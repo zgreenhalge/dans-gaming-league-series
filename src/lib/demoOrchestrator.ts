@@ -289,31 +289,33 @@ export function parseDemoSabremetrics(
   const reloadStats = collectRoundsDropped(reloadEvents, reloadStateRows, context, steamIds);
 
   // Round economy (#279, #519): classifies each player's save/eco/force/full-buy tier per round
-  // from CCSPlayerPawn.m_unFreezetimeEndEquipmentValue (confirmed against a real DGLS demo) and
-  // CCSPlayerController.m_iAccount (cash remaining after buying — the primary signal for
-  // everything except full_buy, not yet validated against a real demo; a bad field name here
-  // fails soft into "0 remaining", which reads as "spent the bank down" and would misclassify
-  // most non-full-buy rounds as force) at each round's freeze-time-end, sampled once per round
-  // (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped defensively like
-  // the reload/inventory tick reads above.
+  // from CCSPlayerPawn.m_unFreezetimeEndEquipmentValue and
+  // CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount (cash remaining after
+  // buying — the primary signal for everything except full_buy), both confirmed against a real
+  // DGLS demo (see scripts/inspect-demo-fields.ts), at each round's freeze-time-end, sampled once
+  // per round (not per shot) — same single-anchor-read shape as sideInference.ts. m_iAccount lives
+  // under the CCSPlayerController_InGameMoneyServices subservice, the same nesting
+  // accumulators.ts's per-round tracking stats use under CCSPlayerController_ActionTrackingServices
+  // — not flat on the controller. Wrapped defensively like the reload/inventory tick reads above.
+  const ACCOUNT_FIELD = 'CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount';
   const economyTicks = neededEconomyTicks(freezeEndEvents, context);
   let equipmentRows: PlayerEquipmentRow[] = [];
   if (economyTicks.length > 0) {
     try {
       const rawEquipmentRows = parseTicks(
         demoBuffer,
-        ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue', 'CCSPlayerController.m_iAccount'],
+        ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue', ACCOUNT_FIELD],
         economyTicks,
       ) as Record<string, unknown>[];
       equipmentRows = rawEquipmentRows.map((r) => ({
         tick: Number(r.tick),
         steamid: String(r.steamid ?? ''),
         equipmentValue: Number(r['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'] ?? 0),
-        remainingCash: Number(r['CCSPlayerController.m_iAccount'] ?? 0),
+        remainingCash: Number(r[ACCOUNT_FIELD] ?? 0),
       }));
     } catch (err) {
       warnings.push(
-        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue"/"CCSPlayerController.m_iAccount" tick fields failed (${(err as Error).message}).`,
+        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue"/"${ACCOUNT_FIELD}" tick fields failed (${(err as Error).message}).`,
       );
     }
   }

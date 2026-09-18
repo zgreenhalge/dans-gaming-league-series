@@ -50,8 +50,8 @@ export interface PlayerEquipmentRow {
   steamid: string;
   equipmentValue: number;
   /** Cash left on hand after buying, at the same freeze-time-end tick as `equipmentValue`
-   *  (`CCSPlayerController.m_iAccount`) — the primary signal splitting `force` from `save`/`eco`,
-   *  see `BANK_MIN`. */
+   *  (`CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount`) — the primary
+   *  signal splitting `force` from `save`/`eco`, see `BANK_MIN`. */
   remainingCash: number;
 }
 

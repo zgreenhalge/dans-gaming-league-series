@@ -1,7 +1,8 @@
 /**
  * Unit tests for classifyRoundEconomy — round-economy tier classification (#279, #519), from each
- * player's own CCSPlayerPawn.m_unFreezetimeEndEquipmentValue and CCSPlayerController.m_iAccount at
- * a round's freeze-time-end, plus their side that round.
+ * player's own CCSPlayerPawn.m_unFreezetimeEndEquipmentValue and
+ * CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount at a round's
+ * freeze-time-end, plus their side that round.
  *
  * Run:  npx vitest run src/lib/parsers/economy.test.ts
  */

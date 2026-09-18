@@ -377,7 +377,8 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
      complete kit costs more than a T's (Kevlar+Helmet $1,000 vs Kevlar $650, plus a CT-only $400
      defuse kit).
   2. Short of a full buy, the round is split first by cash *remaining* after buying
-     (`CCSPlayerController.m_iAccount`), not equipment value: under $2,000 left over is `force` —
+     (`CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount`), not equipment
+     value: under $2,000 left over is `force` —
      the bank got spent down without ever completing a kit, no matter how much or little was
      actually bought.
   3. $2,000+ left over (the bank stayed healthy) splits again by equipment value: under $1,000 is
@@ -385,7 +386,8 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
      Two players can land on an identical mid-tier equipment value for opposite reasons (one spent
      the bank down, one didn't) — step 2 is the distinction equipment value alone can't make.
   Equipment value comes from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's
-  freeze-time-end; remaining cash from `CCSPlayerController.m_iAccount` at the same tick. `Rounds
+  freeze-time-end; remaining cash from
+  `CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount` at the same tick. `Rounds
   Played` for a tier is seeded directly from this classification, independent of whether the player
   fired a shot that round, unlike the weapon breakdown above — a save round with zero shots fired
   still counts as a save round played.

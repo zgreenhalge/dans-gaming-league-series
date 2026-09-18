@@ -80,7 +80,7 @@ recorded score.
 | `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
 | `reload.ts` | Rounds dropped on reload, read from the discrete `weapon_reload` event (`Rounds Dropped/Reload`) |
 | `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist; also the gun/non-gun source of truth for `accuracy.ts`, shared with `weaponStats.ts`. `killWeaponCategory()` is the separate, wider mapping used for kills — it covers every kill weapon (melee/utility/other, not just guns) and must not be used for the accuracy allowlist |
-| `economy.ts` | Per-round save/eco/force/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` and `CCSPlayerController.m_iAccount` at each round's freeze-time-end (see `classifyEconomy()` and [`calculations.md`](./calculations.md)) |
+| `economy.ts` | Per-round save/eco/force/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` and `CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount` at each round's freeze-time-end (see `classifyEconomy()` and [`calculations.md`](./calculations.md)) |
 | `weaponStats.ts` | Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns, plus `collectMatchKills()` — flat per-kill fact rows for `match_kills` (see "Kill and round fact tables" below) |
 
 ## Weapon-class and round-economy breakdowns
