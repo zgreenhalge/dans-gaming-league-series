@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ALL_ECONOMY_TIERS, type MatchKillRow, type MatchRoundEconomyRow } from '@/lib/queries';
 import type { RoundHistoryEntry } from '@/lib/types';
-import { ECONOMY_TYPE_LABEL, type EconomyType } from '@/lib/parsers/economy';
+import type { EconomyType } from '@/lib/parsers/economy';
 import { sideColor } from '@/lib/util';
 import { useElementWidth } from './useElementWidth';
 
@@ -253,11 +253,6 @@ export default function RoundEconomyChart({
             {l.name}
           </span>
         ))}
-        {hasFilter && (
-          <span className="text-[10px] text-[var(--color-text-secondary)]">
-            — dimmed rounds weren&rsquo;t {ECONOMY_TYPE_LABEL[selectedTier as EconomyType] ?? selectedTier}
-          </span>
-        )}
       </div>
 
       <svg
