@@ -544,8 +544,6 @@ export interface GauntletPodSibling {
   matchId: number;
   /** 1 or 2 — which game the SIBLING match is, for the "Game N of this pod" link label. */
   gameNumber: 1 | 2;
-  /** True when `matchId` itself — not the sibling — is Game 2 of the pod. */
-  callerIsGame2: boolean;
   finalScore: string | null;
 }
 
@@ -557,7 +555,7 @@ export async function getGauntletPodSibling(
   matchId: number,
   pod: { match1_id: number; match2_id: number },
 ): Promise<GauntletPodSibling | null> {
-  const { siblingId, siblingGameNumber: gameNumber, callerIsGame2 } = getPodSibling(pod, matchId);
+  const { siblingId, siblingGameNumber: gameNumber } = getPodSibling(pod, matchId);
 
   const { data, error } = await supabase
     .from('matches')
@@ -570,7 +568,6 @@ export async function getGauntletPodSibling(
   return {
     matchId: siblingId,
     gameNumber,
-    callerIsGame2,
     finalScore: m.final_score,
   };
 }
