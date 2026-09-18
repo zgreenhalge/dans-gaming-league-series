@@ -226,13 +226,23 @@ export default async function SeasonPage({
 
   // Regular season — check for paired gauntlet. `leaderboard` and `matchSummaries` are both light
   // (the latter deliberately so — see getSeasonMatchSummaries()'s own doc comment) and needed
-  // regardless of which tab ends up showing, so they're fetched eagerly here alongside
-  // `linkedGauntlet`/`playersById` rather than folded into either tab's own heavy view.
-  const [linkedGauntlet, playersById, leaderboard, matchSummaries] = await Promise.all([
+  // regardless of which tab ends up showing, but nothing below this point depends on their *values*
+  // — only on `linkedGauntlet`/`playersById`. Started here (not awaited yet) so they run alongside
+  // everything below instead of gating it: awaiting all four together would make the heavy-view wave
+  // below wait on whichever of these two happens to be slowest, for no reason.
+  const leaderboardPromise = getSeasonLeaderboard(seasonId);
+  const matchSummariesPromise = getSeasonMatchSummaries(seasonId);
+  // Marks both promises "handled" immediately, before the `await` below gives Node a chance to flag
+  // an in-flight rejection as unhandled (and crash the process under Node's default
+  // --unhandled-rejections=throw) — the real error, if any, still surfaces normally when these are
+  // awaited for real in the Promise.all further down; a `.catch()` here doesn't consume it there,
+  // since a promise can have more than one handler attached.
+  leaderboardPromise.catch(() => {});
+  matchSummariesPromise.catch(() => {});
+
+  const [linkedGauntlet, playersById] = await Promise.all([
     getLinkedGauntlet(season.name),
     getPlayersById(),
-    getSeasonLeaderboard(seasonId),
-    getSeasonMatchSummaries(seasonId),
   ]);
   const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
   const isUpcoming = season.status === 'UPCOMING';
@@ -242,7 +252,7 @@ export default async function SeasonPage({
   // other light reads, all independent of each other — together with the heavy view for whichever
   // tab `initialView` names (the other tab's heavy view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialHeavy] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialHeavy, leaderboard, matchSummaries] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
@@ -250,6 +260,8 @@ export default async function SeasonPage({
     initialView === 'gauntlet' && linkedGauntlet
       ? getGauntletSeasonHeavyView(linkedGauntlet.id, seasonNumber, playersById)
       : getRegularSeasonHeavyView(seasonId, seasonNumber, playersById),
+    leaderboardPromise,
+    matchSummariesPromise,
   ]);
 
   // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
