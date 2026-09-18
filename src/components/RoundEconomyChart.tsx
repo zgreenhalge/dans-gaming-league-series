@@ -147,8 +147,12 @@ export default function RoundEconomyChart({
       killsByKey.set(k2, (killsByKey.get(k2) ?? 0) + 1);
     }
 
-    // A side can hold at most two players; each gets its own color (see `playerColor()`), keyed
-    // by which one is seen first for that side.
+    // A side holds at most two players when every side resolved — each gets its own color (see
+    // `playerColor()`), keyed by which one is seen first for that side. When side resolution
+    // fails for the whole roster (e.g. a gauntlet/knife match with no stored
+    // `skins_starting_side` — teamSides is {shirts: null, skins: null} in that case), every
+    // player collapses into the one shared "null" bucket, so seenCount can climb past 1;
+    // PLAYER_DASH is indexed with a clamp below for exactly that case.
     const seenPerSide = new Map<string, number>();
 
     const lines: PlayerLine[] = players.map((p) => {
@@ -173,7 +177,7 @@ export default function RoundEconomyChart({
       return {
         id: p.id, name: p.name, side: p.side,
         color: playerColor(p.side, seenCount),
-        dashArray: PLAYER_DASH[seenCount],
+        dashArray: PLAYER_DASH[Math.min(seenCount, PLAYER_DASH.length - 1)],
         points,
       };
     });
