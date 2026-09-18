@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ALL_ECONOMY_TIERS, type MatchKillRow, type MatchDamageEventRow, type MatchRoundEconomyRow } from '@/lib/queries';
+import { ALL_ECONOMY_TIERS, type MatchKillRow, type MatchRoundEconomyRow } from '@/lib/queries';
 import type { RoundHistoryEntry } from '@/lib/types';
-import { ECONOMY_TYPE_LABEL, type EconomyType } from '@/lib/parsers/economy';
+import type { EconomyType } from '@/lib/parsers/economy';
 import { sideColor } from '@/lib/util';
 import { useElementWidth } from './useElementWidth';
 
@@ -13,6 +13,12 @@ type Side = 'CT' | 'T' | null;
 
 const PADDING = { top: 16, right: 16, bottom: 24, left: 44 };
 const DOT_R = 3;
+/** Player lines are always dashed or dotted, team-total lines always solid — the stroke style
+ *  itself marks a line as an individual vs. the team's combined total. The two teammates on a
+ *  side additionally get different patterns (dashed vs. dotted, indexed by `playerColor()`'s
+ *  same `indexOnSide`) so their lines stay distinguishable by stroke alone, not just color, even
+ *  where the two paths cross or run close together. */
+const PLAYER_DASH: readonly [string, string] = ['5,3', '1,5'];
 
 /** `sideColor()` (`@/lib/util`) returns `undefined` for a null/unresolved side so a text-color
  *  caller can fall through to the default; this chart always needs a concrete stroke/fill color,
@@ -21,22 +27,22 @@ function lineColor(side: Side): string {
   return sideColor(side) ?? 'var(--color-text-secondary)';
 }
 
-/** Lightened/darkened tints of a team's base side color for its two individual players — keeps
- *  each player visually tied to their team's hue (still obviously "same family" as the bold team
- *  total line below) while giving the two teammates genuinely different colors, not just a dash
- *  pattern. The dash on the second player is kept anyway as a redundant, colorblind-safe cue. */
-function playerTint(side: Side, indexOnSide: number): string {
-  const base = lineColor(side);
-  return indexOnSide === 0
-    ? `color-mix(in srgb, ${base} 70%, white 30%)`
-    : `color-mix(in srgb, ${base} 70%, black 30%)`;
+/** A team's two players each get their own hue, matching CS2's own selectable player colors
+ *  rather than a lighten/darken tint of one base hue — the first player on a side shares the
+ *  team-total line's own color (solid vs. dashed strokes keep the two apart, see the render
+ *  below), the second gets the paired hue: green alongside CT's blue, yellow alongside T's
+ *  orange. */
+function playerColor(side: Side, indexOnSide: number): string {
+  if (indexOnSide === 0) return lineColor(side);
+  if (side === 'CT') return 'var(--color-accent-green-fg)';
+  if (side === 'T') return 'var(--color-accent-yellow-fg)';
+  return lineColor(side);
 }
 
 interface RoundPoint {
   round: number;
   money: number | null;
   kills: number;
-  damage: number;
   economyType: EconomyType | null;
   /** Whether this round matches the Economy sub-tab's selected tier filter — always `true` under
    *  `ALL_ECONOMY_TIERS` (nothing to dim against). Drives the line/marker dimming below. */
@@ -48,9 +54,7 @@ interface PlayerLine {
   name: string;
   side: Side;
   color: string;
-  /** The second player sharing a side is drawn dashed so two teammates' lines stay
-   *  distinguishable even for a colorblind viewer, on top of their different color tints. */
-  dashed: boolean;
+  dashArray: string;
   points: RoundPoint[];
 }
 
@@ -71,15 +75,18 @@ interface TeamLine {
   points: TeamPoint[];
 }
 
-/** Round-by-round equipment value (money), with kills/damage surfaced on hover — the Economy
- *  sub-tab's round timeline (#519), a finer grain than the tier-bucketed `EconomyTable` below it.
- *  One line per player, grouped/colored by side rather than by SHIRTS/SKINS identity, matching
+/** Identifies one series (a player's line or a team's total) for the single-series hover card —
+ *  see `hoverPoint` below. */
+type SeriesRef = { kind: 'player'; id: number } | { kind: 'team'; key: 'shirts' | 'skins' };
+
+/** Round-by-round equipment value (money), with kills surfaced on hover — the Economy sub-tab's
+ *  round timeline (#519), a finer grain than the tier-bucketed `EconomyTable` below it. One line
+ *  per player, grouped/colored by side rather than by SHIRTS/SKINS identity, matching
  *  `Scoreboard`/`TeamHeader`'s own convention of tinting each team by its match-long display side. */
 export default function RoundEconomyChart({
   players,
   roundEconomy,
   kills,
-  damageEvents,
   roundHistory,
   teamSides,
   selectedTier,
@@ -87,7 +94,6 @@ export default function RoundEconomyChart({
   players: { id: number; name: string; side: Side }[];
   roundEconomy: MatchRoundEconomyRow[];
   kills: MatchKillRow[];
-  damageEvents: MatchDamageEventRow[];
   /** This match's round-by-round outcomes (`matches.round_history`) — drives the background
    *  win/loss bands. Joins directly against `roundEconomy.round_number` with no offset math; see
    *  `RoundHistoryEntry.n`'s own doc comment for why. Empty is fine; rounds simply render with no
@@ -104,7 +110,21 @@ export default function RoundEconomyChart({
   selectedTier: string;
 }) {
   const [containerRef, width] = useElementWidth(320, 600);
+  /** The full multi-series tooltip's round — set only by hovering/clicking a round number along
+   *  the bottom axis, not by moving over the plot generally. */
   const [hoverRound, setHoverRound] = useState<number | null>(null);
+  /** The single-series tooltip's target — set by hovering one specific player/team marker.
+   *  Mutually exclusive with `hoverRound`: each setter clears the other. */
+  const [hoverPoint, setHoverPoint] = useState<{ series: SeriesRef; round: number } | null>(null);
+
+  function focusRound(r: number | null) {
+    setHoverRound(r);
+    if (r != null) setHoverPoint(null);
+  }
+  function focusPoint(point: { series: SeriesRef; round: number } | null) {
+    setHoverPoint(point);
+    if (point != null) setHoverRound(null);
+  }
 
   const { rounds, lines, teamLines, yMax, roundBands } = useMemo(() => {
     const roundSet = new Set<number>();
@@ -118,8 +138,8 @@ export default function RoundEconomyChart({
       return { winner, color };
     });
 
-    // One pass each over roundEconomy/kills/damageEvents, keyed by "round-player", so the
-    // per-player-per-round loop below is a Map lookup instead of a fresh scan of each array.
+    // One pass each over roundEconomy/kills, keyed by "round-player", so the per-player-per-round
+    // loop below is a Map lookup instead of a fresh scan of each array.
     const key = (round: number, playerId: number) => `${round}-${playerId}`;
     const econByKey = new Map(roundEconomy.map((r) => [key(r.round_number, r.player_id), r]));
     const killsByKey = new Map<string, number>();
@@ -128,15 +148,9 @@ export default function RoundEconomyChart({
       const k2 = key(k.round_number, k.attacker_player_id);
       killsByKey.set(k2, (killsByKey.get(k2) ?? 0) + 1);
     }
-    const damageByKey = new Map<string, number>();
-    for (const d of damageEvents) {
-      if (d.attacker_player_id == null || d.attacker_player_id === d.victim_player_id) continue;
-      const k = key(d.round_number, d.attacker_player_id);
-      damageByKey.set(k, (damageByKey.get(k) ?? 0) + d.damage);
-    }
 
-    // A side can hold at most two players; the second one drawn for a side is dashed so
-    // teammates stay distinguishable without a second color per side.
+    // A side can hold at most two players; each gets its own color (see `playerColor()`), keyed
+    // by which one is seen first for that side.
     const seenPerSide = new Map<string, number>();
 
     const lines: PlayerLine[] = players.map((p) => {
@@ -153,20 +167,24 @@ export default function RoundEconomyChart({
           round,
           money: econRow?.equipment_value ?? null,
           kills: killsByKey.get(k) ?? 0,
-          damage: damageByKey.get(k) ?? 0,
           economyType,
           matchesFilter,
         };
       });
 
-      return { id: p.id, name: p.name, side: p.side, color: playerTint(p.side, seenCount), dashed: seenCount === 1, points };
+      return {
+        id: p.id, name: p.name, side: p.side,
+        color: playerColor(p.side, seenCount),
+        dashArray: PLAYER_DASH[Math.min(seenCount, PLAYER_DASH.length - 1)],
+        points,
+      };
     });
 
-    // Team totals: a flat sum of both teammates' money each round, one line per team, in the
-    // team's own undiluted color (bold/thick, see render below) so it reads as the "headline"
-    // line the two tinted player lines are a breakdown of. A team round only "matches" the
-    // selected filter when both teammates individually did — a genuine team eco/force/full round,
-    // not just one of the two happening to.
+    // Team totals: a flat sum of both teammates' money each round, one line per team, solid and
+    // bold/thick (see render below) so it reads as the "headline" line the two dashed player
+    // lines are a breakdown of. A team round only "matches" the selected filter when both
+    // teammates individually did — a genuine team eco/force/full round, not just one of the two
+    // happening to.
     const teamLines: TeamLine[] = (['shirts', 'skins'] as const).map((teamKey) => {
       const side = teamSides[teamKey];
       const members = lines.filter((l) => l.side === side);
@@ -189,7 +207,7 @@ export default function RoundEconomyChart({
     );
     const yMax = Math.max(1000, Math.ceil((dataMax * 1.15) / 500) * 500);
     return { rounds, lines, teamLines, yMax, roundBands };
-  }, [players, roundEconomy, kills, damageEvents, roundHistory, teamSides, selectedTier]);
+  }, [players, roundEconomy, kills, roundHistory, teamSides, selectedTier]);
 
   if (rounds.length === 0) return null;
 
@@ -197,6 +215,7 @@ export default function RoundEconomyChart({
   const plotW = width - PADDING.left - PADDING.right;
   const plotH = height - PADDING.top - PADDING.bottom;
   const span = Math.max(1, rounds.length - 1);
+  const colWidth = plotW / rounds.length;
 
   const xFor = (i: number) => PADDING.left + (i / span) * plotW;
   const yFor = (v: number) => PADDING.top + plotH - (v / yMax) * plotH;
@@ -226,22 +245,19 @@ export default function RoundEconomyChart({
   const hasFilter = selectedTier !== ALL_ECONOMY_TIERS;
   const DIMMED_OPACITY = 0.22;
 
-  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    let closest = 0;
-    let closestDist = Infinity;
-    rounds.forEach((_, i) => {
-      const d = Math.abs(xFor(i) - mx);
-      if (d < closestDist) {
-        closestDist = d;
-        closest = i;
-      }
-    });
-    setHoverRound(closestDist < plotW / span ? rounds[closest] : null);
-  }
-
   const hoverIdx = hoverRound != null ? rounds.indexOf(hoverRound) : -1;
+  const activeIdx = hoverIdx >= 0 ? hoverIdx : (hoverPoint != null ? rounds.indexOf(hoverPoint.round) : -1);
+
+  /** Whether `series`'s own marker at `round` is the one `hoverPoint` is currently on — drives
+   *  the "pop" highlight on that one dot/point below, so the hovered marker itself is obvious,
+   *  not just its tooltip. */
+  function isHoveredPoint(series: SeriesRef, round: number): boolean {
+    if (!hoverPoint || hoverPoint.round !== round) return false;
+    const hp = hoverPoint.series;
+    if (hp.kind === 'team' && series.kind === 'team') return hp.key === series.key;
+    if (hp.kind === 'player' && series.kind === 'player') return hp.id === series.id;
+    return false;
+  }
 
   return (
     <div ref={containerRef}>
@@ -257,19 +273,11 @@ export default function RoundEconomyChart({
         {lines.map((l) => (
           <span key={l.id} className="inline-flex items-center gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
             <svg width="16" height="8" aria-hidden="true">
-              <line
-                x1={0} x2={16} y1={4} y2={4}
-                stroke={l.color}
-                strokeWidth={2}
-                strokeDasharray={l.dashed ? '3,2' : undefined}
-              />
+              <line x1={0} x2={16} y1={4} y2={4} stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeDasharray={l.dashArray} />
             </svg>
             {l.name}
           </span>
         ))}
-        <span className="text-[10px] text-[var(--color-text-secondary)]">
-          — background tints the round winner{hasFilter ? `; dimmed rounds weren't ${ECONOMY_TYPE_LABEL[selectedTier as EconomyType] ?? selectedTier}` : ''}
-        </span>
       </div>
 
       <svg
@@ -277,27 +285,23 @@ export default function RoundEconomyChart({
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block', overflow: 'visible' }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoverRound(null)}
+        onMouseLeave={() => { setHoverRound(null); setHoverPoint(null); }}
       >
-        {(() => {
-          const colWidth = plotW / rounds.length;
-          return rounds.map((r, i) => {
-            const color = roundBands[i].color;
-            if (!color) return null;
-            return (
-              <rect
-                key={r}
-                x={xFor(i) - colWidth / 2}
-                y={PADDING.top}
-                width={colWidth}
-                height={plotH}
-                fill={color}
-                fillOpacity={0.1}
-              />
-            );
-          });
-        })()}
+        {rounds.map((r, i) => {
+          const color = roundBands[i].color;
+          if (!color) return null;
+          return (
+            <rect
+              key={r}
+              x={xFor(i) - colWidth / 2}
+              y={PADDING.top}
+              width={colWidth}
+              height={plotH}
+              fill={color}
+              fillOpacity={0.1}
+            />
+          );
+        })}
 
         {yTicks.map((tick) => {
           const y = yFor(tick);
@@ -311,21 +315,33 @@ export default function RoundEconomyChart({
           );
         })}
 
+        {/* The only trigger for the full multi-series tooltip below — hovering/clicking a round
+            number, not the plot area generally. The transparent rect widens the hit target past
+            the digits themselves to the full column width. */}
         {rounds.map((r, i) => (
-          <text key={r} x={xFor(i)} y={height - 6} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9} fontFamily="monospace">
-            {r}
-          </text>
+          <g
+            key={r}
+            onMouseEnter={() => focusRound(r)}
+            onMouseLeave={() => setHoverRound(null)}
+            onClick={() => focusRound(r)}
+            style={{ cursor: 'pointer' }}
+          >
+            <rect x={xFor(i) - colWidth / 2} y={height - 16} width={colWidth} height={16} fill="transparent" />
+            <text x={xFor(i)} y={height - 6} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9} fontFamily="monospace">
+              {r}
+            </text>
+          </g>
         ))}
 
-        {hoverIdx >= 0 && (
-          <line x1={xFor(hoverIdx)} x2={xFor(hoverIdx)} y1={PADDING.top} y2={PADDING.top + plotH} stroke="var(--color-border-secondary)" strokeWidth={1} strokeDasharray="3,3" />
+        {activeIdx >= 0 && (
+          <line x1={xFor(activeIdx)} x2={xFor(activeIdx)} y1={PADDING.top} y2={PADDING.top + plotH} stroke="var(--color-border-secondary)" strokeWidth={1} strokeDasharray="3,3" />
         )}
 
-        {/* Team totals draw first (thick, undiluted color) so the two tinted per-player lines/
-            markers read as a breakdown layered on top, not the other way around. When a tier
-            filter is active, the full line draws dimmed and a second, full-opacity "bright"
-            overlay traces only the rounds that matched (both teammates, for a team line) —
-            two layers of the same path rather than variable per-segment opacity. */}
+        {/* Team totals draw first (thick, solid) so the two dashed per-player lines/markers read
+            as a breakdown layered on top, not the other way around. When a tier filter is
+            active, the full line draws dimmed and a second, full-opacity "bright" overlay
+            traces only the rounds that matched (both teammates, for a team line) — two layers
+            of the same path rather than variable per-segment opacity. */}
         {teamLines.map((t) => (
           <g key={t.key}>
             <path d={pathFor(t.points)} fill="none" stroke={t.color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={hasFilter ? DIMMED_OPACITY : 0.85} />
@@ -337,34 +353,78 @@ export default function RoundEconomyChart({
 
         {lines.map((l) => (
           <g key={l.id}>
-            <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashed ? '5,3' : undefined} opacity={hasFilter ? DIMMED_OPACITY : 1} />
+            <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashArray} opacity={hasFilter ? DIMMED_OPACITY : 1} />
             {hasFilter && (
-              <path d={pathFor(l.points, (i) => l.points[i].matchesFilter)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashed ? '5,3' : undefined} />
+              <path d={pathFor(l.points, (i) => l.points[i].matchesFilter)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashArray} />
             )}
           </g>
         ))}
+
+        {/* Team-point hit targets draw first (no visible marker of their own, except while
+            hovered — the team line itself is normally the marker) so an overlapping player dot's
+            hit target, added below, wins when a round's team total and a player's own value land
+            on the same pixel. */}
+        {teamLines.map((t) =>
+          t.points.map((p, i) => {
+            if (p.money == null) return null;
+            const hovered = isHoveredPoint({ kind: 'team', key: t.key }, p.round);
+            return (
+              <g key={`${t.key}-${p.round}`}>
+                {hovered && (
+                  <>
+                    <circle cx={xFor(i)} cy={yFor(p.money)} r={11} fill={t.color} fillOpacity={0.25} />
+                    <circle cx={xFor(i)} cy={yFor(p.money)} r={5} fill={t.color} stroke="var(--color-bg-primary)" strokeWidth={1.5} />
+                  </>
+                )}
+                <circle
+                  cx={xFor(i)}
+                  cy={yFor(p.money)}
+                  r={8}
+                  fill="transparent"
+                  onMouseEnter={() => focusPoint({ series: { kind: 'team', key: t.key }, round: p.round })}
+                  onMouseLeave={() => setHoverPoint(null)}
+                  style={{ cursor: 'pointer' }}
+                />
+              </g>
+            );
+          }),
+        )}
 
         {lines.map((l) =>
           l.points.map((p, i) => {
             if (p.money == null) return null;
             const r = p.kills > 0 ? Math.min(10, DOT_R + p.kills * 2.5) : DOT_R;
             const dimmed = hasFilter && !p.matchesFilter;
+            const hovered = isHoveredPoint({ kind: 'player', id: l.id }, p.round);
             return (
               <g key={`${l.id}-${p.round}`} opacity={dimmed ? DIMMED_OPACITY : 1}>
-                <circle cx={xFor(i)} cy={yFor(p.money)} r={r} fill={p.kills > 0 ? l.color : 'var(--color-bg-primary)'} stroke={l.color} strokeWidth={1.5} />
+                {hovered && <circle cx={xFor(i)} cy={yFor(p.money)} r={r + 6} fill={l.color} fillOpacity={0.25} />}
+                <circle
+                  cx={xFor(i)} cy={yFor(p.money)} r={hovered ? r + 2 : r}
+                  fill={p.kills > 0 ? l.color : 'var(--color-bg-primary)'} stroke={l.color} strokeWidth={hovered ? 2.5 : 1.5}
+                />
                 {p.kills > 1 && (
                   <text x={xFor(i)} y={yFor(p.money)} textAnchor="middle" dominantBaseline="central" fill="var(--color-bg-primary)" fontSize={8} fontWeight={700}>
                     {p.kills}
                   </text>
                 )}
+                <circle
+                  cx={xFor(i)}
+                  cy={yFor(p.money)}
+                  r={8}
+                  fill="transparent"
+                  onMouseEnter={() => focusPoint({ series: { kind: 'player', id: l.id }, round: p.round })}
+                  onMouseLeave={() => setHoverPoint(null)}
+                  style={{ cursor: 'pointer' }}
+                />
               </g>
             );
           }),
         )}
 
         {hoverIdx >= 0 && (() => {
-          const tooltipW = 175;
-          const tooltipH = 20 + (teamLines.length + lines.length) * 14;
+          const tooltipW = 210;
+          const tooltipH = 26 + (teamLines.length + lines.length) * 17;
           let tx = xFor(hoverIdx) - tooltipW / 2;
           if (tx < PADDING.left) tx = PADDING.left;
           if (tx + tooltipW > width - PADDING.right) tx = width - PADDING.right - tooltipW;
@@ -372,13 +432,13 @@ export default function RoundEconomyChart({
           return (
             <g style={{ pointerEvents: 'none' }}>
               <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
-              <text x={tx + 8} y={ty + 13} fill="var(--color-text-primary)" fontSize={10} fontFamily="monospace" fontWeight={600}>
+              <text x={tx + 8} y={ty + 15} fill="var(--color-text-primary)" fontSize={12} fontFamily="monospace" fontWeight={600}>
                 Round {rounds[hoverIdx]}{roundBands[hoverIdx].winner ? ` — ${roundBands[hoverIdx].winner!.winner === 'SHIRTS' ? 'Shirts' : 'Skins'} won` : ''}
               </text>
               {teamLines.map((t, i) => {
                 const p = t.points[hoverIdx];
                 return (
-                  <text key={t.key} x={tx + 8} y={ty + 28 + i * 14} fontSize={9} fontFamily="monospace" fontWeight={600} fill="var(--color-text-primary)">
+                  <text key={t.key} x={tx + 8} y={ty + 34 + i * 17} fontSize={11} fontFamily="monospace" fontWeight={600} fill="var(--color-text-primary)">
                     <tspan fill={t.color}>{'●'} </tspan>
                     {t.label}: {p.money != null ? `$${p.money}` : '—'}
                   </text>
@@ -387,12 +447,57 @@ export default function RoundEconomyChart({
               {lines.map((l, i) => {
                 const p = l.points[hoverIdx];
                 return (
-                  <text key={l.id} x={tx + 8} y={ty + 28 + (teamLines.length + i) * 14} fontSize={9} fontFamily="monospace" fill="var(--color-text-primary)">
+                  <text key={l.id} x={tx + 8} y={ty + 34 + (teamLines.length + i) * 17} fontSize={11} fontFamily="monospace" fill="var(--color-text-primary)">
                     <tspan fill={l.color}>{'●'} </tspan>
-                    {p.money != null ? `$${p.money}` : '—'} · {p.kills}K · {p.damage}D
+                    {l.name}: {p.money != null ? `$${p.money}` : '—'}
                   </text>
                 );
               })}
+            </g>
+          );
+        })()}
+
+        {/* Hovering one player/team marker directly shows just that series's value, instead of
+            the full round breakdown above — the round-number trigger covers the "compare
+            everyone" case, this covers "what was this one line doing here." */}
+        {hoverPoint && (() => {
+          const idx = rounds.indexOf(hoverPoint.round);
+          if (idx < 0) return null;
+          const series = hoverPoint.series;
+          let label: string, color: string, money: number | null;
+          if (series.kind === 'team') {
+            const t = teamLines.find((tt) => tt.key === series.key);
+            if (!t) return null;
+            ({ label, color } = t);
+            money = t.points[idx].money;
+          } else {
+            const l = lines.find((ll) => ll.id === series.id);
+            if (!l) return null;
+            label = l.name;
+            color = l.color;
+            money = l.points[idx].money;
+          }
+
+          const tooltipW = 175;
+          const tooltipH = 42;
+          let tx = xFor(idx) - tooltipW / 2;
+          if (tx < PADDING.left) tx = PADDING.left;
+          if (tx + tooltipW > width - PADDING.right) tx = width - PADDING.right - tooltipW;
+          const pointY = yFor(money ?? 0);
+          let ty = pointY - tooltipH - 10;
+          if (ty < PADDING.top) ty = pointY + 10;
+          if (ty + tooltipH > height - PADDING.bottom) ty = height - PADDING.bottom - tooltipH;
+
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
+              <text x={tx + 8} y={ty + 16} fill="var(--color-text-primary)" fontSize={12} fontFamily="monospace" fontWeight={600}>
+                Round {hoverPoint.round}
+              </text>
+              <text x={tx + 8} y={ty + 33} fontSize={11} fontFamily="monospace" fill="var(--color-text-primary)">
+                <tspan fill={color}>{'●'} </tspan>
+                {label}: {money != null ? `$${money}` : '—'}
+              </text>
             </g>
           );
         })()}

@@ -593,7 +593,7 @@ export default function MatchTabView({
           weaponClassStats={matchWeaponClassStats}
           economyRows={matchEconomyStats}
           hasEconomyData={matchEconomyStats.length > 0}
-          roundEconomyData={{ rows: matchRoundEconomy, history: roundHistory, damageEvents: matchDamageEvents }}
+          roundEconomyData={{ rows: matchRoundEconomy, history: roundHistory }}
         />
       )}
 

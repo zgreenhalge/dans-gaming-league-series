@@ -506,12 +506,19 @@ on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and
 `getMatchWeaponClassStats()` use for the Weapons sub-tab.
 
 On the match page only, the Economy sub-tab also shows `RoundEconomyChart` — one line per player
-plotting equipment value (`match_round_economy.equipment_value`) across every live round, colored
-and grouped by that player's match-long display side rather than SHIRTS/SKINS identity (same
-convention as `Scoreboard`/`TeamHeader`), with the second player sharing a side drawn dashed so
-teammates stay distinguishable. Kills that round are marked directly on the line (a filled dot
-sized to the kill count); money and damage for the hovered round are read from a tooltip rather than
-a second plotted axis, keeping the chart to one visual channel (money) per player. Each round's
+plotting equipment value (`match_round_economy.equipment_value`) across every live round, plus a
+solid team-total line per team summing its two players — colored and grouped by each player's
+match-long display side rather than SHIRTS/SKINS identity (same convention as
+`Scoreboard`/`TeamHeader`). Solid marks the team total apart from the individual lines it's a sum
+of; the two teammates are further told apart from each other by pattern — one dashed, one dotted —
+on top of genuinely distinct hues matching CS2's own selectable player colors (blue/green on CT,
+orange/yellow on T) rather than a tint of one base color. The first teammate on a side shares its
+team-total line's own color, telling the two apart by stroke style rather than color alone. Kills
+that round are marked directly on the line (a
+filled dot sized to the kill count); money is read from a tooltip rather than a second plotted
+axis, keeping the chart to one visual channel (money) per player — hovering/clicking a round
+number along the bottom axis shows every line's value for that round, while hovering one
+player/team marker directly shows just that line's own value. Each round's
 background is tinted by the *team* that won it (`matches.round_history`), mapped through that
 team's own fixed display color rather than the round's actual (half-swapping) side, so a band's
 color always agrees with the line color of the team it credits. `round_history[].n` and
