@@ -155,11 +155,14 @@ type RawMatch = {
 type RawWeek = { id: number; season_id: number; week_number: number };
 type RawSeason = { id: number; name: string; is_gauntlet: boolean; map_pool: string[] | null };
 
-async function fetchMapRawData(): Promise<{
+/** `cache()`-wrapped so `getAllMatchesWithPickBan()`, `getMapIndex()`, and `getMapDetail()` collapse
+ *  into a single paginated read of `matches`/`seasons` per request, same reasoning as `getMapDetail`
+ *  below. */
+const fetchMapRawData = cache(async (): Promise<{
   matches: RawMatch[];
   weeks: RawWeek[];
   seasons: RawSeason[];
-}> {
+}> => {
   const [matches, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
@@ -174,7 +177,7 @@ async function fetchMapRawData(): Promise<{
     weeks: weekRowsFromLookup(weekLookup),
     seasons: (seasons ?? []) as RawSeason[],
   };
-}
+});
 
 function buildCanonicalNames(matches: RawMatch[], seasons: RawSeason[]): Map<string, string> {
   const canonical = new Map<string, string>();
