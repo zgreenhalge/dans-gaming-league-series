@@ -321,6 +321,19 @@ function zeroEconomyStat(economyType: string): EconomyTierStat {
   return { economy_type: economyType, shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0, rounds_won: 0 };
 }
 
+/** Sums `s`'s counting fields into `acc` in place — the one place the `EconomyTierStat` field list
+ *  is summed, shared by `groupEconomyStatsByPlayer()`'s per-row accumulation and
+ *  `resolveEconomyStat()`'s `ALL_ECONOMY_TIERS` cross-tier sum, matching `addWeaponClassStat()`'s
+ *  mutating-accumulator pattern above. */
+function addEconomyStat(acc: EconomyTierStat, s: EconomyTierStat): void {
+  acc.shots_fired += s.shots_fired;
+  acc.shots_hit += s.shots_hit;
+  acc.headshot_hits += s.headshot_hits;
+  acc.damage_dealt += s.damage_dealt;
+  acc.rounds_played += s.rounds_played;
+  acc.rounds_won += s.rounds_won;
+}
+
 /** Per-player, per-economy-tier shot/accuracy/damage/rounds totals, summed across every
  *  `EconomyMatchRow` in scope, for every player in `rows` in one pass — the Economy sub-tab's
  *  multi-player table (`EconomyTable`, `SabremetricsLeaderboardView.tsx`) calls this once per render
@@ -342,12 +355,7 @@ export function groupEconomyStatsByPlayer(rows: EconomyMatchRow[]): Map<number, 
       b = zeroEconomyStat(r.economy_type);
       buckets.set(r.economy_type, b);
     }
-    b.shots_fired += r.shots_fired;
-    b.shots_hit += r.shots_hit;
-    b.headshot_hits += r.headshot_hits;
-    b.damage_dealt += r.damage_dealt;
-    b.rounds_played += r.rounds_played;
-    b.rounds_won += r.rounds_won;
+    addEconomyStat(b, r);
   }
   const out = new Map<number, EconomyTierStat[]>();
   for (const [playerId, buckets] of byPlayer) {
@@ -375,15 +383,9 @@ export const ALL_ECONOMY_TIERS = 'all';
  *  `ALL_ECONOMY_TIERS` is a combined view, not a guess at one tier. */
 export function resolveEconomyStat(stats: EconomyTierStat[], economyType: string): EconomyTierStat {
   if (economyType === ALL_ECONOMY_TIERS) {
-    return stats.reduce((acc, s) => ({
-      economy_type: ALL_ECONOMY_TIERS,
-      shots_fired: acc.shots_fired + s.shots_fired,
-      shots_hit: acc.shots_hit + s.shots_hit,
-      headshot_hits: acc.headshot_hits + s.headshot_hits,
-      damage_dealt: acc.damage_dealt + s.damage_dealt,
-      rounds_played: acc.rounds_played + s.rounds_played,
-      rounds_won: acc.rounds_won + s.rounds_won,
-    }), zeroEconomyStat(ALL_ECONOMY_TIERS));
+    const acc = zeroEconomyStat(ALL_ECONOMY_TIERS);
+    for (const s of stats) addEconomyStat(acc, s);
+    return acc;
   }
   return stats.find((s) => s.economy_type === economyType) ?? zeroEconomyStat(economyType);
 }
