@@ -13,9 +13,12 @@ type Side = 'CT' | 'T' | null;
 
 const PADDING = { top: 16, right: 16, bottom: 24, left: 44 };
 const DOT_R = 3;
-/** Player lines are always dashed, team-total lines always solid — the stroke style itself marks
- *  a line as an individual vs. the team's combined total, on top of their color difference. */
-const PLAYER_DASH = '5,3';
+/** Player lines are always dashed or dotted, team-total lines always solid — the stroke style
+ *  itself marks a line as an individual vs. the team's combined total. The two teammates on a
+ *  side additionally get different patterns (dashed vs. dotted, indexed by `playerColor()`'s
+ *  same `indexOnSide`) so their lines stay distinguishable by stroke alone, not just color, even
+ *  where the two paths cross or run close together. */
+const PLAYER_DASH: readonly [string, string] = ['5,3', '1,5'];
 
 /** `sideColor()` (`@/lib/util`) returns `undefined` for a null/unresolved side so a text-color
  *  caller can fall through to the default; this chart always needs a concrete stroke/fill color,
@@ -51,6 +54,7 @@ interface PlayerLine {
   name: string;
   side: Side;
   color: string;
+  dashArray: string;
   points: RoundPoint[];
 }
 
@@ -150,7 +154,12 @@ export default function RoundEconomyChart({
         };
       });
 
-      return { id: p.id, name: p.name, side: p.side, color: playerColor(p.side, seenCount), points };
+      return {
+        id: p.id, name: p.name, side: p.side,
+        color: playerColor(p.side, seenCount),
+        dashArray: PLAYER_DASH[Math.min(seenCount, PLAYER_DASH.length - 1)],
+        points,
+      };
     });
 
     // Team totals: a flat sum of both teammates' money each round, one line per team, solid and
@@ -248,7 +257,7 @@ export default function RoundEconomyChart({
         {lines.map((l) => (
           <span key={l.id} className="inline-flex items-center gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
             <svg width="16" height="8" aria-hidden="true">
-              <line x1={0} x2={16} y1={4} y2={4} stroke={l.color} strokeWidth={2} strokeDasharray={PLAYER_DASH} />
+              <line x1={0} x2={16} y1={4} y2={4} stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeDasharray={l.dashArray} />
             </svg>
             {l.name}
           </span>
@@ -320,9 +329,9 @@ export default function RoundEconomyChart({
 
         {lines.map((l) => (
           <g key={l.id}>
-            <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={PLAYER_DASH} opacity={hasFilter ? DIMMED_OPACITY : 1} />
+            <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashArray} opacity={hasFilter ? DIMMED_OPACITY : 1} />
             {hasFilter && (
-              <path d={pathFor(l.points, (i) => l.points[i].matchesFilter)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={PLAYER_DASH} />
+              <path d={pathFor(l.points, (i) => l.points[i].matchesFilter)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashArray} />
             )}
           </g>
         ))}
