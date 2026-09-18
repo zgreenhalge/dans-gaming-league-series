@@ -49,6 +49,27 @@ export function anyMatchPlayed(rows: { final_score: string | null }[]): boolean 
   return rows.some((m) => isPlayedScore(m.final_score));
 }
 
+/** Every unplayed match in `matches` that already has a `scheduled_at` time, soonest first — the
+ *  "scheduled" half of the home page's Upcoming Games panel. Shared by `getUpcomingGames()`
+ *  (`queries/schedule.ts`, a regular season) and `getUpcomingGauntletGames()`
+ *  (`queries/gauntlet.ts`, a gauntlet) so the two season shapes can't drift on what counts as
+ *  "scheduled" or how it's ordered. */
+export function upcomingScheduledMatches<T extends { final_score: string | null; scheduled_at: string | null }>(matches: T[]): T[] {
+  return matches
+    .filter((m) => !isPlayedScore(m.final_score) && m.scheduled_at !== null)
+    .sort((a, b) => new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime());
+}
+
+/** Every unplayed match in `matches` still missing a `scheduled_at` time, by match number — the
+ *  "needs a time" half of the home page's Upcoming Games panel. See `upcomingScheduledMatches()`
+ *  above; a caller narrows `matches` to whatever scope "upcoming" means for its season shape (a
+ *  regular season's current week vs. every unplayed gauntlet bracket match). */
+export function upcomingUnscheduledMatches<T extends { final_score: string | null; scheduled_at: string | null; match_number: number }>(matches: T[]): T[] {
+  return matches
+    .filter((m) => !isPlayedScore(m.final_score) && m.scheduled_at === null)
+    .sort((a, b) => a.match_number - b.match_number);
+}
+
 export const PLAYER_NAME_MIN_LENGTH = 2;
 export const PLAYER_NAME_MAX_LENGTH = 32;
 const PLAYER_NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;

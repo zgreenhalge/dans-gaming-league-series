@@ -1,13 +1,20 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { getSeasons, getAllLeaderboards, getSeasonSchedule, findCurrentWeek } from '@/lib/queries';
-import type { MatchWithRoster, WeekWithMatches } from '@/lib/queries';
+import {
+  getSeasons,
+  getAllLeaderboards,
+  getSeasonSchedule,
+  getUpcomingGames,
+  getGauntletRounds,
+  getUpcomingGauntletGames,
+  gauntletMatchToUpcomingGameRow,
+} from '@/lib/queries';
+import type { UpcomingGameRow } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
 import { seasonTitle } from '@/lib/util';
-import { NextUpPanel } from '@/components/NextUpPanel';
-import { NextWeekPanel } from '@/components/NextWeekPanel';
+import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,29 +118,26 @@ export default async function Home() {
     .sort((a, b) => a.id - b.id);
   const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
   // Kept separate from `active` rather than merged in: a gauntlet has no weekly schedule (no
-  // `start_date`, no week/match structure the This-Week/Next-Week panels below understand), so it
-  // only ever drives its own Live tile, never the schedule panels' "first active season" pick.
+  // `start_date`, no week/match structure), so it only ever drives its own Live tile, never the
+  // Upcoming Games panel's "first active regular season" pick below.
   const activeGauntlets = seasons.filter((s) => s.is_gauntlet && s.status === 'ACTIVE');
 
-  // Fetch schedule for the first active season to power the This Week + Next Week panels
-  let nextUpWeek: WeekWithMatches | null = null;
-  let nextUpMatches: MatchWithRoster[] = [];
-  let nextUpSeason: Season | null = null;
-  let followingWeek: WeekWithMatches | null = null;
+  // Upcoming Games panel data, from whichever season is actually active — a regular season anchors
+  // "needs scheduling" on its current week (getUpcomingGames()); a gauntlet has no weekly structure
+  // to anchor that on, so it surfaces every unscheduled bracket match instead
+  // (getUpcomingGauntletGames()).
+  let upcomingScheduled: UpcomingGameRow[] = [];
+  let upcomingUnscheduled: UpcomingGameRow[] = [];
   if (active.length > 0) {
-    const activeSeason = active[0];
-    const schedule = await getSeasonSchedule(activeSeason.id);
-    const currentWeek = findCurrentWeek(schedule, activeSeason.start_date);
-    if (currentWeek && currentWeek.matches.length > 0) {
-      nextUpWeek = currentWeek;
-      nextUpMatches = [...currentWeek.matches].sort((a, b) => a.match_number - b.match_number);
-      nextUpSeason = activeSeason;
-      const idx = schedule.indexOf(currentWeek);
-      const candidate = idx >= 0 ? schedule[idx + 1] ?? null : null;
-      if (candidate && candidate.matches.some((m) => m.shirts.length > 0 || m.skins.length > 0)) {
-        followingWeek = candidate;
-      }
-    }
+    const schedule = await getSeasonSchedule(active[0].id);
+    const upcomingGames = getUpcomingGames(schedule, active[0].start_date);
+    upcomingScheduled = upcomingGames.scheduled;
+    upcomingUnscheduled = upcomingGames.unscheduled;
+  } else if (activeGauntlets.length > 0) {
+    const rounds = await getGauntletRounds(activeGauntlets[0].id);
+    const upcomingGames = getUpcomingGauntletGames(rounds);
+    upcomingScheduled = upcomingGames.scheduled.map(gauntletMatchToUpcomingGameRow);
+    upcomingUnscheduled = upcomingGames.unscheduled.map(gauntletMatchToUpcomingGameRow);
   }
 
   return (
@@ -160,26 +164,11 @@ export default async function Home() {
           />
         ))}
 
-        {nextUpWeek && nextUpSeason && (
-          <div className="mt-4">
-            <NextUpPanel
-              season={nextUpSeason}
-              week={nextUpWeek}
-              matches={nextUpMatches}
-              currentPlayerId={currentPlayerId}
-            />
-          </div>
-        )}
-
-        {followingWeek && nextUpSeason && (
-          <div className="mt-4">
-            <NextWeekPanel
-              season={nextUpSeason}
-              week={followingWeek}
-              currentPlayerId={currentPlayerId}
-            />
-          </div>
-        )}
+        <UpcomingGamesPanel
+          scheduled={upcomingScheduled}
+          unscheduled={upcomingUnscheduled}
+          currentPlayerId={currentPlayerId}
+        />
       </main>
     </div>
   );

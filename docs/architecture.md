@@ -17,7 +17,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 
 | Path | Page |
 |---|---|
-| `/` | Home — active/upcoming seasons + current week's matches |
+| `/` | Home — active/upcoming seasons + an Upcoming Games panel (scheduled games soonest-first, plus unplayed games still needing a time) |
 | `/seasons` | Season index — all seasons (regular + gauntlet) |
 | `/seasons/[id]` | Season hub — leaderboard + weekly schedule (or gauntlet bracket) |
 | `/matches/[id]` | Match detail — veto banner, scoreboards, score entry, demo upload |
