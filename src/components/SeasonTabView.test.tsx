@@ -284,6 +284,7 @@ describe('SeasonTabView — week/round deep link', () => {
       picked_map: 'Map',
       shirts_pick: null,
       skins_starting_side: null,
+      is_feature_match: false,
       shirts_stats: [{ player_id: 90, player_name: 'Other', faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, is_win: true, rounds_won: 13, rounds_played: 22 }],
       skins_stats: [{ player_id: 91, player_name: 'Rival', faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, is_win: false, rounds_won: 9, rounds_played: 22 }],
       pod_index: 0,

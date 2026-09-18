@@ -1,12 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match, Player } from '../types';
-import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
+import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
 import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
 import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
 import { getAllMatchRounds, type MatchRoundRow } from './rounds';
@@ -235,6 +236,7 @@ export interface GauntletMatch {
   picked_map: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
+  is_feature_match: boolean;
   shirts_stats: GauntletPlayerStat[];
   skins_stats: GauntletPlayerStat[];
   /** The pod this match belongs to — null for gauntlets predating the bracket-scheduling feature
@@ -729,11 +731,11 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
   // JSON/text columns (`round_history`, ban pairs, `pre_match_win_prob*`, etc.) never used here.
   type GauntletMatchRow = Pick<
     Match,
-    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'week_id'
+    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
   >;
   const { data: matchData, error: mErr } = await client
     .from('matches')
-    .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, week_id')
+    .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, is_feature_match, week_id')
     .in('week_id', weekIds)
     .order('match_number');
   if (mErr) throw mErr;
@@ -842,6 +844,7 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
         picked_map: m.picked_map,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
+        is_feature_match: m.is_feature_match,
         shirts_stats: allStats.filter((s) => s.faction === 'SHIRTS'),
         skins_stats: allStats.filter((s) => s.faction === 'SKINS'),
         pod_index: pod?.pod_index ?? null,
@@ -855,6 +858,36 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
     });
   }
   return rounds;
+}
+
+/** Powers the home page's Upcoming Games panel for a gauntlet season — the gauntlet-shaped
+ *  counterpart to `getUpcomingGames()` (`schedule.ts`), which relies on regular-season weeks. A
+ *  gauntlet has no weekly structure to anchor a "current week" window on the way a regular season
+ *  does — bracket matches only exist as rows once their pod is materialized, so every unplayed,
+ *  unscheduled match is already "next" in the sense that matters, not just the current week's. */
+export function getUpcomingGauntletGames(rounds: GauntletRound[]): UpcomingGamesOf<GauntletMatch> {
+  const allMatches = rounds.flatMap((r) => r.matches);
+  return {
+    scheduled: upcomingScheduledMatches(allMatches),
+    unscheduled: upcomingUnscheduledMatches(allMatches),
+  };
+}
+
+/** Adapts a `GauntletMatch` into the shared `UpcomingGameRow` shape the Upcoming Games panel
+ *  renders — `GauntletMatch` carries full per-player stat rows (`shirts_stats`/`skins_stats`)
+ *  rather than the `{ player_id, player_name }[]` roster shape `MatchWithRoster` (and the panel)
+ *  use. */
+export function gauntletMatchToUpcomingGameRow(m: GauntletMatch): UpcomingGameRow {
+  return {
+    id: m.id,
+    match_number: m.match_number,
+    scheduled_at: m.scheduled_at,
+    picked_map: m.picked_map,
+    shirts_pick: m.shirts_pick,
+    is_feature_match: m.is_feature_match,
+    shirts: m.shirts_stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),
+    skins: m.skins_stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),
+  };
 }
 
 export type GauntletSummary = {

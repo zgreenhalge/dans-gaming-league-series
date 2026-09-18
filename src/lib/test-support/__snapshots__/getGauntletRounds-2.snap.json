@@ -10,6 +10,7 @@
         "picked_map": "Foroglio",
         "shirts_pick": "Foroglio",
         "skins_starting_side": "T",
+        "is_feature_match": false,
         "shirts_stats": [
           {
             "player_id": 1,
