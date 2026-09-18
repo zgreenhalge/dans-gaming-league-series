@@ -1,9 +1,9 @@
 'use client';
 
 import EmptyState from './EmptyState';
-import { MatchCard, type MatchCardRight } from './MatchCard';
+import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { isPlayedScore, fmtWindowDate, weekWindow, weekAnchorId } from '@/lib/util';
+import { fmtWindowDate, weekWindow, weekAnchorId } from '@/lib/util';
 import type { WeekWithMatches } from '@/lib/queries';
 
 
@@ -50,15 +50,7 @@ function WeekBlock({
       </button>
       {isOpen &&
         week.matches.map((m) => {
-          const played = isPlayedScore(m.final_score);
-          let right: MatchCardRight = null;
-          if (played) {
-            right = { type: 'score', score: m.final_score! };
-          } else if (m.scheduled_at) {
-            right = { type: 'scheduled', scheduledAt: m.scheduled_at };
-          } else if (win) {
-            right = { type: 'week-window', weekStart: win.start, weekEnd: win.end };
-          }
+          const right = matchCardRight(m.final_score, m.scheduled_at, win ? { type: 'week-window', weekStart: win.start, weekEnd: win.end } : null);
           return (
             <MatchCard
               key={m.id}

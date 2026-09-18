@@ -250,6 +250,49 @@ describe('GauntletRoundsList — pending pod placeholders (#528)', () => {
     expect(screen.queryByText('Game 3')).not.toBeInTheDocument();
   });
 
+  test('a game flagged is_feature_match shows the feature icon, same as a regular-season match', () => {
+    const round: GauntletRound = {
+      round_number: 1,
+      matches: [gauntletMatch({ id: 302, match_number: 1, is_feature_match: true })],
+      is_final_round: false,
+    };
+
+    render(
+      <GauntletRoundsList
+        displayRounds={[round]}
+        allRounds={[round]}
+        bracketShape={[]}
+        openRounds={new Set([1])}
+        onToggleRound={() => {}}
+        currentPlayerId={null}
+      />,
+    );
+
+    expect(screen.getByText('⭐')).toBeInTheDocument();
+  });
+
+  test('an unplayed match with scheduled_at shows the scheduled time instead of "Pending"', () => {
+    const round: GauntletRound = {
+      round_number: 1,
+      matches: [gauntletMatch({ id: 301, match_number: 1, scheduled_at: '2026-01-15T18:00:00Z' })],
+      is_final_round: false,
+    };
+
+    render(
+      <GauntletRoundsList
+        displayRounds={[round]}
+        allRounds={[round]}
+        bracketShape={[]}
+        openRounds={new Set([1])}
+        onToggleRound={() => {}}
+        currentPlayerId={null}
+      />,
+    );
+
+    expect(screen.queryByText('Pending')).not.toBeInTheDocument();
+    expect(screen.getByText(/Jan 15/)).toBeInTheDocument();
+  });
+
   test('legacy pod-less matches (no gauntlet_pods data) keep one continuous Game N count across the round', () => {
     // pod_index null throughout — a gauntlet predating bracket scheduling. Each match stands alone
     // (no Group label), and per-pod numbering must not reset it to "Game 1" three times over.
