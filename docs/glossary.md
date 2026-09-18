@@ -174,6 +174,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Canonical gauntlet finish-order ranking | `src/lib/gauntlet-ranking.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
+| Home page Upcoming Games panel (scheduled matches soonest-first, plus unplayed matches still needing a time) | `getUpcomingGames()` (`src/lib/queries/schedule.ts`, regular season, anchored on `findCurrentWeek()`) / `getUpcomingGauntletGames()` (`src/lib/queries/gauntlet.ts`, gauntlet — no weekly structure to anchor on, so every unscheduled bracket match qualifies), rendered by `src/components/UpcomingGamesPanel.tsx` |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
 | H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/MatchupDetail.tsx` |
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |
