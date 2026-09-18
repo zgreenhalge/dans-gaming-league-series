@@ -318,7 +318,7 @@ export const PLAYER_MATCH_ECONOMY_STATS: Row[] = [
   { player_match_stats_id: 1000, match_id: 100, economy_type: 'full_buy', shots_fired: 95, shots_hit: 42, headshot_hits: 19, damage_dealt: 3400, rounds_played: 18 },
   { player_match_stats_id: 1000, match_id: 100, economy_type: 'eco', shots_fired: 15, shots_hit: 6, headshot_hits: 2, damage_dealt: 200, rounds_played: 4 },
   { player_match_stats_id: 1001, match_id: 100, economy_type: 'full_buy', shots_fired: 80, shots_hit: 30, headshot_hits: 11, damage_dealt: 2500, rounds_played: 17 },
-  { player_match_stats_id: 1001, match_id: 100, economy_type: 'force_buy', shots_fired: 5, shots_hit: 2, headshot_hits: 1, damage_dealt: 100, rounds_played: 5 },
+  { player_match_stats_id: 1001, match_id: 100, economy_type: 'force', shots_fired: 5, shots_hit: 2, headshot_hits: 1, damage_dealt: 100, rounds_played: 5 },
   { player_match_stats_id: 1002, match_id: 100, economy_type: 'full_buy', shots_fired: 40, shots_hit: 15, headshot_hits: 9, damage_dealt: 1800, rounds_played: 18 },
 ];
 

@@ -95,7 +95,7 @@ async function main() {
     const fullBuy = bob.find((r) => r.economy_type === 'full_buy');
     assert.equal(fullBuy?.season_id, 1);
     assert.equal(fullBuy?.shots_hit, 30);
-    const forceBuy = bob.find((r) => r.economy_type === 'force_buy');
+    const forceBuy = bob.find((r) => r.economy_type === 'force');
     assert.equal(forceBuy?.rounds_played, 5);
   });
 
@@ -130,8 +130,8 @@ async function main() {
   });
 
   await test('resolveEconomyStat: an explicit tier the player never played returns a zeroed stat, not undefined', () => {
-    const resolved = resolveEconomyStat([], 'force_buy');
-    assert.equal(resolved.economy_type, 'force_buy');
+    const resolved = resolveEconomyStat([], 'force');
+    assert.equal(resolved.economy_type, 'force');
     assert.equal(resolved.rounds_played, 0);
   });
 

@@ -67,6 +67,9 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   (squares for emphasis, dots for compact inline use)
 - **`.player-name-me`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the
   player whose page you're on" treatments. See also `PlayerName.tsx`.
+- **`<InfoTooltip>`** (`InfoTooltip.tsx`) — the "?" badge that reveals a fuller explanation on hover
+  or keyboard focus. Reach for this whenever a label needs more than a one-line `title` attribute
+  can hold (multi-line or formatted text); use a plain `title` for a single short sentence instead.
 
 ## Typography
 

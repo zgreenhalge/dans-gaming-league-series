@@ -31,7 +31,7 @@ import {
   collectRoundsDropped, neededReloadTicks, type WeaponReloadRow, type PlayerReloadStateRow,
 } from './parsers/reload';
 import {
-  classifyRoundEconomy, collectMatchRoundEconomy, neededEconomyTicks,
+  foldRoundEconomyByPlayer, collectMatchRoundEconomy, neededEconomyTicks,
   type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
 import {
@@ -288,29 +288,41 @@ export function parseDemoSabremetrics(
   }
   const reloadStats = collectRoundsDropped(reloadEvents, reloadStateRows, context, steamIds);
 
-  // Round economy (#279): classifies each player's eco/force-buy/full-buy tier per round from
-  // CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at each round's freeze-time-end, sampled once
-  // per round (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped
-  // defensively like the reload/inventory tick reads above.
+  // Round economy (#279, #519): classifies each player's save/eco/force/full-buy tier per round
+  // from CCSPlayerPawn.m_unFreezetimeEndEquipmentValue and
+  // CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount (cash remaining after
+  // buying — the primary signal for everything except full_buy), both confirmed against a real
+  // DGLS demo (see scripts/inspect-demo-fields.ts), at each round's freeze-time-end, sampled once
+  // per round (not per shot) — same single-anchor-read shape as sideInference.ts. m_iAccount lives
+  // under the CCSPlayerController_InGameMoneyServices subservice, the same nesting
+  // accumulators.ts's per-round tracking stats use under CCSPlayerController_ActionTrackingServices
+  // — not flat on the controller. Wrapped defensively like the reload/inventory tick reads above.
+  const ACCOUNT_FIELD = 'CCSPlayerController.CCSPlayerController_InGameMoneyServices.m_iAccount';
   const economyTicks = neededEconomyTicks(freezeEndEvents, context);
   let equipmentRows: PlayerEquipmentRow[] = [];
   if (economyTicks.length > 0) {
     try {
       const rawEquipmentRows = parseTicks(
-        demoBuffer, ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'], economyTicks,
+        demoBuffer,
+        ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue', ACCOUNT_FIELD],
+        economyTicks,
       ) as Record<string, unknown>[];
       equipmentRows = rawEquipmentRows.map((r) => ({
         tick: Number(r.tick),
         steamid: String(r.steamid ?? ''),
         equipmentValue: Number(r['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'] ?? 0),
+        remainingCash: Number(r[ACCOUNT_FIELD] ?? 0),
       }));
     } catch (err) {
       warnings.push(
-        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue" tick field failed (${(err as Error).message}).`,
+        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue"/"${ACCOUNT_FIELD}" tick fields failed (${(err as Error).message}).`,
       );
     }
   }
-  const roundEconomy = classifyRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+  // Computed once here (not re-derived later) since both the per-shot economy breakdown below and
+  // the match_round_economy fact rows persisted further down need it.
+  const roundEconomyFacts = collectMatchRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+  const roundEconomy = foldRoundEconomyByPlayer(roundEconomyFacts, steamIds);
 
   // Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns (#279).
   const weaponClassStats = collectWeaponClassStats(fireEvents, hurtEvents, context, steamIds);
@@ -350,7 +362,6 @@ export function parseDemoSabremetrics(
     tick: u.tick,
   }));
 
-  const roundEconomyFacts = collectMatchRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
   const matchRoundEconomy: DemoMatchRoundEconomy[] = roundEconomyFacts.map((e) => ({
     round_number: e.round_number,
     player_id: playerIdOf(e.player_steamid)!,

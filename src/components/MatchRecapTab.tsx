@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Crosshair } from 'lucide-react';
-import { tabCls } from '@/lib/util';
+import { tabCls, sideColor } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import { ticksSince, formatClock } from '@/lib/replay/playback';
 import MapHeatmap from './MapHeatmap';
@@ -26,12 +26,6 @@ function sideClass(s: Side | null): string {
   if (s === 'CT') return 'faction-ct';
   if (s === 'T') return 'faction-t';
   return '';
-}
-
-function sideColor(s: Side | null): string | undefined {
-  if (s === 'CT') return 'var(--color-ct)';
-  if (s === 'T') return 'var(--color-t)';
-  return undefined;
 }
 
 /** Light per-row tint + matching hover accent for the event's actor team. */
