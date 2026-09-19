@@ -13,7 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel, isPlayedScore, isServerOff } from './util';
+import { matchLabel, isPlayedScore, isServerOff, isServerLive } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './server-schedule-collision';
 import {
   dathostServerId,
@@ -28,7 +28,7 @@ import {
   runConsole,
   type DathostServer,
 } from './dathost';
-import { releaseScrimSession } from './scrim-session';
+import { releaseScrimSession, getScrimSession } from './scrim-session';
 import { resolveConfigSet, pushCfgFiles, type CfgPushResult } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { notifyMatchServerLive } from './discord-notify';
@@ -136,10 +136,16 @@ export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'd
 /** Server-states in which a match currently occupies the single shared server (D2). */
 const OCCUPYING_STATES: readonly ServerState[] = ['provisioning', 'live', 'tearing_down'];
 
-/** Thrown when a provision is refused because another match already holds the shared server (#134). */
+/** Thrown when a provision is refused because the shared server is already in use — either another
+ *  match holds it (#134, `occupantMatchId` set) or it's genuinely live with no `match_server_state`
+ *  row to explain it (a scrim, or a manual admin-console launch — `occupantMatchId: null`). */
 export class ServerBusyError extends Error {
-  constructor(readonly occupantMatchId: number) {
-    super(`The match server is already in use by match ${occupantMatchId}.`);
+  constructor(readonly occupantMatchId: number | null) {
+    super(
+      occupantMatchId !== null
+        ? `The match server is already in use by match ${occupantMatchId}.`
+        : 'The match server is currently live with an active session.',
+    );
     this.name = 'ServerBusyError';
   }
 }
@@ -164,6 +170,24 @@ export async function findServerOccupant(
     .limit(1);
   const rows = (data ?? []) as { match_id: number }[];
   return rows.length ? rows[0].match_id : null;
+}
+
+/**
+ * Whether the shared server is genuinely live right now, independent of what any
+ * `match_server_state` row says — a scrim (`scrim_sessions`) or a manual admin-console launch never
+ * claims a `match_server_state` row, so `findServerOccupant` alone can't see them. `provisionMatchServer`
+ * checks this before ever starting a boot: never interrupting ongoing play outranks starting a new
+ * match on time. Best-effort like the rest of this module's DatHost reads — an unreachable DatHost
+ * can't confirm liveness either way, so it's treated as not-live rather than blocking provisioning on a
+ * network hiccup.
+ */
+export async function isServerActuallyLive(supabaseAdmin: SupabaseClient, serverId: string): Promise<boolean> {
+  if (await getScrimSession(supabaseAdmin)) return true;
+  try {
+    return isServerLive(await getServer(serverId));
+  } catch {
+    return false;
+  }
 }
 
 export interface NearbyUnscoredMatch {
@@ -323,6 +347,10 @@ export async function provisionMatchServer(
   // common overlap from a silent mid-game clobber into a clean refusal.
   const occupant = await findServerOccupant(supabaseAdmin, matchId);
   if (occupant !== null) throw new ServerBusyError(occupant);
+  // Ground-truth check: a scrim or a manual admin-console launch never claims a `match_server_state`
+  // row, so the DB-only check above can't see them. Not interrupting ongoing play outranks starting a
+  // new match on time.
+  if (await isServerActuallyLive(supabaseAdmin, serverId)) throw new ServerBusyError(null);
 
   try {
     await setServerState(supabaseAdmin, matchId, {
