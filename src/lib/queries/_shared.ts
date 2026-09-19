@@ -327,6 +327,17 @@ export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> 
   return matchSeason;
 });
 
+/** A season's played match ids, from `resolveMatchSeasons()`'s already-cached map — the shared
+ *  season-scoping step behind `getSeasonEhogRatings()` (`ehog.ts`) and `hasSeasonSabremetrics()`
+ *  (`sabremetrics.ts`), which both need exactly this list and nothing more. */
+export async function matchIdsForSeason(seasonId: number): Promise<number[]> {
+  const matchIds: number[] = [];
+  for (const [matchId, sid] of await resolveMatchSeasons()) {
+    if (sid === seasonId) matchIds.push(matchId);
+  }
+  return matchIds;
+}
+
 /**
  * Read a gzipped JSON artifact from R2 at `key`, or `null` if it doesn't exist, fails
  * to parse, or its `version` doesn't match `expectedVersion` — used by the map-level

@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
-import { batchedIn, chunk, SUPABASE_IN_BATCH, resolveMatchSeasons } from './_shared';
+import { batchedIn, chunk, SUPABASE_IN_BATCH, matchIdsForSeason } from './_shared';
 
 
 // ---------------------------------------------------------------------------
@@ -143,15 +143,12 @@ export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
 }
 
 export async function getSeasonEhogRatings(seasonId: number): Promise<Record<number, number>> {
-  // resolveMatchSeasons() (cache()-wrapped, `_shared.ts`) already resolves every played match's
-  // season — every caller of this function also calls getAllSabremetrics()/getAllMatchRounds()/etc.
-  // in the same render pass, which already fetch it, so this reuses that read instead of its own
-  // `weeks`/`matches` round trip. An unplayed match id here would be harmless anyway (it never has
+  // matchIdsForSeason() reuses resolveMatchSeasons()'s already-cached map (`_shared.ts`) — every
+  // caller of this function also calls getAllSabremetrics()/getAllMatchRounds()/etc. in the same
+  // render pass, which already fetch it, so this reuses that read instead of its own `weeks`/
+  // `matches` round trip. An unplayed match id here would be harmless anyway (it never has
   // `player_rating_history` rows), but resolveMatchSeasons() already excludes those.
-  const matchIds: number[] = [];
-  for (const [matchId, sid] of await resolveMatchSeasons()) {
-    if (sid === seasonId) matchIds.push(matchId);
-  }
+  const matchIds = await matchIdsForSeason(seasonId);
   if (matchIds.length === 0) return {};
 
   // Chunks are independent requests — run them together rather than waiting on one before the next.

@@ -201,6 +201,18 @@ describe('CombinedSeasonTabView — Stats/Advanced Stats sub-tab data', () => {
     renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  // `tab` (the sub-tab) is shared across both top tabs and doesn't reset on a topTab switch, so it
+  // can read 'advanced' on a top tab whose own light view has no advanced stats at all — e.g.
+  // landing on `?view=gauntlet&tab=advanced` when the gauntlet has no parsed demos (GAUNTLET_LIGHT
+  // has hasAdvancedStats: false). Fetching stats here would pull this app's heaviest queries for a
+  // payload SeasonTabView's own resolveTab() hides immediately since 'advanced' never makes it into
+  // its tab list.
+  test('never fetches stats for a top tab whose own light view has no advanced stats', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet&tab=advanced');
+    renderWithUrlState(<CombinedSeasonTabView {...gauntletInitialProps()} />);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('CombinedSeasonTabView — admin "Manage Bracket" link on the Gauntlet tab', () => {

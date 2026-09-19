@@ -61,7 +61,7 @@ export default function CombinedSeasonTabView({
   gauntletBracketShape: BracketPod[];
   gauntletStatus: string;
   /** Whether any of the gauntlet's matches has a played score — light (`getGauntletSeasonProgress()`),
-   *  so it's known before (and regardless of whether) the Gauntlet tab's own heavy data has loaded. */
+   *  so it's known before (and regardless of whether) the Gauntlet tab's own light data has loaded. */
   gauntletStarted: boolean;
   currentPlayerId: number | null;
   isAdmin: boolean;
@@ -130,6 +130,18 @@ export default function CombinedSeasonTabView({
   const [statsLoadError, setStatsLoadError] = useState<TopTab | null>(null);
   const [statsRetryNonce, setStatsRetryNonce] = useState(0);
 
+  // `subTab` is shared across both top tabs (it doesn't reset on a topTab switch), so it can read
+  // 'advanced' while the *active* tab's own light view has no advanced stats at all (e.g. switching
+  // from a demo-parsed Regular season into a Gauntlet with none) — SeasonTabView's own resolveTab()
+  // would hide that tab immediately, but not before this effect would otherwise have already fired
+  // this app's heaviest queries for a payload nothing renders. `undefined` while the active tab's
+  // own light view is still loading — re-checked once it resolves via this effect's own dependency
+  // on it, rather than skipping forever on a still-unknown answer. No equivalent guard for the
+  // (rarer) 'stats' sub-tab, which would need `hasStats`'s own leaderboard/played-match derivation
+  // duplicated from SeasonTabView — left to its resolveTab() to hide, at the cost of one wasted
+  // fetch in that narrower case.
+  const activeHasAdvancedStats = lightCache[topTab]?.hasAdvancedStats;
+
   // The active top tab's Stats/Advanced Stats sub-tab data — a second, separately-lazy tier below
   // the light view above, only fetched once `subTab` is actually 'stats'/'advanced'. Cached here
   // (not inside SeasonTabView, which unmounts on every top-tab switch) so it survives switching
@@ -137,6 +149,7 @@ export default function CombinedSeasonTabView({
   // SeasonTabView's own `onStatsRetry` doc comment).
   useEffect(() => {
     if ((subTab !== 'stats' && subTab !== 'advanced') || statsCache[topTab] || statsLoadingKind === topTab) return;
+    if (subTab === 'advanced' && !activeHasAdvancedStats) return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatsLoadingKind(topTab);
@@ -164,7 +177,7 @@ export default function CombinedSeasonTabView({
       setStatsLoadingKind((k) => (k === topTab ? null : k));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subTab, topTab, statsRetryNonce, regularSeasonId, gauntletSeasonId]);
+  }, [subTab, topTab, statsRetryNonce, regularSeasonId, gauntletSeasonId, activeHasAdvancedStats]);
 
   // Seed number → player name from the regular season's own standings (already canonical-sorted,
   // i.e. seed order) — lets the gauntlet bracket diagram name an unseeded seed slot before the

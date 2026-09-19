@@ -127,7 +127,7 @@ export default async function SeasonPage({
   if (!Number.isFinite(seasonId)) notFound();
 
   // Which of the Regular Season / Gauntlet tabs to eagerly render server-side — the other tab's own
-  // heavy data is fetched lazily, client-side, the first time it's actually opened (see
+  // light data is fetched lazily, client-side, the first time it's actually opened (see
   // CombinedSeasonTabView). Read from the URL so a direct `?view=gauntlet` link still renders that
   // tab on the first paint, with no client-side flash/refetch.
   const initialView: 'regular' | 'gauntlet' = (await searchParams).view === 'gauntlet' ? 'gauntlet' : 'regular';
@@ -226,7 +226,7 @@ export default async function SeasonPage({
   // (the latter deliberately so — see getSeasonMatchSummaries()'s own doc comment) and needed
   // regardless of which tab ends up showing, but nothing below this point depends on their *values*
   // — only on `linkedGauntlet`/`playersById`. Started here (not awaited yet) so they run alongside
-  // everything below instead of gating it: awaiting all four together would make the heavy-view wave
+  // everything below instead of gating it: awaiting all four together would make the light-view wave
   // below wait on whichever of these two happens to be slowest, for no reason.
   const leaderboardPromise = getSeasonLeaderboard(seasonId);
   const matchSummariesPromise = getSeasonMatchSummaries(seasonId);
