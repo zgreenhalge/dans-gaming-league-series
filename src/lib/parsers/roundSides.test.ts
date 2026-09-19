@@ -102,6 +102,45 @@ test('buildRoundSides: matchStartTick defaults to 0 (no tick filtering) for demo
   assert.equal(buildRoundSides(events, 'CT', 13).length, 2);
 });
 
+// --- startingRealRound: anchoring the half-swap for a segment that begins mid-match ---
+//
+// A demo segment that doesn't start at the match's true round 1 (e.g. one of several GOTV
+// recordings split by a server restart) needs the half/OT-swap boundary anchored on the
+// match-wide round count, not this segment's own first live round. These lock that anchoring in
+// isolation, with no dependency on multi-segment merging (that's the merge layer's job) — this is
+// purely "does buildRoundSides place the swap at the right *real* round when a caller says this
+// segment doesn't start at real round 1."
+
+test('buildRoundSides: without startingRealRound, a segment beginning mid-match miscomputes the ' +
+  'half-swap relative to its own first round (the bug this offset exists to fix)', () => {
+  // Engine rounds 5..23, parsed as if this were the whole match: firstRoundNumber=5 is (wrongly)
+  // treated as real round 1, so the flip lands 12 rounds later at engine round 17 (real round 13
+  // by this segment's own count), not the true engine round 13.
+  const events = Array.from({ length: 19 }, (_, i) => round(i + 5));
+  const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
+  assert.equal(byNum.get(13)!.shirtsSide, 'T'); // still first half by this (wrong) reckoning
+  assert.equal(byNum.get(17)!.shirtsSide, 'CT'); // segment-relative flip lands here instead
+});
+
+test('buildRoundSides: startingRealRound anchors the half-swap on the match-wide round count', () => {
+  // Same engine rounds 5..23, now told this segment's first live round IS real round 5 (4 real
+  // rounds already played in a prior segment). The flip must land at the true engine round 13.
+  const events = Array.from({ length: 19 }, (_, i) => round(i + 5));
+  const byNum = new Map(
+    buildRoundSides(events, 'CT', 13, 0, 5).map((s) => [s.roundNumber, s]),
+  );
+  assert.equal(byNum.get(12)!.shirtsSide, 'T'); // real round 12: last of first half
+  assert.equal(byNum.get(13)!.shirtsSide, 'CT'); // real round 13: first of second half
+  assert.equal(byNum.get(23)!.shirtsSide, 'CT'); // real round 23: still second half
+});
+
+test('buildRoundSides: startingRealRound defaults to 1, matching every existing single-segment call', () => {
+  const events = Array.from({ length: 13 }, (_, i) => round(i + 1));
+  const withDefault = buildRoundSides(events, 'CT', 13);
+  const withExplicit1 = buildRoundSides(events, 'CT', 13, 0, 1);
+  assert.deepEqual(withDefault, withExplicit1);
+});
+
 test('sideForFaction: SHIRTS returns the round shirts side, SKINS returns the opposite', () => {
   const info = { roundNumber: 1, endTick: 0, winnerSide: 'CT' as const, shirtsSide: 'T' as const, winReason: 'elim' as const };
   assert.equal(sideForFaction(info, 'SHIRTS'), 'T');

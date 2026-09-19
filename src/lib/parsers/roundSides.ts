@@ -75,6 +75,12 @@ export function buildRoundSides(
   skinsStartingSide: 'CT' | 'T' | null,
   targetWinRounds: number,
   matchStartTick = 0,
+  /** The match-wide real round number this segment's first live round actually is — 1 for a
+   *  segment that starts at the match's true beginning (every existing single-segment caller), or
+   *  higher for a later segment of a restart-interrupted match. Anchoring the half-swap on a
+   *  segment's own first live round instead would mislabel every round straddling the boundary
+   *  once that segment isn't the match's true first segment. */
+  startingRealRound = 1,
 ): RoundSideInfo[] {
   if (skinsStartingSide === null) return [];
 
@@ -92,7 +98,7 @@ export function buildRoundSides(
 
   return liveRounds.map((e) => {
     const roundNumber = e.total_rounds_played;
-    const realRoundNumber = roundNumber - firstRoundNumber + 1;
+    const realRoundNumber = roundNumber - firstRoundNumber + startingRealRound;
 
     return {
       roundNumber,

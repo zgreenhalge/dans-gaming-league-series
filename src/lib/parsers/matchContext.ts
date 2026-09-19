@@ -230,6 +230,8 @@ export function buildMatchContext(
   skinsStartingSide: 'CT' | 'T' | null,
   targetWinRounds: number,
   officiallyEndedTicks: number[] = [],
+  /** See `buildRoundSides`'s doc comment — 1 for every current caller (a single, complete demo). */
+  startingRealRound = 1,
 ): MatchContext {
   const warnings: string[] = [];
 
@@ -247,7 +249,9 @@ export function buildMatchContext(
   }
 
   const matchStartTick = findMatchStartTick(demoBuffer);
-  const rounds = buildRoundSides(roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick);
+  const rounds = buildRoundSides(
+    roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick, startingRealRound,
+  );
   const hasSides = rounds.length > 0;
 
   if (!hasSides && skinsStartingSide === null) {
