@@ -62,7 +62,7 @@ export function parseDemoFile(
 
   // --- Round outcomes (needed for final tick + halftime logic) ---
   const matchStartTick = findMatchStartTick(demoBuffer);
-  const liveRounds = getLiveRoundEndEvents(demoBuffer);
+  const liveRounds = getLiveRoundEndEvents(demoBuffer, matchStartTick);
   const totalRounds = liveRounds.length;
 
   // --- K / D / A / Damage: read all from the engine's own accumulators ---

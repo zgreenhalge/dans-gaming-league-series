@@ -53,22 +53,30 @@ async function main() {
     'total_rounds_played', 'winner', 'reason', 'is_warmup_period',
   ]);
 
-  console.log(`round_end events (${rounds.length}):`);
-  for (const r of [...rounds].sort((a, b) => a.tick - b.tick)) {
+  const sortedRounds = [...rounds].sort((a, b) => a.tick - b.tick);
+
+  // One parseTicks() call for every round's tick, not one per round — each call re-walks the
+  // whole buffer, so batching avoids N redundant scans for N rounds.
+  const teamRows = parseTicks(buf, ['team_num'], sortedRounds.map((r) => r.tick)) as {
+    tick: number;
+    steamid: string | bigint;
+    team_num?: number;
+  }[];
+  const teamsByTick = new Map<number, string[]>();
+  for (const row of teamRows) {
+    if (!row.steamid || String(row.steamid) === '0') continue;
+    const list = teamsByTick.get(row.tick) ?? [];
+    list.push(`${row.steamid}:${row.team_num}`);
+    teamsByTick.set(row.tick, list);
+  }
+
+  console.log(`round_end events (${sortedRounds.length}):`);
+  for (const r of sortedRounds) {
     console.log(
       `  tick=${r.tick}  total_rounds_played=${r.total_rounds_played}` +
       `  winner=${r.winner}  warmup=${r.is_warmup_period}  reason=${r.reason}`,
     );
-
-    const teamRows = parseTicks(buf, ['team_num'], [r.tick]) as {
-      steamid: string | bigint;
-      team_num?: number;
-    }[];
-    const teams = teamRows
-      .filter((t) => t.steamid && String(t.steamid) !== '0')
-      .map((t) => `${t.steamid}:${t.team_num}`)
-      .join(', ');
-    console.log(`    team_num @ tick=${r.tick}: ${teams}`);
+    console.log(`    team_num @ tick=${r.tick}: ${(teamsByTick.get(r.tick) ?? []).join(', ')}`);
   }
 }
 
