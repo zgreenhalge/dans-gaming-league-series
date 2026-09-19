@@ -137,20 +137,26 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
   if (order.length > 1) {
     const referenceIdx = order[0];
     const reference = new Set(playerIdsBySegment[referenceIdx]);
+    const flaggedEmpty = new Set<number>();
     for (const i of order.slice(1)) {
       const ids = new Set(playerIdsBySegment[i]);
       // A segment resolving zero players (a short or manually-started recording can legitimately
       // lack a populated player-info table — see noPlayersFoundWarning() in rosterResolver.ts,
       // which already warns on this at parse time) is a different, less alarming situation than
       // one resolving a genuinely different roster: its round outcomes still count toward the
-      // merged score, it just contributes no per-player stats — not a sign of a wrong file
-      // pairing. Detected structurally here (an empty id set), not by checking for that warning's
-      // text, so this module stays decoupled from another module's message format.
+      // merged score, it just contributes no per-player stats for that segment's own rounds —
+      // rounds_played/damage/ADR for every player are short by exactly that many rounds, with no
+      // way to recover which player they belonged to. Detected structurally here (an empty id
+      // set), not by checking for that warning's text, so this module stays decoupled from
+      // another module's message format.
       if (ids.size === 0 || reference.size === 0) {
         const emptyIdx = ids.size === 0 ? i : referenceIdx;
-        flags.push(
-          `segment ${emptyIdx} resolved zero players — its round outcomes are still included in the merge, but it contributes no per-player stats`,
-        );
+        if (!flaggedEmpty.has(emptyIdx)) {
+          flaggedEmpty.add(emptyIdx);
+          flags.push(
+            `segment ${emptyIdx} resolved zero players — its round outcomes are still included in the merge, but every player's merged rounds_played/damage/ADR is short by that segment's rounds, with no way to attribute them`,
+          );
+        }
         continue;
       }
       const sameSize = ids.size === reference.size;
@@ -180,34 +186,61 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
 export function mergeSegmentResults(segments: ParsedDemoResult[]): ParsedDemoResult {
   const warnings = [...new Set(segments.flatMap((s) => s.warnings))];
 
-  // Segments should agree on the demo-inferred starting side (it's a property of the one match,
-  // not of any single recording). This is only reachable when nothing is stored — a stored side
-  // makes every segment's effectiveSide identical regardless of its own inference — so a
-  // disagreement here means each segment's score was computed from a genuinely different,
-  // mutually incompatible side attribution, not just a diagnostic mismatch: the merged score is
-  // nulled rather than summed, the same "never substitute a plausible-looking wrong value" rule
-  // this module follows for an unresolvable per-segment side.
+  // Diagnostic only: the raw demo-inferred side disagreeing across segments is worth a human's
+  // attention even when a stored side papers over it (every segment then uses that same stored
+  // value for round attribution regardless of what its own inference said) — so this alone never
+  // nulls the score. What actually gates the score is effective_side below.
   const distinctInferredSides = [
     ...new Set(segments.map((s) => s.inferred_side).filter((s): s is 'CT' | 'T' => s !== null)),
   ];
   const inferred_side = distinctInferredSides.length === 1 ? distinctInferredSides[0] : null;
-  const sidesDisagree = distinctInferredSides.length > 1;
+  if (distinctInferredSides.length > 1) {
+    warnings.push(
+      `Segments disagree on the demo-inferred starting side (${distinctInferredSides.join(', ')}).`,
+    );
+  }
+
+  // The side each segment actually used for round attribution. Segments disagreeing here means
+  // their scores were computed from mutually incompatible attributions — only reachable when
+  // nothing is stored, since a stored side is identical across every segment regardless of that
+  // segment's own inference — so the merged score is nulled rather than summed, the same "never
+  // substitute a plausible-looking wrong value" rule this module follows for an unresolvable
+  // per-segment side.
+  const distinctEffectiveSides = [
+    ...new Set(segments.map((s) => s.effective_side).filter((s): s is 'CT' | 'T' => s !== null)),
+  ];
+  const effective_side = distinctEffectiveSides.length === 1 ? distinctEffectiveSides[0] : null;
+  const sidesDisagree = distinctEffectiveSides.length > 1;
   if (sidesDisagree) {
     warnings.push(
-      `Segments disagree on the demo-inferred starting side (${distinctInferredSides.join(', ')}) — the merged score cannot be trusted; verify these demos belong to the same match.`,
+      `Segments used different starting sides for round attribution (${distinctEffectiveSides.join(', ')}) — the merged score cannot be trusted; verify these demos belong to the same match.`,
+    );
+  }
+
+  // Re-verifying round contiguity on the merged round_history itself — rather than trusting the
+  // caller already ran checkSegmentAgreement()'s gap/overlap check — means a bad pairing can never
+  // silently produce a plausible-looking score even if that check was skipped or its result
+  // ignored upstream. A properly anchored, crash-artifact-filtered match's rounds are always a
+  // contiguous run with no gap or regression once merged and sorted.
+  const rawRoundHistory = segments.every((s) => s.round_history)
+    ? segments.flatMap((s) => s.round_history!).sort((a, b) => a.n - b.n)
+    : null;
+  const roundsContiguous =
+    !rawRoundHistory || rawRoundHistory.every((r, i) => i === 0 || r.n === rawRoundHistory[i - 1].n + 1);
+  if (rawRoundHistory && !roundsContiguous) {
+    warnings.push(
+      'Merged round history is not contiguous — the segments\' round numbering does not agree; the merged score cannot be trusted.',
     );
   }
 
   const allScoresKnown =
-    !sidesDisagree && segments.every((s) => s.shirts_score !== null && s.skins_score !== null);
+    !sidesDisagree && roundsContiguous && segments.every((s) => s.shirts_score !== null && s.skins_score !== null);
   const sumScore = (pick: (s: ParsedDemoResult) => number | null) =>
     allScoresKnown ? segments.reduce((sum, s) => sum + pick(s)!, 0) : null;
   const shirts_score = sumScore((s) => s.shirts_score);
   const skins_score = sumScore((s) => s.skins_score);
 
-  const round_history = allScoresKnown && segments.every((s) => s.round_history)
-    ? segments.flatMap((s) => s.round_history!).sort((a, b) => a.n - b.n)
-    : null;
+  const round_history = allScoresKnown ? rawRoundHistory : null;
 
   // sumNumericFields also sums `adr` (it's numeric) into a meaningless total; discarded below in
   // favor of recomputing it from the merged damage/rounds_played, the only correct way to combine
@@ -221,7 +254,7 @@ export function mergeSegmentResults(segments: ParsedDemoResult[]): ParsedDemoRes
     return { ...s, adr, is_win };
   });
 
-  return { stats, shirts_score, skins_score, round_history, warnings, inferred_side };
+  return { stats, shirts_score, skins_score, round_history, warnings, inferred_side, effective_side };
 }
 
 /** Combines each segment's `weaponStats`/`economyStats` bucket arrays (WeaponStatFields keyed by

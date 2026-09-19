@@ -42,6 +42,12 @@ export interface ParsedDemoResult {
   warnings: string[];
   /** Side inferred from the demo's round-1 `team_num` (null if unresolvable); for diagnostics. */
   inferred_side: 'CT' | 'T' | null;
+  /** The side actually used for round attribution (stored wins over `inferred_side` when both are
+   *  known — see `resolveEffectiveSide()`); null when neither resolved, in which case the score is
+   *  null too. `segmentMerge.ts`'s `mergeSegmentResults()` uses this, not `inferred_side`, to decide
+   *  whether segments' scores are mutually compatible — a stored side makes every segment use the
+   *  identical value regardless of that segment's own (possibly noisy) inference. */
+  effective_side: 'CT' | 'T' | null;
 }
 
 export function parseDemoFile(
@@ -176,6 +182,7 @@ export function parseDemoFile(
     round_history: roundHistory,
     warnings,
     inferred_side: inferredSide,
+    effective_side: effectiveSide,
   };
 }
 

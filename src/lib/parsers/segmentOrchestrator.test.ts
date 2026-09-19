@@ -2,9 +2,8 @@
  * Unit tests for orchestrateSegments() — the sequencing glue (probe → offsets → per-segment parse
  * → agreement → merge) shared by parseDemoFileSegments()/parseDemoSabremetricsSegments(). The
  * per-segment parse/merge/probe steps are all injected here as fakes, so this proves the
- * *sequencing* itself is correct with no real demo buffer or demoparser2 call involved — the thing
- * this module's own header comment says is the one place that sequencing lives, and previously had
- * no direct test (only the pure helpers underneath it did).
+ * *sequencing* itself is correct with no real demo buffer or demoparser2 call involved — the one
+ * place, per this module's own header comment, that sequencing lives.
  *
  * Run:  npx vitest run src/lib/parsers/segmentOrchestrator.test.ts
  */

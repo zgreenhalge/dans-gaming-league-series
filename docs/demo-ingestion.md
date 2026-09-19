@@ -281,10 +281,19 @@ take an array of demo buffers instead of one and combine them into a single resu
    genuine roster mismatch, since its round outcomes still count toward the merged score whenever
    the match's starting side is stored (shared across every segment regardless of that segment's own
    roster resolution); only when the side is *also* unknown does a zero-player segment leave the
-   merged score unresolved, same as any other segment whose side can't be determined. Segments that
-   independently infer *different* starting sides (only possible when nothing is stored) null the
-   merged score rather than returning a number built from mutually incompatible round attributions.
-4. `mergeSegmentResults()`/`mergeSabremetricResults()` (`parsers/segmentMerge.ts`) combine the
+   merged score unresolved, same as any other segment whose side can't be determined — and even
+   then, every player's merged `rounds_played`/damage/ADR is short by that segment's own rounds,
+   with no way to recover which player they belonged to.
+4. `mergeSegmentResults()` re-verifies two things itself rather than trusting the caller already
+   ran (and heeded) `checkSegmentAgreement()`: the merged `round_history` is contiguous with no
+   gap or regression, and every segment's *effective* side (the one actually used for round
+   attribution — stored wins over a segment's own inference, so a stored side makes every segment
+   use the identical value) agrees. Either failure nulls the merged score rather than returning a
+   number built from an inconsistency, so a bad pairing can't silently produce a plausible-looking
+   wrong result even if the upstream check was skipped. A segment's raw *inferred* side (its own,
+   possibly noisy, demo-based read) disagreeing with another segment's is only ever diagnostic —
+   surfaced as a warning, but doesn't null a score that a stored side already made correct.
+5. `mergeSegmentResults()`/`mergeSabremetricResults()` (`parsers/segmentMerge.ts`) combine the
    per-segment results generically at the field level — summing every numeric stat/sabremetric field
    sharing a player-id key, rather than by a hardcoded field list, and concatenating fact-row arrays
    sorted back into round order (independent of segment/argument order) — so a new field on an
