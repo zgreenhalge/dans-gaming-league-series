@@ -67,11 +67,15 @@ so you don't have to reverse-engineer them from scratch each time.
   live veto submission (`/api/matches/[id]/veto`) still keys off `is_gauntlet` alone since only
   already-played CSV imports can hit the mismatch.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
-  - **Ban phase** — each of the 4 rostered players bans one map from the season's 5-map `map_pool`,
-    into their own fixed slot (`shirts_ban`/`shirts_ban2` for SHIRTS, `skins_ban1`/`skins_ban2` for
-    SKINS, assigned by ascending `player_id` within the faction). All 4 bans are submitted
-    simultaneously — there's no turn order between or within factions. Once all 4 slots are filled,
-    the one map neither side banned is auto-picked into `shirts_pick` (`/api/matches/[id]/veto`).
+  - **Ban phase** — each of the 4 rostered players bans one map from the paired regular season's
+    5-map `map_pool`, into their own fixed slot (`shirts_ban`/`shirts_ban2` for SHIRTS,
+    `skins_ban1`/`skins_ban2` for SKINS, assigned by ascending `player_id` within the faction). A
+    gauntlet season's own `map_pool` column is always `null` — it's never written at creation
+    (`createGauntletSeasonRow()` in `src/lib/gauntlet-engine.ts`) — so any code needing the pool for a
+    gauntlet match must resolve it via `getLinkedRegularSeason()`, same as `getMatch()`
+    (`src/lib/queries/match.ts`) and the veto route do. All 4 bans are submitted simultaneously —
+    there's no turn order between or within factions. Once all 4 slots are filled, the one map neither
+    side banned is auto-picked into `shirts_pick` (`/api/matches/[id]/veto`).
   - **No side pick** — gauntlet matches never set `skins_starting_side`; the veto route rejects it as
     an invalid gauntlet field. Instead the server always plays a knife round
     (`matchzy_knife_enabled_default true` in the golden config) and its winner picks their starting
