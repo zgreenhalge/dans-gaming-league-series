@@ -302,6 +302,15 @@ dispatching to the multi-segment functions instead of the single-buffer ones, an
 derived score/stats/warnings report as a normal single-demo run for an admin to review before
 confirming the score through the existing `PATCH /score` flow by hand.
 
+**Known limitation.** `parseDemoSabremetrics()` returns empty sabremetric/fact-row arrays and a
+generic "No live rounds found in demo" warning whenever a segment's side can't be resolved,
+regardless of whether that segment's roster resolved fine — a real distinction from a genuinely
+empty demo that this early return doesn't currently make. In a multi-segment merge this can produce
+a "resolved zero players" agreement flag on the sabremetrics side for a segment whose roster
+actually resolved every player on the score side, both surfacing on the same admin review. Not
+specific to multi-segment demos (the same conflation happens on any single unresolvable-side parse)
+and out of scope to fix without touching that early return's behavior for every caller.
+
 ## Environment
 
 The demo path needs Cloudflare R2 credentials (in addition to the standard env vars in the root

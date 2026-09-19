@@ -157,6 +157,12 @@ export function parseDemoSabremetrics(
   );
 
   if (context.rounds.length === 0) {
+    // Fires whenever the side can't be resolved (stored side null and demo inference failed),
+    // regardless of whether the roster itself resolved fine — so this warning can fire for a
+    // segment whose roster resolved every player, and in a multi-segment merge its player-id list
+    // reads as empty here even though parseDemoFile's for the same segment isn't. A real
+    // distinction (empty roster vs. unresolvable side vs. genuinely empty demo), just not one this
+    // early return currently makes.
     warnings.push(...context.warnings);
     return {
       sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
