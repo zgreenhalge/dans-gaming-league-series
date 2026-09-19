@@ -17,8 +17,6 @@ interface Props {
   weekEnd: string | null;
   canEdit: boolean;
   played: boolean;
-  /** True for Game 2 of a gauntlet pod — its time is derived from Game 1's, so it's shown read-only. */
-  isPodGame2?: boolean;
   /** The pod's other game, for the cross-link under the map name — null for a non-gauntlet match or
    *  one with no resolvable pod sibling. */
   podSibling?: { matchId: number; gameNumber: number; finalScore: string | null } | null;
@@ -90,7 +88,6 @@ export default function MatchHeaderSection({
   weekEnd,
   canEdit,
   played,
-  isPodGame2 = false,
   podSibling = null,
   otherScheduled = [],
 }: Props) {
@@ -110,17 +107,13 @@ export default function MatchHeaderSection({
     clear,
   } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
-  // Game 2 of a gauntlet pod has no independent schedule — its time is always derived from Game 1's
-  // (PATCH /api/matches/[id]/schedule enforces this server-side), so it's shown but never editable
-  // here regardless of the caller's own canEdit.
-  const canEditSchedule = canEdit && !isPodGame2;
   const windowLabel =
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
 
   const scheduleReadView = !editing && (
     <div className="flex items-center gap-2">
       {scheduledAt ? (
-        canEditSchedule ? (
+        canEdit ? (
           <div>
             <button
               onClick={startEditing}
@@ -151,7 +144,7 @@ export default function MatchHeaderSection({
           {windowLabel}
         </span>
       ) : null}
-      {canEditSchedule && !scheduledAt && (
+      {canEdit && !scheduledAt && (
         <button
           onClick={startEditing}
           className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
@@ -162,7 +155,7 @@ export default function MatchHeaderSection({
     </div>
   );
 
-  const scheduleEditView = canEditSchedule && editing && (
+  const scheduleEditView = canEdit && editing && (
     <div className="flex items-center gap-2 flex-wrap">
       <input
         type="datetime-local"

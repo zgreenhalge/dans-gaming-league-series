@@ -1,9 +1,10 @@
 /**
  * Route-handler harness for PATCH /api/matches/[id]/schedule — the admin-or-in-match access gate,
- * the gauntlet-pod scheduling rules (Game 1 only, Game 2 derived 30 minutes later), body validation,
- * and (#395) that a successful write always calls the `schedule_match_reminder` RPC afterward with
- * the right args, best-effort (an RPC failure doesn't fail the request, since scheduled_at itself
- * already committed).
+ * that a gauntlet pod's Game 1 and Game 2 are each independently schedulable (no forced pairing —
+ * that only happens via a synced Discord Scheduled Event, see discord-event-sync.test.ts), body
+ * validation, and (#395) that a successful write always calls the `schedule_match_reminder` RPC
+ * afterward with the right args, best-effort (an RPC failure doesn't fail the request, since
+ * scheduled_at itself already committed).
  *
  * Run:  npx vitest run "src/app/api/matches/[id]/schedule/route.test.ts"
  */
@@ -28,9 +29,6 @@ const GAUNTLET_MATCH_ID_2 = 201; // Game 2, added by installPodFixture() below
 function installFixture(rpcHandlers: Record<string, RpcHandler> = {}) {
   const db = buildFakeDb();
   const client = createFakeSupabaseClient(db, rpcHandlers);
-  // The route reads its gauntlet-pod lookup through the query layer's anon `supabase` singleton
-  // (getGauntletPodForMatch()), same as every other read-only query helper, while writing through
-  // the admin client — both need to point at the same fake db.
   __setTestClient(client);
   __setTestAdminClient(client);
   return db;
@@ -92,39 +90,57 @@ async function main() {
     assert.equal(res.status, 403);
   });
 
-  await test('PATCH — a gauntlet match with no fully materialized pod is rejected (404)', async () => {
+  await test('PATCH — a gauntlet match with no fully materialized pod can still be scheduled directly', async () => {
     // Base fixture's pod 1000 only has match1_id set — a transient state in production, between
-    // materializePod()'s two match inserts, that's never actually schedulable.
-    installFixture();
-    const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: null });
-    assert.equal(res.status, 404);
+    // materializePod()'s two match inserts — but scheduling here no longer looks at the pod at all.
+    __setTestAfterMode(true);
+    const db = installFixture({ schedule_match_reminder: () => true });
+    const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
+    assert.equal(res.status, 200);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)?.scheduled_at, '2026-09-01T18:00:00.000Z');
+    await __flushTestAfter();
+    __setTestAfterMode(false);
   });
 
-  await test('PATCH — scheduling a pod\'s Game 2 directly is rejected (400), pointing at Game 1', async () => {
-    installPodFixture();
-    const res = await call(GAUNTLET_MATCH_ID_2, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
-    assert.equal(res.status, 400);
-    assert.match((await res.json()).error, /Game 1/);
-  });
-
-  await test('PATCH — scheduling a pod\'s Game 1 also sets Game 2 thirty minutes later, and reminds only Game 1', async () => {
+  await test('PATCH — scheduling a pod\'s Game 2 directly succeeds and never touches Game 1', async () => {
     __setTestAfterMode(true);
     const { calls, handler } = recordingRpc();
     const db = installPodFixture({ schedule_match_reminder: handler });
+    // A known baseline for Game 1, distinct from buildFakeDb()'s own default, so this test proves
+    // the route leaves it alone regardless of what an earlier test in this file left it as (fixture
+    // rows are shared references — see installPodFixture()'s own comment above).
+    db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)!.scheduled_at = '2026-08-01T12:00:00.000Z';
+    const iso = '2026-09-01T18:00:00.000Z';
+
+    const res = await call(GAUNTLET_MATCH_ID_2, ADMIN_ID, { scheduled_at: iso });
+    assert.equal(res.status, 200);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, iso);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)?.scheduled_at, '2026-08-01T12:00:00.000Z', 'Game 1 is untouched');
+
+    await __flushTestAfter();
+    assert.deepEqual(calls, [{ p_match_id: GAUNTLET_MATCH_ID_2, p_scheduled_at: iso }]);
+    __setTestAfterMode(false);
+  });
+
+  await test('PATCH — scheduling a pod\'s Game 1 never sets or touches Game 2\'s time, and reminds only Game 1', async () => {
+    __setTestAfterMode(true);
+    const { calls, handler } = recordingRpc();
+    const db = installPodFixture({ schedule_match_reminder: handler });
+    // A known baseline for Game 2, same reasoning as the Game-2-edit test above.
+    db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)!.scheduled_at = '2026-08-01T12:30:00.000Z';
     const iso = '2026-09-01T18:00:00.000Z';
 
     const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: iso });
     assert.equal(res.status, 200);
     assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)?.scheduled_at, iso);
-    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, '2026-09-01T18:30:00.000Z');
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, '2026-08-01T12:30:00.000Z', 'Game 2 is untouched');
 
     await __flushTestAfter();
-    assert.equal(calls.length, 1, 'only Game 1 gets a reminder scheduled — one per pod, not two');
-    assert.deepEqual(calls[0], { p_match_id: GAUNTLET_MATCH_ID, p_scheduled_at: iso });
+    assert.deepEqual(calls, [{ p_match_id: GAUNTLET_MATCH_ID, p_scheduled_at: iso }]);
     __setTestAfterMode(false);
   });
 
-  await test('PATCH — clearing a pod\'s Game 1 time also clears Game 2\'s', async () => {
+  await test('PATCH — clearing a pod\'s Game 1 time leaves Game 2\'s own time alone', async () => {
     __setTestAfterMode(true);
     const db = installPodFixture({ schedule_match_reminder: () => true });
     db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)!.scheduled_at = '2026-09-01T18:00:00.000Z';
@@ -133,7 +149,7 @@ async function main() {
     const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: null });
     assert.equal(res.status, 200);
     assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)?.scheduled_at, null);
-    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, null);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, '2026-09-01T18:30:00.000Z');
     await __flushTestAfter();
     __setTestAfterMode(false);
   });

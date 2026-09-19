@@ -18,12 +18,14 @@ export interface AdminMatchRow {
   weekEnd: string | null;
   /** The other match in this one's gauntlet pod, if any — null for a non-gauntlet match or a
    *  gauntlet match with no resolvable pod. Excluded from the schedule editor's own collision
-   *  candidates (the two are intentionally 30 minutes apart on the one server). */
+   *  candidates — the pod's two games are meant to be scheduled close together for one session (a
+   *  synced Discord Scheduled Event always puts them exactly 30 minutes apart), which isn't a
+   *  double-booking the way two unrelated matches contending for the server would be. */
   podSiblingId: number | null;
   /** 1 or 2 — which of the pod's two games this is (by materialization order), null when
-   *  `podSiblingId` is null. Only game 1 sets the pod's schedule (`PATCH /api/matches/[id]/schedule`
-   *  writes both games' `scheduled_at` from a single "pod start" time); game 2 is read-only,
-   *  always 30 minutes after game 1. */
+   *  `podSiblingId` is null. Each game has its own independently editable schedule
+   *  (`PATCH /api/matches/[id]/schedule`); only a Discord Scheduled Event sync pairs them 30
+   *  minutes apart automatically. */
   podGameNumber: 1 | 2 | null;
 }
 

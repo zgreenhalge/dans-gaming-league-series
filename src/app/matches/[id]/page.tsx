@@ -278,9 +278,9 @@ export default async function MatchPage({
       // Non-admins are blocked from veto until the window opens
       canVeto = isAdmin || vetoWindowOpen;
       vetoIsAdmin = isAdmin;
-      // Scheduling rights apply to both regular and gauntlet matches — MatchHeaderSection itself
-      // further restricts a gauntlet pod's Game 2 to read-only (its time is always derived from
-      // Game 1's, see PATCH /api/matches/[id]/schedule).
+      // Scheduling rights apply to both regular and gauntlet matches — a pod's Game 1 and Game 2 are
+      // each independently editable here (PATCH /api/matches/[id]/schedule only auto-derives Game 2
+      // from Game 1 when the time comes from a synced Discord Scheduled Event).
       canEdit = true;
       if (myStatRow) {
         playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
@@ -306,7 +306,10 @@ export default async function MatchPage({
   // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
   // match, gauntlet included, so the banner shows regardless of edit rights; a gauntlet match's own
   // pod sibling is excluded here (not inside getOtherScheduledMatches, which stays gauntlet-agnostic)
-  // since it's intentionally 30 minutes away, not a collision.
+  // since the pod's two games are meant to be scheduled close together for one session — a synced
+  // Discord Scheduled Event always puts them exactly `POD_GAME_GAP_MS` apart, well inside the
+  // collision window, and a manual edit keeping them close is the same intended shape, not a
+  // double-booking the way two unrelated matches contending for the server would be.
   const otherScheduled = otherScheduledRaw.filter((r) => r.id !== podSibling?.matchId);
   const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
 
@@ -360,7 +363,6 @@ export default async function MatchPage({
               weekEnd={window?.weekEnd ?? null}
               canEdit={canEdit}
               played={played}
-              isPodGame2={podSibling?.callerIsGame2 ?? false}
               podSibling={podSibling}
               otherScheduled={otherScheduled}
             />

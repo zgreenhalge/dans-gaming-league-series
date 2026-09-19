@@ -62,7 +62,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 |---|---|---|
 | `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
 | `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert and closes the match's Discord thread, if any, the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
-| `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time — for a gauntlet match, this is Game 1 only; Game 2's `scheduled_at` is derived 30 minutes later, and scheduling Game 2 directly is refused (see [Gauntlet bracket scheduling](#gauntlet-bracket-scheduling)) |
+| `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time — a gauntlet pod's Game 1 and Game 2 are each set independently here (see [Gauntlet bracket scheduling](#gauntlet-bracket-scheduling) for when they're instead paired 30 minutes apart automatically) |
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
@@ -260,18 +260,22 @@ to the plain round list.
 
 **Pod scheduling.** A pod's two games share the same 4 players reshuffled across factions, so they can
 never be played simultaneously — the shared DatHost server ([`hosting.md`](./hosting.md)'s reuse
-model) has no capacity for that anyway, and there's no plan to add a second server. Scheduling is
-therefore a pod-level concept, not a per-match one: `PATCH /api/matches/[id]/schedule` treats the time
-given as the pod's start (Game 1), refusing the request outright if it targets Game 2 directly, and
-writes Game 2's `matches.scheduled_at` as Game 1's time plus a fixed 30-minute gap
-(`POD_GAME_GAP_MS`) — the two matches' own rows stay the single source of truth, so nothing downstream
-needs a separate "pod schedule" concept just to read a time. `getOtherScheduledMatches()` itself stays
-gauntlet-agnostic (one query, no `gauntlet_pods` lookup); its callers, which already know a match's pod
-sibling from resolving it for other reasons, filter that sibling out of the shared-server collision
-warning's (`findScheduleCollision()`) candidate pool themselves, since 30 minutes apart on the one
-server is the intended shape, not a conflict. The match page and admin console both surface a link to
-the pod's other game (`getGauntletPodSibling()`) and hide the schedule editor on Game 2 in favor of a
-read-only time plus a link back to Game 1.
+model) has no capacity for that anyway, and there's no plan to add a second server. Each game's
+`matches.scheduled_at` is independently editable through `PATCH /api/matches/[id]/schedule` — a
+player or admin can set either game's time by hand, on its own, without touching the other. Automatic
+pairing (Game 2's time as Game 1's plus a fixed 30-minute gap, `POD_GAME_GAP_MS`/
+`podGame2ScheduledAt()`) happens only when a game's time is sourced from a linked Discord Scheduled
+Event: `discord-event-sync.ts` tracks just Game 1's shared thread and derives Game 2's
+`scheduled_at` from whatever it resolves for Game 1, since Game 2's own thread state is never tracked
+separately. `getOtherScheduledMatches()` itself stays gauntlet-agnostic (one query, no `gauntlet_pods`
+lookup); its callers, which already know a match's pod sibling from resolving it for other reasons,
+filter that sibling out of the shared-server collision warning's (`findScheduleCollision()`) candidate
+pool themselves, since the pod's two games are meant to be scheduled close together for one session —
+a synced Discord Scheduled Event always puts them exactly `POD_GAME_GAP_MS` apart, well inside the
+1-hour collision window, and a manual edit keeping them close is the same intended shape, not a
+double-booking the way two unrelated matches contending for the server would be. The match page and
+admin console both surface a link to the pod's other game (`getGauntletPodSibling()`) alongside that
+game's own schedule editor.
 `match_server_state` needs nothing extra — with play strictly sequential, a pod's two games just
 provision/play/teardown one after the other on the one server, same as any other two matches.
 
