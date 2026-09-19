@@ -13,7 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel, isPlayedScore, isServerOff } from './util';
+import { matchLabel, isPlayedScore, isServerOff, isServerLive } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './server-schedule-collision';
 import {
   dathostServerId,
@@ -136,10 +136,16 @@ export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'd
 /** Server-states in which a match currently occupies the single shared server (D2). */
 const OCCUPYING_STATES: readonly ServerState[] = ['provisioning', 'live', 'tearing_down'];
 
-/** Thrown when a provision is refused because another match already holds the shared server (#134). */
+/** Thrown when a provision is refused because the shared server is already in use — either another
+ *  match holds it (#134, `occupantMatchId` set) or it's genuinely live with no `match_server_state`
+ *  row to explain it (a scrim, or a manual admin-console launch — `occupantMatchId: null`). */
 export class ServerBusyError extends Error {
-  constructor(readonly occupantMatchId: number) {
-    super(`The match server is already in use by match ${occupantMatchId}.`);
+  constructor(readonly occupantMatchId: number | null) {
+    super(
+      occupantMatchId !== null
+        ? `The match server is already in use by match ${occupantMatchId}.`
+        : 'The match server is currently live with an active session.',
+    );
     this.name = 'ServerBusyError';
   }
 }
@@ -323,6 +329,14 @@ export async function provisionMatchServer(
   // common overlap from a silent mid-game clobber into a clean refusal.
   const occupant = await findServerOccupant(supabaseAdmin, matchId);
   if (occupant !== null) throw new ServerBusyError(occupant);
+
+  // Ground-truth check: a scrim or a manual admin-console launch never claims a `match_server_state`
+  // row, so the DB-only check above can't see them — ask DatHost itself rather than cross-referencing
+  // another table. Not interrupting ongoing play outranks starting a new match on time. An unreachable
+  // DatHost can't confirm liveness either way, so it's treated as not-live rather than blocking
+  // provisioning on a network hiccup.
+  const server = await getServer(serverId).catch(() => null);
+  if (isServerLive(server)) throw new ServerBusyError(null);
 
   try {
     await setServerState(supabaseAdmin, matchId, {

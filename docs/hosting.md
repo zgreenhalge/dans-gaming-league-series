@@ -98,6 +98,13 @@ claims the server (so a refusal never marks *it* failed). There is a tiny check-
 (two vetos completing within the same DB round-trip); accepted, since veto completions are seconds+
 apart in practice and this turns a silent mid-game clobber into a clean refusal.
 
+`findServerOccupant` only sees matches tracked in `match_server_state` — a scrim or a manual
+admin-console launch never claims a row there, so `provisionMatchServer` also asks DatHost itself
+whether the server is live (`isServerLive`, `src/lib/util.ts`) rather than cross-referencing another
+table, and refuses with the same `ServerBusyError` (`occupantMatchId: null`) when it's genuinely live.
+Not interrupting ongoing play outranks starting a new match on time, for both the automatic
+veto-completion trigger and a manual "Provision Server" click.
+
 A **soft scheduling warning** (`src/lib/server-schedule-collision.ts`) flags — on the match page and in the admin
 match console (both render the shared `ScheduleEditor` over `useScheduleEditor`) — when two matches
 are scheduled **strictly under an hour** apart (they'd contend for the one server); it links the
