@@ -1,7 +1,7 @@
 /**
  * Route-handler harness for GET /api/seasons/[id]/view — exercises the route's own query-param
- * validation (`kind`/`seasonNumber`) and its dispatch to getRegularSeasonHeavyView()/
- * getGauntletSeasonHeavyView(), through the exported handler directly. The underlying heavy-view
+ * validation (`kind`/`seasonNumber`) and its dispatch to getRegularSeasonLightView()/
+ * getGauntletSeasonLightView(), through the exported handler directly. The underlying light-view
  * functions' own data correctness is covered by queries-seasons.test.ts/queries-gauntlet.test.ts —
  * this only checks that the route wires them up correctly.
  *
@@ -48,25 +48,28 @@ async function main() {
     assert.equal(res.status, 400);
   });
 
-  await test('kind=regular returns the regular season heavy view', async () => {
+  await test('kind=regular returns the regular season light view', async () => {
     const res = await call(REGULAR_SEASON_ID, '?kind=regular&seasonNumber=5');
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.ok(Array.isArray(body.schedule) && body.schedule.length > 0);
     assert.ok(body.h2hData);
-    assert.ok(Array.isArray(body.sabremetrics));
+    assert.equal(typeof body.hasAdvancedStats, 'boolean');
     // Gauntlet-only fields must not be present on the regular shape.
     assert.equal(body.rounds, undefined);
     assert.equal(body.leaderboard, undefined);
+    // Stats-view fields belong to GET /api/seasons/[id]/stats, not this route.
+    assert.equal(body.sabremetrics, undefined);
   });
 
-  await test('kind=gauntlet returns the gauntlet season heavy view, leaderboard derived from rounds', async () => {
+  await test('kind=gauntlet returns the gauntlet season light view, leaderboard derived from rounds', async () => {
     const res = await call(GAUNTLET_SEASON_ID, '?kind=gauntlet&seasonNumber=5');
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.ok(Array.isArray(body.rounds) && body.rounds.length > 0);
     assert.ok(Array.isArray(body.leaderboard) && body.leaderboard.length > 0);
     assert.ok(body.h2hData);
+    assert.equal(typeof body.hasAdvancedStats, 'boolean');
     // Regular-only field must not be present on the gauntlet shape.
     assert.equal(body.schedule, undefined);
   });
