@@ -1,9 +1,9 @@
 import { cache } from 'react';
 import { supabase } from '../supabase';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
+import { canonicalSort, deriveRates, deriveRwr } from '../util';
 import { getPlayersById } from './player';
-import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
+import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -55,11 +55,7 @@ const getSeasonBaseData = cache(async (): Promise<{
   perPlayerStats: Map<string, PerPlayerStats>;
   rosterBySeason: Map<number, Set<number>>;
 }> => {
-  const [
-    stats,
-    { data: matches, error: mErr },
-    weekLookup,
-  ] = await Promise.all([
+  const [stats, allMatches] = await Promise.all([
     // player_id/match_id are nullable in the generated schema type (they're nullable FK columns),
     // but every row the ingest pipeline writes to player_match_stats always sets both — asPage()
     // narrows to that app-level invariant rather than threading `| null` through every consumer.
@@ -79,20 +75,18 @@ const getSeasonBaseData = cache(async (): Promise<{
           .range(from, to),
       ),
     ),
-    supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
-    getWeekLookup(),
+    // cache()-wrapped and shared with resolveMatchSeasons()/every other unplayed-inclusive caller,
+    // rather than this function's own `matches`/`weeks` read.
+    resolveAllMatches(),
   ]);
-  if (mErr) throw mErr;
 
   // played non-playoff matches → their season (for perPlayerStats)
   const playedMatchSeason = new Map<number, number>();
   // unplayed matches → their season (for rosterBySeason)
   const unplayedMatchSeason = new Map<number, number>();
-  for (const m of (matches ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
-    const sid = weekLookup.get(m.week_id)?.season_id;
-    if (sid == null) continue;
-    if (isPlayedScore(m.final_score) && !m.is_playoff_game) playedMatchSeason.set(m.id, sid);
-    if (!isPlayedScore(m.final_score)) unplayedMatchSeason.set(m.id, sid);
+  for (const m of allMatches) {
+    if (m.played && !m.is_playoff_game) playedMatchSeason.set(m.id, m.season_id);
+    if (!m.played) unplayedMatchSeason.set(m.id, m.season_id);
   }
 
   const perPlayerStats = new Map<string, PerPlayerStats>();

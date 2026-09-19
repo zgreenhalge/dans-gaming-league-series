@@ -1,18 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match, Player } from '../types';
-import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
+import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
 import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import { getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
 import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
-import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
-import { getAllMatchRounds, type MatchRoundRow } from './rounds';
-import { getAllMatchKills, type MatchKillRow } from './kills';
-import { getAllWeaponClassStats, getAllEconomyStats, type WeaponClassMatchRow, type EconomyMatchRow } from './weaponStats';
+import { getAllSabremetrics, hasSeasonSabremetrics } from './sabremetrics';
+import { getAllMatchRounds } from './rounds';
+import { getAllMatchKills } from './kills';
+import { getAllWeaponClassStats, getAllEconomyStats } from './weaponStats';
+import type { SeasonStatsView } from './seasons';
 
 
 function aggToRow(
@@ -480,44 +481,55 @@ export function deriveGauntletSeasonLeaderboard(
     .sort(canonicalSort);
 }
 
-export interface GauntletSeasonHeavyView {
+export interface GauntletSeasonLightView {
   rounds: GauntletRound[];
   leaderboard: LeaderboardRowWithId[];
   h2hData: H2HData;
   ehogRatings: Record<number, number>;
-  sabremetrics: SabremetricMatchRow[];
-  matchRounds: MatchRoundRow[];
-  matchKills: MatchKillRow[];
-  matchWeaponClassStats: WeaponClassMatchRow[];
-  matchEconomyStats: EconomyMatchRow[];
+  /** Whether this season has at least one match with parsed sabremetrics — decides whether the
+   *  Advanced Stats tab shows at all, independent of whether `SeasonStatsView` has been fetched yet
+   *  (see `hasSeasonSabremetrics()`, `sabremetrics.ts`). */
+  hasAdvancedStats: boolean;
 }
 
-/** Every per-match ("heavy") field the season detail page's Gauntlet tab needs, batched into one
- *  call — distinct from the page's light data (the bracket shape, seed names), which is needed
- *  regardless of which tab is showing and so is fetched separately, always. `leaderboard` is
- *  derived from `rounds` (`deriveGauntletSeasonLeaderboard()`) rather than a second
- *  `getGauntletSeasonLeaderboard()` round trip over the same matches. `seasonNumber`/`playersById`
- *  are accepted rather than re-resolved here since every caller (the page's own initial render, the
- *  lazy tab-switch route) already has both in hand. */
-export async function getGauntletSeasonHeavyView(
+/** The season detail page's Gauntlet tab fields needed regardless of which sub-tab is showing —
+ *  the Leaderboard, H2H, Groups, and Schedule sub-tabs all render from this alone. Distinct from
+ *  `SeasonStatsView` (`seasons.ts` — the Stats/Advanced Stats sub-tabs' own per-match fields, the
+ *  most expensive queries this app runs, and identical in shape for either season kind), which is
+ *  fetched lazily, client-side, only once one of those two sub-tabs is actually opened — see
+ *  `getGauntletSeasonStatsView()` below and `SeasonTabView`. `leaderboard` is derived from `rounds`
+ *  (`deriveGauntletSeasonLeaderboard()`) rather than a second `getGauntletSeasonLeaderboard()`
+ *  round trip over the same matches. `seasonNumber`/`playersById` are accepted rather than
+ *  re-resolved here since every caller (the page's own initial render, the lazy tab-switch route)
+ *  already has both in hand. */
+export async function getGauntletSeasonLightView(
   seasonId: number,
   seasonNumber: number | null,
   playersById: Map<number, Player>,
-): Promise<GauntletSeasonHeavyView> {
-  const [rounds, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+): Promise<GauntletSeasonLightView> {
+  const [rounds, ehogRatings, hasAdvancedStats] = await Promise.all([
     getGauntletRounds(seasonId),
     getSeasonEhogRatings(seasonId),
+    hasSeasonSabremetrics(seasonId),
+  ]);
+  const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
+  // Computed from `rounds` — already fetched above — instead of a second, redundant getH2HData()
+  // round-trip over the same matches (see #441).
+  const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, seasonNumber), playersById);
+  return { rounds, leaderboard, h2hData, ehogRatings, hasAdvancedStats };
+}
+
+/** The Gauntlet tab's Stats/Advanced Stats sub-tab fields — see `GauntletSeasonLightView`'s own
+ *  doc comment for why these are split out and fetched separately, lazily. */
+export async function getGauntletSeasonStatsView(seasonId: number): Promise<SeasonStatsView> {
+  const [sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     getAllSabremetrics(seasonId),
     getAllMatchRounds(seasonId),
     getAllMatchKills(seasonId),
     getAllWeaponClassStats(seasonId),
     getAllEconomyStats(seasonId),
   ]);
-  const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
-  // Computed from `rounds` — already fetched above — instead of a second, redundant getH2HData()
-  // round-trip over the same matches (see #441).
-  const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, seasonNumber), playersById);
-  return { rounds, leaderboard, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
+  return { sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
 }
 
 /** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
@@ -694,19 +706,14 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
 /** Whether a gauntlet season has any materialized matches yet ("seeded") and whether any of them has
  *  a played score ("started") — the admin console's gauntlet-lifecycle list needs only these two
  *  booleans per season, not the full per-player payload `getGauntletRounds()` builds (which joins
- *  `player_match_stats`/`players` to get there). Reads only `weeks`/`matches`, so it's cheap enough
- *  to call once per in-progress gauntlet on that page. */
+ *  `player_match_stats`/`players` to get there). Reads from `resolveAllMatches()` (`_shared.ts`,
+ *  `cache()`-wrapped) rather than its own scoped `weeks`/`matches` query, so every season this is
+ *  called for in one render pass (the admin console lists every gauntlet) shares that one read. */
 export async function getGauntletSeasonProgress(seasonId: number): Promise<{ seeded: boolean; started: boolean }> {
-  const weekLookup = await getWeekLookup([seasonId]);
-  const weekIds = weekRowsFromLookup(weekLookup).map((w) => w.id);
-  if (weekIds.length === 0) return { seeded: false, started: false };
-
-  const { data, error } = await supabase.from('matches').select('final_score').in('week_id', weekIds);
-  if (error) throw error;
-  const rows = (data ?? []) as { final_score: string | null }[];
+  const rows = (await resolveAllMatches()).filter((m) => m.season_id === seasonId);
   return {
     seeded: rows.length > 0,
-    started: anyMatchPlayed(rows),
+    started: rows.some((m) => m.played),
   };
 }
 
@@ -718,8 +725,17 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
   // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
   // run itself — sort explicitly here since round_number below is assigned in weekRows iteration
   // order.
-  const weekLookup = await getWeekLookup([seasonId], client);
-  const weekRows = weekRowsFromLookup(weekLookup).sort((a, b) => a.week_number - b.week_number);
+  //
+  // On the default-client path, call the bare (unscoped) getWeekLookup() rather than
+  // getWeekLookup([seasonId], client) — cache() keys on the exact argument list, so a fresh
+  // `[seasonId]` array literal would miss the request-wide `weeks` read resolveAllMatches() (and
+  // every other bare caller in the same render pass) already shares under that same no-arg call.
+  // Same reasoning as the getPlayersById() call below. Only takes the scoped path for a non-default
+  // client, where there's no render-pass cache to share anyway.
+  const weekLookup = client === supabase ? await getWeekLookup() : await getWeekLookup([seasonId], client);
+  const weekRows = weekRowsFromLookup(weekLookup)
+    .filter((w) => w.season_id === seasonId)
+    .sort((a, b) => a.week_number - b.week_number);
   if (weekRows.length === 0) return [];
 
   const weekIds = weekRows.map((w) => w.id);

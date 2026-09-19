@@ -48,6 +48,19 @@ export async function fetchAllPages<T>(
  *  caller's id list itself runs into the thousands. */
 export const SUPABASE_IN_BATCH = 200;
 
+/** Splits `arr` into `size`-length slices — the shared chunking step behind every caller that
+ *  fans a large id list out into parallel `SUPABASE_IN_BATCH`-sized `.in()` requests (`batchedIn()`
+ *  below, and `ehog.ts`'s own chunked `player_rating_history` reads, which can't go through
+ *  `batchedIn()` itself since they need an extra `.eq('formula_version', ...)` filter it has no
+ *  parameter for). */
+export function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
 /**
  * Runs a `.in(column, ids)` select in `SUPABASE_IN_BATCH`-sized id chunks, each chunk itself
  * paginated via `fetchAllPages()` — covers both truncation risks a large `.in()` list carries:
@@ -60,18 +73,19 @@ export async function batchedIn<T>(
   ids: number[],
   select: string,
 ): Promise<T[]> {
-  const results: T[] = [];
-  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
-    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
-    // `table` is caller-supplied and genuinely dynamic across this helper's call sites, so it can't
-    // be narrowed to the generated client's per-table literal union — `asPage<T>` below covers the
-    // rest of the result shape.
-    const page = await fetchAllPages<T>((from, to) =>
-      asPage<T>(supabase.from(table as never).select(select).in(column, chunk).range(from, to)),
-    );
-    results.push(...page);
-  }
-  return results;
+  // Chunks are independent requests (each its own `.in()` filter) — run them together rather than
+  // waiting on one chunk before starting the next.
+  const pages = await Promise.all(
+    chunk(ids, SUPABASE_IN_BATCH).map((idBatch) =>
+      // `table` is caller-supplied and genuinely dynamic across this helper's call sites, so it
+      // can't be narrowed to the generated client's per-table literal union — `asPage<T>` below
+      // covers the rest of the result shape.
+      fetchAllPages<T>((from, to) =>
+        asPage<T>(supabase.from(table as never).select(select).in(column, idBatch).range(from, to)),
+      ),
+    ),
+  );
+  return pages.flat();
 }
 
 /**
@@ -255,30 +269,74 @@ export const getRoundSides = cache(async (matchId?: number): Promise<Map<string,
   ]));
 });
 
+export interface AllMatchesRow {
+  id: number;
+  season_id: number;
+  is_playoff_game: boolean;
+  played: boolean;
+}
+
 /**
- * Resolves `match_id -> season_id` for every played match (`isPlayedScore(final_score)`), via
- * `matches` -> `weeks` -> `seasons` — the join every demo-derived-stat query needs to scope its
- * rows to a season. Shared by `getAllSabremetrics()` and the weapon-class/economy breakdown
- * queries so the join logic can't drift between them. Wrapped in React's `cache()` (#507) so every
- * caller within one render pass — `getAllMatchRounds()`, `getAllMatchKills()`,
- * `getAllWeaponClassStats()`/`getAllEconomyStats()`, `getSabremetricSeasonTotals()` — shares one
- * `matches`/`weeks` read rather than each resolving the join independently.
+ * Every match in the league — played or not — resolved to its `season_id` via `matches` ->
+ * `weeks`, plus `is_playoff_game` and `played` status. The one shared `matches`/`weeks` join
+ * behind every "which matches belong to this season" caller, whether it only wants played matches
+ * (`resolveMatchSeasons()` below) or needs unplayed ones too (`getSeasonBaseData()`'s roster
+ * derivation in `leaderboard.ts`, `getGauntletSeasonProgress()`'s seeded/started check in
+ * `gauntlet.ts` — a gauntlet can be validly "seeded" with zero played matches). Wrapped in React's
+ * `cache()` so every caller within one render pass shares this one full-table read instead of each
+ * re-querying `matches` with its own scoping/column selection.
  */
-export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> => {
+export const resolveAllMatches = cache(async (): Promise<AllMatchesRow[]> => {
   const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
-    supabase.from('matches').select('id, week_id, final_score'),
+    supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     getWeekLookup(),
   ]);
   if (matchErr) throw matchErr;
 
-  const matchSeason = new Map<number, number>();
-  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
-    if (!isPlayedScore(m.final_score)) continue;
+  const rows: AllMatchesRow[] = [];
+  for (const m of (matchRows ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
     const week = weekLookup.get(m.week_id);
-    if (week != null) matchSeason.set(m.id, week.season_id);
+    if (week == null) continue;
+    rows.push({
+      id: m.id,
+      season_id: week.season_id,
+      is_playoff_game: m.is_playoff_game,
+      played: isPlayedScore(m.final_score),
+    });
+  }
+  return rows;
+});
+
+/**
+ * Resolves `match_id -> season_id` for every played match, via `matches` -> `weeks` -> `seasons` —
+ * the join every demo-derived-stat query needs to scope its rows to a season. Shared by
+ * `getAllSabremetrics()` and the weapon-class/economy breakdown queries so the join logic can't
+ * drift between them. Derived from `resolveAllMatches()` (itself `cache()`-wrapped) rather than its
+ * own `matches` read, so this and every unplayed-inclusive caller of `resolveAllMatches()` share one
+ * fetch. Wrapped in `cache()` (#507) so every caller within one render pass — `getAllMatchRounds()`,
+ * `getAllMatchKills()`, `getAllWeaponClassStats()`/`getAllEconomyStats()`,
+ * `getSabremetricSeasonTotals()` — shares one result rather than each resolving the join
+ * independently.
+ */
+export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> => {
+  const rows = await resolveAllMatches();
+  const matchSeason = new Map<number, number>();
+  for (const r of rows) {
+    if (r.played) matchSeason.set(r.id, r.season_id);
   }
   return matchSeason;
 });
+
+/** A season's played match ids, from `resolveMatchSeasons()`'s already-cached map — the shared
+ *  season-scoping step behind `getSeasonEhogRatings()` (`ehog.ts`) and `hasSeasonSabremetrics()`
+ *  (`sabremetrics.ts`), which both need exactly this list and nothing more. */
+export async function matchIdsForSeason(seasonId: number): Promise<number[]> {
+  const matchIds: number[] = [];
+  for (const [matchId, sid] of await resolveMatchSeasons()) {
+    if (sid === seasonId) matchIds.push(matchId);
+  }
+  return matchIds;
+}
 
 /**
  * Read a gzipped JSON artifact from R2 at `key`, or `null` if it doesn't exist, fails
