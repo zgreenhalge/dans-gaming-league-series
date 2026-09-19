@@ -143,7 +143,9 @@ export function parseDemoSabremetrics(
   const sabLiveRounds = filterLiveRoundEnds(roundEndEvents, matchStartTick);
   const inferredSide =
     sabLiveRounds.length > 0
-      ? inferSkinsStartingSide(demoBuffer, sabLiveRounds[0].tick, steamToPlayer)
+      ? inferSkinsStartingSide(
+          demoBuffer, sabLiveRounds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
+        )
       : null;
   const { side: effectiveSide } = resolveEffectiveSide(skinsSide, inferredSide);
 

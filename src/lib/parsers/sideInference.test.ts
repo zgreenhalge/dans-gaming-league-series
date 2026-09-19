@@ -8,7 +8,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { decideSkinsSide, resolveEffectiveSide } from './sideInference';
+import { decideSkinsSide, resolveEffectiveSide, anchorToRoundOne } from './sideInference';
+import { sideForRealRound } from './roundSides';
 import { test, report } from '../test-support/miniTest';
 
 const CT = 3;
@@ -47,6 +48,46 @@ test('a SKINS player missing from the tick → decided by the present one', () =
   const r = roster([['s1', 'SKINS'], ['s2', 'SKINS']]);
   const teams = new Map([['s1', CT]]); // s2 not in the tick read
   assert.equal(decideSkinsSide(teams, r), 'CT');
+});
+
+// --- anchorToRoundOne: recovering the round-1 side from a team_num read taken at a later round ---
+//
+// A demo segment that begins mid-match (e.g. the second half of a restart-interrupted match) has
+// its first `team_num` read AFTER the halftime swap, not at the match's true round 1 — reading it
+// naively would report the inverted side. This corrects for that using the same half/OT swap
+// schedule `buildRoundSides` uses, given the segment's real starting round number.
+
+test('anchorToRoundOne: a segment starting at real round 1 (the common case) is unchanged', () => {
+  assert.equal(anchorToRoundOne('CT', 1, 13), 'CT');
+  assert.equal(anchorToRoundOne('T', 1, 13), 'T');
+});
+
+test('anchorToRoundOne: null side passes through unchanged', () => {
+  assert.equal(anchorToRoundOne(null, 13, 13), null);
+});
+
+test('anchorToRoundOne: a segment starting just past the halftime swap (real round 13, MR12) inverts', () => {
+  // The demo's own team_num read at round 13 shows the post-swap side; the true round-1 anchor
+  // for that team is the opposite.
+  assert.equal(anchorToRoundOne('CT', 13, 13), 'T');
+  assert.equal(anchorToRoundOne('T', 13, 13), 'CT');
+});
+
+test('anchorToRoundOne: round-trips against sideForRealRound for an arbitrary round/side/target', () => {
+  // The correction is sideForRealRound's own inverse: whatever side a round-1 anchor of S produces
+  // at round R, feeding that result back through anchorToRoundOne at the same R must recover S.
+  for (const target of [13, 16]) {
+    for (const round of [1, 5, 12, 13, 20, 25, 27, 28]) {
+      for (const anchor of ['CT', 'T'] as const) {
+        const sideAtRound = sideForRealRound(round, anchor, target);
+        assert.equal(
+          anchorToRoundOne(sideAtRound, round, target),
+          anchor,
+          `round=${round} target=${target} anchor=${anchor}`,
+        );
+      }
+    }
+  }
 });
 
 // --- resolveEffectiveSide (stored wins) ---

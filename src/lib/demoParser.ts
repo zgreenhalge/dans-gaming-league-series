@@ -98,7 +98,9 @@ export function parseDemoFile(
   // round-1 anchor gauntlet/knife matches have no stored value for). ---
   const inferredSide =
     liveRounds.length > 0
-      ? inferSkinsStartingSide(demoBuffer, liveRounds[0].tick, steamToPlayer)
+      ? inferSkinsStartingSide(
+          demoBuffer, liveRounds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
+        )
       : null;
   const { side: effectiveSide, disagreed } = resolveEffectiveSide(skinsSide, inferredSide);
   if (disagreed && skinsSide !== null && inferredSide !== null) {

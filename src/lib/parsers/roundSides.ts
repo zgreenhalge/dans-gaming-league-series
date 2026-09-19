@@ -54,8 +54,13 @@ const OT_ROUNDS_PER_HALF = 3;
  * canonical side-assignment rule (see `docs/calculations.md`'s "Side Splits") — both
  * `buildRoundSides` (per recorded round) and `roundsPlayedBySide` (a rounds-played total,
  * with no per-round event data) derive from this one function so they can't drift apart.
+ *
+ * Its swap decision depends only on `realRoundNumber`/`targetWinRounds`, not `startingSide` —
+ * which makes it its own inverse for a fixed round: applying it a second time at the same round
+ * recovers whichever side was passed in the first time. A caller with a side reading taken at a
+ * later round, not round 1, can use that property to work backward to the round-1 anchor.
  */
-function sideForRealRound(
+export function sideForRealRound(
   realRoundNumber: number,
   startingSide: 'CT' | 'T',
   targetWinRounds: number,
