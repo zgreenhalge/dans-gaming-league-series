@@ -306,7 +306,7 @@ function twoPodFixture(): FakeDb {
 
 function draftFixtureDb(): FakeDb {
   return {
-    seasons: [{ id: 30, name: 'Season 11', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 }],
+    seasons: [{ id: 30, name: 'Season 11', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13, map_pool: ['Foroglio', 'Vertigo', 'Cobblestone', 'Nuke', 'Inferno'] }],
     // A played week/match so isSeasonFullyPlayed() (the manual editor's materialization gate) sees
     // this regular season as actually done, matching its ARCHIVED status above.
     weeks: [{ id: 1, season_id: 30, week_number: 1, bye_player_id: null }],
@@ -387,6 +387,9 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
   assert.ok(gauntletSeason);
   assert.equal(gauntletSeason!.name, 'Season 11 Gauntlet');
   assert.equal(result.status === 'saved' ? result.gauntletSeasonId : null, gauntletSeason!.id);
+  // The gauntlet season's own map_pool is carried over from the paired regular season at creation,
+  // rather than left null for callers to resolve later (docs/glossary.md's Gauntlet entry).
+  assert.deepEqual(gauntletSeason!.map_pool, ['Foroglio', 'Vertigo', 'Cobblestone', 'Nuke', 'Inferno']);
 
   assert.equal(podsOf(db, gauntletSeason!.id as number).length, 2);
   const r1 = db.gauntlet_pods.find((p) => p.round_number === 1)!;

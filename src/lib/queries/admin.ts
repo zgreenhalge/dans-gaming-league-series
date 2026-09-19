@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import type { Match, Player } from '../types';
 import { matchLabel, extractSeasonNumber, compareMatchRefDesc, weekWindow } from '../util';
 import { podGames } from '../gauntlet-pod';
-import { getSeasons } from './seasons';
+import { getLinkedRegularSeason } from './seasons';
 
 
 /** One row of the admin match-management console (#144) — a full match plus the context its editors
@@ -37,21 +37,11 @@ export interface AdminMatchRow {
  * the site. Admin-only surface; the page gates access.
  */
 export async function getAdminMatches(): Promise<AdminMatchRow[]> {
-  const [{ data, error }, { data: podRows }, allSeasons] = await Promise.all([
+  const [{ data, error }, { data: podRows }] = await Promise.all([
     supabase.from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'),
     supabase.from('gauntlet_pods').select('match1_id, match2_id'),
-    getSeasons(),
   ]);
   if (error || !data) return [];
-
-  // A gauntlet season's own map_pool is always null (never written at creation) — its bans come
-  // from the paired regular season's pool, matched name-based by season number.
-  const regularPoolByNumber = new Map<number, string[] | null>();
-  for (const s of allSeasons) {
-    if (s.is_gauntlet) continue;
-    const num = extractSeasonNumber(s.name);
-    if (num != null) regularPoolByNumber.set(num, s.map_pool);
-  }
 
   const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
   for (const p of (podRows ?? []) as { match1_id: number | null; match2_id: number | null }[]) {
@@ -77,13 +67,20 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
   // getOtherScheduledMatches above).
   const rows = data as unknown as Row[];
 
-  const out = rows.map((r): AdminMatchRow => {
+  const out = await Promise.all(rows.map(async (r): Promise<AdminMatchRow> => {
     const { weeks, ...match } = r;
     const season = weeks?.seasons ?? null;
     const weekNumber = weeks?.week_number ?? null;
     const win =
       season?.start_date && weekNumber != null ? weekWindow(season.start_date, weekNumber) : null;
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    // A gauntlet season's own map_pool can be null for a pre-existing row — the pool it bans from
+    // is always the paired regular season's, resolved the same way as getMatch()/the veto route.
+    // getLinkedRegularSeason() reads through the request-cached getSeasons(), so resolving this per
+    // row costs no extra query beyond the first.
+    const mapPool = season?.is_gauntlet
+      ? (await getLinkedRegularSeason(season.name ?? '', supabase))?.map_pool ?? null
+      : (season?.map_pool ?? null);
     return {
       match: match as Match,
       label: matchLabel({
@@ -95,15 +92,13 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
       seasonNumber: season?.name ? extractSeasonNumber(season.name) : null,
       weekNumber,
       isGauntlet: season?.is_gauntlet ?? false,
-      mapPool: season?.is_gauntlet
-        ? (regularPoolByNumber.get(extractSeasonNumber(season.name ?? '') ?? -1) ?? null)
-        : (season?.map_pool ?? null),
+      mapPool,
       weekStart: win ? fmt(win.start) : null,
       weekEnd: win ? fmt(win.end) : null,
       podSiblingId: podInfoByMatchId.get(r.id)?.siblingId ?? null,
       podGameNumber: podInfoByMatchId.get(r.id)?.gameNumber ?? null,
     };
-  });
+  }));
 
   out.sort((a, b) =>
     compareMatchRefDesc(

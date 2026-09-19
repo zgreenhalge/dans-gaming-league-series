@@ -139,10 +139,12 @@ export async function PATCH(
   }
 
   const isGauntlet = season?.is_gauntlet ?? false;
-  // A gauntlet season's own map_pool is always null (never written at creation) — the pool it bans
-  // from is the paired regular season's, found name-based (docs/glossary.md's Gauntlet entry).
-  const gauntletMapPool = isGauntlet && season ? (await getLinkedRegularSeason(season.name, supabaseAdmin))?.map_pool : null;
-  const mapPool: string[] = (isGauntlet ? gauntletMapPool : season?.map_pool) ?? [];
+  // A gauntlet season's own map_pool can be null for a pre-existing row created before its bans
+  // started being carried over at creation — the pool it bans from is always the paired regular
+  // season's (docs/glossary.md's Gauntlet entry).
+  const mapPool: string[] = (isGauntlet && season
+    ? (await getLinkedRegularSeason(season.name, supabaseAdmin))?.map_pool
+    : season?.map_pool) ?? [];
 
   const currentValues: Record<VetoField, string | null> = {
     shirts_ban: m.shirts_ban,
