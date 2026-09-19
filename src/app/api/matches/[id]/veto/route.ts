@@ -11,6 +11,7 @@ import {
 } from '@/lib/dathost-lifecycle';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
+import { getLinkedRegularSeason } from '@/lib/queries/seasons';
 
 const VALID_FIELDS = [
   'shirts_ban',
@@ -42,6 +43,7 @@ type MatchRow = {
   skins_starting_side: string | null;
   weeks: {
     seasons: {
+      name: string;
       is_gauntlet: boolean;
       map_pool: string[] | null;
     };
@@ -70,7 +72,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, scheduled_at, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet, map_pool))',
+        'id, final_score, scheduled_at, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(name, is_gauntlet, map_pool))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -137,7 +139,10 @@ export async function PATCH(
   }
 
   const isGauntlet = season?.is_gauntlet ?? false;
-  const mapPool: string[] = season?.map_pool ?? [];
+  // A gauntlet season's own map_pool is always null (never written at creation) — the pool it bans
+  // from is the paired regular season's, found name-based (docs/glossary.md's Gauntlet entry).
+  const gauntletMapPool = isGauntlet && season ? (await getLinkedRegularSeason(season.name, supabaseAdmin))?.map_pool : null;
+  const mapPool: string[] = (isGauntlet ? gauntletMapPool : season?.map_pool) ?? [];
 
   const currentValues: Record<VetoField, string | null> = {
     shirts_ban: m.shirts_ban,

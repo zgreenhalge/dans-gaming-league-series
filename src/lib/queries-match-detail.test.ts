@@ -29,6 +29,18 @@ async function main() {
     assert.equal(await getMatch(9999), null);
   });
 
+  await test('getMatch(200) — gauntlet match inherits its map_pool from the paired regular season', async () => {
+    const detail = await getMatch(200);
+    assert.equal(detail?.season.name, 'Season 5 Gauntlet');
+    assert.deepEqual(detail?.season.map_pool, ['Foroglio', 'Cobblestone', 'Vertigo']);
+  });
+
+  await test('getMatch(300) — orphan gauntlet (no paired regular season) has an empty map_pool', async () => {
+    const detail = await getMatch(300);
+    assert.equal(detail?.season.name, 'Season 4 Gauntlet');
+    assert.equal(detail?.season.map_pool, null);
+  });
+
   await test('getMatchSabremetrics(100) — played match, snapshot', async () => {
     const rows = await getMatchSabremetrics(100);
     assert.equal(rows.length, 4);

@@ -5,6 +5,7 @@ import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLa
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
+import { getLinkedRegularSeason } from './seasons';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 import {
@@ -57,6 +58,13 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   const w = week as unknown as (Week & { seasons: Season | null }) | null;
   if (!w || !w.seasons) return null;
   const { seasons: season, ...weekRow } = w;
+
+  // Gauntlet seasons never store their own map_pool (`docs/glossary.md`'s Gauntlet entry) — the
+  // pick/ban pool comes from the paired regular season, found name-based via extractSeasonNumber.
+  if (season.is_gauntlet) {
+    const regularSeason = await getLinkedRegularSeason(season.name);
+    season.map_pool = regularSeason?.map_pool ?? null;
+  }
 
   const statRows: MatchStatRow[] = ((stats ?? []) as PlayerMatchStat[]).map(
     (s) => ({
