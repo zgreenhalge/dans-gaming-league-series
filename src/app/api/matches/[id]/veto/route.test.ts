@@ -51,8 +51,10 @@ function makeDb(): FakeDb {
       { id: OUT_OF_MATCH_ID, is_admin: false, name: 'Outsider' },
       ...[G_SHIRTS1, G_SHIRTS2, G_SKINS1, G_SKINS2, R_SHIRTS1, R_SHIRTS2, R_SKINS1, R_SKINS2].map((id) => ({ id, is_admin: false, name: `Player ${id}` })),
     ],
+    // The gauntlet season's own map_pool is always null (never written at creation) — its bans come
+    // from the paired regular season's pool, so only "Season 60" carries one here.
     seasons: [
-      { id: 1, name: 'Season 60 Gauntlet', is_gauntlet: true, map_pool: MAP_POOL, status: 'ACTIVE' },
+      { id: 1, name: 'Season 60 Gauntlet', is_gauntlet: true, map_pool: null, status: 'ACTIVE' },
       { id: 2, name: 'Season 60', is_gauntlet: false, map_pool: MAP_POOL, status: 'ACTIVE' },
     ],
     weeks: [

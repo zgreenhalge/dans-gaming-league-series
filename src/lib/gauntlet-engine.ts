@@ -621,7 +621,7 @@ type CreateSeasonRowResult =
  * automated path) without duplicating them here. */
 async function createGauntletSeasonRow(
   supabaseAdmin: SupabaseClient,
-  regularSeason: { name: string; target_win_rounds: number },
+  regularSeason: { name: string; target_win_rounds: number; map_pool: string[] | null },
   opts: { startDate?: string | null } = {},
 ): Promise<CreateSeasonRowResult> {
   const seasonNumber = extractSeasonNumber(regularSeason.name);
@@ -630,6 +630,8 @@ async function createGauntletSeasonRow(
   }
   const gauntletName = `Season ${seasonNumber} Gauntlet`;
 
+  // Bans draw from the paired regular season's pool (`docs/glossary.md`'s Gauntlet entry) — carried
+  // over here so nothing downstream ever needs to resolve it at read time.
   const { data: gauntletSeason, error: insertErr } = await supabaseAdmin
     .from('seasons')
     .insert({
@@ -638,6 +640,7 @@ async function createGauntletSeasonRow(
       status: 'ACTIVE',
       start_date: opts.startDate ?? null,
       target_win_rounds: regularSeason.target_win_rounds,
+      map_pool: regularSeason.map_pool,
     })
     .select('id')
     .single();

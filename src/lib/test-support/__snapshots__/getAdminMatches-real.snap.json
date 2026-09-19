@@ -59,7 +59,11 @@
     "seasonNumber": 5,
     "weekNumber": 1,
     "isGauntlet": true,
-    "mapPool": null,
+    "mapPool": [
+      "Foroglio",
+      "Cobblestone",
+      "Vertigo"
+    ],
     "weekStart": "2026-03-01",
     "weekEnd": "2026-03-07",
     "podSiblingId": null,

@@ -68,22 +68,24 @@ export const getSeason = cache(async (id: number, client: SupabaseClient = supab
   return (data ?? null) as Season | null;
 });
 
-/** Find the gauntlet season paired to a regular season by season number in name. */
-export async function getLinkedGauntlet(regularSeasonName: string): Promise<Season | null> {
+/** Find the gauntlet season paired to a regular season by season number in name. Reads through the
+ *  `cache()`-wrapped `getSeasons()` rather than its own query, so repeat lookups in the same request
+ *  (e.g. one per row in `getAdminMatches()`) collapse into the single round trip already made
+ *  elsewhere in that request instead of adding their own. */
+export async function getLinkedGauntlet(regularSeasonName: string, client: SupabaseClient = supabase): Promise<Season | null> {
   const num = extractSeasonNumber(regularSeasonName);
   if (num == null) return null;
-  const { data, error } = await supabase.from('seasons').select('*').eq('is_gauntlet', true);
-  if (error) throw error;
-  return ((data ?? []) as Season[]).find((s) => extractSeasonNumber(s.name) === num) ?? null;
+  const seasons = await getSeasons(client);
+  return seasons.find((s) => s.is_gauntlet && extractSeasonNumber(s.name) === num) ?? null;
 }
 
-/** Find the regular season paired to a gauntlet season by season number in name. */
-export async function getLinkedRegularSeason(gauntletName: string): Promise<Season | null> {
+/** Find the regular season paired to a gauntlet season by season number in name. Same
+ *  `getSeasons()`-backed reasoning as `getLinkedGauntlet()` above. */
+export async function getLinkedRegularSeason(gauntletName: string, client: SupabaseClient = supabase): Promise<Season | null> {
   const num = extractSeasonNumber(gauntletName);
   if (num == null) return null;
-  const { data, error } = await supabase.from('seasons').select('*').eq('is_gauntlet', false);
-  if (error) throw error;
-  return ((data ?? []) as Season[]).find((s) => extractSeasonNumber(s.name) === num) ?? null;
+  const seasons = await getSeasons(client);
+  return seasons.find((s) => !s.is_gauntlet && extractSeasonNumber(s.name) === num) ?? null;
 }
 
 /** A season's explicit roster (`season_players`) — the pre-match-history source of who's on a
