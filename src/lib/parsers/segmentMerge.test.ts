@@ -303,9 +303,13 @@ test('mergeSegmentResults: segments agreeing on inferred side (one null, one res
   assert.ok(!merged.warnings.some((w) => /disagree/i.test(w)));
 });
 
-test('mergeSegmentResults: segments disagreeing on inferred side warn instead of silently picking one', () => {
+test('mergeSegmentResults: segments disagreeing on inferred side null the score instead of returning a number built from incompatible attributions', () => {
+  // Each segment's own shirts_score/skins_score is internally consistent (computed from that
+  // segment's own effectiveSide), but a disagreement between segments' independently-inferred
+  // sides means those attributions are mutually incompatible — only possible to reach in the
+  // first place when nothing is stored, so nothing else papers over the ambiguity.
   const seg = (inferred_side: 'CT' | 'T' | null): ParsedDemoResult => ({
-    stats: [playerStat({ player_id: 1 })],
+    stats: [playerStat({ player_id: 1, rounds_won: 1, rounds_played: 1 })],
     shirts_score: 1, skins_score: 0,
     round_history: [{ n: 1, winner: 'SHIRTS', side: 'CT', condition: 'elim' }],
     warnings: [],
@@ -313,6 +317,10 @@ test('mergeSegmentResults: segments disagreeing on inferred side warn instead of
   });
   const merged = mergeSegmentResults([seg('CT'), seg('T')]);
   assert.equal(merged.inferred_side, null);
+  assert.equal(merged.shirts_score, null);
+  assert.equal(merged.skins_score, null);
+  assert.equal(merged.round_history, null);
+  assert.ok(merged.stats.every((s) => s.is_win === false));
   assert.ok(merged.warnings.some((w) => /disagree/i.test(w)), merged.warnings.join('; '));
 });
 
@@ -427,6 +435,24 @@ test('mergeSabremetricResults: fact-row arrays (matchKills, matchRounds, ...) ar
   assert.equal(merged.matchKills.length, 2);
   assert.deepEqual(merged.matchKills.map((k) => k.round_number), [1, 5]);
   assert.equal(merged.matchRounds.length, 2);
+});
+
+test('mergeSabremetricResults: fact-row arrays are sorted back into round order regardless of segment/argument order', () => {
+  // orchestrateSegments builds `segments` in the caller's own argument order, not the
+  // round-order-sorted order computeSegmentOffsets derives — a caller passing segments out of
+  // chronological order (e.g. --demo b.dem --demo a.dem where b is actually second) must not
+  // leave the merged fact-row arrays in argument order.
+  const segB = baseSabResult({
+    matchKills: [{ round_number: 5, attacker_player_id: 2, victim_player_id: 1, assister_player_id: null, weapon: 'usp_silencer', headshot: true, noscope: false, wallbang: false, blind_kill: false, midair: false, is_teamkill: false, tick: 900 }],
+    matchRounds: [{ round_number: 5, winner_side: 'T', shirts_side: 'T', win_reason: 'bomb' }],
+  });
+  const segA = baseSabResult({
+    matchKills: [{ round_number: 1, attacker_player_id: 1, victim_player_id: 2, assister_player_id: null, weapon: 'ak47', headshot: false, noscope: false, wallbang: false, blind_kill: false, midair: false, is_teamkill: false, tick: 100 }],
+    matchRounds: [{ round_number: 1, winner_side: 'CT', shirts_side: 'CT', win_reason: 'elim' }],
+  });
+  const merged = mergeSabremetricResults([segB, segA]); // B (round 5) passed before A (round 1)
+  assert.deepEqual(merged.matchKills.map((k) => k.round_number), [1, 5]);
+  assert.deepEqual(merged.matchRounds.map((r) => r.round_number), [1, 5]);
 });
 
 test('mergeSabremetricResults: warnings are deduped across segments', () => {

@@ -278,12 +278,19 @@ take an array of demo buffers instead of one and combine them into a single resu
 3. `checkSegmentAgreement()` flags a bad pairing before the merge is trusted: a gap or overlap in
    round coverage, a segment contributing zero live rounds, or segments resolving different
    rosters. A segment resolving *zero* players is flagged distinctly and less alarmingly than a
-   genuine roster mismatch — its round outcomes still count toward the merged score, since that's
-   computed independently of roster resolution.
+   genuine roster mismatch, since its round outcomes still count toward the merged score whenever
+   the match's starting side is stored (shared across every segment regardless of that segment's own
+   roster resolution); only when the side is *also* unknown does a zero-player segment leave the
+   merged score unresolved, same as any other segment whose side can't be determined. Segments that
+   independently infer *different* starting sides (only possible when nothing is stored) null the
+   merged score rather than returning a number built from mutually incompatible round attributions.
 4. `mergeSegmentResults()`/`mergeSabremetricResults()` (`parsers/segmentMerge.ts`) combine the
-   per-segment results generically — summing every numeric stat/sabremetric field sharing a
-   player-id key and concatenating every fact-row array — rather than by a hardcoded field list, so
-   a new collector never needs matching merge code.
+   per-segment results generically at the field level — summing every numeric stat/sabremetric field
+   sharing a player-id key, rather than by a hardcoded field list, and concatenating fact-row arrays
+   sorted back into round order (independent of segment/argument order) — so a new field on an
+   existing per-player record needs no merge-code change. A wholly new fact-row array or top-level
+   result field is a different case and does need one matching line added to the merge function, the
+   same way it needs one in the result type it's added to.
 
 The single-buffer `parseDemoFile()`/`parseDemoSabremetrics()` are unchanged for the normal one-demo
 case; the multi-segment functions are additive, used only when a match actually needs stitching.

@@ -1,9 +1,12 @@
 // Pure, Buffer-free primitives for combining multiple independently-parsed demo segments (e.g. two
 // GOTV recordings split by a mid-match server restart) into one result. Nothing here touches a
 // Buffer or calls into demoparser2 — every function operates on the *output* of parseSegment-shaped
-// parsing, keyed by round_number/player_id, so a future change to a collector never requires a
-// matching change here: this merges by generic shape (sum the numeric fields sharing a key, or
-// concatenate the fact rows), not by any specific field name.
+// parsing, keyed by round_number/player_id. The numeric fields *within* an existing per-player
+// record (SabFields, a WeaponStatFields bucket) are merged by generic shape — summed by key, not by
+// a hardcoded field list — so a new field on one of those already-merged shapes needs no change
+// here. A wholly new top-level fact-row array or result field is a different case: it needs one
+// matching line in mergeSegmentResults()/mergeSabremetricResults()'s own return, the same way it
+// needs one line in ParsedDemoResult/ParsedDemoSabremetricsResult's type definition.
 //
 // See src/lib/parsers/roundSides.ts's `startingRealRound` param for the companion half of this: the
 // round-anchoring fix that makes each segment's own numbers correct in the first place. Merging
@@ -177,13 +180,32 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
 export function mergeSegmentResults(segments: ParsedDemoResult[]): ParsedDemoResult {
   const warnings = [...new Set(segments.flatMap((s) => s.warnings))];
 
-  const allScoresKnown = segments.every((s) => s.shirts_score !== null && s.skins_score !== null);
+  // Segments should agree on the demo-inferred starting side (it's a property of the one match,
+  // not of any single recording). This is only reachable when nothing is stored — a stored side
+  // makes every segment's effectiveSide identical regardless of its own inference — so a
+  // disagreement here means each segment's score was computed from a genuinely different,
+  // mutually incompatible side attribution, not just a diagnostic mismatch: the merged score is
+  // nulled rather than summed, the same "never substitute a plausible-looking wrong value" rule
+  // this module follows for an unresolvable per-segment side.
+  const distinctInferredSides = [
+    ...new Set(segments.map((s) => s.inferred_side).filter((s): s is 'CT' | 'T' => s !== null)),
+  ];
+  const inferred_side = distinctInferredSides.length === 1 ? distinctInferredSides[0] : null;
+  const sidesDisagree = distinctInferredSides.length > 1;
+  if (sidesDisagree) {
+    warnings.push(
+      `Segments disagree on the demo-inferred starting side (${distinctInferredSides.join(', ')}) — the merged score cannot be trusted; verify these demos belong to the same match.`,
+    );
+  }
+
+  const allScoresKnown =
+    !sidesDisagree && segments.every((s) => s.shirts_score !== null && s.skins_score !== null);
   const sumScore = (pick: (s: ParsedDemoResult) => number | null) =>
     allScoresKnown ? segments.reduce((sum, s) => sum + pick(s)!, 0) : null;
   const shirts_score = sumScore((s) => s.shirts_score);
   const skins_score = sumScore((s) => s.skins_score);
 
-  const round_history = segments.every((s) => s.round_history)
+  const round_history = allScoresKnown && segments.every((s) => s.round_history)
     ? segments.flatMap((s) => s.round_history!).sort((a, b) => a.n - b.n)
     : null;
 
@@ -198,20 +220,6 @@ export function mergeSegmentResults(segments: ParsedDemoResult[]): ParsedDemoRes
       (s.faction === 'SHIRTS' ? shirts_score! > skins_score! : skins_score! > shirts_score!);
     return { ...s, adr, is_win };
   });
-
-  // Segments should agree on the demo-inferred starting side (it's a property of the one match,
-  // not of any single recording) — surfacing a disagreement rather than silently picking whichever
-  // segment happens to come first is the same "never substitute a plausible-looking wrong value"
-  // rule the rest of this module follows for scores.
-  const distinctInferredSides = [
-    ...new Set(segments.map((s) => s.inferred_side).filter((s): s is 'CT' | 'T' => s !== null)),
-  ];
-  const inferred_side = distinctInferredSides.length === 1 ? distinctInferredSides[0] : null;
-  if (distinctInferredSides.length > 1) {
-    warnings.push(
-      `Segments disagree on the demo-inferred starting side (${distinctInferredSides.join(', ')}) — verify these demos belong to the same match.`,
-    );
-  }
 
   return { stats, shirts_score, skins_score, round_history, warnings, inferred_side };
 }
@@ -238,8 +246,8 @@ function mergeBuckets<K extends string>(
 
 /** Combines each segment's `ParsedDemoSabremetricsResult` (parseDemoSabremetrics's shape) into one.
  *  `SabFields` sum generically per player (any future field included, no hardcoded list); weapon/
- *  economy buckets sum per (player, bucket); every fact-row array concatenates untouched, since
- *  `round_number` is already globally comparable across segments (see roundSides.ts). */
+ *  economy buckets sum per (player, bucket); every fact-row array concatenates and is re-sorted
+ *  into round order (`sortByRound()`, below). */
 export function mergeSabremetricResults(
   segments: ParsedDemoSabremetricsResult[],
 ): ParsedDemoSabremetricsResult {
@@ -269,11 +277,22 @@ export function mergeSabremetricResults(
   return {
     sabremetrics,
     weaponStats,
-    matchKills: segments.flatMap((s) => s.matchKills),
-    matchRounds: segments.flatMap((s) => s.matchRounds),
-    matchUtilityThrows: segments.flatMap((s) => s.matchUtilityThrows),
-    matchRoundEconomy: segments.flatMap((s) => s.matchRoundEconomy),
-    matchDamageEvents: segments.flatMap((s) => s.matchDamageEvents),
+    matchKills: sortByRound(segments.flatMap((s) => s.matchKills)),
+    matchRounds: sortByRound(segments.flatMap((s) => s.matchRounds)),
+    matchUtilityThrows: sortByRound(segments.flatMap((s) => s.matchUtilityThrows)),
+    matchRoundEconomy: sortByRound(segments.flatMap((s) => s.matchRoundEconomy)),
+    matchDamageEvents: sortByRound(segments.flatMap((s) => s.matchDamageEvents)),
     warnings,
   };
+}
+
+/** Concatenating fact-row arrays across segments doesn't preserve round order when the caller's
+ *  segments aren't already given in chronological order (`orchestrateSegments` builds them in
+ *  argument order, not `computeSegmentOffsets`' round-sorted order) — sorted back into round order
+ *  here so the merged result reads chronologically regardless of input order, matching
+ *  `mergeSegmentResults`' treatment of `round_history`. `tick` isn't comparable *across* segments
+ *  (each has its own independent tick space), but within one already-round-sorted position it's
+ *  only ever used to order same-round rows, so it's a safe tiebreaker. */
+function sortByRound<T extends { round_number: number; tick?: number }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => a.round_number - b.round_number || (a.tick ?? 0) - (b.tick ?? 0));
 }
