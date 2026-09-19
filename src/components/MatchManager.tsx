@@ -53,9 +53,9 @@ export function MatchManager({
   const [openId, setOpenId] = useState<number | null>(null);
 
   // Every unplayed scheduled match — the collision pool the schedule editor checks against (built
-  // once from the loaded list, so no per-row fetch). A gauntlet match's own pod sibling is filtered
-  // out per-row below (see `others`), not here, since the pod's two games share the one server
-  // sequentially by design — being close together in time isn't a double-booking.
+  // once from the loaded list, so no per-row fetch). A gauntlet match's own pod sibling is included
+  // like any other match: both games are now independently editable, so scheduling them the same or
+  // overlapping is a genuine shared-server conflict, not a guaranteed-safe pairing to exempt.
   const scheduledRefs: ScheduledMatchRef[] = useMemo(
     () =>
       matches
@@ -99,7 +99,7 @@ export function MatchManager({
           {filtered.map((m) => {
             const played = isPlayedScore(m.match.final_score);
             const isOpen = openId === m.match.id;
-            const others = scheduledRefs.filter((r) => r.id !== m.match.id && r.id !== m.podSiblingId);
+            const others = scheduledRefs.filter((r) => r.id !== m.match.id);
             return (
               <div key={m.match.id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
                 <button

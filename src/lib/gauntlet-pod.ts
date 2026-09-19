@@ -9,9 +9,6 @@
  *  time is known from a synced Discord Scheduled Event. */
 export const POD_GAME_GAP_MS = 30 * 60 * 1000;
 
-/** `POD_GAME_GAP_MS`, formatted for UI copy and Discord message text. */
-export const POD_GAME_GAP_LABEL = '30 minutes';
-
 /** Game 2's `scheduled_at`, derived from Game 1's when a Discord Scheduled Event sync resolves
  *  Game 1's time — `null` in, `null` out (clearing Game 1's time clears Game 2's too). */
 export function podGame2ScheduledAt(game1ScheduledAt: string | null): string | null {

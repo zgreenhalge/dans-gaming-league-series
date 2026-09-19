@@ -304,12 +304,10 @@ export default async function MatchPage({
 
   // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
   // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
-  // match, gauntlet included, so the banner shows regardless of edit rights; a gauntlet match's own
-  // pod sibling is excluded here (not inside getOtherScheduledMatches, which stays gauntlet-agnostic)
-  // since the pod's two games share the one server sequentially by design — being close together in
-  // time isn't a double-booking the way it would be for two unrelated matches.
-  const otherScheduled = otherScheduledRaw.filter((r) => r.id !== podSibling?.matchId);
-  const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
+  // match, gauntlet included, so the banner shows regardless of edit rights. A gauntlet match's own
+  // pod sibling is included like any other match: both games are independently editable, so
+  // scheduling them the same or overlapping is a genuine shared-server conflict worth the warning.
+  const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduledRaw);
 
   const matchJsonLd = buildMatchJsonLd({
     matchId: match.id,
@@ -362,7 +360,7 @@ export default async function MatchPage({
               canEdit={canEdit}
               played={played}
               podSibling={podSibling}
-              otherScheduled={otherScheduled}
+              otherScheduled={otherScheduledRaw}
             />
 
             <MatchScoreHero

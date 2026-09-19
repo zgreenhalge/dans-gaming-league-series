@@ -267,11 +267,11 @@ pairing (Game 2's time as Game 1's plus a fixed 30-minute gap, `POD_GAME_GAP_MS`
 `podGame2ScheduledAt()`) happens only when a game's time is sourced from a linked Discord Scheduled
 Event: `discord-event-sync.ts` tracks just Game 1's shared thread and derives Game 2's
 `scheduled_at` from whatever it resolves for Game 1, since Game 2's own thread state is never tracked
-separately. `getOtherScheduledMatches()` itself stays gauntlet-agnostic (one query, no `gauntlet_pods`
-lookup); its callers, which already know a match's pod sibling from resolving it for other reasons,
-filter that sibling out of the shared-server collision warning's (`findScheduleCollision()`) candidate
-pool themselves, since the pod's two games sharing the one server sequentially by design isn't a
-conflict. The match page and admin console both surface a link to the pod's other game
+separately. `getOtherScheduledMatches()` stays gauntlet-agnostic (one query, no `gauntlet_pods`
+lookup) and includes a match's own pod sibling like any other match in the shared-server collision
+warning's (`findScheduleCollision()`) candidate pool — since each game is independently schedulable,
+scheduling a pod's two games the same or overlapping is a genuine conflict, not a guaranteed-safe
+pairing to exempt. The match page and admin console both surface a link to the pod's other game
 (`getGauntletPodSibling()`) alongside that game's own schedule editor.
 `match_server_state` needs nothing extra — with play strictly sequential, a pod's two games just
 provision/play/teardown one after the other on the one server, same as any other two matches.
