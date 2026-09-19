@@ -1,12 +1,14 @@
-import { parseEvent, parseTicks } from '@laihoe/demoparser2';
+import { parseTicks } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { findMatchStartTick } from './parsers/matchContext';
+import { findMatchStartTick, getLiveRoundEndEvents } from './parsers/matchContext';
 import { buildRoundSides, reasonToCondition } from './parsers/roundSides';
 import {
   inferSkinsStartingSide,
   resolveEffectiveSide,
   sideDisagreementWarning,
 } from './parsers/sideInference';
+import { mergeSegmentResults } from './parsers/segmentMerge';
+import { orchestrateSegments } from './parsers/segmentOrchestrator';
 import type { RoundHistoryEntry } from './types';
 
 const TRACKING = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
@@ -47,6 +49,10 @@ export function parseDemoFile(
   roster: RosterEntry[],
   skinsSide: 'CT' | 'T' | null,
   targetWinRounds: number,
+  /** See `buildRoundSides()`'s doc — 1 for a standalone demo (every direct caller), or the
+   *  match-wide starting round `parseDemoFileSegments()` supplies for a later segment of a
+   *  restart-interrupted match. */
+  startingRealRound = 1,
 ): ParsedDemoResult {
   const warnings: string[] = [];
 
@@ -55,20 +61,8 @@ export function parseDemoFile(
   const steamToPlayer = resolveRoster(demoPlayers, roster, warnings);
 
   // --- Round outcomes (needed for final tick + halftime logic) ---
-  const roundEndEvents: {
-    tick: number;
-    round: number;
-    winner: string | null;
-    reason: string | null;
-    is_warmup_period: boolean | number;
-  }[] = parseEvent(demoBuffer, 'round_end', [], ['winner', 'reason', 'is_warmup_period']);
-
-  // The live match starts here; anything before it is warmup or an erroneously-recorded knife
-  // round (which the engine counts as a real round). Drop those by tick — see findMatchStartTick.
   const matchStartTick = findMatchStartTick(demoBuffer);
-  const liveRounds = roundEndEvents.filter(
-    (e) => !e.is_warmup_period && e.winner !== null && e.round > 0 && e.tick >= matchStartTick,
-  );
+  const liveRounds = getLiveRoundEndEvents(demoBuffer);
   const totalRounds = liveRounds.length;
 
   // --- K / D / A / Damage: read all from the engine's own accumulators ---
@@ -116,16 +110,11 @@ export function parseDemoFile(
   let skinsRoundsWon = 0;
 
   const roundSides = buildRoundSides(
-    liveRounds.map((e) => ({
-      tick: e.tick,
-      total_rounds_played: e.round,
-      winner: e.winner,
-      is_warmup_period: false,
-      reason: null,
-    })),
+    liveRounds,
     effectiveSide,
     targetWinRounds,
     matchStartTick,
+    startingRealRound,
   );
 
   // buildRoundSides filters identically to `liveRounds` above and preserves
@@ -186,4 +175,25 @@ export function parseDemoFile(
     warnings,
     inferred_side: inferredSide,
   };
+}
+
+/**
+ * Parses a match split across multiple demo recordings (e.g. by a server restart mid-match — see
+ * docs/demo-ingestion.md) and combines them into one result. Thin glue over `orchestrateSegments()`
+ * (segmentOrchestrator.ts) — that shared function does the actual probe/offset/agreement/merge
+ * sequencing, identical to `parseDemoSabremetricsSegments()`'s (demoOrchestrator.ts) except for
+ * which per-segment parser and merge function it's given.
+ */
+export function parseDemoFileSegments(
+  demoBuffers: Buffer[],
+  roster: RosterEntry[],
+  skinsSide: 'CT' | 'T' | null,
+  targetWinRounds: number,
+): ParsedDemoResult {
+  return orchestrateSegments(
+    demoBuffers,
+    (buf, startingRealRound) => parseDemoFile(buf, roster, skinsSide, targetWinRounds, startingRealRound),
+    mergeSegmentResults,
+    (segment) => segment.stats.map((p) => p.player_id),
+  );
 }

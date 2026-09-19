@@ -106,9 +106,19 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
   const { segments, order, playerIdsBySegment } = input;
   const flags: string[] = [];
 
-  for (let i = 1; i < order.length; i++) {
-    const prev = segments[order[i - 1]];
-    const cur = segments[order[i]];
+  for (const i of order) {
+    if (segments[i].liveRoundCount === 0) {
+      flags.push(`segment ${i} contributed zero live rounds — verify this demo parsed correctly before trusting the merge`);
+    }
+  }
+
+  // A segment that contributed zero rounds has nothing to be contiguous with — comparing its
+  // placeholder firstRoundNumber (0) against a real segment would read as a false gap/overlap,
+  // and it's already flagged above on its own terms.
+  const withRounds = order.filter((i) => segments[i].liveRoundCount > 0);
+  for (let i = 1; i < withRounds.length; i++) {
+    const prev = segments[withRounds[i - 1]];
+    const cur = segments[withRounds[i]];
     const expectedNext = prev.firstRoundNumber + prev.liveRoundCount;
     if (cur.firstRoundNumber > expectedNext) {
       flags.push(
@@ -126,6 +136,20 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
     const reference = new Set(playerIdsBySegment[referenceIdx]);
     for (const i of order.slice(1)) {
       const ids = new Set(playerIdsBySegment[i]);
+      // A segment resolving zero players (a short or manually-started recording can legitimately
+      // lack a populated player-info table — see noPlayersFoundWarning() in rosterResolver.ts,
+      // which already warns on this at parse time) is a different, less alarming situation than
+      // one resolving a genuinely different roster: its round outcomes still count toward the
+      // merged score, it just contributes no per-player stats — not a sign of a wrong file
+      // pairing. Detected structurally here (an empty id set), not by checking for that warning's
+      // text, so this module stays decoupled from another module's message format.
+      if (ids.size === 0 || reference.size === 0) {
+        const emptyIdx = ids.size === 0 ? i : referenceIdx;
+        flags.push(
+          `segment ${emptyIdx} resolved zero players — its round outcomes are still included in the merge, but it contributes no per-player stats`,
+        );
+        continue;
+      }
       const sameSize = ids.size === reference.size;
       const sameMembers = sameSize && [...reference].every((id) => ids.has(id));
       if (!sameMembers) {

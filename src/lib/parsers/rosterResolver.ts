@@ -27,11 +27,13 @@ export function parseEliminationWarning(warning: string): EliminationResolution 
 
 /**
  * The warning emitted when a demo yields zero players — distinct from the starting-side-unknown
- * warnings this would otherwise cascade into indistinguishably, since a genuinely empty player
- * list means the demo is likely truncated or corrupted, not that the match had no resolvable side.
+ * warnings this would otherwise cascade into indistinguishably. A genuinely empty player list can
+ * mean a truncated/corrupted file, but also a short or manually-started recording with no
+ * populated player-info table — not necessarily a bad file, just one an admin should look at.
  */
 export function noPlayersFoundWarning(): string {
-  return 'No players found in demo — file may be truncated or corrupted.';
+  return 'No players found in demo — the file may be truncated/corrupted, or the recording may ' +
+    'be too short/early-started for player info to have been captured.';
 }
 
 export function readDemoPlayers(

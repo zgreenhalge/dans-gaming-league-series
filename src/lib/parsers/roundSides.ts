@@ -70,6 +70,22 @@ function sideForRealRound(
   return otHalf % 2 === 1 ? otherSide : startingSide;
 }
 
+/** Every `round_end` a caller's parse should count toward the score: warmup and null-winner rows
+ *  (crash artifacts) dropped, and anything before `matchStartTick` dropped as warmup or an
+ *  erroneous knife round. The one place this predicate is defined — `buildRoundSides` and any
+ *  caller that needs to know a segment's live-round range before running the full parse (see
+ *  `getLiveRoundEndEvents()` in `matchContext.ts`) both apply it from here, so they can't diverge
+ *  on which rounds count. */
+export function filterLiveRoundEnds<T extends RoundEndRow>(events: T[], matchStartTick = 0): T[] {
+  return events.filter(
+    (e) =>
+      !e.is_warmup_period &&
+      e.winner !== null &&
+      e.total_rounds_played > 0 &&
+      e.tick >= matchStartTick,
+  );
+}
+
 export function buildRoundSides(
   roundEndEvents: RoundEndRow[],
   skinsStartingSide: 'CT' | 'T' | null,
@@ -86,13 +102,7 @@ export function buildRoundSides(
 
   const shirtsStartSide: 'CT' | 'T' = skinsStartingSide === 'CT' ? 'T' : 'CT';
 
-  const liveRounds = roundEndEvents.filter(
-    (e) =>
-      !e.is_warmup_period &&
-      e.winner !== null &&
-      e.total_rounds_played > 0 &&
-      e.tick >= matchStartTick,
-  );
+  const liveRounds = filterLiveRoundEnds(roundEndEvents, matchStartTick);
 
   const firstRoundNumber = liveRounds.length > 0 ? liveRounds[0].total_rounds_played : 0;
 

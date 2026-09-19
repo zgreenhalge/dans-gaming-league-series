@@ -6,8 +6,10 @@ import type {
 } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
-import type { RoundEndRow } from './parsers/roundSides';
+import { filterLiveRoundEnds, type RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
+import { mergeSabremetricResults } from './parsers/segmentMerge';
+import { orchestrateSegments } from './parsers/segmentOrchestrator';
 import { collectAccumulators } from './parsers/accumulators';
 import { collectKast } from './parsers/kast';
 import {
@@ -71,6 +73,10 @@ export function parseDemoSabremetrics(
   roster: RosterEntry[],
   skinsSide: 'CT' | 'T' | null,
   targetWinRounds: number,
+  /** See `buildRoundSides()`'s doc — 1 for a standalone demo (every direct caller), or the
+   *  match-wide starting round `parseDemoSabremetricsSegments()` supplies for a later segment of a
+   *  restart-interrupted match. */
+  startingRealRound = 1,
 ): ParsedDemoSabremetricsResult {
   const warnings: string[] = [];
 
@@ -134,9 +140,7 @@ export function parseDemoSabremetrics(
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
-  const sabLiveRounds = roundEndEvents.filter(
-    (e) => !e.is_warmup_period && e.winner !== null && e.total_rounds_played > 0 && e.tick >= matchStartTick,
-  );
+  const sabLiveRounds = filterLiveRoundEnds(roundEndEvents, matchStartTick);
   const inferredSide =
     sabLiveRounds.length > 0
       ? inferSkinsStartingSide(demoBuffer, sabLiveRounds[0].tick, steamToPlayer)
@@ -147,6 +151,7 @@ export function parseDemoSabremetrics(
     demoBuffer, roundEndEvents, deathEvents,
     steamToPlayer, effectiveSide, targetWinRounds,
     officiallyEndedEvents.map((e) => e.tick),
+    startingRealRound,
   );
 
   if (context.rounds.length === 0) {
@@ -428,4 +433,23 @@ export function parseDemoSabremetrics(
     matchDamageEvents,
     warnings: uniqueWarnings,
   };
+}
+
+/**
+ * Parses a match split across multiple demo recordings and combines them into one result. Thin
+ * glue over `orchestrateSegments()` (segmentOrchestrator.ts) — see `parseDemoFileSegments()`'s doc
+ * (demoParser.ts) for the shared sequencing this and that function both delegate to.
+ */
+export function parseDemoSabremetricsSegments(
+  demoBuffers: Buffer[],
+  roster: RosterEntry[],
+  skinsSide: 'CT' | 'T' | null,
+  targetWinRounds: number,
+): ParsedDemoSabremetricsResult {
+  return orchestrateSegments(
+    demoBuffers,
+    (buf, startingRealRound) => parseDemoSabremetrics(buf, roster, skinsSide, targetWinRounds, startingRealRound),
+    mergeSabremetricResults,
+    (segment) => segment.sabremetrics.map((p) => p.player_id),
+  );
 }

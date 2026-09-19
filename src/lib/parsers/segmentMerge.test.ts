@@ -187,6 +187,22 @@ test('checkSegmentAgreement: a roster mismatch across segments is flagged', () =
   assert.ok(result.flags.some((f) => /roster/i.test(f)), result.flags.join('; '));
 });
 
+test('checkSegmentAgreement: a segment resolving zero players gets a distinct, non-alarming flag, not "roster mismatch"', () => {
+  // A short or manually-started recording can legitimately have no player-info table populated —
+  // that's a different confidence level than a segment resolving a genuinely different roster, so
+  // it must not read as "wrong file paired" (see the mismatch test above for that case).
+  const input = agreementInput({
+    segments: [
+      { firstRoundNumber: 1, liveRoundCount: 4 },
+      { firstRoundNumber: 5, liveRoundCount: 19 },
+    ],
+    playerIdsBySegment: [[], [1, 2, 3, 4]], // segment A resolved no players at all
+  });
+  const result = checkSegmentAgreement(input);
+  assert.ok(result.flags.some((f) => /zero players/i.test(f)), result.flags.join('; '));
+  assert.ok(!result.flags.some((f) => /roster mismatch/i.test(f)), result.flags.join('; '));
+});
+
 test('checkSegmentAgreement: a single segment always passes (nothing to compare)', () => {
   const input = agreementInput({
     segments: [{ firstRoundNumber: 1, liveRoundCount: 23 }],
@@ -195,6 +211,22 @@ test('checkSegmentAgreement: a single segment always passes (nothing to compare)
   const result = checkSegmentAgreement(input);
   assert.equal(result.ok, true);
   assert.deepEqual(result.flags, []);
+});
+
+test('checkSegmentAgreement: a segment with zero live rounds is flagged distinctly, not as a false gap against the real segments', () => {
+  // firstRoundNumber defaults to 0 for a segment that yielded no live rounds at all (a corrupted
+  // or unparseable file) — sorting it to the front by that 0 must not poison the gap/overlap
+  // comparison against the segments that actually have rounds.
+  const input = agreementInput({
+    segments: [
+      { firstRoundNumber: 0, liveRoundCount: 0 }, // contributed nothing
+      { firstRoundNumber: 1, liveRoundCount: 23 },
+    ],
+    playerIdsBySegment: [[], [1, 2, 3, 4]],
+  });
+  const result = checkSegmentAgreement(input);
+  assert.ok(result.flags.some((f) => /zero live rounds/i.test(f)), result.flags.join('; '));
+  assert.ok(!result.flags.some((f) => /gap/i.test(f)), result.flags.join('; '));
 });
 
 // --- mergeSegmentResults (parseDemoFile shape) ---

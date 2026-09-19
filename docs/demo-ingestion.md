@@ -254,6 +254,40 @@ Precedence: **a stored side always wins** (it was entered deliberately); the dem
 value. When a stored side and the demo disagree, the parser keeps the stored side and emits a warning,
 which surfaces on the admin console's Activity feed as a data-quality flag.
 
+## Multi-segment demos (a match split by a server restart)
+
+A DatHost server restart mid-match (recovered via MatchZy's round-backup restore) leaves the
+match's demo as two or more separate GOTV recordings — each with its own independent tick space
+starting near 0, but a continuous `total_rounds_played` counter across the restart (the round
+backup preserves round history even though it resets per-player engine accumulators, which is why
+K/D/A/damage from each segment's accumulators must be *summed*, not treated as a full-match
+snapshot from whichever segment is parsed).
+
+`parseDemoFileSegments()`/`parseDemoSabremetricsSegments()` (`demoParser.ts`/`demoOrchestrator.ts`)
+take an array of demo buffers instead of one and combine them into a single result, via
+`orchestrateSegments()` (`parsers/segmentOrchestrator.ts`):
+
+1. Each buffer's live-round range is probed cheaply (`getLiveRoundEndEvents()`,
+   `parsers/matchContext.ts`) to sort segments by their own first live round and derive each one's
+   match-wide starting round (`computeSegmentOffsets()`, `parsers/segmentMerge.ts`) — independent of
+   upload/argument order.
+2. Each segment is parsed with the single-buffer `parseDemoFile()`/`parseDemoSabremetrics()`, now
+   anchoring its half/OT-swap boundary on that match-wide starting round (`startingRealRound`, see
+   `buildRoundSides()` in `parsers/roundSides.ts`) instead of assuming it's the match's true first
+   segment.
+3. `checkSegmentAgreement()` flags a bad pairing before the merge is trusted: a gap or overlap in
+   round coverage, a segment contributing zero live rounds, or segments resolving different
+   rosters. A segment resolving *zero* players is flagged distinctly and less alarmingly than a
+   genuine roster mismatch — its round outcomes still count toward the merged score, since that's
+   computed independently of roster resolution.
+4. `mergeSegmentResults()`/`mergeSabremetricResults()` (`parsers/segmentMerge.ts`) combine the
+   per-segment results generically — summing every numeric stat/sabremetric field sharing a
+   player-id key and concatenating every fact-row array — rather than by a hardcoded field list, so
+   a new collector never needs matching merge code.
+
+The single-buffer `parseDemoFile()`/`parseDemoSabremetrics()` are unchanged for the normal one-demo
+case; the multi-segment functions are additive, used only when a match actually needs stitching.
+
 ## Environment
 
 The demo path needs Cloudflare R2 credentials (in addition to the standard env vars in the root
