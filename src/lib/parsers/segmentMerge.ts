@@ -135,10 +135,17 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
   }
 
   if (order.length > 1) {
-    const referenceIdx = order[0];
-    const reference = new Set(playerIdsBySegment[referenceIdx]);
+    // The roster-mismatch comparison needs a reference segment that actually resolved players —
+    // comparing every segment only against order[0] would miss a mismatch between two OTHER
+    // segments whenever order[0] itself resolved zero players (every comparison against an empty
+    // reference would short-circuit into the zero-players branch before ever checking the
+    // remaining segments against each other).
+    const rosterReferenceIdx = order.find((i) => playerIdsBySegment[i].length > 0);
+    const reference = new Set(
+      rosterReferenceIdx !== undefined ? playerIdsBySegment[rosterReferenceIdx] : [],
+    );
     const flaggedEmpty = new Set<number>();
-    for (const i of order.slice(1)) {
+    for (const i of order) {
       const ids = new Set(playerIdsBySegment[i]);
       // A segment resolving zero players (a short or manually-started recording can legitimately
       // lack a populated player-info table — see noPlayersFoundWarning() in rosterResolver.ts,
@@ -149,16 +156,16 @@ export function checkSegmentAgreement(input: SegmentAgreementInput): { ok: boole
       // way to recover which player they belonged to. Detected structurally here (an empty id
       // set), not by checking for that warning's text, so this module stays decoupled from
       // another module's message format.
-      if (ids.size === 0 || reference.size === 0) {
-        const emptyIdx = ids.size === 0 ? i : referenceIdx;
-        if (!flaggedEmpty.has(emptyIdx)) {
-          flaggedEmpty.add(emptyIdx);
+      if (ids.size === 0) {
+        if (!flaggedEmpty.has(i)) {
+          flaggedEmpty.add(i);
           flags.push(
-            `segment ${emptyIdx} resolved zero players — its round outcomes are still included in the merge, but every player's merged rounds_played/damage/ADR is short by that segment's rounds, with no way to attribute them`,
+            `segment ${i} resolved zero players — its round outcomes are still included in the merge, but every player's merged rounds_played/damage/ADR is short by that segment's rounds, with no way to attribute them`,
           );
         }
         continue;
       }
+      if (i === rosterReferenceIdx) continue;
       const sameSize = ids.size === reference.size;
       const sameMembers = sameSize && [...reference].every((id) => ids.has(id));
       if (!sameMembers) {

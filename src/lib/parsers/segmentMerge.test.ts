@@ -187,6 +187,24 @@ test('checkSegmentAgreement: a roster mismatch across segments is flagged', () =
   assert.ok(result.flags.some((f) => /roster/i.test(f)), result.flags.join('; '));
 });
 
+test('checkSegmentAgreement: a roster mismatch between two non-reference segments is still caught when the reference segment itself resolved zero players', () => {
+  // Comparing every segment only against order[0] misses a mismatch between two OTHER segments
+  // whenever order[0] happens to be the empty one — every comparison against an empty reference
+  // short-circuits into the zero-players branch before a real mismatch between the remaining two
+  // segments is ever checked.
+  const input = agreementInput({
+    segments: [
+      { firstRoundNumber: 1, liveRoundCount: 2 },  // resolves zero players
+      { firstRoundNumber: 3, liveRoundCount: 4 },
+      { firstRoundNumber: 7, liveRoundCount: 19 },
+    ],
+    playerIdsBySegment: [[], [1, 2, 3, 4], [5, 6, 7, 8]], // segments 1 and 2 are genuinely different rosters
+  });
+  const result = checkSegmentAgreement(input);
+  assert.ok(result.flags.some((f) => /zero players/i.test(f)), result.flags.join('; '));
+  assert.ok(result.flags.some((f) => /roster mismatch/i.test(f)), result.flags.join('; '));
+});
+
 test('checkSegmentAgreement: a segment resolving zero players gets a distinct, non-alarming flag, not "roster mismatch"', () => {
   // A short or manually-started recording can legitimately have no player-info table populated —
   // that's a different confidence level than a segment resolving a genuinely different roster, so

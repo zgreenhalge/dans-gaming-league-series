@@ -10,7 +10,15 @@ import { computeSegmentOffsets, checkSegmentAgreement, type SegmentRoundRange } 
 
 /** The real, Buffer-consuming probe: a segment's own round range, cheaply, before the full
  *  per-segment parse. `orchestrateSegments()`'s default — overridable so the sequencing itself is
- *  testable with synthetic ranges, with no real demo buffer involved. */
+ *  testable with synthetic ranges, with no real demo buffer involved.
+ *
+ *  This does re-parse `round_end`/`begin_new_match` a second time, since the offset it produces
+ *  has to be known *before* the real per-segment parse can run with it — an accepted tradeoff
+ *  (weighed and kept deliberately, not an oversight) for a manual, occasionally-run admin recovery
+ *  tool, not a per-request hot path. Avoiding it would mean splitting `parseDemoFile`/
+ *  `parseDemoSabremetrics` into a parse-events phase and a compute phase so the offset could be
+ *  derived from data already parsed — real interface complexity this tool's actual usage pattern
+ *  doesn't justify. */
 export function probeSegmentRoundRange(buf: Buffer): SegmentRoundRange {
   const liveRounds = getLiveRoundEndEvents(buf);
   return {
