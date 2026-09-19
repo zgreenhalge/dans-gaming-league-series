@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics, Faction } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
+import { resolveMatchSeasons, fetchAllPages, asPage, batchedIn } from './_shared';
 import {
   getAllKillCreditFlags, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
   buildPlayerFactionsAndRoster, lookupDerivedSabFields, deriveRoundsBySide,
@@ -118,6 +118,38 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     });
   }
   return result;
+}
+
+/** Whether a season has at least one match with parsed sabremetrics — the light-weight signal the
+ *  season detail page's tab bar needs to decide whether to show "Advanced Stats" at all, without
+ *  fetching and deriving the full `getAllSabremetrics()` dataset (the most expensive per-match
+ *  query in this codebase, joining kills/rounds/weapon-stats/economy/utility) just to check it's
+ *  non-empty. Derives its candidate match ids from `resolveMatchSeasons()` (`_shared.ts`,
+ *  `cache()`-wrapped) rather than a season-scoped query of its own — every caller of this function
+ *  also calls `getSeasonEhogRatings()` in the same render pass, which already fetches it. */
+export async function hasSeasonSabremetrics(seasonId: number): Promise<boolean> {
+  const matchIds: number[] = [];
+  for (const [matchId, sid] of await resolveMatchSeasons()) {
+    if (sid === seasonId) matchIds.push(matchId);
+  }
+  if (matchIds.length === 0) return false;
+
+  // A single embedded-join query (`.select('player_match_stats_id, player_match_stats!inner(match_id)')`
+  // + `.in('player_match_stats.match_id', matchIds)`) would do this existence check in one round
+  // trip instead of two — the same dotted-filter-on-an-embed pattern `isWeekComplete()` uses
+  // (`schedule.ts`) — but the fake Supabase client this codebase tests against (`fakeSupabase.ts`)
+  // doesn't resolve filters on embedded relations, only flat columns, so that shape can't be
+  // verified here. Two flat-column queries instead.
+  const pmsRows = await batchedIn<{ id: number }>('player_match_stats', 'match_id', matchIds, 'id');
+  if (pmsRows.length === 0) return false;
+
+  const { data, error } = await supabase
+    .from('player_match_sabremetrics')
+    .select('player_match_stats_id')
+    .in('player_match_stats_id', pmsRows.map((r) => r.id))
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
 }
 
 /** Sums a `SabFieldsWithDerived` stat's CT and T components according to which sides are

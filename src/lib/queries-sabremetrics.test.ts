@@ -19,6 +19,7 @@ __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
 import {
   getAllSabremetrics,
+  hasSeasonSabremetrics,
   getSabremetricSeasonTotals,
   aggregateRows,
   chokeScore,
@@ -185,6 +186,18 @@ async function main() {
     const rows = await getAllSabremetrics(1);
     assert.equal(rows.length, 4);
     matchesSnapshot('getAllSabremetrics-season1', rows);
+  });
+
+  await test('hasSeasonSabremetrics() — true for a season with a played, parsed match', async () => {
+    assert.equal(await hasSeasonSabremetrics(1), true);
+  });
+
+  await test('hasSeasonSabremetrics() — false for a season with only an unplayed match (season 3, match 400)', async () => {
+    assert.equal(await hasSeasonSabremetrics(3), false);
+  });
+
+  await test('hasSeasonSabremetrics() — false for a season with no matches at all', async () => {
+    assert.equal(await hasSeasonSabremetrics(999), false);
   });
 
   await test('getSabremetricSeasonTotals() — one row per (player, season), snapshot', async () => {

@@ -2,7 +2,7 @@
 /**
  * Component tests for `CombinedSeasonTabView.tsx`: `topTab` reads from/writes to the `view` param,
  * `subTab` reads from/writes to the `tab` param and stays shared between the regular-season and
- * gauntlet `SeasonTabView` instances it renders, and the non-initial tab's heavy data is fetched
+ * gauntlet `SeasonTabView` instances it renders, and the non-initial tab's light data is fetched
  * lazily (mocked here) the first time it's opened.
  *
  * Run:  npx vitest run src/components/CombinedSeasonTabView.test.tsx
@@ -15,7 +15,7 @@ import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock }
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
-import type { RegularSeasonHeavyView, GauntletSeasonHeavyView } from '@/lib/queries';
+import type { RegularSeasonLightView, GauntletSeasonLightView, SeasonStatsView } from '@/lib/queries';
 import CombinedSeasonTabView from './CombinedSeasonTabView';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -58,22 +58,22 @@ const PLAYED_WEEK = {
   ],
 };
 
-const REGULAR_HEAVY: RegularSeasonHeavyView = {
+const REGULAR_LIGHT: RegularSeasonLightView = {
   schedule: [PLAYED_WEEK],
   h2hData: EMPTY_H2H,
   ehogRatings: {},
-  sabremetrics: [],
-  matchRounds: [],
-  matchKills: [],
-  matchWeaponClassStats: [],
-  matchEconomyStats: [],
+  hasAdvancedStats: false,
 };
 
-const GAUNTLET_HEAVY: GauntletSeasonHeavyView = {
+const GAUNTLET_LIGHT: GauntletSeasonLightView = {
   rounds: [],
   leaderboard: [leaderboardRow({ player_id: 2, player_name: 'Bob' })],
   h2hData: EMPTY_H2H,
   ehogRatings: {},
+  hasAdvancedStats: false,
+};
+
+const EMPTY_STATS: SeasonStatsView = {
   sabremetrics: [],
   matchRounds: [],
   matchKills: [],
@@ -84,12 +84,18 @@ const GAUNTLET_HEAVY: GauntletSeasonHeavyView = {
 beforeEach(() => {
   resetNextNavigationMock();
   nextNavigationMock.setPathname('/seasons/1');
-  // Backs whichever tab's heavy data isn't already seeded via `initialHeavyData` — a test that
-  // clicks into the non-initial tab exercises the lazy-fetch path against this mock instead of a
-  // real network call.
+  // Backs whichever tab's light data isn't already seeded via `initialLightData`, and any Stats/
+  // Advanced Stats sub-tab fetch — a test that clicks into either exercises its own lazy-fetch path
+  // against this mock instead of a real network call. Keyed by URL rather than a single blanket
+  // response so `/view` (light) and `/stats` calls each get their own correctly-shaped payload.
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(GAUNTLET_HEAVY) } as Response)),
+    vi.fn((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(url.includes('/stats') ? EMPTY_STATS : GAUNTLET_LIGHT),
+      } as Response),
+    ),
   );
 });
 
@@ -111,7 +117,7 @@ function baseProps() {
     gauntletSeasonId: 2,
     seasonNumber: 1,
     initialView: 'regular' as const,
-    initialHeavyData: { kind: 'regular' as const, data: REGULAR_HEAVY },
+    initialLightData: { kind: 'regular' as const, data: REGULAR_LIGHT },
   };
 }
 
@@ -121,7 +127,7 @@ function gauntletInitialProps() {
   return {
     ...baseProps(),
     initialView: 'gauntlet' as const,
-    initialHeavyData: { kind: 'gauntlet' as const, data: GAUNTLET_HEAVY },
+    initialLightData: { kind: 'gauntlet' as const, data: GAUNTLET_LIGHT },
   };
 }
 
@@ -168,6 +174,30 @@ describe('CombinedSeasonTabView — lazy-loading the non-initial tab', () => {
   });
 
   test('never fetches when the active tab already has data', () => {
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('CombinedSeasonTabView — Stats/Advanced Stats sub-tab data', () => {
+  // The stats-view cache lives here (not inside SeasonTabView, which unmounts on every top-tab
+  // switch) precisely so it survives switching top tabs away and back — see this component's own
+  // `statsCache` doc comment. `nextNavigationMock.pushState` doesn't feed back into
+  // `useSearchParams()` (see the lazy-loading describe block above), so a real switch-away-and-back
+  // can't be exercised via simulated clicks here; this instead verifies the wiring a real switch
+  // would exercise — that opening the Stats sub-tab fetches the right season/kind's stats data.
+  test('fetches the active top tab\'s stats data once the Stats sub-tab is open', async () => {
+    nextNavigationMock.setSearchParams('tab=stats');
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
+
+    await screen.findByRole('tab', { name: 'Stats' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect((fetch as unknown as { mock: { calls: string[][] } }).mock.calls[0][0]).toBe(
+      '/api/seasons/1/stats?kind=regular',
+    );
+  });
+
+  test('does not fetch stats data while on the Leaderboard sub-tab', () => {
     renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
     expect(fetch).not.toHaveBeenCalled();
   });

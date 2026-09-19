@@ -14,7 +14,8 @@ import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { BasicStatsView } from './BasicStatsView';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
-import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
+import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SeasonStatsView } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, anyMatchPlayed, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
@@ -90,28 +91,33 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   tab?: Tab;
   onTabChange?: (t: Tab) => void;
   ehogRatings?: Record<number, number>;
-  /** This season's per-match sabremetrics — the Advanced Stats tab only shows once at least
-   *  one match here has a parsed demo. */
-  sabremetrics?: SabremetricMatchRow[];
-  /** This season's demo-derived round outcomes — feeds the Maps & Sides tab's round-win-%-by-side
-   *  column. Empty for matches with no parsed demo. */
-  matchRounds?: MatchRoundRow[];
-  /** This season's demo-derived kills — feeds the Advanced tab's Weapons sub-tab. Empty for
-   *  matches with no parsed demo. */
-  matchKills?: MatchKillRow[];
-  /** This season's `player_match_weapon_stats` rows — feeds the Advanced tab's Weapons sub-tab
-   *  category accuracy breakdown (#474). Empty for matches with no parsed demo. */
-  matchWeaponClassStats?: WeaponClassMatchRow[];
-  /** This season's `player_match_economy_stats` rows — feeds the Advanced tab's Economy sub-tab
-   *  (#481). Empty for matches with no parsed demo. Unlike `CareerStatsView`/`PlayerView`, this
-   *  page applies no further client-side season filter on top of it, so `hasEconomyData` below is
-   *  safely derived straight from it, the same way `hasSab` is derived from `sabremetrics`. */
-  matchEconomyStats?: EconomyMatchRow[];
+  /** This season/kind's own id — used to lazily fetch `SeasonStatsView` (sabremetrics, per-match
+   *  rounds/kills/weapon-class/economy breakdowns) itself the first time the Stats or Advanced
+   *  Stats sub-tab is opened, via `GET /api/seasons/[id]/stats`. Only meaningful in uncontrolled
+   *  mode — see `onStatsRetry`'s doc comment below. */
+  seasonId?: number;
+  /** Whether this season has at least one match with parsed sabremetrics — decides whether the
+   *  Advanced Stats tab shows at all, independent of whether `statsData` has loaded yet. */
+  hasAdvancedStats?: boolean;
+  /**
+   * The Stats/Advanced Stats sub-tabs' own data — two modes, mirroring `tab`/`onTabChange` above:
+   *
+   * - **Controlled** (`CombinedSeasonTabView`, which must cache this tier across top-tab switches
+   *   the same way it already does the light view — this component gets unmounted/remounted on
+   *   every switch, so its own local state can't survive that): pass `statsData`/`statsError` (the
+   *   parent owns the fetch, keyed by top tab) and `onStatsRetry` (the parent's retry handler).
+   * - **Uncontrolled** (`SeasonPage`'s direct, non-paired render, which never unmounts this
+   *   component due to a tab switch): omit `statsData`/`statsError`/`onStatsRetry` and pass
+   *   `seasonId` instead — this component fetches and caches `SeasonStatsView` itself.
+   */
+  statsData?: SeasonStatsView;
+  statsError?: boolean;
+  onStatsRetry?: () => void;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats = [] } = props;
-  const hasSab = !!sabremetrics && sabremetrics.length > 0;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, seasonId, hasAdvancedStats } = props;
+  const hasSab = !!hasAdvancedStats;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
   const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
@@ -386,6 +392,57 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   // regular and gauntlet sub-views in `CombinedSeasonTabView`) points at one this side has hidden.
   const tab = resolveTab(rawTab, tabs);
 
+  // The Stats and Advanced Stats sub-tabs share one lazy fetch (`SeasonStatsView`) — the most
+  // expensive queries this app runs, so they're only fetched the first time either sub-tab is
+  // actually opened, not on every page load regardless of which sub-tab (if any) gets used.
+  // Controlled/uncontrolled, same split as `tab`/`onTabChange` above — see `onStatsRetry`'s own doc
+  // comment on the props type for which mode each caller needs and why.
+  const isStatsControlled = props.onStatsRetry != null;
+  const [localStatsData, setLocalStatsData] = useState<SeasonStatsView | undefined>(undefined);
+  const [localStatsLoading, setLocalStatsLoading] = useState(false);
+  const [localStatsError, setLocalStatsError] = useState(false);
+  // Bumped by the error state's "Retry" button to force the effect below to re-run — same reasoning
+  // as `CombinedSeasonTabView`'s own top-tab fetch retry.
+  const [localStatsRetryNonce, setLocalStatsRetryNonce] = useState(0);
+
+  const statsData = isStatsControlled ? props.statsData : localStatsData;
+  const statsError = isStatsControlled ? !!props.statsError : localStatsError;
+  const retryStats = isStatsControlled ? props.onStatsRetry! : () => setLocalStatsRetryNonce((n) => n + 1);
+
+  // Only fetches in uncontrolled mode — a controlled caller owns the fetch itself (its own effect,
+  // keyed the same way, mirrors this one server-side of the props boundary).
+  useEffect(() => {
+    if (isStatsControlled) return;
+    if ((tab !== 'stats' && tab !== 'advanced') || localStatsData || localStatsLoading || seasonId == null) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalStatsLoading(true);
+    setLocalStatsError(false);
+    fetch(`/api/seasons/${seasonId}/stats?kind=${props.kind}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load');
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) setLocalStatsData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalStatsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLocalStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      // A switch between 'stats' and 'advanced' before this fetch settles re-runs this effect (both
+      // satisfy the guard above) — without resetting the flag here, the `!cancelled` checks above
+      // would skip `setLocalStatsLoading(false)` on the in-flight fetch's own resolution, leaving
+      // it stuck `true` and permanently short-circuiting the guard on every later run.
+      setLocalStatsLoading(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStatsControlled, tab, seasonId, props.kind, localStatsRetryNonce]);
+
   // Scrolls to the default-open week/round whenever the Schedule tab becomes active with no
   // explicit `week`/`round` override (that case already scrolls via `scrollTargetId` above) — without
   // this, switching to the tab expands the current week but leaves the page wherever it already was,
@@ -490,19 +547,33 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
         )
       )}
 
-      {tab === 'stats' && hasStats && <BasicStatsView rows={leaderboard} matches={allMatches} rounds={matchRounds} />}
+      {tab === 'stats' && hasStats && (
+        statsData ? (
+          <BasicStatsView rows={leaderboard} matches={allMatches} rounds={statsData.matchRounds} />
+        ) : statsError ? (
+          <TabLoadError label="stats" onRetry={retryStats} />
+        ) : (
+          <TabLoadingSkeleton />
+        )
+      )}
 
       {tab === 'advanced' && hasSab && (
-        <SabremetricsLeaderboardView
-          rows={sabremetrics!}
-          kills={matchKills}
-          weaponClassStats={matchWeaponClassStats}
-          economyRows={matchEconomyStats}
-          hasEconomyData={matchEconomyStats.length > 0}
-          matches={allMatches}
-          rounds={matchRounds}
-          hasSideData={allMatches.length > 0}
-        />
+        statsData ? (
+          <SabremetricsLeaderboardView
+            rows={statsData.sabremetrics}
+            kills={statsData.matchKills}
+            weaponClassStats={statsData.matchWeaponClassStats}
+            economyRows={statsData.matchEconomyStats}
+            hasEconomyData={statsData.matchEconomyStats.length > 0}
+            matches={allMatches}
+            rounds={statsData.matchRounds}
+            hasSideData={allMatches.length > 0}
+          />
+        ) : statsError ? (
+          <TabLoadError label="advanced stats" onRetry={retryStats} />
+        ) : (
+          <TabLoadingSkeleton />
+        )
       )}
 
       {tab === 'h2h' && hasH2H && <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />}

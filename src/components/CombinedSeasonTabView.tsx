@@ -5,8 +5,8 @@ import Link from 'next/link';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
 import { useTabState } from './useTabState';
 import { tabCls } from '@/lib/util';
-import { SkeletonBar } from './Skeleton';
-import type { BracketPod, RegularSeasonHeavyView, GauntletSeasonHeavyView } from '@/lib/queries';
+import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
+import type { BracketPod, RegularSeasonLightView, GauntletSeasonLightView, SeasonStatsView } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type TopTab = 'regular' | 'gauntlet';
@@ -34,29 +34,8 @@ function TopTabBar({ tab, setTab }: { tab: TopTab; setTab: (t: TopTab) => void }
   );
 }
 
-function TabLoadingSkeleton() {
-  return (
-    <div aria-hidden>
-      <SkeletonBar className="h-px w-full mb-6" />
-      {[1, 2, 3, 4, 5].map((i) => (
-        <SkeletonBar key={i} className="h-10 w-full mb-px" />
-      ))}
-    </div>
-  );
-}
-
-function TabLoadError({ label, onRetry }: { label: string; onRetry: () => void }) {
-  return (
-    <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-3">
-      <span>Couldn&apos;t load {label}.</span>
-      <button onClick={onRetry} className="underline decoration-dotted hover:text-[var(--color-text-primary)]">
-        Retry
-      </button>
-    </div>
-  );
-}
-
-type HeavyCache = { regular?: RegularSeasonHeavyView; gauntlet?: GauntletSeasonHeavyView };
+type LightCache = { regular?: RegularSeasonLightView; gauntlet?: GauntletSeasonLightView };
+type StatsCache = { regular?: SeasonStatsView; gauntlet?: SeasonStatsView };
 
 export default function CombinedSeasonTabView({
   leaderboard,
@@ -72,7 +51,7 @@ export default function CombinedSeasonTabView({
   gauntletSeasonId,
   seasonNumber,
   initialView,
-  initialHeavyData,
+  initialLightData,
 }: {
   leaderboard: LeaderboardRowWithId[];
   seasonStartDate: string | null;
@@ -91,16 +70,16 @@ export default function CombinedSeasonTabView({
   regularSeasonId: number;
   gauntletSeasonId: number;
   seasonNumber: number | null;
-  /** Which tab the server eagerly fetched heavy data for — the other tab's heavy data is fetched
+  /** Which tab the server eagerly fetched light data for — the other tab's light data is fetched
    *  client-side, once, the first time it's actually opened. */
   initialView: TopTab;
-  initialHeavyData: { kind: 'regular'; data: RegularSeasonHeavyView } | { kind: 'gauntlet'; data: GauntletSeasonHeavyView };
+  initialLightData: { kind: 'regular'; data: RegularSeasonLightView } | { kind: 'gauntlet'; data: GauntletSeasonLightView };
 }) {
   const [topTab, setTopTab] = useTabState(TOP_TABS, initialView, 'view');
   const [subTab, setSubTab] = useTabState(SEASON_TABS, 'leaderboard');
 
-  const [heavyCache, setHeavyCache] = useState<HeavyCache>(() => ({
-    [initialHeavyData.kind]: initialHeavyData.data,
+  const [lightCache, setLightCache] = useState<LightCache>(() => ({
+    [initialLightData.kind]: initialLightData.data,
   }));
   const [loadingKind, setLoadingKind] = useState<TopTab | null>(null);
   const [loadError, setLoadError] = useState<TopTab | null>(null);
@@ -109,10 +88,12 @@ export default function CombinedSeasonTabView({
   // it), but a retry button avoids making that the only way back from a failed fetch.
   const [retryNonce, setRetryNonce] = useState(0);
 
-  // Fetches the active tab's heavy data the first time it's opened — once cached, switching back to
-  // it later is instant (no further network calls for the life of this page view).
+  // Fetches the active tab's light data the first time it's opened — once cached, switching back to
+  // it later is instant (no further network calls for the life of this page view). The Stats/
+  // Advanced Stats sub-tabs' own (heavier) data is a separate lazy fetch, owned by SeasonTabView
+  // itself rather than this component — see its own fetch effect.
   useEffect(() => {
-    if (heavyCache[topTab] || loadingKind === topTab) return;
+    if (lightCache[topTab] || loadingKind === topTab) return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingKind(topTab);
@@ -125,7 +106,7 @@ export default function CombinedSeasonTabView({
       })
       .then((data) => {
         if (cancelled) return;
-        setHeavyCache((prev) => ({ ...prev, [topTab]: data }));
+        setLightCache((prev) => ({ ...prev, [topTab]: data }));
       })
       .catch(() => {
         if (!cancelled) setLoadError(topTab);
@@ -144,6 +125,47 @@ export default function CombinedSeasonTabView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topTab, retryNonce, regularSeasonId, gauntletSeasonId, seasonNumber]);
 
+  const [statsCache, setStatsCache] = useState<StatsCache>({});
+  const [statsLoadingKind, setStatsLoadingKind] = useState<TopTab | null>(null);
+  const [statsLoadError, setStatsLoadError] = useState<TopTab | null>(null);
+  const [statsRetryNonce, setStatsRetryNonce] = useState(0);
+
+  // The active top tab's Stats/Advanced Stats sub-tab data — a second, separately-lazy tier below
+  // the light view above, only fetched once `subTab` is actually 'stats'/'advanced'. Cached here
+  // (not inside SeasonTabView, which unmounts on every top-tab switch) so it survives switching
+  // away and back the same way `lightCache` above does — passed down as controlled props (see
+  // SeasonTabView's own `onStatsRetry` doc comment).
+  useEffect(() => {
+    if ((subTab !== 'stats' && subTab !== 'advanced') || statsCache[topTab] || statsLoadingKind === topTab) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatsLoadingKind(topTab);
+    setStatsLoadError(null);
+    const seasonId = topTab === 'regular' ? regularSeasonId : gauntletSeasonId;
+    fetch(`/api/seasons/${seasonId}/stats?kind=${topTab}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load');
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setStatsCache((prev) => ({ ...prev, [topTab]: data }));
+      })
+      .catch(() => {
+        if (!cancelled) setStatsLoadError(topTab);
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoadingKind(null);
+      });
+    return () => {
+      cancelled = true;
+      // Same reasoning as the light-view effect's own cleanup above — without this, a switch away
+      // before the fetch settles would leave `statsLoadingKind` stuck at this tab forever.
+      setStatsLoadingKind((k) => (k === topTab ? null : k));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTab, topTab, statsRetryNonce, regularSeasonId, gauntletSeasonId]);
+
   // Seed number → player name from the regular season's own standings (already canonical-sorted,
   // i.e. seed order) — lets the gauntlet bracket diagram name an unseeded seed slot before the
   // gauntlet is actually seeded.
@@ -152,8 +174,8 @@ export default function CombinedSeasonTabView({
     [leaderboard],
   );
 
-  const regularData = heavyCache.regular;
-  const gauntletData = heavyCache.gauntlet;
+  const regularData = lightCache.regular;
+  const gauntletData = lightCache.gauntlet;
 
   return (
     <>
@@ -175,11 +197,10 @@ export default function CombinedSeasonTabView({
             tab={subTab}
             onTabChange={setSubTab}
             ehogRatings={regularData.ehogRatings}
-            sabremetrics={regularData.sabremetrics}
-            matchRounds={regularData.matchRounds}
-            matchKills={regularData.matchKills}
-            matchWeaponClassStats={regularData.matchWeaponClassStats}
-            matchEconomyStats={regularData.matchEconomyStats}
+            hasAdvancedStats={regularData.hasAdvancedStats}
+            statsData={statsCache.regular}
+            statsError={statsLoadError === 'regular'}
+            onStatsRetry={() => setStatsRetryNonce((n) => n + 1)}
           />
         ) : loadError === 'regular' ? (
           <TabLoadError label="regular season stats" onRetry={() => setRetryNonce((n) => n + 1)} />
@@ -213,11 +234,10 @@ export default function CombinedSeasonTabView({
             tab={subTab}
             onTabChange={setSubTab}
             ehogRatings={gauntletData.ehogRatings}
-            sabremetrics={gauntletData.sabremetrics}
-            matchRounds={gauntletData.matchRounds}
-            matchKills={gauntletData.matchKills}
-            matchWeaponClassStats={gauntletData.matchWeaponClassStats}
-            matchEconomyStats={gauntletData.matchEconomyStats}
+            hasAdvancedStats={gauntletData.hasAdvancedStats}
+            statsData={statsCache.gauntlet}
+            statsError={statsLoadError === 'gauntlet'}
+            onStatsRetry={() => setStatsRetryNonce((n) => n + 1)}
           />
         ) : loadError === 'gauntlet' ? (
           <TabLoadError label="gauntlet stats" onRetry={() => setRetryNonce((n) => n + 1)} />

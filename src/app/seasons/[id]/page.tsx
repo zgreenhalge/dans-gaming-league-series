@@ -14,10 +14,10 @@ import {
   getGauntletSeasonProgress,
   getLinkedGauntlet,
   getLinkedRegularSeason,
-  getRegularSeasonHeavyView,
-  getGauntletSeasonHeavyView,
-  type RegularSeasonHeavyView,
-  type GauntletSeasonHeavyView,
+  getRegularSeasonLightView,
+  getGauntletSeasonLightView,
+  type RegularSeasonLightView,
+  type GauntletSeasonLightView,
   type GauntletRound,
 } from '@/lib/queries';
 import SeasonTabView from '@/components/SeasonTabView';
@@ -147,19 +147,20 @@ export default async function SeasonPage({
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone, reusing the same
-    // getGauntletSeasonHeavyView() the paired-season path below fetches for its own Gauntlet tab
+    // getGauntletSeasonLightView() the paired-season path below fetches for its own Gauntlet tab
     // instead of duplicating its fetch/derive logic. `getPlayersById()` is `cache()`-wrapped
     // (fetched here rather than earlier so a season that redirects above never pays for it at all);
-    // it's needed as a value (not just a promise) to build the heavy-view call, so it's resolved
+    // it's needed as a value (not just a promise) to build the light-view call, so it's resolved
     // before that fetch starts rather than folded into the same Promise.all — a real but small cost
-    // on this rare path (a gauntlet predating bracket-scheduling, or never paired).
+    // on this rare path (a gauntlet predating bracket-scheduling, or never paired). The Stats/
+    // Advanced Stats sub-tabs' own heavier data is a separate lazy fetch — see SeasonTabView.
     const playersById = await getPlayersById();
     const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
-    const [heavy, bracketShape] = await Promise.all([
-      getGauntletSeasonHeavyView(seasonId, extractSeasonNumber(season.name), playersById),
+    const [light, bracketShape] = await Promise.all([
+      getGauntletSeasonLightView(seasonId, extractSeasonNumber(season.name), playersById),
       getGauntletBracketShape(seasonId),
     ]);
-    const { rounds, leaderboard, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats } = heavy;
+    const { rounds, leaderboard, h2hData, ehogRatings, hasAdvancedStats } = light;
     const matchCount = countGauntletMatches(rounds);
     const finalRound = rounds.length > 0 ? rounds[rounds.length - 1].round_number : null;
     const seasonJsonLd = buildSeasonJsonLd({
@@ -204,6 +205,7 @@ export default async function SeasonPage({
             <UrlStateProvider>
               <SeasonTabView
                 kind="gauntlet"
+                seasonId={seasonId}
                 rounds={rounds}
                 bracketShape={bracketShape}
                 leaderboard={leaderboard}
@@ -211,11 +213,7 @@ export default async function SeasonPage({
                 currentPlayerId={currentPlayerId}
                 h2hData={h2hData}
                 ehogRatings={ehogRatings}
-                sabremetrics={sabremetrics}
-                matchRounds={matchRounds}
-                matchKills={matchKills}
-                matchWeaponClassStats={matchWeaponClassStats}
-                matchEconomyStats={matchEconomyStats}
+                hasAdvancedStats={hasAdvancedStats}
               />
             </UrlStateProvider>
           </Suspense>
@@ -249,17 +247,18 @@ export default async function SeasonPage({
   const seasonNumber = extractSeasonNumber(season.name);
 
   // The paired gauntlet's light cross-link data (bracket shape, seeded/started) plus this page's
-  // other light reads, all independent of each other — together with the heavy view for whichever
-  // tab `initialView` names (the other tab's heavy view is fetched lazily, client-side, once it's
-  // actually opened — see CombinedSeasonTabView).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialHeavy, leaderboard, matchSummaries] = await Promise.all([
+  // other light reads, all independent of each other — together with the light view for whichever
+  // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
+  // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
+  // further lazy fetch on top of that, owned by SeasonTabView itself).
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialLight, leaderboard, matchSummaries] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
     isUpcoming ? getSeasonRoster(seasonId, playersById) : Promise.resolve([]),
     initialView === 'gauntlet' && linkedGauntlet
-      ? getGauntletSeasonHeavyView(linkedGauntlet.id, seasonNumber, playersById)
-      : getRegularSeasonHeavyView(seasonId, seasonNumber, playersById),
+      ? getGauntletSeasonLightView(linkedGauntlet.id, seasonNumber, playersById)
+      : getRegularSeasonLightView(seasonId, seasonNumber, playersById),
     leaderboardPromise,
     matchSummariesPromise,
   ]);
@@ -268,15 +267,15 @@ export default async function SeasonPage({
   // matches, in which case it's indistinguishable from having no gauntlet at all — not worth a tab.
   const showGauntletTab = !!linkedGauntlet && (gauntletBracketShape.length > 0 || gauntletSeasonProgress.seeded);
 
-  let initialHeavyData: { kind: 'regular'; data: RegularSeasonHeavyView } | { kind: 'gauntlet'; data: GauntletSeasonHeavyView } =
+  let initialLightData: { kind: 'regular'; data: RegularSeasonLightView } | { kind: 'gauntlet'; data: GauntletSeasonLightView } =
     initialView === 'gauntlet' && linkedGauntlet
-      ? { kind: 'gauntlet', data: initialHeavy as GauntletSeasonHeavyView }
-      : { kind: 'regular', data: initialHeavy as RegularSeasonHeavyView };
+      ? { kind: 'gauntlet', data: initialLight as GauntletSeasonLightView }
+      : { kind: 'regular', data: initialLight as RegularSeasonLightView };
   // Rare fallback: a `?view=gauntlet` link landed on a season whose linked gauntlet turns out to
   // have no real content to show a tab for — fetch the regular view actually needed to render
   // instead. Never reached on a normal page load (only a stale/bogus `view` param takes this path).
-  if (!showGauntletTab && initialHeavyData.kind === 'gauntlet') {
-    initialHeavyData = { kind: 'regular', data: await getRegularSeasonHeavyView(seasonId, seasonNumber, playersById) };
+  if (!showGauntletTab && initialLightData.kind === 'gauntlet') {
+    initialLightData = { kind: 'regular', data: await getRegularSeasonLightView(seasonId, seasonNumber, playersById) };
   }
 
   const matchCount = matchSummaries.matches.length;
@@ -353,27 +352,24 @@ export default async function SeasonPage({
                 gauntletSeasonId={linkedGauntlet.id}
                 seasonNumber={seasonNumber}
                 initialView={initialView}
-                initialHeavyData={initialHeavyData}
+                initialLightData={initialLightData}
               />
-            ) : initialHeavyData.kind === 'regular' ? (
+            ) : initialLightData.kind === 'regular' ? (
               <SeasonTabView
                 kind="regular"
+                seasonId={season.id}
                 leaderboard={leaderboard}
-                schedule={initialHeavyData.data.schedule}
+                schedule={initialLightData.data.schedule}
                 seasonStartDate={season.start_date}
                 seasonStatus={season.status}
                 mapPool={season.map_pool}
                 currentPlayerId={currentPlayerId}
-                h2hData={initialHeavyData.data.h2hData}
-                ehogRatings={initialHeavyData.data.ehogRatings}
-                sabremetrics={initialHeavyData.data.sabremetrics}
-                matchRounds={initialHeavyData.data.matchRounds}
-                matchKills={initialHeavyData.data.matchKills}
-                matchWeaponClassStats={initialHeavyData.data.matchWeaponClassStats}
-                matchEconomyStats={initialHeavyData.data.matchEconomyStats}
+                h2hData={initialLightData.data.h2hData}
+                ehogRatings={initialLightData.data.ehogRatings}
+                hasAdvancedStats={initialLightData.data.hasAdvancedStats}
               />
             ) : (
-              // Unreachable: `showGauntletTab` false guarantees `initialHeavyData.kind === 'regular'`
+              // Unreachable: `showGauntletTab` false guarantees `initialLightData.kind === 'regular'`
               // — either there was never a gauntlet-kind fetch to begin with, or the fallback above
               // already replaced it with one. The `kind === 'regular'` check above (rather than an
               // assertion) gives real type narrowing for the branch instead of asserting it per-field.

@@ -9,10 +9,11 @@ import { getPlayersById } from './player';
 import { getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
 import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
-import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
-import { getAllMatchRounds, type MatchRoundRow } from './rounds';
-import { getAllMatchKills, type MatchKillRow } from './kills';
-import { getAllWeaponClassStats, getAllEconomyStats, type WeaponClassMatchRow, type EconomyMatchRow } from './weaponStats';
+import { getAllSabremetrics, hasSeasonSabremetrics } from './sabremetrics';
+import { getAllMatchRounds } from './rounds';
+import { getAllMatchKills } from './kills';
+import { getAllWeaponClassStats, getAllEconomyStats } from './weaponStats';
+import type { SeasonStatsView } from './seasons';
 
 
 function aggToRow(
@@ -480,44 +481,55 @@ export function deriveGauntletSeasonLeaderboard(
     .sort(canonicalSort);
 }
 
-export interface GauntletSeasonHeavyView {
+export interface GauntletSeasonLightView {
   rounds: GauntletRound[];
   leaderboard: LeaderboardRowWithId[];
   h2hData: H2HData;
   ehogRatings: Record<number, number>;
-  sabremetrics: SabremetricMatchRow[];
-  matchRounds: MatchRoundRow[];
-  matchKills: MatchKillRow[];
-  matchWeaponClassStats: WeaponClassMatchRow[];
-  matchEconomyStats: EconomyMatchRow[];
+  /** Whether this season has at least one match with parsed sabremetrics — decides whether the
+   *  Advanced Stats tab shows at all, independent of whether `SeasonStatsView` has been fetched yet
+   *  (see `hasSeasonSabremetrics()`, `sabremetrics.ts`). */
+  hasAdvancedStats: boolean;
 }
 
-/** Every per-match ("heavy") field the season detail page's Gauntlet tab needs, batched into one
- *  call — distinct from the page's light data (the bracket shape, seed names), which is needed
- *  regardless of which tab is showing and so is fetched separately, always. `leaderboard` is
- *  derived from `rounds` (`deriveGauntletSeasonLeaderboard()`) rather than a second
- *  `getGauntletSeasonLeaderboard()` round trip over the same matches. `seasonNumber`/`playersById`
- *  are accepted rather than re-resolved here since every caller (the page's own initial render, the
- *  lazy tab-switch route) already has both in hand. */
-export async function getGauntletSeasonHeavyView(
+/** The season detail page's Gauntlet tab fields needed regardless of which sub-tab is showing —
+ *  the Leaderboard, H2H, Groups, and Schedule sub-tabs all render from this alone. Distinct from
+ *  `SeasonStatsView` (`seasons.ts` — the Stats/Advanced Stats sub-tabs' own per-match fields, the
+ *  most expensive queries this app runs, and identical in shape for either season kind), which is
+ *  fetched lazily, client-side, only once one of those two sub-tabs is actually opened — see
+ *  `getGauntletSeasonStatsView()` below and `SeasonTabView`. `leaderboard` is derived from `rounds`
+ *  (`deriveGauntletSeasonLeaderboard()`) rather than a second `getGauntletSeasonLeaderboard()`
+ *  round trip over the same matches. `seasonNumber`/`playersById` are accepted rather than
+ *  re-resolved here since every caller (the page's own initial render, the lazy tab-switch route)
+ *  already has both in hand. */
+export async function getGauntletSeasonLightView(
   seasonId: number,
   seasonNumber: number | null,
   playersById: Map<number, Player>,
-): Promise<GauntletSeasonHeavyView> {
-  const [rounds, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+): Promise<GauntletSeasonLightView> {
+  const [rounds, ehogRatings, hasAdvancedStats] = await Promise.all([
     getGauntletRounds(seasonId),
     getSeasonEhogRatings(seasonId),
+    hasSeasonSabremetrics(seasonId),
+  ]);
+  const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
+  // Computed from `rounds` — already fetched above — instead of a second, redundant getH2HData()
+  // round-trip over the same matches (see #441).
+  const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, seasonNumber), playersById);
+  return { rounds, leaderboard, h2hData, ehogRatings, hasAdvancedStats };
+}
+
+/** The Gauntlet tab's Stats/Advanced Stats sub-tab fields — see `GauntletSeasonLightView`'s own
+ *  doc comment for why these are split out and fetched separately, lazily. */
+export async function getGauntletSeasonStatsView(seasonId: number): Promise<SeasonStatsView> {
+  const [sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     getAllSabremetrics(seasonId),
     getAllMatchRounds(seasonId),
     getAllMatchKills(seasonId),
     getAllWeaponClassStats(seasonId),
     getAllEconomyStats(seasonId),
   ]);
-  const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
-  // Computed from `rounds` — already fetched above — instead of a second, redundant getH2HData()
-  // round-trip over the same matches (see #441).
-  const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, seasonNumber), playersById);
-  return { rounds, leaderboard, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
+  return { sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
 }
 
 /** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
