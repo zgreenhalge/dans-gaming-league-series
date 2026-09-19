@@ -305,11 +305,14 @@ The single-buffer `parseDemoFile()`/`parseDemoSabremetrics()` are unchanged for 
 case; the multi-segment functions are additive, used only when a match actually needs stitching.
 
 **Admin recovery path.** This is a manual, CLI-first recovery tool, not a self-serve upload flow —
-`scripts/inspect-demo.ts` accepts `--demo` more than once
-(`tsx scripts/inspect-demo.ts --demo a.dem --demo b.dem --roster roster.json --skins-side CT`),
-dispatching to the multi-segment functions instead of the single-buffer ones, and prints the same
-derived score/stats/warnings report as a normal single-demo run for an admin to review before
-confirming the score through the existing `PATCH /score` flow by hand.
+`scripts/inspect-demo.ts` accepts more than one demo, either as a repeated `--demo` flag or
+comma-separated within one (`--demo a.dem,b.dem` and `--demo a.dem --demo b.dem` both work), and
+dispatches to the multi-segment functions instead of the single-buffer ones. `--match <id>` can be
+given alongside local `--demo` files purely to source the roster/side/target defaults from the DB
+instead of a hand-written `--roster` file — the demo bytes still come from the local files, never
+R2, whenever `--demo` is present. The tool prints the same derived score/stats/warnings report as a
+normal single-demo run for an admin to review before confirming the score through the existing
+`PATCH /score` flow by hand.
 
 **Known limitation.** `parseDemoSabremetrics()` returns empty sabremetric/fact-row arrays and a
 generic "No live rounds found in demo" warning whenever a segment's side can't be resolved,

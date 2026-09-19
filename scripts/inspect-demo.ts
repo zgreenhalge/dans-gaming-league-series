@@ -9,7 +9,7 @@
 // seeing what the pipeline would produce before it runs. Interpret the numbers against whatever
 // source of truth applies to your case (scoreboard, official result, another tool).
 //
-// Passing --demo more than once parses a match split across multiple recordings by a server
+// Passing more than one --demo path parses a match split across multiple recordings by a server
 // restart (see docs/demo-ingestion.md's "Multi-segment demos") — segments are combined via
 // parseDemoFileSegments()/parseDemoSabremetricsSegments() regardless of the order given.
 //
@@ -17,16 +17,20 @@
 //   tsx scripts/inspect-demo.ts --match 123                         # roster/side/target from DB
 //   tsx scripts/inspect-demo.ts --match 123 --skins-side unknown    # ignore stored side; infer it
 //   tsx scripts/inspect-demo.ts --demo ./game.dem --roster ./roster.json --skins-side CT
-//   tsx scripts/inspect-demo.ts --demo ./a.dem --demo ./b.dem --roster ./roster.json --skins-side CT
+//   tsx scripts/inspect-demo.ts --demo ./a.dem,./b.dem --roster ./roster.json --skins-side CT
+//   tsx scripts/inspect-demo.ts --demo ./a.dem --demo ./b.dem --match 123   # local segments, DB roster
 //
 // Flags:
-//   --demo <path>        local .dem file (gzip auto-detected). Repeatable, for a match split across
-//                        multiple recordings by a server restart. Mutually exclusive with --match
-//                        (which only supports a single stored demo).
-//   --match <id>         pull the demo from R2 at demoKey(id) (needs CLOUDFLARE_R2_* + Supabase env).
-//                        With --match, roster / skins-side / target default from the DB
-//                        (getReplayInputs) — no --roster needed. --demo still requires --roster.
-//   --roster <path>      JSON array of RosterEntry (REQUIRED for --demo; optional override for --match):
+//   --demo <path>[,<path>...]   one or more local .dem files (gzip auto-detected) — repeat the flag,
+//                        comma-separate within one, or both. More than one path is a match split
+//                        across multiple recordings by a server restart.
+//   --match <id>         with --demo, only supplies roster/side/target defaults from the DB
+//                        (getReplayInputs) instead of requiring --roster — the demo bytes still come
+//                        from --demo, never R2. Without --demo, pulls the (single) demo from R2 at
+//                        demoKey(id) instead (needs CLOUDFLARE_R2_* + Supabase env). One of --demo or
+//                        --match is required.
+//   --roster <path>      JSON array of RosterEntry (required unless --match supplies one; overrides
+//                        the DB roster when both are given):
 //                          [{ "player_id": 1, "faction": "SHIRTS",
 //                             "steam_id": "7656119...", "name": "Zach",
 //                             "steam_nickname": "zg" }, ...]
@@ -90,17 +94,20 @@ function printWarnings(warnings: string[]): void {
 async function main() {
   const argv = process.argv.slice(2);
   const args = parseArgs(argv);
-  const demoPaths = collectFlagValues(argv, 'demo');
+  // Repeatable and/or comma-separated within one occurrence — `--demo a.dem,b.dem` and
+  // `--demo a.dem --demo b.dem` both work, so segments never have to be listed one flag at a time.
+  const demoPaths = collectFlagValues(argv, 'demo').flatMap((p) => p.split(',').map((s) => s.trim()));
 
   const hasDemo = demoPaths.length > 0;
   const hasMatch = typeof args.match === 'string';
-  if (hasDemo === hasMatch) {
-    die('Provide exactly one of --demo <path> (repeatable) or --match <id>.');
+  if (!hasDemo && !hasMatch) {
+    die('Provide --demo <path> (repeatable/comma-separated) and/or --match <id>.');
   }
   const hasRoster = typeof args.roster === 'string';
 
-  // For --match, roster / side / target default from the DB (getReplayInputs) — the same inputs the
-  // app parses a match with — so a quick check is just `--match <id>`. --demo has no DB context.
+  // With --match, roster / side / target default from the DB (getReplayInputs) — the same inputs
+  // the app parses a match with. This still applies when --demo is also given (local segments, DB
+  // metadata) — only the demo *bytes* come from R2 when --demo is absent.
   let dbRoster: RosterEntry[] | null = null;
   let dbSide: 'CT' | 'T' | null = null;
   let dbTarget = 13;
@@ -111,7 +118,7 @@ async function main() {
     dbTarget = inputs.targetWinRounds;
   }
 
-  // Roster: an explicit --roster file wins; otherwise the DB roster (--match only).
+  // Roster: an explicit --roster file wins; otherwise the DB roster (needs --match).
   let roster: RosterEntry[];
   let rosterSource: string;
   if (hasRoster) {
@@ -125,7 +132,7 @@ async function main() {
     roster = dbRoster;
     rosterSource = 'DB (getReplayInputs)';
   } else {
-    die('Missing --roster <path.json> (required with --demo). See the header for the shape.');
+    die('Missing --roster <path.json> (required unless --match supplies one). See the header for the shape.');
   }
   if (!Array.isArray(roster) || roster.length === 0) die('Roster must be a non-empty array.');
 
