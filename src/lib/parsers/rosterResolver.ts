@@ -25,6 +25,15 @@ export function parseEliminationWarning(warning: string): EliminationResolution 
   return m ? { demoName: m[1], steamId: m[2], rosterName: m[3] } : null;
 }
 
+/**
+ * The warning emitted when a demo yields zero players — distinct from the starting-side-unknown
+ * warnings this would otherwise cascade into indistinguishably, since a genuinely empty player
+ * list means the demo is likely truncated or corrupted, not that the match had no resolvable side.
+ */
+export function noPlayersFoundWarning(): string {
+  return 'No players found in demo — file may be truncated or corrupted.';
+}
+
 export function readDemoPlayers(
   demoBuffer: Buffer,
 ): { steamId: string; name: string }[] {
@@ -40,6 +49,11 @@ export function resolveRoster(
   roster: RosterEntry[],
   warnings: string[],
 ): Map<string, { player_id: number; faction: 'SHIRTS' | 'SKINS' }> {
+  if (demoPlayers.length === 0) {
+    warnings.push(noPlayersFoundWarning());
+    return new Map();
+  }
+
   const resolved = new Map<string, { player_id: number; faction: 'SHIRTS' | 'SKINS' }>();
   const usedIds = new Set<number>();
   let remaining = [...demoPlayers];

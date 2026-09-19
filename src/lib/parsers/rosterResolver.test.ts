@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { eliminationWarning, parseEliminationWarning, resolveRoster } from './rosterResolver';
+import { eliminationWarning, parseEliminationWarning, noPlayersFoundWarning, resolveRoster } from './rosterResolver';
 import type { RosterEntry } from '../demoParser';
 import { test, report } from '../test-support/miniTest';
 
@@ -99,6 +99,17 @@ test('resolveRoster: throws listing every unmatched player when more than one is
     () => resolveRoster(demoPlayers, roster, []),
     /Could not match 2 demo player\(s\)/,
   );
+});
+
+test('resolveRoster: zero demo players warns distinctly instead of silently returning empty', () => {
+  const roster: RosterEntry[] = [slot({ player_id: 1, steam_id: '111', name: 'Tim' })];
+  const warnings: string[] = [];
+  const resolved = resolveRoster([], roster, warnings);
+  assert.equal(resolved.size, 0);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0], noPlayersFoundWarning());
+  // Must not collide with the starting-side-unknown warnings this cascades into today.
+  assert.doesNotMatch(warnings[0], /starting side unknown/i);
 });
 
 test('resolveRoster: duplicate steam ids on the roster do not double-assign the same slot', () => {
