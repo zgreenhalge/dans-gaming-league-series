@@ -31,7 +31,6 @@ import {
   getActiveServerMatch,
   getServerOccupancy,
   teardownMatchServer,
-  isServerActuallyLive,
   provisionMatchServer,
   ServerBusyError,
   type ActiveServerMatch,
@@ -340,28 +339,14 @@ async function testTeardownNoOpBranches() {
   });
 }
 
-async function testIsServerActuallyLive() {
-  await test('isServerActuallyLive: true when a scrim session is active (no DatHost call needed)', async () => {
-    const db: FakeDb = { scrim_sessions: [{ id: 1, started_by: 1, warned_15: false, warned_10: false, warned_5: false }] };
-    const client = createFakeSupabaseClient(db);
-    assert.equal(await isServerActuallyLive(client as never, 'srv-1'), true);
-  });
-
-  await test('isServerActuallyLive: false when no scrim and DatHost is unreachable (fails open, not blocking)', async () => {
-    const db: FakeDb = { scrim_sessions: [] };
-    const client = createFakeSupabaseClient(db);
-    const result = await withEnvAsync({ DATHOST_EMAIL: undefined, DATHOST_PASSWORD: undefined }, () =>
-      isServerActuallyLive(client as never, 'srv-1'),
-    );
-    assert.equal(result, false);
-  });
-}
-
 async function testProvisionMatchServerGuards() {
+  // The ground-truth "is DatHost itself reporting live?" branch isn't exercised here — same
+  // network-boundary limitation as this file's other DatHost-touching branches (see the file
+  // docstring): there's no live DatHost connection in this environment, so `getServer` fails fast and
+  // is caught as not-live, same as `getReconciledServerState`'s `live` branch above.
   await test('provisionMatchServer: refuses with ServerBusyError(occupantMatchId) when another match holds the server', async () => {
     const db: FakeDb = {
       match_server_state: [{ match_id: 5, server_state: 'live', connect_string: null, server_started_at: null, dathost_server_id: 'srv-1', teardown_at: null }],
-      scrim_sessions: [],
     };
     const client = createFakeSupabaseClient(db);
     await assert.rejects(
@@ -371,23 +356,8 @@ async function testProvisionMatchServerGuards() {
         ),
       (err: unknown) => err instanceof ServerBusyError && err.occupantMatchId === 5,
     );
-  });
-
-  await test('provisionMatchServer: refuses with ServerBusyError(null) when a scrim is live with no match_server_state occupant', async () => {
-    const db: FakeDb = {
-      match_server_state: [],
-      scrim_sessions: [{ id: 1, started_by: 1, warned_15: false, warned_10: false, warned_5: false }],
-    };
-    const client = createFakeSupabaseClient(db);
-    await assert.rejects(
-      () =>
-        withEnvAsync({ DATHOST_SERVER_ID: 'srv-1' }, () =>
-          provisionMatchServer(client as never, 100, 'https://dgls.example.com/config', { headerKey: 'X-MatchZy-Token', headerValue: 'sekret' }),
-        ),
-      (err: unknown) => err instanceof ServerBusyError && err.occupantMatchId === null,
-    );
     // Refused before ever claiming the server — no match_server_state row should have been written.
-    assert.equal(db.match_server_state.length, 0);
+    assert.equal(db.match_server_state.length, 1, 'only the pre-existing occupant row, nothing added');
   });
 }
 
@@ -401,7 +371,6 @@ async function main() {
   await testGetActiveServerMatch();
   await testGetServerOccupancy();
   await testTeardownNoOpBranches();
-  await testIsServerActuallyLive();
   await testProvisionMatchServerGuards();
   report();
 }

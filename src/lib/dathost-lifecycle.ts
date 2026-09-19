@@ -28,7 +28,7 @@ import {
   runConsole,
   type DathostServer,
 } from './dathost';
-import { releaseScrimSession, getScrimSession } from './scrim-session';
+import { releaseScrimSession } from './scrim-session';
 import { resolveConfigSet, pushCfgFiles, type CfgPushResult } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { notifyMatchServerLive } from './discord-notify';
@@ -170,24 +170,6 @@ export async function findServerOccupant(
     .limit(1);
   const rows = (data ?? []) as { match_id: number }[];
   return rows.length ? rows[0].match_id : null;
-}
-
-/**
- * Whether the shared server is genuinely live right now, independent of what any
- * `match_server_state` row says — a scrim (`scrim_sessions`) or a manual admin-console launch never
- * claims a `match_server_state` row, so `findServerOccupant` alone can't see them. `provisionMatchServer`
- * checks this before ever starting a boot: never interrupting ongoing play outranks starting a new
- * match on time. Best-effort like the rest of this module's DatHost reads — an unreachable DatHost
- * can't confirm liveness either way, so it's treated as not-live rather than blocking provisioning on a
- * network hiccup.
- */
-export async function isServerActuallyLive(supabaseAdmin: SupabaseClient, serverId: string): Promise<boolean> {
-  if (await getScrimSession(supabaseAdmin)) return true;
-  try {
-    return isServerLive(await getServer(serverId));
-  } catch {
-    return false;
-  }
 }
 
 export interface NearbyUnscoredMatch {
@@ -347,10 +329,14 @@ export async function provisionMatchServer(
   // common overlap from a silent mid-game clobber into a clean refusal.
   const occupant = await findServerOccupant(supabaseAdmin, matchId);
   if (occupant !== null) throw new ServerBusyError(occupant);
+
   // Ground-truth check: a scrim or a manual admin-console launch never claims a `match_server_state`
-  // row, so the DB-only check above can't see them. Not interrupting ongoing play outranks starting a
-  // new match on time.
-  if (await isServerActuallyLive(supabaseAdmin, serverId)) throw new ServerBusyError(null);
+  // row, so the DB-only check above can't see them — ask DatHost itself rather than cross-referencing
+  // another table. Not interrupting ongoing play outranks starting a new match on time. An unreachable
+  // DatHost can't confirm liveness either way, so it's treated as not-live rather than blocking
+  // provisioning on a network hiccup.
+  const server = await getServer(serverId).catch(() => null);
+  if (isServerLive(server)) throw new ServerBusyError(null);
 
   try {
     await setServerState(supabaseAdmin, matchId, {
