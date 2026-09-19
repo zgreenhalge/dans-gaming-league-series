@@ -25,6 +25,12 @@ parsing library and the CS2 demo format itself, see
    which writes basics to `player_match_stats` and upserts the sabremetric rows into
    `player_match_sabremetrics` (keyed by `player_match_stats_id`).
 
+   As soon as the route confirms the R2 read succeeded — before either parser runs — it clears
+   `live_match_score` for the match (`clearLiveScoreBestEffort()`, `src/lib/demo/liveScore.ts`). A
+   demo present in R2 is proof the match is over even if it's a partial/corrupt recording salvaged
+   after a server issue and fails to parse, so the site-wide "Live" ticker stops showing the match
+   regardless of whether parsing (or scoring) ever succeeds.
+
 Both parsers take the same inputs: the demo buffer, the resolved **roster**, `skins_starting_side`,
 and the season's `target_win_rounds`. The roster (which Steam player maps to which DGLS player and
 faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts` (exact steam-id →

@@ -7,6 +7,7 @@ import { getReplayInputs } from '@/lib/replay/inputs';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { gunzipMaybe } from '@/lib/gzip';
+import { clearLiveScoreBestEffort } from '@/lib/demo/liveScore';
 
 export const maxDuration = 300;
 
@@ -60,6 +61,11 @@ export async function POST(
       { status: 404 },
     );
   }
+  // A demo landing in R2 is proof the match is over, whether or not it goes on to parse cleanly
+  // (a manual upload can be a partial/corrupt recording salvaged after a server issue) — clear the
+  // live-match ticker here rather than only after a successful parse, matching pullDemoAndClearLiveScore's
+  // "presence in R2 ends 'live'" rule for the automated pull path.
+  await clearLiveScoreBestEffort(supabaseAdmin, matchId);
   const contentLength = r2Res.ContentLength ?? 0;
   if (contentLength > MAX_DEMO_BYTES) {
     return NextResponse.json(

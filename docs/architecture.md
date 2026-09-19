@@ -481,7 +481,7 @@ Wired into twenty-nine operations today:
 | `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route, `/api/ingest/matchzy-log`, and `POST /api/matches/[id]/server/teardown` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
 | `weapon_stats_persist` | `match` | `persistWeaponStats()`/`clearWeaponStats()`'s hook in the score route |
-| `live_score_clear` | `match` | `clearLiveScoreBestEffort()` (`liveScore.ts`), called by `pullDemoAndClearLiveScore()` and by `writeMatchScore()`'s fallback |
+| `live_score_clear` | `match` | `clearLiveScoreBestEffort()` (`liveScore.ts`), called by `pullDemoAndClearLiveScore()`, by `POST /api/matches/[id]/demo/parse` as soon as it confirms the demo is present in R2 (whether or not it goes on to parse cleanly), and by `writeMatchScore()`'s fallback |
 | `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
 | `schedule_generate` | `season` (regular) | `generateSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) `generate_season_schedule_draft()` RPC call erroring |
