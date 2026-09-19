@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRegularSeasonStatsView, getGauntletSeasonStatsView } from '@/lib/queries';
+import { parseSeasonKind } from '../season-kind';
 
 /**
  * The season detail page's Stats/Advanced Stats sub-tab data (sabremetrics, per-match rounds,
@@ -17,10 +18,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 
-  const kind = req.nextUrl.searchParams.get('kind');
-  if (kind !== 'regular' && kind !== 'gauntlet') {
-    return NextResponse.json({ error: "kind must be 'regular' or 'gauntlet'" }, { status: 400 });
-  }
+  const parsedKind = parseSeasonKind(req.nextUrl.searchParams.get('kind'));
+  if ('error' in parsedKind) return parsedKind.error;
+  const { kind } = parsedKind;
 
   const data = kind === 'regular' ? await getRegularSeasonStatsView(seasonId) : await getGauntletSeasonStatsView(seasonId);
 
