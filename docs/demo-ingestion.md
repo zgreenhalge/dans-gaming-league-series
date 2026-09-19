@@ -288,6 +288,13 @@ take an array of demo buffers instead of one and combine them into a single resu
 The single-buffer `parseDemoFile()`/`parseDemoSabremetrics()` are unchanged for the normal one-demo
 case; the multi-segment functions are additive, used only when a match actually needs stitching.
 
+**Admin recovery path.** This is a manual, CLI-first recovery tool, not a self-serve upload flow —
+`scripts/inspect-demo.ts` accepts `--demo` more than once
+(`tsx scripts/inspect-demo.ts --demo a.dem --demo b.dem --roster roster.json --skins-side CT`),
+dispatching to the multi-segment functions instead of the single-buffer ones, and prints the same
+derived score/stats/warnings report as a normal single-demo run for an admin to review before
+confirming the score through the existing `PATCH /score` flow by hand.
+
 ## Environment
 
 The demo path needs Cloudflare R2 credentials (in addition to the standard env vars in the root

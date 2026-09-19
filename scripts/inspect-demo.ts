@@ -9,13 +9,20 @@
 // seeing what the pipeline would produce before it runs. Interpret the numbers against whatever
 // source of truth applies to your case (scoreboard, official result, another tool).
 //
+// Passing --demo more than once parses a match split across multiple recordings by a server
+// restart (see docs/demo-ingestion.md's "Multi-segment demos") — segments are combined via
+// parseDemoFileSegments()/parseDemoSabremetricsSegments() regardless of the order given.
+//
 // Usage:
 //   tsx scripts/inspect-demo.ts --match 123                         # roster/side/target from DB
 //   tsx scripts/inspect-demo.ts --match 123 --skins-side unknown    # ignore stored side; infer it
 //   tsx scripts/inspect-demo.ts --demo ./game.dem --roster ./roster.json --skins-side CT
+//   tsx scripts/inspect-demo.ts --demo ./a.dem --demo ./b.dem --roster ./roster.json --skins-side CT
 //
 // Flags:
-//   --demo <path>        local .dem file (gzip auto-detected). Mutually exclusive with --match.
+//   --demo <path>        local .dem file (gzip auto-detected). Repeatable, for a match split across
+//                        multiple recordings by a server restart. Mutually exclusive with --match
+//                        (which only supports a single stored demo).
 //   --match <id>         pull the demo from R2 at demoKey(id) (needs CLOUDFLARE_R2_* + Supabase env).
 //                        With --match, roster / skins-side / target default from the DB
 //                        (getReplayInputs) — no --roster needed. --demo still requires --roster.
@@ -30,14 +37,16 @@
 //   --json               print the full raw parser output as JSON instead of the readable report.
 
 import { readFileSync } from 'node:fs';
-import { parseDemoFile, type RosterEntry, type DemoPlayerStat } from '../src/lib/demoParser';
-import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
+import {
+  parseDemoFile, parseDemoFileSegments, type RosterEntry, type DemoPlayerStat,
+} from '../src/lib/demoParser';
+import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib/demoOrchestrator';
 import { deriveKillCreditCounts, type KillCreditFlags } from '../src/lib/queries';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { demoKey } from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
-import { parseArgs, die, loadDemoFromR2 } from './inspect-demo-shared';
+import { parseArgs, collectFlagValues, die, loadDemoFromR2 } from './inspect-demo-shared';
 
 function pad(s: string | number, w: number): string {
   return String(s).padEnd(w);
@@ -79,12 +88,14 @@ function printWarnings(warnings: string[]): void {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const args = parseArgs(argv);
+  const demoPaths = collectFlagValues(argv, 'demo');
 
-  const hasDemo = typeof args.demo === 'string';
+  const hasDemo = demoPaths.length > 0;
   const hasMatch = typeof args.match === 'string';
   if (hasDemo === hasMatch) {
-    die('Provide exactly one of --demo <path> or --match <id>.');
+    die('Provide exactly one of --demo <path> (repeatable) or --match <id>.');
   }
   const hasRoster = typeof args.roster === 'string';
 
@@ -134,22 +145,30 @@ async function main() {
   const targetWinRounds = args.target ? Number(args.target) : dbTarget;
   if (!Number.isFinite(targetWinRounds) || targetWinRounds <= 0) die('--target must be a positive number.');
 
-  // Demo bytes
-  const rawBuf = hasDemo
-    ? readFileSync(args.demo as string)
-    : await loadDemoFromR2(Number(args.match));
-  const demoBuffer = gunzipMaybe(rawBuf);
+  // Demo bytes — one buffer for --match, one or more for --demo (repeatable).
+  const demoBuffers = hasDemo
+    ? demoPaths.map((p) => gunzipMaybe(readFileSync(p)))
+    : [gunzipMaybe(await loadDemoFromR2(Number(args.match)))];
+  const totalSize = demoBuffers.reduce((sum, b) => sum + b.length, 0);
+  const isMultiSegment = demoBuffers.length > 1;
 
   console.log('\n=== demo inspection (production parsers) ===');
-  console.log(`source        : ${hasDemo ? `file ${args.demo}` : `R2 ${demoKey(Number(args.match))}`}`);
-  console.log(`demo size     : ${(demoBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+  console.log(
+    `source        : ${hasDemo ? demoPaths.map((p) => `file ${p}`).join(' + ') : `R2 ${demoKey(Number(args.match))}`}`,
+  );
+  console.log(`demo size     : ${(totalSize / 1024 / 1024).toFixed(2)} MB${isMultiSegment ? ` (${demoBuffers.length} segments)` : ''}`);
   console.log(`roster        : ${roster.length} players (${rosterSource})`);
   console.log(`stored side   : ${skinsSide ?? 'unknown (null → rely on demo inference)'}`);
   console.log(`target rounds : ${targetWinRounds}`);
 
-  // Run the EXACT production parsers (same call as the parse route).
-  const result = parseDemoFile(demoBuffer, roster, skinsSide, targetWinRounds);
-  const sabre = parseDemoSabremetrics(demoBuffer, roster, skinsSide, targetWinRounds);
+  // Run the EXACT production parsers (same call as the parse route) — the single-buffer or
+  // multi-segment entry point depending on how many --demo files were given.
+  const result = isMultiSegment
+    ? parseDemoFileSegments(demoBuffers, roster, skinsSide, targetWinRounds)
+    : parseDemoFile(demoBuffers[0], roster, skinsSide, targetWinRounds);
+  const sabre = isMultiSegment
+    ? parseDemoSabremetricsSegments(demoBuffers, roster, skinsSide, targetWinRounds)
+    : parseDemoSabremetrics(demoBuffers[0], roster, skinsSide, targetWinRounds);
   const warnings = [...new Set([...result.warnings, ...sabre.warnings])];
 
   if (args.json) {
