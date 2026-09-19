@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import type { Match, Player } from '../types';
 import { matchLabel, extractSeasonNumber, compareMatchRefDesc, weekWindow } from '../util';
 import { podGames } from '../gauntlet-pod';
+import { getSeasons } from './seasons';
 
 
 /** One row of the admin match-management console (#144) — a full match plus the context its editors
@@ -36,11 +37,21 @@ export interface AdminMatchRow {
  * the site. Admin-only surface; the page gates access.
  */
 export async function getAdminMatches(): Promise<AdminMatchRow[]> {
-  const [{ data, error }, { data: podRows }] = await Promise.all([
+  const [{ data, error }, { data: podRows }, allSeasons] = await Promise.all([
     supabase.from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'),
     supabase.from('gauntlet_pods').select('match1_id, match2_id'),
+    getSeasons(),
   ]);
   if (error || !data) return [];
+
+  // A gauntlet season's own map_pool is always null (never written at creation) — its bans come
+  // from the paired regular season's pool, matched name-based by season number.
+  const regularPoolByNumber = new Map<number, string[] | null>();
+  for (const s of allSeasons) {
+    if (s.is_gauntlet) continue;
+    const num = extractSeasonNumber(s.name);
+    if (num != null) regularPoolByNumber.set(num, s.map_pool);
+  }
 
   const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
   for (const p of (podRows ?? []) as { match1_id: number | null; match2_id: number | null }[]) {
@@ -84,7 +95,9 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
       seasonNumber: season?.name ? extractSeasonNumber(season.name) : null,
       weekNumber,
       isGauntlet: season?.is_gauntlet ?? false,
-      mapPool: season?.map_pool ?? null,
+      mapPool: season?.is_gauntlet
+        ? (regularPoolByNumber.get(extractSeasonNumber(season.name ?? '') ?? -1) ?? null)
+        : (season?.map_pool ?? null),
       weekStart: win ? fmt(win.start) : null,
       weekEnd: win ? fmt(win.end) : null,
       podSiblingId: podInfoByMatchId.get(r.id)?.siblingId ?? null,
