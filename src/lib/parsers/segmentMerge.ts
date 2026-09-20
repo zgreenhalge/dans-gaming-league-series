@@ -16,6 +16,7 @@ import type { DemoPlayerStat, ParsedDemoResult } from '../demoParser';
 import type {
   ParsedDemoSabremetricsResult, DemoSabremetricStat, DemoWeaponStat, WeaponStatFields, SabFields,
 } from '../types';
+import { addNumericFields } from '../util';
 
 /**
  * Groups `rows` by the string value of `keyFields` and sums every other numeric field across the
@@ -285,22 +286,32 @@ function mergeBuckets<K extends string>(
 }
 
 /** Combines each segment's `ParsedDemoSabremetricsResult` (parseDemoSabremetrics's shape) into one.
- *  `SabFields` sum generically per player (any future field included, no hardcoded list); weapon/
- *  economy buckets sum per (player, bucket); every fact-row array concatenates and is re-sorted
- *  into round order (`sortByRound()`, below). */
+ *  `SabFields` sum per player via the same shared `addNumericFields()` accumulation primitive
+ *  (`util.ts`) `queries/sabremetrics.ts`'s `addSabFields()` uses for season/career totals — any
+ *  future field included, no hardcoded list; weapon/economy buckets sum per (player, bucket); every
+ *  fact-row array concatenates and is re-sorted into round order (`sortByRound()`, below). */
 export function mergeSabremetricResults(
   segments: ParsedDemoSabremetricsResult[],
 ): ParsedDemoSabremetricsResult {
   const warnings = [...new Set(segments.flatMap((s) => s.warnings))];
 
-  const flatSab = segments.flatMap((s) =>
-    s.sabremetrics.map((r) => ({ player_id: r.player_id, ...r.sabremetrics })),
-  );
-  const mergedSab = sumNumericFields(flatSab, ['player_id']);
-  const sabremetrics: DemoSabremetricStat[] = mergedSab.map((row) => {
-    const { player_id, ...sabremetrics } = row;
-    return { player_id, sabremetrics: sabremetrics as SabFields };
-  });
+  const sabByPlayer = new Map<number, SabFields>();
+  for (const s of segments) {
+    for (const r of s.sabremetrics) {
+      const existing = sabByPlayer.get(r.player_id);
+      if (existing) {
+        addNumericFields(existing, r.sabremetrics);
+      } else {
+        sabByPlayer.set(r.player_id, { ...r.sabremetrics });
+      }
+    }
+  }
+  // Map preserves insertion order, so this stays in first-appearance order — same guarantee
+  // sumNumericFields() documents for its own group output.
+  const sabremetrics: DemoSabremetricStat[] = [...sabByPlayer.entries()].map(([player_id, sabremetrics]) => ({
+    player_id,
+    sabremetrics,
+  }));
 
   const bucketsOf = <B extends WeaponStatFields>(pick: (w: DemoWeaponStat) => B[]) =>
     segments.flatMap((s) => s.weaponStats.map((w) => ({ player_id: w.player_id, buckets: pick(w) })));

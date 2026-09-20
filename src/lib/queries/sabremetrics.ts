@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics, Faction } from '../types';
+import { addNumericFields } from '../util';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, matchIdsForSeason, fetchAllPages, asPage, batchedIn } from './_shared';
 import {
@@ -166,14 +167,13 @@ export function splitStat(
   return total;
 }
 
-/** Adds every field of `b` into `a` in place via `Object.keys()` rather than per-field
- *  enumeration — the shared accumulation primitive behind every sabremetric total in this
- *  codebase, used directly by `SabremetricsLeaderboardView`'s `aggregateRows()` (one accumulator
- *  per player, mutated per match row) and via `sumSabFields()` below for season/career totals. */
+/** Adds every field of `b` into `a` in place via the shared `addNumericFields()` primitive
+ *  (`util.ts`) — used directly by `SabremetricsLeaderboardView`'s `aggregateRows()` (one accumulator
+ *  per player, mutated per match row) and via `sumSabFields()` below for season/career totals.
+ *  `parsers/segmentMerge.ts`'s `mergeSabremetricResults()` accumulates a per-player `SabFields` merge
+ *  across demo segments the same way. */
 export function addSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): void {
-  for (const key of Object.keys(b) as (keyof SabFieldsWithDerived)[]) {
-    a[key] += b[key];
-  }
+  addNumericFields(a, b);
 }
 
 function sumSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): SabFieldsWithDerived {
