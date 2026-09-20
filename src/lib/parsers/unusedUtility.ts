@@ -27,7 +27,7 @@ const GRENADE_VALUE: Record<string, number> = {
 // death is the last one where it reflects what the player was actually holding.
 const PRE_DEATH_TICK_OFFSET = 1;
 
-/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death. */
+/** Tick list demoSabremetrics.ts needs to fetch (via parseTicks, all players): one per death. */
 export function neededInventoryTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
   const ticks = new Set<number>();
   for (const d of deathEvents) {
@@ -42,7 +42,7 @@ export function neededInventoryTicks(deathEvents: PlayerDeathRow[], context: Mat
  * at the moment of death, summed across a player's deaths. Reads demoparser2's synthetic
  * "inventory" tick field — a list of weapon display names (e.g. "Smoke Grenade"), not classnames
  * — for the player currently holding them, one tick before death (see PRE_DEATH_TICK_OFFSET).
- * demoOrchestrator.ts wraps the parseTicks call so a future parser change that breaks this field
+ * demoSabremetrics.ts wraps the parseTicks call so a future parser change that breaks this field
  * degrades this stat to zero instead of failing the whole ingestion pipeline.
  */
 export function collectUnusedUtility(

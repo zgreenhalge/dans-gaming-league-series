@@ -44,7 +44,7 @@ import { readFileSync } from 'node:fs';
 import {
   parseDemoFile, parseDemoFileSegments, type RosterEntry, type DemoPlayerStat,
 } from '../src/lib/demoParser';
-import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib/demoOrchestrator';
+import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib/demoSabremetrics';
 import { deriveKillCreditCounts, type KillCreditFlags } from '../src/lib/queries';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { getAdminClient } from '../src/lib/supabase-admin';

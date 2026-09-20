@@ -1,5 +1,5 @@
 // The Buffer-consuming orchestration shared by parseDemoFileSegments() (demoParser.ts) and
-// parseDemoSabremetricsSegments() (demoOrchestrator.ts): probe each segment's round range, derive
+// parseDemoSabremetricsSegments() (demoSabremetrics.ts): probe each segment's round range, derive
 // offsets, run the real per-segment parse with the correct offset, check agreement, and merge.
 // Kept separate from segmentMerge.ts, which is deliberately Buffer-free — this file is the one
 // place that sequences Buffer-consuming work around those pure primitives, so the two callers

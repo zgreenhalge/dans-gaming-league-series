@@ -29,7 +29,7 @@ export interface PlayerTickRow {
   y: number;
 }
 
-/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks) for collectCounterStrafe:
+/** Tick list demoSabremetrics.ts needs to fetch (via parseTicks) for collectCounterStrafe:
  *  each qualifying rifle fire's own tick plus SPEED_TICK_WINDOW ticks earlier. */
 export function neededCounterStrafeTicks(fireEvents: WeaponFireRow[], bounds: RoundBounds): number[] {
   const ticks = new Set<number>();

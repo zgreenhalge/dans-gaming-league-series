@@ -9,7 +9,7 @@ debugging time.
 
 ## The library: `@laihoe/demoparser2`
 
-DGLS's parsers (`src/lib/demoParser.ts`, `src/lib/demoOrchestrator.ts`, `src/lib/replay/`) are
+DGLS's parsers (`src/lib/demoParser.ts`, `src/lib/demoSabremetrics.ts`, `src/lib/replay/`) are
 built on **[`@laihoe/demoparser2`](https://github.com/LaihoE/demoparser)** — a Rust-core CS2 demo
 parser with Python/Node bindings. It's become the de facto standard for CS2 demo analysis: it backs
 [**awpy**](https://github.com/pnxenopoulos/awpy), the most widely used Python library for CS2 data

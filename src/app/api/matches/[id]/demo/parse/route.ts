@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseDemoFile, parseDemoFileSegments } from '@/lib/demoParser';
-import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '@/lib/demoOrchestrator';
+import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '@/lib/demoSabremetrics';
 import { getReplayInputs } from '@/lib/replay/inputs';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { getDemoManifest } from '@/lib/demo/segmentManifest';

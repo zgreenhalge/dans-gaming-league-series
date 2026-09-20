@@ -190,7 +190,7 @@ export function parseDemoFile(
  * Parses a match split across multiple demo recordings (e.g. by a server restart mid-match — see
  * docs/demo-ingestion.md) and combines them into one result. Thin glue over `orchestrateSegments()`
  * (segmentOrchestrator.ts) — that shared function does the actual probe/offset/agreement/merge
- * sequencing, identical to `parseDemoSabremetricsSegments()`'s (demoOrchestrator.ts) except for
+ * sequencing, identical to `parseDemoSabremetricsSegments()`'s (demoSabremetrics.ts) except for
  * which per-segment parser and merge function it's given.
  */
 export function parseDemoFileSegments(

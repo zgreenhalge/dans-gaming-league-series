@@ -163,7 +163,7 @@ test('collectMatchKills: midair looks up the attacker\'s airborne state at the k
 });
 
 test('collectMatchKills: trusts its input for (round, victim) uniqueness — dedup is dedupeDeathEvents()\'s job, not this collector\'s', () => {
-  // demoOrchestrator.ts always runs dedupeDeathEvents() (matchContext.ts) before this collector,
+  // demoSabremetrics.ts always runs dedupeDeathEvents() (matchContext.ts) before this collector,
   // so in production it never actually sees two events for the same (round, victim). This test
   // documents that collectMatchKills doesn't re-guard that invariant itself — see matchContext.test.ts
   // for the dedup/warning behavior itself.

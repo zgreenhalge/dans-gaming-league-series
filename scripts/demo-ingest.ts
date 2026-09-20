@@ -42,7 +42,7 @@
 
 import { gzipSync } from 'node:zlib';
 import { parseDemoFile } from '../src/lib/demoParser';
-import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
+import { parseDemoSabremetrics } from '../src/lib/demoSabremetrics';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { demoBaseName } from '../src/lib/matchzy';
 import { quarantineDemo } from '../src/lib/demo/quarantine';

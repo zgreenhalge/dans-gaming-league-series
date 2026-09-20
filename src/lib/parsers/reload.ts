@@ -17,7 +17,7 @@ export interface PlayerReloadStateRow {
   clip1: number;
 }
 
-/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per
+/** Tick list demoSabremetrics.ts needs to fetch (via parseTicks, all players): one per
  *  weapon_reload event, in a live round. */
 export function neededReloadTicks(reloadEvents: WeaponReloadRow[], bounds: RoundBounds): number[] {
   const ticks = new Set<number>();
