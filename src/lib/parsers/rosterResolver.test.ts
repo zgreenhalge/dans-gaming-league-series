@@ -112,6 +112,44 @@ test('resolveRoster: zero demo players warns distinctly instead of silently retu
   assert.doesNotMatch(warnings[0], /starting side unknown/i);
 });
 
+test('resolveRoster: a roster slot with no demo player at all warns, even though every demo player matched cleanly', () => {
+  // 4-player roster, but the demo only ever shows 3 of them (e.g. one reconnected too late to
+  // appear in any sampled tick) — every demo player matches a roster slot via pass 1, so
+  // `remaining` ends up empty and neither the throw nor the 1-vs-1 elimination warning fires.
+  // This is the one place left to catch a roster that's silently short a player.
+  const roster: RosterEntry[] = [
+    slot({ player_id: 1, steam_id: '111', name: 'Tim' }),
+    slot({ player_id: 2, steam_id: '222', name: 'Dan' }),
+    slot({ player_id: 3, steam_id: '333', name: 'Sam' }),
+    slot({ player_id: 4, steam_id: '444', name: 'Max' }),
+  ];
+  const demoPlayers = [
+    { steamId: '111', name: 'Tim' },
+    { steamId: '222', name: 'Dan' },
+    { steamId: '333', name: 'Sam' },
+  ];
+  const warnings: string[] = [];
+  const resolved = resolveRoster(demoPlayers, roster, warnings);
+  assert.equal(resolved.size, 3);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /resolved 3 of 4/i);
+  assert.match(warnings[0], /Max/);
+});
+
+test('resolveRoster: every roster slot resolved warns about nothing extra', () => {
+  const roster: RosterEntry[] = [
+    slot({ player_id: 1, steam_id: '111', name: 'Tim' }),
+    slot({ player_id: 2, steam_id: '222', name: 'Dan' }),
+  ];
+  const demoPlayers = [
+    { steamId: '111', name: 'Tim' },
+    { steamId: '222', name: 'Dan' },
+  ];
+  const warnings: string[] = [];
+  resolveRoster(demoPlayers, roster, warnings);
+  assert.deepEqual(warnings, []);
+});
+
 test('resolveRoster: duplicate steam ids on the roster do not double-assign the same slot', () => {
   const roster: RosterEntry[] = [
     slot({ player_id: 1, steam_id: '111', name: 'Tim', faction: 'SHIRTS' }),

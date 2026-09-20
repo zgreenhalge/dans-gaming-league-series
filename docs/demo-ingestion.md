@@ -36,6 +36,13 @@ and the season's `target_win_rounds`. The roster (which Steam player maps to whi
 faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts` (exact steam-id →
 name → elimination fallback).
 
+**Reading the demo's own players.** `readDemoPlayers()` (`rosterResolver.ts`) tries demoparser2's
+`parsePlayerInfo()` first, but falls back to a direct per-tick `name`/`steamid` read at the first
+`round_end` tick when that comes back empty — `parsePlayerInfo()` reads a player-info string table
+that can end up empty on a short demo segment (e.g. one resumed mid-match after a server restart),
+even though the same steamid/name is readily available on every player entity at any tick, the same
+per-tick read every other collector in this codebase already relies on.
+
 **Learning steam ids on confirm.** When a demo player is matched by the elimination fallback,
 `rosterResolver.ts` emits a warning (`eliminationWarning()`) carrying the demo steam id + the roster
 player it was matched to. The confirm forwards parser `warnings` to `PATCH /score`, which — **for an

@@ -1,4 +1,4 @@
-import { parsePlayerInfo } from '@laihoe/demoparser2';
+import { parseEvent, parsePlayerInfo, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from '../demoParser';
 
 function normName(s: string | null | undefined): string {
@@ -36,14 +36,39 @@ export function noPlayersFoundWarning(): string {
     'be too short/early-started for player info to have been captured.';
 }
 
+function withSteamIds(
+  rows: { steamid: string | bigint; name?: string }[],
+): { steamId: string; name: string }[] {
+  return rows
+    .filter((p) => p.steamid && String(p.steamid) !== '0')
+    .map((p) => ({ steamId: String(p.steamid), name: p.name ?? '' }));
+}
+
 export function readDemoPlayers(
   demoBuffer: Buffer,
 ): { steamId: string; name: string }[] {
-  const playerInfoRaw: { steamid: string | bigint; name: string }[] =
-    parsePlayerInfo(demoBuffer);
-  return playerInfoRaw
-    .filter((p) => p.steamid && String(p.steamid) !== '0')
-    .map((p) => ({ steamId: String(p.steamid), name: p.name ?? '' }));
+  const fromPlayerInfo = withSteamIds(parsePlayerInfo(demoBuffer));
+  if (fromPlayerInfo.length > 0) return fromPlayerInfo;
+
+  // parsePlayerInfo() reads a player-info string table that can come back empty for a short demo
+  // segment resumed mid-match after a server restart, even though every player's steamid/name is
+  // still readable directly off their entity at any tick — the same per-tick read every other
+  // collector in this codebase already relies on. Falls back to that rather than accepting a false
+  // "zero players" result when the roster is actually right there in the demo.
+  //
+  // Samples every round_end tick, not just the first — a player who reconnects a little later than
+  // the others after the restart that necessitated this fallback in the first place might not be
+  // networked yet at that first tick, and a fallback that only checked one tick could silently
+  // return a partial roster with no signal anything was missing. Later ticks pick them up.
+  const rounds = parseEvent(demoBuffer, 'round_end', [], []) as { tick: number }[];
+  if (rounds.length === 0) return [];
+  const rows = parseTicks(demoBuffer, ['name'], rounds.map((r) => r.tick)) as {
+    steamid: string | bigint;
+    name?: string;
+  }[];
+  const byId = new Map<string, { steamId: string; name: string }>();
+  for (const p of withSteamIds(rows)) byId.set(p.steamId, p);
+  return [...byId.values()];
 }
 
 export function resolveRoster(
@@ -93,6 +118,7 @@ export function resolveRoster(
     const d = remaining[0];
     warnings.push(eliminationWarning(d.name, d.steamId, open[0].name));
     resolved.set(d.steamId, { player_id: open[0].player_id, faction: open[0].faction });
+    usedIds.add(open[0].player_id);
     remaining = [];
   }
 
@@ -101,6 +127,19 @@ export function resolveRoster(
       `Could not match ${remaining.length} demo player(s) to roster: ` +
         remaining.map((d) => `"${d.name}" (${d.steamId})`).join(', ') +
         '. Check that players have their Steam ID saved.',
+    );
+  }
+
+  // Every demo player matched a roster slot, but that's not the same as every roster slot having
+  // a demo player — a demo that simply never captured one player (e.g. one who reconnected too
+  // late to appear in any round_end-tick sample) resolves cleanly here with no thrown error and no
+  // elimination warning (that pass only fires for exactly one unmatched slot), so this is the one
+  // remaining place such a partial roster would otherwise go undetected.
+  const stillOpen = roster.filter((r) => !usedIds.has(r.player_id));
+  if (stillOpen.length > 0) {
+    warnings.push(
+      `Demo resolved ${resolved.size} of ${roster.length} roster players — missing: ` +
+        `${stillOpen.map((r) => r.name).join(', ')}. Their stats for this segment cannot be included.`,
     );
   }
 
