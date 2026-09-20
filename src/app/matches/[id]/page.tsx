@@ -216,7 +216,7 @@ export default async function MatchPage({
     // Whether this match's demo was recovered from multiple recordings (a server restart) — the
     // Recap tab uses this to skip offering replay generation, which only ever reads a single demo
     // and would just fail or produce a one-segment replay for a match like this.
-    played ? getDemoManifest(matchId).then((m) => !!m) : Promise.resolve(false),
+    played ? getDemoManifest(matchId).then((m) => !!m).catch(() => false) : Promise.resolve(false),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
   const { job: replayJob, events: replayEvents } = replay;

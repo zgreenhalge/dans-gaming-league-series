@@ -94,8 +94,8 @@ function ReplayStatusPanel({
     return (
       <div className="border border-[var(--color-border-primary)] px-5 py-6 mt-4 text-center">
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)] max-w-md mx-auto">
-          2D replay isn't available for this match — its demo was recovered from multiple
-          recordings after a server restart, which the replay pipeline doesn't support yet.
+          2D replay isn&apos;t available for this match — its demo was recovered from multiple
+          recordings after a server restart, which the replay pipeline doesn&apos;t support yet.
         </div>
       </div>
     );
