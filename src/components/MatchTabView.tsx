@@ -389,12 +389,15 @@ export default function MatchTabView({
     job: ReplayJobState;
     events: ReplayEventsView | null;
     recordingURL: string | null;
+    /** See `MatchRecapTab`'s doc — recovered from multiple demo recordings (a server restart), so
+     *  the replay pipeline (single-demo only) isn't offered for this match. */
+    isMultiSegmentDemo: boolean;
   };
 }) {
   const { deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent } = ehog;
   const { data: scoutingData, h2h: scoutingH2H } = scouting;
   const { map: matchMap, matchIds: mapMatchIds, pool: mapPool } = mapInfo;
-  const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL } = recap;
+  const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL, isMultiSegmentDemo } = recap;
 
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   // Real duel data only exists once a demo's been parsed into match_kills — a played match
@@ -635,6 +638,7 @@ export default function MatchTabView({
           canDispatch={canDispatchReplay}
           recordingURL={recordingURL}
           canEditRecording={canEditRecording}
+          isMultiSegmentDemo={isMultiSegmentDemo}
         />
       )}
     </>

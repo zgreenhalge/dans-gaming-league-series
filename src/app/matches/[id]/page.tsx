@@ -29,6 +29,7 @@ import { isVetoComplete } from '@/lib/veto';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
+import { getDemoManifest } from '@/lib/demo/segmentManifest';
 
 export const revalidate = 60;
 
@@ -180,7 +181,7 @@ export default async function MatchPage({
     ? getPlayerRatings(allScoutedPlayerIds)
     : Promise.resolve([]);
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows, isMultiSegmentDemo] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -212,6 +213,10 @@ export default async function MatchPage({
     played ? getMatchRoundEconomy(matchId) : Promise.resolve([]),
     replayPromise,
     playerRatingsPromise,
+    // Whether this match's demo was recovered from multiple recordings (a server restart) — the
+    // Recap tab uses this to skip offering replay generation, which only ever reads a single demo
+    // and would just fail or produce a one-segment replay for a match like this.
+    played ? getDemoManifest(matchId).then((m) => !!m) : Promise.resolve(false),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
   const { job: replayJob, events: replayEvents } = replay;
@@ -468,7 +473,7 @@ export default async function MatchPage({
               ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
               scouting={{ data: scoutingData, h2h: scoutingH2H }}
               mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
-              recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url }}
+              recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url, isMultiSegmentDemo }}
             />
           </UrlStateProvider>
         </Suspense>

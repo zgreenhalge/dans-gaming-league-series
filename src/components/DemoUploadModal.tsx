@@ -128,6 +128,7 @@ export default function DemoUploadModal({
 
   const [stage, setStage] = useState<Stage>('idle');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingSegment, setUploadingSegment] = useState<{ index: number; count: number } | null>(null);
   const [parsed, setParsed] = useState<ParsedResult | null>(null);
   const [draftStats, setDraftStats] = useState<DraftStats>({});
   const [shirtsScore, setShirtsScore] = useState('');
@@ -201,6 +202,7 @@ export default function DemoUploadModal({
     } else {
       setStage('idle');
       setUploadProgress(0);
+      setUploadingSegment(null);
       setParsed(null);
       setDraftStats({});
       setShirtsScore('');
@@ -233,33 +235,13 @@ export default function DemoUploadModal({
     }));
   }
 
-  async function handleFileSelect(file: File) {
-    if (!file.name.endsWith('.dem') && !file.name.endsWith('.dem.gz') && !file.name.endsWith('.gz')) {
-      setError('Please select a CS2 demo file (.dem or .dem.gz).');
-      return;
-    }
-
-    setError(null);
-    setStage('uploading');
-    setUploadProgress(0);
-
-    // Step 1: get presigned upload URL
-    const urlRes = await fetch(`/api/matches/${matchId}/demo/upload-url`, { method: 'POST' });
-    if (!urlRes.ok) {
-      const json = await urlRes.json().catch(() => ({}));
-      setError(json.error ?? 'Failed to prepare upload.');
-      setStage('idle');
-      return;
-    }
-    const { signedUrl } = await urlRes.json();
-
-    // Step 2: PUT file directly to R2 with progress tracking
-    await new Promise<void>((resolve, reject) => {
+  function uploadFile(file: File, signedUrl: string, onProgress: (pct: number) => void): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', signedUrl);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.upload.onprogress = (ev) => {
-        if (ev.lengthComputable) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+        if (ev.lengthComputable) onProgress(Math.round((ev.loaded / ev.total) * 100));
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) resolve();
@@ -267,13 +249,71 @@ export default function DemoUploadModal({
       };
       xhr.onerror = () => reject(new Error('Upload network error.'));
       xhr.send(file);
-    }).catch((err: unknown) => {
+    });
+  }
+
+  // Selecting more than one file is a match split across multiple recordings by a server restart
+  // (see docs/demo-ingestion.md's "Multi-segment demos") — one file behaves exactly as before (the
+  // canonical demoKey(), no manifest); more than one uploads each to its own segment key, in
+  // sequence (so the progress bar/label stays meaningful), then writes a manifest naming all of
+  // them once every upload has actually succeeded, before parsing.
+  async function handleFilesSelect(files: File[]) {
+    for (const file of files) {
+      if (!file.name.endsWith('.dem') && !file.name.endsWith('.dem.gz') && !file.name.endsWith('.gz')) {
+        setError('Please select CS2 demo files (.dem or .dem.gz).');
+        return;
+      }
+    }
+
+    setError(null);
+    setStage('uploading');
+    setUploadProgress(0);
+    setUploadingSegment(files.length > 1 ? { index: 0, count: files.length } : null);
+
+    // Step 1: get one presigned URL per file
+    const urlRes = await fetch(`/api/matches/${matchId}/demo/upload-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: files.length }),
+    });
+    if (!urlRes.ok) {
+      const json = await urlRes.json().catch(() => ({}));
+      setError(json.error ?? 'Failed to prepare upload.');
+      setStage('idle');
+      return;
+    }
+    const { uploads }: { uploads: { signedUrl: string; path: string }[] } = await urlRes.json();
+
+    // Step 2: PUT each file to its own R2 key, in sequence, with progress tracking
+    try {
+      for (let i = 0; i < files.length; i++) {
+        setUploadingSegment(files.length > 1 ? { index: i, count: files.length } : null);
+        setUploadProgress(0);
+        await uploadFile(files[i], uploads[i].signedUrl, setUploadProgress);
+      }
+    } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
       setStage('idle');
-      return Promise.reject();
-    });
+      return;
+    }
 
-    // Step 3: trigger server-side parsing
+    // Step 3: for more than one segment, write the manifest naming all of them — only once every
+    // upload above has actually succeeded, so the manifest never points at a missing segment.
+    if (files.length > 1) {
+      const finalizeRes = await fetch(`/api/matches/${matchId}/demo/segments/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths: uploads.map((u) => u.path) }),
+      });
+      if (!finalizeRes.ok) {
+        const json = await finalizeRes.json().catch(() => ({}));
+        setError(json.error ?? 'Failed to finalize the multi-segment upload.');
+        setStage('idle');
+        return;
+      }
+    }
+
+    // Step 4: trigger server-side parsing (auto-detects the manifest for a multi-segment upload)
     setStage('parsing');
     const parseRes = await fetch(`/api/matches/${matchId}/demo/parse`, { method: 'POST' });
     if (!parseRes.ok) {
@@ -404,19 +444,21 @@ export default function DemoUploadModal({
                 <input
                   type="file"
                   accept=".dem,.dem.gz,.gz"
+                  multiple
                   className="sr-only"
                   onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFileSelect(f).catch(() => {});
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 0) handleFilesSelect(files).catch(() => {});
                   }}
                 />
                 <span className="text-[32px] opacity-40">📁</span>
                 <div className="text-center">
                   <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-                    Choose demo file
+                    Choose demo file(s)
                   </p>
                   <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
-                    .dem or .dem.gz — stats will be extracted automatically
+                    .dem or .dem.gz — stats will be extracted automatically. Select more than one if
+                    a server restart split the match into multiple recordings.
                   </p>
                 </div>
               </label>
@@ -439,7 +481,9 @@ export default function DemoUploadModal({
             {stage === 'uploading' && (
               <div className="flex flex-col gap-3">
                 <div className="tracked text-[10px] text-[var(--color-text-secondary)]">
-                  Uploading demo…
+                  {uploadingSegment
+                    ? `Uploading segment ${uploadingSegment.index + 1} of ${uploadingSegment.count}…`
+                    : 'Uploading demo…'}
                 </div>
                 <div className="h-1.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] overflow-hidden">
                   <div
