@@ -464,14 +464,27 @@ export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = 
 };
 
 /** Picks a gauntlet round list's final round — the one round every "is this over/who won" derivation
- * (`canonicalGauntletRankMap`, `GauntletRoundCard`) needs to single out. Prefers a round explicitly
- * flagged `is_final_round` (set by `getGauntletRounds()` from `gauntlet_pods.is_final`, so it's
- * accurate even while the true final round is still unmaterialized and an earlier round happens to
- * be fully scheduled); falls back to the highest `round_number` for a caller that doesn't supply the
- * flag (e.g. a hand-built round list in a test). Returns `undefined` for an empty list. */
+ * (`canonicalGauntletRankMap`, `GauntletRoundCard`) needs to single out.
+ *
+ * `finalRoundNumber`, when supplied as a real number, is the bracket's authoritative final round
+ * number (`finalRoundNumberOf(getGauntletBracketShape(...))`) and is trusted over anything in
+ * `rounds` itself: it returns that round if it's in `rounds`, or `undefined` if it isn't — the
+ * bracket's final round genuinely hasn't been scheduled yet, which is structurally distinct from "no
+ * round in this list happens to be flagged final."
+ *
+ * `null` (the bracket has no known final pod at all — e.g. a legacy CSV-imported gauntlet with no
+ * `gauntlet_pods` data) and omitting the parameter entirely (a caller with no bracket data on hand,
+ * e.g. a hand-built round list in a test) behave identically: prefer a round explicitly flagged
+ * `is_final_round` (set by `getGauntletRounds()` from `gauntlet_pods.is_final`) if any round in the
+ * list carries it, else fall back to the highest `round_number`. Returns `undefined` for an empty
+ * list. */
 export function finalRoundOf<T extends { round_number: number; is_final_round?: boolean }>(
   rounds: T[],
+  finalRoundNumber?: number | null,
 ): T | undefined {
+  if (typeof finalRoundNumber === 'number') {
+    return rounds.find((r) => r.round_number === finalRoundNumber);
+  }
   const declared = rounds.find((r) => r.is_final_round === true);
   if (declared) return declared;
   return rounds.length === 0
@@ -479,8 +492,33 @@ export function finalRoundOf<T extends { round_number: number; is_final_round?: 
     : rounds.reduce((latest, r) => (r.round_number > latest.round_number ? r : latest));
 }
 
+/** Extracts the authoritative final round number from a gauntlet's bracket shape
+ * (`getGauntletBracketShape()`), for `finalRoundOf()`/`canonicalGauntletRankMap()`. Returns the final
+ * pod's `round_number` if the bracket has one, or `null` if the bracket has no pods at all yet (no
+ * `gauntlet_pods` rows for this season). */
+export function finalRoundNumberOf(bracketShape: { round_number: number; is_final: boolean }[]): number | null {
+  return bracketShape.find((p) => p.is_final)?.round_number ?? null;
+}
+
 export function avgOf(arr: number[]): number {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
+
+/** Mutates `a` by adding every numeric field of `b` into the matching field of `a`, in place —
+ * non-numeric fields are left untouched. The shared accumulation primitive behind every "combine two
+ * records of the same numeric-field shape by summing" derivation in this codebase: a running
+ * per-player sabremetric total (`queries/sabremetrics.ts`'s `addSabFields()`, used by
+ * `aggregateRows()` and `getSabremetricSeasonTotals()`) and a per-player `SabFields` merge across
+ * demo segments (`parsers/segmentMerge.ts`'s `mergeSabremetricResults()`). Lives here rather than in
+ * `queries/` or `parsers/` so both layers can import it without an illegal `parsers/` -> `queries/`
+ * dependency. */
+export function addNumericFields<T extends object>(a: T, b: T): void {
+  for (const key of Object.keys(b) as (keyof T)[]) {
+    const bv = b[key];
+    if (typeof bv === 'number') {
+      a[key] = (((a[key] as unknown as number) ?? 0) + bv) as T[keyof T];
+    }
+  }
 }
 
 export function formatEhogDelta(delta: number): string {

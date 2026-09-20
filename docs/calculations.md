@@ -621,17 +621,19 @@ prop to `GauntletStandings` (its podium), `LeaderboardTable` (`canonicalRanking`
 own copy of the rounds, so they can't drift apart or disagree about whether the gauntlet is even
 complete yet.
 
-The rounds passed in must include an empty placeholder round for the bracket's real final round when
-it hasn't materialized as a scheduled week yet (`SeasonTabView`'s `scheduleRounds`, sourced from the
-bracket shape's `is_final` pod) — otherwise `canonicalGauntletRankMap` has no way to tell "the final
-hasn't happened yet" from "the last *scheduled* round is the final and it just finished," and reads
-whichever earlier round happens to be fully played as if it were the final.
+`canonicalGauntletRankMap()` takes the bracket's real final round number as an explicit second
+argument (`finalRoundNumberOf(bracketShape)`, from `getGauntletBracketShape()`) rather than inferring
+it from the `rounds` list itself — that number is trusted over anything in `rounds`, so it correctly
+returns no ranking when the bracket's true final round hasn't materialized as a scheduled week yet,
+even though `rounds` (real, scheduled rounds only) has nothing flagged final in that case. `rounds`
+itself is passed raw and unpadded for ranking; no placeholder round is needed for this.
 
-Returns no ranking while the gauntlet is incomplete (final round not fully played).
+Returns no ranking while the gauntlet is incomplete (final round not fully played, or not yet
+scheduled).
 
-Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/gauntlet-ranking.ts`. Pass the result as the
-`canonicalRanking` prop to `LeaderboardTable` and the `rankMap` prop to `GauntletStandings` and
-`GauntletRoundsList` anywhere gauntlet leaderboards are ranked.
+Implemented by `canonicalGauntletRankMap(rounds, finalRoundNumber)` in `src/lib/gauntlet-ranking.ts`.
+Pass the result as the `canonicalRanking` prop to `LeaderboardTable` and the `rankMap` prop to
+`GauntletStandings` and `GauntletRoundsList` anywhere gauntlet leaderboards are ranked.
 
 ## Gauntlet Seeding Projection
 

@@ -213,11 +213,15 @@ highest round_number with matches scheduled so far — the two diverge whenever 
 hasn't materialized yet while an earlier round has already been fully scheduled, and conflating them
 would both suppress that earlier round's stakes label (final rounds carry none) and let
 `canonicalGauntletRankMap()` crown a premature champion off it. `finalRoundOf()` (`src/lib/util.ts`)
-is the one shared pick-the-final-round function both `GauntletRoundCard` (via `round.is_final_round`
-directly, since `getGauntletRounds()` already resolved it per round) and `canonicalGauntletRankMap()`
-(picking one round out of the full list) rely on — it prefers a round flagged `is_final_round`,
-falling back to the highest `round_number` only for a caller that never set the flag (e.g. a
-hand-built round list in a test). The score route runs
+is the one shared pick-the-final-round function `canonicalGauntletRankMap()` relies on (picking one
+round out of the full list; `GauntletRoundCard` instead reads `round.is_final_round` directly, since
+`getGauntletRounds()` already resolved it per round). Its caller can pass the bracket's authoritative
+final round number (`finalRoundNumberOf(getGauntletBracketShape(...))`) as a second argument, trusted
+over anything in the round list itself — this is how `canonicalGauntletRankMap()` correctly reads a
+gauntlet as incomplete when the true final round hasn't materialized as a scheduled week yet, without
+needing a placeholder round standing in for it. Without that argument (or with no known final pod), it
+falls back to a round flagged `is_final_round`, or the highest `round_number` for a caller that never
+set the flag (e.g. a hand-built round list in a test). The score route runs
 `checkGauntletCompletion()` (below) only after
 `resolveAndPropagate()` settles, in the same hook — running them as unordered independent hooks would
 let completion see an incomplete round as "everything played" and archive before the final round
