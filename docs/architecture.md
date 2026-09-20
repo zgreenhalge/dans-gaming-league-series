@@ -64,8 +64,9 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert and closes the match's Discord thread, if any, the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time — a gauntlet pod's Game 1 and Game 2 are each set independently here (see [Gauntlet bracket scheduling](#gauntlet-bracket-scheduling) for when they're instead paired 30 minutes apart automatically) |
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
-| `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
-| `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
+| `POST` | `/api/matches/[id]/demo/upload-url` | Mint one or more presigned Cloudflare R2 URLs to upload `.dem` file(s) — more than one for a match split across recordings by a server restart (see [`demo-ingestion.md`](./demo-ingestion.md#multi-segment-demos-a-match-split-by-a-server-restart)) |
+| `POST` | `/api/matches/[id]/demo/segments/finalize` | Write the manifest naming a multi-segment upload's segment keys, once every one is confirmed present in R2 ([`demo-ingestion.md`](./demo-ingestion.md#multi-segment-demos-a-match-split-by-a-server-restart)) |
+| `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo (single file, or every segment a manifest names) into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
 | `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged auto-ingest result ([`hosting.md`](./hosting.md)) |
 | `POST` | `/api/matches/[id]/demo/dispatch` | Re-parse the demo already in R2 (manual counterpart to `ingest/matchzy-log`'s auto-dispatch) |
 | `GET/POST` | `/api/matches/[id]/server/{status,provision,teardown}` | Per-match DatHost server lifecycle ([`hosting.md`](./hosting.md)) |

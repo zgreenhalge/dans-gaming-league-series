@@ -511,7 +511,11 @@ export default function MatchTabView({
                     targetWinRounds={targetWinRounds}
                     isAdmin={isCurrentUserAdmin}
                     alreadyPlayed={played}
-                    hasDemoUploaded={!!demoDownloadUrl}
+                    // A multi-segment match's demo lives under segment keys + a manifest, never the
+                    // canonical demoKey() demoDownloadUrl is derived from — without isMultiSegmentDemo
+                    // here, the modal would think no demo exists and skip straight to editing from
+                    // stale initialStats instead of re-parsing the real (multi-segment) demo.
+                    hasDemoUploaded={!!demoDownloadUrl || isMultiSegmentDemo}
                     initialStats={allStats.length > 0 ? allStats : undefined}
                     initialShirtsScore={score?.shirts ?? null}
                     initialSkinsScore={score?.skins ?? null}

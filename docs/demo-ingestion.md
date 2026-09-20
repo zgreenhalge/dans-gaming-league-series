@@ -19,7 +19,7 @@ parsing library and the CS2 demo format itself, see
    needed, and runs two parsers over the buffer:
    - `parseDemoFile()` (`src/lib/demoParser.ts`) — basic per-player stats (K/A/D, damage, ADR,
      rounds, win flags) plus warnings.
-   - `parseDemoSabremetrics()` (`src/lib/demoOrchestrator.ts`) — the advanced sabremetric fields.
+   - `parseDemoSabremetrics()` (`src/lib/demoSabremetrics.ts`) — the advanced sabremetric fields.
    The route returns the merged result for review; it does **not** write to the DB. The reviewed
    stats are persisted through the score-submission endpoint (`PATCH /api/matches/[id]/score`),
    which writes basics to `player_match_stats` and upserts the sabremetric rows into
@@ -36,12 +36,14 @@ and the season's `target_win_rounds`. The roster (which Steam player maps to whi
 faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts` (exact steam-id →
 name → elimination fallback).
 
-**Reading the demo's own players.** `readDemoPlayers()` (`rosterResolver.ts`) tries demoparser2's
-`parsePlayerInfo()` first, but falls back to a direct per-tick `name`/`steamid` read at the first
-`round_end` tick when that comes back empty — `parsePlayerInfo()` reads a player-info string table
-that can end up empty on a short demo segment (e.g. one resumed mid-match after a server restart),
-even though the same steamid/name is readily available on every player entity at any tick, the same
-per-tick read every other collector in this codebase already relies on.
+**Reading the demo's own players.** `readDemoPlayers()` (`rosterResolver.ts`) always
+cross-references demoparser2's `parsePlayerInfo()` against a direct per-tick `name`/`steamid` read
+across every `round_end` tick, not just when `parsePlayerInfo()` comes back totally empty —
+`parsePlayerInfo()` reads a player-info string table that can end up empty, or short by one or more
+players, on a short demo segment (e.g. one resumed mid-match after a server restart), even though
+the same steamid/name is readily available on every player entity at any tick, the same per-tick
+read every other collector in this codebase already relies on. `parsePlayerInfo()`'s name wins when
+both sources agree on a steamid; the per-tick read only fills in steamids it alone found.
 
 **Learning steam ids on confirm.** When a demo player is matched by the elimination fallback,
 `rosterResolver.ts` emits a warning (`eliminationWarning()`) carrying the demo steam id + the roster
@@ -73,7 +75,7 @@ recorded score.
 
 ## Sabremetric collectors
 
-`demoOrchestrator.ts` composes one collector per metric family, each in `src/lib/parsers/`:
+`demoSabremetrics.ts` composes one collector per metric family, each in `src/lib/parsers/`:
 
 | Module | Produces |
 |---|---|
@@ -102,7 +104,7 @@ Unlike every other collector above, `weaponStats.ts`'s two collectors — `colle
 and `collectEconomyStats()` — don't feed a single per-player row in `SabFields`. Each produces
 several bucketed rows per player (one per weapon, or one per economy tier), persisted into their own
 tables — `player_match_weapon_stats` and `player_match_economy_stats` — rather than
-`player_match_sabremetrics`. `demoOrchestrator.ts` returns them as `ParsedDemoSabremetricsResult`'s
+`player_match_sabremetrics`. `demoSabremetrics.ts` returns them as `ParsedDemoSabremetricsResult`'s
 `weaponStats` field, alongside (not merged into) `sabremetrics`; `src/lib/demo/weaponStats.ts`
 persists them via `replaceMatchRows()` (`factTables.ts`), the same match-scoped delete-then-insert
 every other fact table uses, keyed off `player_match_stats_id` plus the bucket column (`weapon`/
@@ -138,7 +140,7 @@ above: a new derived stat is a query change, not a new table.
   table stays a genuine fact table; consuming queries decide whether to exclude them.
 - `match_rounds` needs no new collector at all — `buildRoundSides()` (`roundSides.ts`) already computes
   `{ roundNumber, winnerSide, shirtsSide, winReason }` per live round for the CT/T sabremetric splits;
-  `demoOrchestrator.ts` just maps `context.rounds` straight into `DemoMatchRound[]`. `winReason` comes
+  `demoSabremetrics.ts` just maps `context.rounds` straight into `DemoMatchRound[]`. `winReason` comes
   from `round_end`'s `reason` field via `reasonToCondition()` (`roundSides.ts`), shared with the replay
   pipeline (`replay/extract.ts`) rather than each defining its own copy.
 - `src/lib/demo/matchKills.ts` / `matchRounds.ts` persist via `replaceMatchRows()`
@@ -223,7 +225,7 @@ early, since nothing about the next round starts until after it.
 
 A player can die at most once in a live round — `match_kills` enforces `unique (round, victim)` — so
 `dedupeDeathEvents()` (`parsers/matchContext.ts`) drops any second `player_death` landing on the same
-(round, victim) before any event-based collector sees the stream (`demoOrchestrator.ts` calls it once,
+(round, victim) before any event-based collector sees the stream (`demoSabremetrics.ts` calls it once,
 right after `buildMatchContext()`). A genuine duplicate there (as opposed to warmup noise or trailing
 action, both already resolved to their correct round by `roundOf()` above) is a real anomaly — e.g. a
 duplicated event from the parser itself — so it's recorded to `context.warnings`, which gates
@@ -270,7 +272,7 @@ backup preserves round history even though it resets per-player engine accumulat
 K/D/A/damage from each segment's accumulators must be *summed*, not treated as a full-match
 snapshot from whichever segment is parsed).
 
-`parseDemoFileSegments()`/`parseDemoSabremetricsSegments()` (`demoParser.ts`/`demoOrchestrator.ts`)
+`parseDemoFileSegments()`/`parseDemoSabremetricsSegments()` (`demoParser.ts`/`demoSabremetrics.ts`)
 take an array of demo buffers instead of one and combine them into a single result, via
 `orchestrateSegments()` (`parsers/segmentOrchestrator.ts`):
 
@@ -320,6 +322,14 @@ segment and calls the multi-segment functions instead of the single-buffer ones;
 upload is entirely unchanged and never touches a manifest. Uploading a single file for a match that
 previously had a multi-segment manifest deletes the stale manifest, so a corrected full re-upload
 always wins over old segments rather than the parse route silently continuing to combine them.
+
+Editing an already-played match with a multi-segment demo re-parses it through the same manifest
+check (`MatchTabView.tsx` passes `isMultiSegmentDemo` into `DemoUploadModal`'s `hasDemoUploaded`
+alongside the canonical-key presence check, since a multi-segment match's demo never lives at the
+canonical key those presence checks were originally written against) — without it, the edit flow
+would fall back to editing from the match's stale, already-recorded stats instead of re-parsing the
+real demo. There's currently no "download demo" link for a multi-segment match, unlike the
+single-file case (no single object to point a download at).
 
 A demo segment left over from an aborted or retried multi-file upload (a PUT failed partway
 through, or a later attempt uses a different file count) has no manifest referencing it and is

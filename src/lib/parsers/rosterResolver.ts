@@ -47,27 +47,30 @@ function withSteamIds(
 export function readDemoPlayers(
   demoBuffer: Buffer,
 ): { steamId: string; name: string }[] {
-  const fromPlayerInfo = withSteamIds(parsePlayerInfo(demoBuffer));
-  if (fromPlayerInfo.length > 0) return fromPlayerInfo;
-
-  // parsePlayerInfo() reads a player-info string table that can come back empty for a short demo
-  // segment resumed mid-match after a server restart, even though every player's steamid/name is
-  // still readable directly off their entity at any tick — the same per-tick read every other
-  // collector in this codebase already relies on. Falls back to that rather than accepting a false
-  // "zero players" result when the roster is actually right there in the demo.
+  // parsePlayerInfo() reads a player-info string table that can come back empty, or short by one or
+  // more players, for a short demo segment resumed mid-match after a server restart — even though
+  // every player's steamid/name is readable directly off their entity at any tick, the same per-tick
+  // read every other collector in this codebase already relies on. Always cross-referenced against
+  // that per-tick read (not just as a fallback when parsePlayerInfo() is *totally* empty) — a
+  // partial result is just as real a risk as an empty one and would otherwise silently
+  // under-resolve the roster with no signal anything was missing.
   //
   // Samples every round_end tick, not just the first — a player who reconnects a little later than
-  // the others after the restart that necessitated this fallback in the first place might not be
-  // networked yet at that first tick, and a fallback that only checked one tick could silently
-  // return a partial roster with no signal anything was missing. Later ticks pick them up.
-  const rounds = parseEvent(demoBuffer, 'round_end', [], []) as { tick: number }[];
-  if (rounds.length === 0) return [];
-  const rows = parseTicks(demoBuffer, ['name'], rounds.map((r) => r.tick)) as {
-    steamid: string | bigint;
-    name?: string;
-  }[];
+  // the others after the restart that necessitated this cross-reference in the first place might
+  // not be networked yet at that first tick. Later ticks pick them up.
   const byId = new Map<string, { steamId: string; name: string }>();
-  for (const p of withSteamIds(rows)) byId.set(p.steamId, p);
+  const rounds = parseEvent(demoBuffer, 'round_end', [], []) as { tick: number }[];
+  if (rounds.length > 0) {
+    const rows = parseTicks(demoBuffer, ['name'], rounds.map((r) => r.tick)) as {
+      steamid: string | bigint;
+      name?: string;
+    }[];
+    for (const p of withSteamIds(rows)) byId.set(p.steamId, p);
+  }
+  // parsePlayerInfo()'s name (when it has an entry) wins as the cleaner display name — the per-tick
+  // sample's `name` field is a fallback for steamids it alone found, not the preferred source.
+  for (const p of withSteamIds(parsePlayerInfo(demoBuffer))) byId.set(p.steamId, p);
+
   return [...byId.values()];
 }
 
