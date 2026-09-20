@@ -36,6 +36,45 @@ test('canonicalGauntletRankMap: an incomplete final round returns an empty map',
   assert.equal(canonicalGauntletRankMap(rounds).size, 0);
 });
 
+test('canonicalGauntletRankMap: a bracket-known final round that has not materialized returns an empty map, without caller-side padding', () => {
+  // Round 1 is fully played, but the bracket's real final is round 2 — which has no matches yet
+  // because it hasn't been scheduled. Passing finalRoundNumber: 2 must return "not complete" even
+  // though round 1 is the only (and thus highest-numbered) round actually in the list.
+  const rounds = [
+    {
+      round_number: 1,
+      matches: [
+        {
+          final_score: '13-9',
+          shirts_stats: [gp(1, 'SHIRTS', true, 80)],
+          skins_stats: [gp(2, 'SKINS', false, 70)],
+        },
+      ],
+    },
+  ];
+  assert.equal(canonicalGauntletRankMap(rounds, 2).size, 0);
+});
+
+test('canonicalGauntletRankMap: finalRoundNumber: null (no bracket data) falls back to the highest round_number, same as omitting it', () => {
+  const rounds = [
+    {
+      round_number: 1,
+      matches: [
+        {
+          final_score: '13-9',
+          shirts_stats: [gp(1, 'SHIRTS', true, 80)],
+          skins_stats: [gp(2, 'SKINS', false, 70)],
+        },
+      ],
+    },
+  ];
+  const withNull = canonicalGauntletRankMap(rounds, null);
+  const omitted = canonicalGauntletRankMap(rounds);
+  assert.equal(withNull.get(1), 1);
+  assert.equal(withNull.get(2), 2);
+  assert.deepEqual([...withNull], [...omitted]);
+});
+
 test('canonicalGauntletRankMap: final-round wins rank above ties, RWR% breaks ties, and earlier eliminations rank lower', () => {
   const rounds = [
     // Round 1 (non-final): p5 loses to p8 and is never seen again -> eliminated round 1.

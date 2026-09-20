@@ -19,11 +19,20 @@ interface _GauntletRound { round_number: number; matches: _GauntletMatch[]; is_f
  *
  * Returns an empty map when the gauntlet is not yet complete.
  * Use this instead of canonicalSort wherever gauntlet leaderboards are rendered.
+ *
+ * `finalRoundNumber` (from `finalRoundNumberOf(getGauntletBracketShape(...))`, see `finalRoundOf()`
+ * in `util.ts`) is the bracket's authoritative final round number — pass it whenever bracket data is
+ * available so a final round that hasn't been scheduled yet reads as "not complete" even though
+ * `rounds` only ever contains real, scheduled rounds and so has nothing flagged `is_final_round` in
+ * that case. Omit it only when no bracket data is on hand (e.g. a hand-built round list in a test).
  */
-export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, number> {
+export function canonicalGauntletRankMap(
+  rounds: _GauntletRound[],
+  finalRoundNumber?: number | null,
+): Map<number, number> {
   if (rounds.length === 0) return new Map();
 
-  const finalRound = finalRoundOf(rounds);
+  const finalRound = finalRoundOf(rounds, finalRoundNumber);
   if (!finalRound || !allMatchesPlayed(finalRound.matches)) {
     return new Map();
   }

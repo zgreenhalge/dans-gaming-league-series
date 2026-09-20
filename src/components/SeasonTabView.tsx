@@ -18,7 +18,7 @@ import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SeasonStatsView } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
-import { isPlayedScore, anyMatchPlayed, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
+import { isPlayedScore, anyMatchPlayed, tabCls, weekAnchorId, roundAnchorId, finalRoundNumberOf } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 import { podMightBeMine } from '@/lib/gauntlet-draft';
@@ -127,14 +127,12 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const mapPool = props.kind === 'regular' ? (props.mapPool ?? null) : null;
   const gauntletBracketShape = props.kind === 'regular' ? (props.gauntletBracketShape ?? EMPTY_BRACKET_SHAPE) : EMPTY_BRACKET_SHAPE;
 
-  // The full set of rounds the Schedule tab (and anything ranking off it) should see — real,
-  // materialized rounds (`rounds`, from getGauntletRounds()) plus an empty shell for any round_number
-  // bracketShape knows about but that has no week/matches yet (e.g. an unscheduled final), so a round
-  // always exists to attach that round's pending-pod placeholders to (#528) and so `finalRoundOf()`
-  // (canonicalGauntletRankMap, GauntletRoundsList) can find the bracket's *real* final round instead
-  // of falling back to whichever earlier round happens to be the last one with real matches. Distinct
+  // The full set of rounds the Schedule tab should see — real, materialized rounds (`rounds`, from
+  // getGauntletRounds()) plus an empty shell for any round_number bracketShape knows about but that
+  // has no week/matches yet (e.g. an unscheduled final), so a round always exists to attach that
+  // round's pending-pod placeholders to (#528) and GauntletRoundsList's final-round badge to. Distinct
   // from `rounds` itself, which stays untouched for any other purpose (Discord threads, event-sync,
-  // …) — an empty shell round carries no real data of its own.
+  // ranking, …) — an empty shell round carries no real data of its own.
   const scheduleRounds = useMemo(() => {
     if (!isGauntlet) return rounds;
     const byNumber = new Map(rounds.map((r) => [r.round_number, r]));
@@ -145,9 +143,13 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     return [...byNumber.values()].sort((a, b) => a.round_number - b.round_number);
   }, [isGauntlet, rounds, bracketShape]);
 
+  // Ranks off the real, unpadded `rounds` (never `scheduleRounds`) — `finalRoundNumberOf(bracketShape)`
+  // tells canonicalGauntletRankMap the bracket's true final round number directly, so it correctly
+  // returns "not complete" when that round hasn't materialized yet without needing a placeholder round
+  // to stand in for it.
   const gauntletRanking = useMemo(
-    () => (isGauntlet ? canonicalGauntletRankMap(scheduleRounds) : undefined),
-    [isGauntlet, scheduleRounds],
+    () => (isGauntlet ? canonicalGauntletRankMap(rounds, finalRoundNumberOf(bracketShape)) : undefined),
+    [isGauntlet, rounds, bracketShape],
   );
 
   // Seed-placement row tinting for a regular season's own leaderboard — gold for a bye, red for a
