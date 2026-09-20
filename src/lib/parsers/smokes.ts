@@ -78,7 +78,7 @@ function sampleTicksForLife(life: SmokeLife, intervalTicks: number): number[] {
   return ticks;
 }
 
-/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players) for
+/** Tick list demoSabremetrics.ts needs to fetch (via parseTicks, all players) for
  *  collectSmokes: sampled ticks across each smoke's life. */
 export function neededSmokeTicks(
   detonateEvents: SmokeEventRow[],

@@ -1,4 +1,5 @@
 import { parseTicks } from '@laihoe/demoparser2';
+import { sideForRealRound } from './roundSides';
 
 // Infer skins' starting side (the round-1 anchor `buildRoundSides` needs) directly
 // from the demo, instead of relying on a stored `skins_starting_side`. The demo is
@@ -47,13 +48,36 @@ export function decideSkinsSide(
 }
 
 /**
- * Read `team_num` at the first live round's tick and infer skins' starting side.
- * (Sides don't change within a round, so round 1's end tick reflects its start side.)
+ * Recovers the match's true round-1 side from a `team_num` read taken at a segment's own first
+ * live round — identity when that segment starts at real round 1 (every single-segment caller),
+ * but a segment that begins after the halftime/OT swap (a later segment of a restart-interrupted
+ * match) reads its side *post*-swap, not the round-1 anchor `buildRoundSides` needs. Correcting for
+ * this is `sideForRealRound`'s own inverse: applying the same half/OT schedule a second time at the
+ * same round number always returns to the original side (the swap decision depends only on the
+ * round number and target, not on which side is passed in), so the correction and the original
+ * swap are the same function call.
+ */
+export function anchorToRoundOne(
+  sideAtRound: 'CT' | 'T' | null,
+  realRoundNumber: number,
+  targetWinRounds: number,
+): 'CT' | 'T' | null {
+  if (sideAtRound === null) return null;
+  return sideForRealRound(realRoundNumber, sideAtRound, targetWinRounds);
+}
+
+/**
+ * Read `team_num` at a segment's first live round and infer skins' round-1 starting side.
+ * (Sides don't change within a round, so a round's end tick reflects its own side.) `targetWinRounds`
+ * and `startingRealRound` (default 1) anchor that reading back to the match's true round 1 via
+ * `anchorToRoundOne()` — a no-op for the common single-segment/first-segment case.
  */
 export function inferSkinsStartingSide(
   demoBuffer: Buffer,
   firstLiveRoundTick: number,
   steamToPlayer: ResolvedRoster,
+  targetWinRounds: number,
+  startingRealRound = 1,
 ): 'CT' | 'T' | null {
   const rows = parseTicks(demoBuffer, ['team_num'], [firstLiveRoundTick]) as {
     steamid: string | bigint;
@@ -65,7 +89,8 @@ export function inferSkinsStartingSide(
     if (!sid || sid === '0') continue;
     if (typeof r.team_num === 'number') teamBySteamId.set(sid, r.team_num);
   }
-  return decideSkinsSide(teamBySteamId, steamToPlayer);
+  const sideAtSegmentStart = decideSkinsSide(teamBySteamId, steamToPlayer);
+  return anchorToRoundOne(sideAtSegmentStart, startingRealRound, targetWinRounds);
 }
 
 /**

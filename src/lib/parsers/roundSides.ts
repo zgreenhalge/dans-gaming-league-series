@@ -54,8 +54,13 @@ const OT_ROUNDS_PER_HALF = 3;
  * canonical side-assignment rule (see `docs/calculations.md`'s "Side Splits") — both
  * `buildRoundSides` (per recorded round) and `roundsPlayedBySide` (a rounds-played total,
  * with no per-round event data) derive from this one function so they can't drift apart.
+ *
+ * Its swap decision depends only on `realRoundNumber`/`targetWinRounds`, not `startingSide` —
+ * which makes it its own inverse for a fixed round: applying it a second time at the same round
+ * recovers whichever side was passed in the first time. A caller with a side reading taken at a
+ * later round, not round 1, can use that property to work backward to the round-1 anchor.
  */
-function sideForRealRound(
+export function sideForRealRound(
   realRoundNumber: number,
   startingSide: 'CT' | 'T',
   targetWinRounds: number,
@@ -70,29 +75,45 @@ function sideForRealRound(
   return otHalf % 2 === 1 ? otherSide : startingSide;
 }
 
-export function buildRoundSides(
-  roundEndEvents: RoundEndRow[],
-  skinsStartingSide: 'CT' | 'T' | null,
-  targetWinRounds: number,
-  matchStartTick = 0,
-): RoundSideInfo[] {
-  if (skinsStartingSide === null) return [];
-
-  const shirtsStartSide: 'CT' | 'T' = skinsStartingSide === 'CT' ? 'T' : 'CT';
-
-  const liveRounds = roundEndEvents.filter(
+/** Every `round_end` a caller's parse should count toward the score: warmup and null-winner rows
+ *  (crash artifacts) dropped, and anything before `matchStartTick` dropped as warmup or an
+ *  erroneous knife round. The one place this predicate is defined — `buildRoundSides` and any
+ *  caller that needs to know a segment's live-round range before running the full parse (see
+ *  `getLiveRoundEndEvents()` in `matchContext.ts`) both apply it from here, so they can't diverge
+ *  on which rounds count. */
+export function filterLiveRoundEnds<T extends RoundEndRow>(events: T[], matchStartTick = 0): T[] {
+  return events.filter(
     (e) =>
       !e.is_warmup_period &&
       e.winner !== null &&
       e.total_rounds_played > 0 &&
       e.tick >= matchStartTick,
   );
+}
+
+export function buildRoundSides(
+  roundEndEvents: RoundEndRow[],
+  skinsStartingSide: 'CT' | 'T' | null,
+  targetWinRounds: number,
+  matchStartTick = 0,
+  /** The match-wide real round number this segment's first live round actually is — 1 for a
+   *  segment that starts at the match's true beginning (every existing single-segment caller), or
+   *  higher for a later segment of a restart-interrupted match. Anchoring the half-swap on a
+   *  segment's own first live round instead would mislabel every round straddling the boundary
+   *  once that segment isn't the match's true first segment. */
+  startingRealRound = 1,
+): RoundSideInfo[] {
+  if (skinsStartingSide === null) return [];
+
+  const shirtsStartSide: 'CT' | 'T' = skinsStartingSide === 'CT' ? 'T' : 'CT';
+
+  const liveRounds = filterLiveRoundEnds(roundEndEvents, matchStartTick);
 
   const firstRoundNumber = liveRounds.length > 0 ? liveRounds[0].total_rounds_played : 0;
 
   return liveRounds.map((e) => {
     const roundNumber = e.total_rounds_played;
-    const realRoundNumber = roundNumber - firstRoundNumber + 1;
+    const realRoundNumber = roundNumber - firstRoundNumber + startingRealRound;
 
     return {
       roundNumber,

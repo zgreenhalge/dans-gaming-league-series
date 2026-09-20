@@ -44,6 +44,7 @@
 import { api } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
+import { getDemoManifest } from '../src/lib/demo/segmentManifest';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { notice, warning, error } from './gh-actions-log';
 import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, isDemoPath, type RemoteFile } from '../src/lib/dathost-retention';
@@ -175,13 +176,28 @@ async function trackedMatches(
   );
 }
 
-async function demoIsSafeInR2(matchId: number): Promise<boolean> {
+async function objectExists(key: string): Promise<boolean> {
   try {
-    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
+    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
     return true;
   } catch {
     return false;
   }
+}
+
+/** A match's demo is safe in R2 either as the canonical single-file demoKey(), or — for a match
+ *  recovered from multiple recordings after a server restart (see docs/demo-ingestion.md's
+ *  "Multi-segment demos") — as every segment its manifest names. A manifest naming a
+ *  still-missing segment (an upload genuinely interrupted mid-way) is *not* safe: this only ever
+ *  becomes true once every listed segment actually exists, the same all-or-nothing guarantee the
+ *  manifest's own write ordering already provides. */
+async function demoIsSafeInR2(matchId: number): Promise<boolean> {
+  if (await objectExists(demoKey(matchId))) return true;
+
+  const manifest = await getDemoManifest(matchId);
+  if (!manifest) return false;
+  const segmentsExist = await Promise.all(manifest.segments.map(objectExists));
+  return segmentsExist.every(Boolean);
 }
 
 async function deleteFile(serverId: string, path: string): Promise<void> {

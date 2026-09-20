@@ -1,7 +1,7 @@
 /**
  * Unit tests for collectRoundsDropped — rounds dropped on reload (#212). weapon_reload is a
  * discrete game event, so each fixture supplies a reload event plus a single tick-state row at
- * that same tick (Weapon.m_iClip1/Weapon.m_bInReload), matching how demoOrchestrator.ts samples
+ * that same tick (Weapon.m_iClip1/Weapon.m_bInReload), matching how demoSabremetrics.ts samples
  * the netprop once per event rather than periodically.
  *
  * Run:  npx vitest run src/lib/parsers/reload.test.ts

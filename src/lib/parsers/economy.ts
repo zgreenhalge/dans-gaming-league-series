@@ -120,7 +120,7 @@ export function collectMatchRoundEconomy(
   return rows;
 }
 
-/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per live
+/** Tick list demoSabremetrics.ts needs to fetch (via parseTicks, all players): one per live
  *  round's freeze-time-end. */
 export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], bounds: RoundBounds): number[] {
   const ticks = new Set<number>();
@@ -134,7 +134,7 @@ export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], bounds:
 /** Folds `collectMatchRoundEconomy()`'s flat rows into a `(steamid -> round -> tier)` map — the
  *  shape `collectEconomyStats()` (`weaponStats.ts`) needs for an O(1) per-shot tier lookup while
  *  it replays the same match. A separate export (not inlined into `classifyRoundEconomy()` below)
- *  so a caller that already has the flat rows in hand (`demoOrchestrator.ts`, which also persists
+ *  so a caller that already has the flat rows in hand (`demoSabremetrics.ts`, which also persists
  *  them as-is) can reshape them without re-running the round/player scan a second time. */
 export function foldRoundEconomyByPlayer(
   rows: RoundEconomyFactRow[],

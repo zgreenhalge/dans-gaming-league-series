@@ -24,6 +24,20 @@ export function parseArgs(argv: string[]): Record<string, string | boolean> {
   return out;
 }
 
+/** Collects every occurrence of a repeatable `--flag value` pair, in argv order — `parseArgs()`
+ *  only keeps the last value per flag name, so a flag meant to be passed more than once (e.g.
+ *  inspect-demo.ts's `--demo`, for a match split across multiple recordings) needs this instead.
+ *  Uses the same "is the next token a value or another flag" rule as `parseArgs()`. */
+export function collectFlagValues(argv: string[], name: string): string[] {
+  const flag = `--${name}`;
+  const values: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const next = argv[i + 1];
+    if (argv[i] === flag && next !== undefined && !next.startsWith('--')) values.push(next);
+  }
+  return values;
+}
+
 export function die(msg: string): never {
   console.error(`\n✖ ${msg}\n`);
   process.exit(1);

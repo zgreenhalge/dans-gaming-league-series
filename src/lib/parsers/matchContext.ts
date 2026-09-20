@@ -1,5 +1,7 @@
 import { parseEvent, parseHeader, parseTicks } from '@laihoe/demoparser2';
-import { buildRoundSides, sideForFaction, type RoundEndRow, type RoundSideInfo } from './roundSides';
+import {
+  buildRoundSides, filterLiveRoundEnds, sideForFaction, type RoundEndRow, type RoundSideInfo,
+} from './roundSides';
 import { roundOf, type RoundBounds } from './_shared';
 
 /**
@@ -19,6 +21,21 @@ export function findMatchStartTick(demoBuffer: Buffer): number {
     // event absent/unreadable — leave 0 so no rounds are filtered by tick
   }
   return maxTick;
+}
+
+/** Parses a demo's own `round_end` stream and applies `filterLiveRoundEnds()` (roundSides.ts) —
+ *  for a caller that only has a raw buffer and needs a segment's live-round range (e.g. to compute
+ *  a multi-segment offset) before running the full per-segment parse, which parses and filters the
+ *  same event again as part of its own work. Takes `matchStartTick` when the caller already
+ *  computed it (avoids a redundant `findMatchStartTick()` scan); computes it itself otherwise. */
+export function getLiveRoundEndEvents(
+  demoBuffer: Buffer,
+  matchStartTick = findMatchStartTick(demoBuffer),
+): RoundEndRow[] {
+  const roundEndEvents = parseEvent(
+    demoBuffer, 'round_end', [], ['total_rounds_played', 'winner', 'reason', 'is_warmup_period'],
+  ) as RoundEndRow[];
+  return filterLiveRoundEnds(roundEndEvents, matchStartTick);
 }
 
 /**
@@ -230,6 +247,9 @@ export function buildMatchContext(
   skinsStartingSide: 'CT' | 'T' | null,
   targetWinRounds: number,
   officiallyEndedTicks: number[] = [],
+  /** See `buildRoundSides()`'s doc — 1 for a standalone demo, or the match-wide starting round a
+   *  multi-segment caller (`parseDemoSabremetricsSegments()`) supplies for a later segment. */
+  startingRealRound = 1,
 ): MatchContext {
   const warnings: string[] = [];
 
@@ -247,7 +267,9 @@ export function buildMatchContext(
   }
 
   const matchStartTick = findMatchStartTick(demoBuffer);
-  const rounds = buildRoundSides(roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick);
+  const rounds = buildRoundSides(
+    roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick, startingRealRound,
+  );
   const hasSides = rounds.length > 0;
 
   if (!hasSides && skinsStartingSide === null) {

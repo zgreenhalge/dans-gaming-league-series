@@ -46,7 +46,7 @@ function isTradeOpportunity(
     withinDistance(teammatePos, killerPos, TRADE_KILLER_DISTANCE);
 }
 
-/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death, to
+/** Tick list demoSabremetrics.ts needs to fetch (via parseTicks, all players): one per death, to
  *  check whether a teammate was close enough to plausibly trade. */
 export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
   const ticks = new Set<number>();

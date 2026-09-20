@@ -5,7 +5,7 @@
  * the invariants: y-flip, aspect-preserved auto-fit, the calibrated radar transform,
  * frame interpolation, angular wrap, and the event/grenade time windows.
  *
- * `extract.ts`'s `buildReplay()` itself is out of scope here, same as `demoOrchestrator.ts`/
+ * `extract.ts`'s `buildReplay()` itself is out of scope here, same as `demoSabremetrics.ts`/
  * `demoParser.ts`: it calls `@laihoe/demoparser2`'s `parseEvent`/`parseTicks`/`parseGrenades`
  * directly on the demo buffer, with no separable pure logic pulled out of the collectors — per
  * `docs/patterns.md`'s "test external IO by extracting the logic around it" convention, that's a
