@@ -337,6 +337,47 @@ describe('SeasonTabView — week/round deep link', () => {
     expect(screen.getByText('Not yet scheduled')).toBeInTheDocument();
   });
 
+  test('the leaderboard tab withholds the podium while the bracket\'s real final round is unmaterialized, even though an earlier round already finished 13-4', () => {
+    // Mirrors a real gauntlet mid-bracket: round 2 has a fully-played pod (so `allMatchesPlayed`
+    // on it alone would say "complete"), but the true final is round 3 and hasn't been scheduled —
+    // `rounds` has no entry for it at all, only `bracketShape` knows it exists. `GauntletStandings`
+    // must not mistake round 2 for the final just because it's the last round with real matches.
+    const playedMatch: GauntletMatch = {
+      id: 900,
+      match_number: 1,
+      final_score: '13-4',
+      scheduled_at: null,
+      picked_map: 'Map',
+      shirts_pick: null,
+      skins_starting_side: null,
+      is_feature_match: false,
+      shirts_stats: [
+        { player_id: 1, player_name: 'Alice', faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 80, damage: 0, is_win: true, rounds_won: 13, rounds_played: 17 },
+      ],
+      skins_stats: [
+        { player_id: 2, player_name: 'Bob', faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 70, damage: 0, is_win: false, rounds_won: 4, rounds_played: 17 },
+      ],
+      pod_index: 1,
+      advance_rule: 'single',
+    };
+    const finalPod = bracketPod({ id: 60, round_number: 3, pod_index: 0, advance_rule: 'single', is_final: true });
+
+    nextNavigationMock.setSearchParams('tab=leaderboard');
+    renderWithUrlState(
+      <SeasonTabView
+        kind="gauntlet"
+        rounds={[round(1), { round_number: 2, matches: [playedMatch], is_final_round: false }]}
+        bracketShape={[finalPod]}
+        leaderboard={[leaderboardRow({ player_id: 1 }), leaderboardRow({ player_id: 2, player_name: 'Bob' })]}
+        seasonStatus="ACTIVE"
+        currentPlayerId={null}
+        h2hData={EMPTY_H2H}
+      />,
+    );
+
+    expect(screen.queryByText('Champion')).not.toBeInTheDocument();
+  });
+
 });
 
 describe('SeasonTabView — H2H pair writes to the URL', () => {

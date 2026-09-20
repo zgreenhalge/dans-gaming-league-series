@@ -5,7 +5,6 @@ import EmptyState from './EmptyState';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
-import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
@@ -13,6 +12,8 @@ import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 // keeps GauntletRoundCard's `useMemo` dependency stable across renders instead of a fresh `[]`
 // literal defeating it every time.
 const EMPTY_PODS: BracketPod[] = [];
+// Same stability reasoning for the default `rankMap` — see the prop doc comment below.
+const EMPTY_RANK_MAP: Map<number, number> = new Map();
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
   const records = new Map<
@@ -337,6 +338,7 @@ export default function GauntletRoundsList({
   displayRounds,
   allRounds,
   bracketShape = [],
+  rankMap = EMPTY_RANK_MAP,
   seedNames,
   myGamesOnly = false,
   openRounds,
@@ -349,6 +351,12 @@ export default function GauntletRoundsList({
    * this component renders for pods that exist in the bracket but haven't materialized real matches
    * yet (#528). Omitted (or `[]`) renders exactly as before: real matches only. */
   bracketShape?: BracketPod[];
+  /** The canonical gauntlet ranking (`canonicalGauntletRankMap()`), computed once by the caller
+   *  (`SeasonTabView`'s `gauntletRanking`) against the *padded* round list — never recomputed here
+   *  from `allRounds`, which only ever has real, scheduled rounds and so can't tell a genuinely
+   *  unmaterialized final round apart from a finished gauntlet (see `GauntletStandings`, which shares
+   *  this same prop). Omitted (or empty) renders as if the gauntlet weren't complete yet. */
+  rankMap?: Map<number, number>;
   seedNames?: Map<number, string>;
   /** Mirrors the "My games" toggle `displayRounds` was already filtered by — applied here to
    * `bracketShape`'s pending pods too, so a pod nobody-you've-tracked-yet is in doesn't reappear
@@ -359,8 +367,6 @@ export default function GauntletRoundsList({
   onToggleRound: (roundNumber: number) => void;
   currentPlayerId: number | null;
 }) {
-  const rankMap = canonicalGauntletRankMap(allRounds);
-
   // Pure functions of bracketShape/myGamesOnly/currentPlayerId — memoized so toggling a round
   // open/closed (which re-renders this whole list) doesn't redo them for the entire bracket.
   const podsById = useMemo(() => buildPodsById(bracketShape), [bracketShape]);
