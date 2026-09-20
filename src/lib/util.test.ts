@@ -33,6 +33,9 @@ import {
   fmtUtcShort,
   formatDuration,
   groupByMap,
+  addNumericFields,
+  finalRoundOf,
+  finalRoundNumberOf,
 } from './util';
 import { mapSlug } from './maps';
 import { test, report } from './test-support/miniTest';
@@ -304,6 +307,41 @@ test('groupByMap: a null mapOf result excludes the row', () => {
   const rows = [{ map: 'Palais' }, { map: null }];
   const buckets = groupByMap(rows, (r) => r.map);
   assert.equal([...buckets.values()].reduce((n, b) => n + b.rows.length, 0), 1);
+});
+
+// --- addNumericFields: the shared per-record accumulation primitive behind addSabFields()
+//     (queries/sabremetrics.ts) and mergeSabremetricResults() (parsers/segmentMerge.ts) ---
+test('addNumericFields: sums numeric fields of b into a, in place', () => {
+  const a = { kills: 10, deaths: 5, damage: 800 };
+  addNumericFields(a, { kills: 3, deaths: 1, damage: 200 });
+  assert.deepEqual(a, { kills: 13, deaths: 6, damage: 1000 });
+});
+test('addNumericFields: leaves non-numeric fields untouched', () => {
+  const a = { kills: 10, name: 'p1' };
+  addNumericFields(a, { kills: 3, name: 'p2' });
+  assert.deepEqual(a, { kills: 13, name: 'p1' });
+});
+
+// --- finalRoundOf / finalRoundNumberOf: the bracket-aware final-round lookup (#565) ---
+test('finalRoundOf: an explicit finalRoundNumber wins over any is_final_round flag or highest round_number', () => {
+  const rounds = [
+    { round_number: 1, is_final_round: false },
+    { round_number: 2, is_final_round: true }, // would win under the old flag-based lookup
+  ];
+  assert.equal(finalRoundOf(rounds, 1)?.round_number, 1);
+});
+test('finalRoundOf: an explicit finalRoundNumber not present in rounds returns undefined (not yet scheduled)', () => {
+  const rounds = [{ round_number: 1, is_final_round: false }];
+  assert.equal(finalRoundOf(rounds, 2), undefined);
+});
+test('finalRoundOf: finalRoundNumber: null falls back to the highest round_number, same as omitting it', () => {
+  const rounds = [{ round_number: 1 }, { round_number: 3 }, { round_number: 2 }];
+  assert.equal(finalRoundOf(rounds, null)?.round_number, 3);
+  assert.equal(finalRoundOf(rounds)?.round_number, 3);
+});
+test('finalRoundNumberOf: returns the final pod\'s round_number, or null when no pod is final', () => {
+  assert.equal(finalRoundNumberOf([{ round_number: 1, is_final: false }, { round_number: 2, is_final: true }]), 2);
+  assert.equal(finalRoundNumberOf([]), null);
 });
 
 report();
