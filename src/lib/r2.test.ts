@@ -8,8 +8,17 @@
  */
 
 import assert from 'node:assert/strict';
-import { demoMatchIdFromKey } from './r2';
+import { demoMatchIdFromKey, demoSegmentKey, demoManifestKey } from './r2';
 import { test, report } from './test-support/miniTest';
+
+test('demoSegmentKey: deterministic per match id and segment index', () => {
+  assert.equal(demoSegmentKey(501, 0), '501/segment-0.dem');
+  assert.equal(demoSegmentKey(501, 1), '501/segment-1.dem');
+});
+
+test('demoManifestKey: deterministic per match id, distinct from the single-file demoKey', () => {
+  assert.equal(demoManifestKey(501), '501/demo-manifest.json');
+});
 
 test('demoMatchIdFromKey: matches a demo key and returns its match id', () => {
   assert.equal(demoMatchIdFromKey('501/game.dem'), 501);

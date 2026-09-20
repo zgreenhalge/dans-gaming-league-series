@@ -26,6 +26,28 @@ export function demoKey(matchId: number): string {
   return `${matchId}/game.dem`;
 }
 
+// A restart-interrupted match splits into a handful of recordings in practice (see
+// docs/demo-ingestion.md's "Multi-segment demos") — this bounds how many segments the upload-url
+// and segments/finalize routes will ever mint/accept for one match, not a real expected count.
+// Shared so the two routes can't drift on the bound.
+export const MAX_DEMO_SEGMENTS = 10;
+
+/** Deterministic key for one segment of a match split across multiple demo recordings by a server
+ *  restart (see docs/demo-ingestion.md's "Multi-segment demos") — used instead of `demoKey()` only
+ *  when more than one demo file is uploaded for a match; a single-file upload still uses `demoKey()`
+ *  unchanged. */
+export function demoSegmentKey(matchId: number, index: number): string {
+  return `${matchId}/segment-${index}.dem`;
+}
+
+/** Deterministic key for the manifest listing a multi-segment match's segment keys (gzipped JSON:
+ *  `{ segments: string[] }`) — written only once every segment in a multi-file upload has actually
+ *  finished uploading, so its presence is a reliable "this match's demo is fully in R2" signal (a
+ *  partial upload leaves no manifest at all, rather than one pointing at a missing segment). */
+export function demoManifestKey(matchId: number): string {
+  return `${matchId}/demo-manifest.json`;
+}
+
 /** Deterministic key for a match's 2D replay payload (gzipped JSON). */
 export function replayKey(matchId: number): string {
   return `${matchId}/replay.json`;

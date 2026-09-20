@@ -304,15 +304,40 @@ take an array of demo buffers instead of one and combine them into a single resu
 The single-buffer `parseDemoFile()`/`parseDemoSabremetrics()` are unchanged for the normal one-demo
 case; the multi-segment functions are additive, used only when a match actually needs stitching.
 
-**Admin recovery path.** This is a manual, CLI-first recovery tool, not a self-serve upload flow —
-`scripts/inspect-demo.ts` accepts more than one demo, either as a repeated `--demo` flag or
-comma-separated within one (`--demo a.dem,b.dem` and `--demo a.dem --demo b.dem` both work), and
-dispatches to the multi-segment functions instead of the single-buffer ones. `--match <id>` can be
-given alongside local `--demo` files purely to source the roster/side/target defaults from the DB
-instead of a hand-written `--roster` file — the demo bytes still come from the local files, never
-R2, whenever `--demo` is present. The tool prints the same derived score/stats/warnings report as a
-normal single-demo run for an admin to review before confirming the score through the existing
-`PATCH /score` flow by hand.
+**Admin upload path.** `DemoUploadModal.tsx`'s file input accepts more than one file — selecting 2+
+uploads each to its own R2 key (`demoSegmentKey(matchId, i)`) instead of the canonical `demoKey()`,
+then writes a manifest (`demo/segments/finalize`, `src/lib/demo/segmentManifest.ts`) naming all of
+them once every upload has actually succeeded (server-verified, not just client-assumed). `POST
+/api/matches/[id]/demo/parse` checks for a manifest first and, if present, downloads every listed
+segment and calls the multi-segment functions instead of the single-buffer ones; a single-file
+upload is entirely unchanged and never touches a manifest. Uploading a single file for a match that
+previously had a multi-segment manifest deletes the stale manifest, so a corrected full re-upload
+always wins over old segments rather than the parse route silently continuing to combine them.
+
+A demo segment left over from an aborted or retried multi-file upload (a PUT failed partway
+through, or a later attempt uses a different file count) has no manifest referencing it and is
+never cleaned up automatically — a storage cost, not a correctness risk, since nothing ever reads
+an unreferenced segment key.
+
+**CLI recovery path.** `scripts/inspect-demo.ts` accepts the same multi-demo input for manual,
+read-only inspection before an upload — either a repeated `--demo` flag or comma-separated within
+one (`--demo a.dem,b.dem` and `--demo a.dem --demo b.dem` both work) — and dispatches to the
+multi-segment functions the same way. `--match <id>` can be given alongside local `--demo` files
+purely to source the roster/side/target defaults from the DB instead of a hand-written `--roster`
+file — the demo bytes still come from the local files, never R2, whenever `--demo` is present. The
+tool prints the same derived score/stats/warnings report the admin UI would show, for confirming
+what an upload will produce before actually doing it.
+
+**Retention.** `scripts/dathost-cleanup.ts`'s `demoIsSafeInR2()` (the gate on deleting DatHost-side
+residue) recognizes a multi-segment match's demo as safe once every segment its manifest names is
+confirmed present, the same all-or-nothing guarantee `demo/segments/finalize` already enforces when
+writing the manifest — not just the canonical single-file `demoKey()`.
+
+**2D replay is not supported for a multi-segment match** — the Recap tab shows an explanatory
+warning instead of a "Generate replay" control (`isMultiSegmentDemo`, threaded from whether a
+manifest exists), since the replay pipeline only ever reads a single demo and stitching a
+continuous tick-based timeline across a genuine tick-space discontinuity is a materially different
+problem than combining discrete round-scoped facts (tracked as a follow-up).
 
 **Known limitation.** `parseDemoSabremetrics()` returns empty sabremetric/fact-row arrays and a
 generic "No live rounds found in demo" warning whenever a segment's side can't be resolved,
