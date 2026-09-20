@@ -81,6 +81,7 @@ export const SEASON_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 
 const EMPTY_SCHEDULE: WeekWithMatches[] = [];
 const EMPTY_ROUNDS: GauntletRound[] = [];
 const EMPTY_BRACKET_SHAPE: BracketPod[] = [];
+const EMPTY_RANK_MAP = new Map<number, number>();
 
 type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   leaderboard: LeaderboardRowWithId[];
@@ -504,7 +505,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
       {tab === 'leaderboard' && hasLeaderboard && (
         <>
-          {isGauntlet && <GauntletStandings rounds={rounds} leaderboard={leaderboard} />}
+          {isGauntlet && <GauntletStandings rankMap={gauntletRanking ?? EMPTY_RANK_MAP} leaderboard={leaderboard} />}
           <LeaderboardTable
             rows={leaderboard}
             showMedals={seasonStatus === 'ARCHIVED'}
