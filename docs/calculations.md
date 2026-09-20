@@ -616,9 +616,10 @@ always computed from the specific round in which the placement is decided, not f
 stats. ADR is round-weighted so it aggregates correctly across a round's matches.
 
 `canonicalGauntletRankMap()` is computed once per season page (`SeasonTabView`) and passed down as a
-prop to both `GauntletStandings` (its podium) and `LeaderboardTable` (`canonicalRanking`) — neither
-recomputes it from its own copy of the rounds, so the two views can't drift apart or disagree about
-whether the gauntlet is even complete yet.
+prop to `GauntletStandings` (its podium), `LeaderboardTable` (`canonicalRanking`), and
+`GauntletRoundsList` (its final round's champion styling) — none of the three recomputes it from its
+own copy of the rounds, so they can't drift apart or disagree about whether the gauntlet is even
+complete yet.
 
 The rounds passed in must include an empty placeholder round for the bracket's real final round when
 it hasn't materialized as a scheduled week yet (`SeasonTabView`'s `scheduleRounds`, sourced from the
@@ -629,8 +630,8 @@ whichever earlier round happens to be fully played as if it were the final.
 Returns no ranking while the gauntlet is incomplete (final round not fully played).
 
 Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/gauntlet-ranking.ts`. Pass the result as the
-`canonicalRanking` prop to `LeaderboardTable` and the `rankMap` prop to `GauntletStandings` anywhere
-gauntlet leaderboards are ranked.
+`canonicalRanking` prop to `LeaderboardTable` and the `rankMap` prop to `GauntletStandings` and
+`GauntletRoundsList` anywhere gauntlet leaderboards are ranked.
 
 ## Gauntlet Seeding Projection
 

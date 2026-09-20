@@ -19,15 +19,16 @@ export default function GauntletStandings({
    *  if it hasn't materialized yet) — never recomputed here from the raw, unpadded rounds. Passing
    *  the same map the leaderboard table's `canonicalRanking` prop uses keeps the podium and the
    *  table from drifting: recomputing from unpadded rounds mistook the last *materialized* round for
-   *  the final one, showing a podium as soon as an earlier, unrelated pod finished. Empty until the
-   *  gauntlet is complete. */
-  rankMap: Map<number, number>;
+   *  the final one, showing a podium as soon as an earlier, unrelated pod finished. Omitted (or
+   *  empty) renders as if the gauntlet weren't complete yet, matching `GauntletBracketDiagram`'s
+   *  same optional `rankMap` prop. */
+  rankMap?: Map<number, number>;
   leaderboard: LeaderboardRowWithId[];
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
 
-  if (rankMap.size === 0) return null;
+  if (!rankMap || rankMap.size === 0) return null;
 
   const byRank = new Map<number, number>();
   for (const [playerId, rank] of rankMap) byRank.set(rank, playerId);
