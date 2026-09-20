@@ -160,27 +160,25 @@ export function parseDemoSabremetrics(
     // Fires whenever no round-scoped sabremetric can be computed — either the starting side can't be
     // resolved (stored side null and demo inference failed; buildRoundSides() returns [] in that case
     // regardless of roster) or this segment genuinely has no live rounds at all (effectiveSide known,
-    // but no round_end events survive filterLiveRoundEnds()). Distinct from whether the roster itself
-    // resolved: steamToPlayer can be fully populated in either case, so — mirroring parseDemoFile(),
-    // which never drops a resolved player just because rounds_won/score can't be determined — every
-    // resolved player still gets a real sabremetrics row here, all fields zeroed (nothing round-scoped
-    // is computable without a resolved side), rather than being silently omitted. This keeps a
-    // multi-segment merge's player-id comparison (checkSegmentAgreement()) reading this segment's real
-    // roster instead of a false "resolved zero players."
+    // but no round_end events survive filterLiveRoundEnds()). `sabremetrics` stays `[]` regardless —
+    // every caller of `persistSabremetrics()` relies on an empty array being a safe no-op, and nothing
+    // round-scoped is actually computable here, so a zeroed row would misrepresent a real (if
+    // uncomputed) player as having genuinely played and recorded zeros. `resolvedPlayerIds` carries
+    // the distinct "roster resolved" signal instead — steamToPlayer can be fully populated even though
+    // `sabremetrics` is empty, and parseDemoSabremetricsSegments() reads this, not `sabremetrics`, for
+    // checkSegmentAgreement()'s player-id comparison, so a segment whose roster resolved fine but
+    // whose side didn't isn't misreported as "resolved zero players."
     warnings.push(...context.warnings);
-    const sabremetrics: DemoSabremetricStat[] = [...steamToPlayer.values()].map(({ player_id }) => ({
-      player_id,
-      sabremetrics: { ...ZERO },
-    }));
     warnings.push(
       effectiveSide === null
         ? 'Starting side unknown — sabremetrics cannot be attributed to rounds.'
         : 'No live rounds found in demo.',
     );
     return {
-      sabremetrics, weaponStats: [], matchKills: [], matchRounds: [],
+      sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
       matchUtilityThrows: [], matchRoundEconomy: [], matchDamageEvents: [],
       warnings,
+      resolvedPlayerIds: [...steamToPlayer.values()].map((p) => p.player_id),
     };
   }
 
@@ -453,6 +451,7 @@ export function parseDemoSabremetrics(
     sabremetrics, weaponStats, matchKills, matchRounds, matchUtilityThrows, matchRoundEconomy,
     matchDamageEvents,
     warnings: uniqueWarnings,
+    resolvedPlayerIds: steamIds.map((steamId) => steamToPlayer.get(steamId)!.player_id),
   };
 }
 
@@ -471,6 +470,6 @@ export function parseDemoSabremetricsSegments(
     demoBuffers,
     (buf, startingRealRound) => parseDemoSabremetrics(buf, roster, skinsSide, targetWinRounds, startingRealRound),
     mergeSabremetricResults,
-    (segment) => segment.sabremetrics.map((p) => p.player_id),
+    (segment) => segment.resolvedPlayerIds,
   );
 }

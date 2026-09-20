@@ -456,6 +456,7 @@ function baseSabResult(overrides: Partial<ParsedDemoSabremetricsResult>): Parsed
   return {
     sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
     matchUtilityThrows: [], matchRoundEconomy: [], matchDamageEvents: [], warnings: [],
+    resolvedPlayerIds: [],
     ...overrides,
   };
 }
@@ -537,6 +538,24 @@ test('mergeSabremetricResults: warnings are deduped across segments', () => {
   const segB = baseSabResult({ warnings: [w] });
   const merged = mergeSabremetricResults([segA, segB]);
   assert.deepEqual(merged.warnings, [w]);
+});
+
+test('mergeSabremetricResults: resolvedPlayerIds reflects a segment whose roster resolved but had no computable sabremetrics (#560)', () => {
+  // A segment whose starting side couldn't be resolved has sabremetrics: [] (parseDemoSabremetrics's
+  // early return never fabricates zero-valued rows — persistSabremetrics()'s empty-array no-op guard
+  // must stay meaningful) but still reports resolvedPlayerIds for whoever the roster did resolve, so
+  // checkSegmentAgreement()'s player-id comparison (fed resolvedPlayerIds, not sabremetrics) doesn't
+  // misreport this segment as having resolved zero players.
+  const segA = baseSabResult({ sabremetrics: [sab(1, {})], resolvedPlayerIds: [1, 2] });
+  const segB = baseSabResult({ sabremetrics: [], resolvedPlayerIds: [1, 2] });
+  const merged = mergeSabremetricResults([segA, segB]);
+  assert.deepEqual(merged.resolvedPlayerIds, [1, 2]);
+});
+test('mergeSabremetricResults: resolvedPlayerIds is deduped and in first-appearance order across segments', () => {
+  const segA = baseSabResult({ resolvedPlayerIds: [2, 1] });
+  const segB = baseSabResult({ resolvedPlayerIds: [1, 3] });
+  const merged = mergeSabremetricResults([segA, segB]);
+  assert.deepEqual(merged.resolvedPlayerIds, [2, 1, 3]);
 });
 
 report();

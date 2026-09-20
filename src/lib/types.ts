@@ -366,4 +366,13 @@ export interface ParsedDemoSabremetricsResult {
   matchRoundEconomy: DemoMatchRoundEconomy[];
   matchDamageEvents: DemoMatchDamageEvent[];
   warnings: string[];
+  /** Every player_id the roster resolved for this demo/segment, independent of whether any
+   *  round-scoped sabremetric could be computed (`sabremetrics` stays `[]` whenever the starting
+   *  side is unresolvable or the segment has no live rounds — see `parseDemoSabremetrics()`'s early
+   *  return, `demoSabremetrics.ts`). Diagnostic only: `parseDemoSabremetricsSegments()` uses this,
+   *  not `sabremetrics`, for `checkSegmentAgreement()`'s per-segment roster comparison, so a segment
+   *  whose roster resolved fine but whose side didn't isn't misreported as "resolved zero players" —
+   *  without ever making `sabremetrics` itself non-empty on a segment with nothing real to persist
+   *  (every caller of `persistSabremetrics()` relies on an empty array being a safe no-op). */
+  resolvedPlayerIds: number[];
 }

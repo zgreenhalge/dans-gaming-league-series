@@ -318,6 +318,7 @@ export function mergeSabremetricResults(
     matchRoundEconomy: sortByRound(segments.flatMap((s) => s.matchRoundEconomy)),
     matchDamageEvents: sortByRound(segments.flatMap((s) => s.matchDamageEvents)),
     warnings,
+    resolvedPlayerIds: [...new Set(segments.flatMap((s) => s.resolvedPlayerIds))],
   };
 }
 
