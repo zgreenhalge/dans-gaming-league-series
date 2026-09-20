@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import GauntletRoundsList from './GauntletRoundsList';
 import type { GauntletMatch, GauntletRound } from '@/lib/queries';
 import { bracketPod } from '@/lib/test-support/gauntletFixtures';
@@ -321,5 +321,58 @@ describe('GauntletRoundsList — pending pod placeholders (#528)', () => {
     expect(screen.getByText('Game 2')).toBeInTheDocument();
     expect(screen.getByText('Game 3')).toBeInTheDocument();
     expect(screen.queryByText(/^Group \d/)).not.toBeInTheDocument();
+  });
+});
+
+describe('GauntletRoundsList — champion styling comes from the shared rankMap prop, not a recomputed one', () => {
+  const finalRound: GauntletRound = {
+    round_number: 3,
+    is_final_round: true,
+    matches: [
+      gauntletMatch({
+        id: 900,
+        final_score: '13-9',
+        shirts_stats: [{ player_id: 1, player_name: 'Alice', faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 80, damage: 0, is_win: true, rounds_won: 13, rounds_played: 22 }],
+        skins_stats: [{ player_id: 2, player_name: 'Bob', faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 70, damage: 0, is_win: false, rounds_won: 9, rounds_played: 22 }],
+      }),
+    ],
+  };
+
+  test('crowns the player the passed-in rankMap ranks 1st, in the final round\'s Results list', () => {
+    render(
+      <GauntletRoundsList
+        displayRounds={[finalRound]}
+        allRounds={[finalRound]}
+        bracketShape={[]}
+        rankMap={new Map([[1, 1], [2, 2]])}
+        openRounds={new Set([3])}
+        onToggleRound={() => {}}
+        currentPlayerId={null}
+      />,
+    );
+
+    const results = within(screen.getByText('Results').parentElement!);
+    expect(results.getByText('Alice')).toHaveStyle({ color: 'var(--color-accent-amber-strong)' });
+    expect(results.getByText('Bob')).not.toHaveStyle({ color: 'var(--color-accent-amber-strong)' });
+  });
+
+  test('crowns nobody when no rankMap is passed, even though the round is a fully-played final', () => {
+    // Regression: this component used to compute its own ranking internally from `allRounds`
+    // (`canonicalGauntletRankMap(allRounds)`), which happened to agree with the caller's own
+    // ranking only because every caller passed the same padded round list. It now only ever reads
+    // the `rankMap` prop, so omitting it must not crown anyone rather than silently recomputing.
+    render(
+      <GauntletRoundsList
+        displayRounds={[finalRound]}
+        allRounds={[finalRound]}
+        bracketShape={[]}
+        openRounds={new Set([3])}
+        onToggleRound={() => {}}
+        currentPlayerId={null}
+      />,
+    );
+
+    const results = within(screen.getByText('Results').parentElement!);
+    expect(results.getByText('Alice')).not.toHaveStyle({ color: 'var(--color-accent-amber-strong)' });
   });
 });

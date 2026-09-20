@@ -504,7 +504,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
       {tab === 'leaderboard' && hasLeaderboard && (
         <>
-          {isGauntlet && <GauntletStandings rounds={rounds} leaderboard={leaderboard} />}
+          {isGauntlet && <GauntletStandings rankMap={gauntletRanking} leaderboard={leaderboard} />}
           <LeaderboardTable
             rows={leaderboard}
             showMedals={seasonStatus === 'ARCHIVED'}
@@ -530,6 +530,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             displayRounds={displayRounds}
             allRounds={scheduleRounds}
             bracketShape={bracketShape}
+            rankMap={gauntletRanking}
             seedNames={seedNames}
             myGamesOnly={myGamesOnly}
             openRounds={openItems}

@@ -3,8 +3,6 @@
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { GauntletRound } from '@/lib/queries';
-import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
 
@@ -13,20 +11,24 @@ const tint = (rank: 1 | 2 | 3, opacity = 18) =>
   `color-mix(in srgb, ${MEDAL_COLORS[rank]} ${opacity}%, var(--color-bg-primary))`;
 
 export default function GauntletStandings({
-  rounds,
+  rankMap,
   leaderboard,
 }: {
-  rounds: GauntletRound[];
+  /** The canonical gauntlet ranking (`canonicalGauntletRankMap()`), computed once by the caller
+   *  against the *padded* round list (real rounds plus an empty shell for the bracket's final round
+   *  if it hasn't materialized yet) — never recomputed here from the raw, unpadded rounds. Passing
+   *  the same map the leaderboard table's `canonicalRanking` prop uses keeps the podium and the
+   *  table from drifting: recomputing from unpadded rounds mistook the last *materialized* round for
+   *  the final one, showing a podium as soon as an earlier, unrelated pod finished. Omitted (or
+   *  empty) renders as if the gauntlet weren't complete yet, matching `GauntletBracketDiagram`'s
+   *  same optional `rankMap` prop. */
+  rankMap?: Map<number, number>;
   leaderboard: LeaderboardRowWithId[];
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
 
-  // Podium order comes straight from the canonical gauntlet ranking so the
-  // standings and the leaderboard table can't drift. Returns an empty map
-  // until the gauntlet is complete.
-  const rankMap = canonicalGauntletRankMap(rounds);
-  if (rankMap.size === 0) return null;
+  if (!rankMap || rankMap.size === 0) return null;
 
   const byRank = new Map<number, number>();
   for (const [playerId, rank] of rankMap) byRank.set(rank, playerId);

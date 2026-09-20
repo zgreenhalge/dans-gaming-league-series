@@ -556,7 +556,6 @@ export interface GauntletPodSibling {
   matchId: number;
   /** 1 or 2 — which game the SIBLING match is, for the "Game N of this pod" link label. */
   gameNumber: 1 | 2;
-  finalScore: string | null;
 }
 
 /** The other game in `matchId`'s pod, for the match page's "your pod" cross-link — null for a pod
@@ -571,16 +570,14 @@ export async function getGauntletPodSibling(
 
   const { data, error } = await supabase
     .from('matches')
-    .select('final_score')
+    .select('id')
     .eq('id', siblingId)
     .maybeSingle();
   if (error) throw error;
-  const m = data as { final_score: string | null } | null;
-  if (!m) return null;
+  if (!data) return null;
   return {
     matchId: siblingId,
     gameNumber,
-    finalScore: m.final_score,
   };
 }
 
