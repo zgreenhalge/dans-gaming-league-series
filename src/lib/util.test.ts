@@ -339,6 +339,15 @@ test('finalRoundOf: finalRoundNumber: null falls back to the highest round_numbe
   assert.equal(finalRoundOf(rounds, null)?.round_number, 3);
   assert.equal(finalRoundOf(rounds)?.round_number, 3);
 });
+test('finalRoundOf: finalRoundNumber: null still prefers a declared is_final_round flag over the highest round_number, same as omitting it', () => {
+  const rounds = [
+    { round_number: 1, is_final_round: false },
+    { round_number: 2, is_final_round: true },
+    { round_number: 3, is_final_round: false },
+  ];
+  assert.equal(finalRoundOf(rounds, null)?.round_number, 2);
+  assert.equal(finalRoundOf(rounds)?.round_number, 2);
+});
 test('finalRoundNumberOf: returns the final pod\'s round_number, or null when no pod is final', () => {
   assert.equal(finalRoundNumberOf([{ round_number: 1, is_final: false }, { round_number: 2, is_final: true }]), 2);
   assert.equal(finalRoundNumberOf([]), null);

@@ -20,39 +20,31 @@ import { addNumericFields } from '../util';
 
 /**
  * Groups `rows` by the string value of `keyFields` and sums every other numeric field across the
- * group, taking the first-seen value for non-numeric fields. Generic over shape — adding a new
- * numeric field to whatever produced `rows` (e.g. a new `SabFields` collector) is summed
- * automatically, with no change needed here.
+ * group via the shared `addNumericFields()` primitive (`util.ts`), taking the first-seen value for
+ * non-numeric fields. Generic over shape — adding a new numeric field to whatever produced `rows`
+ * (e.g. a new `SabFields` collector) is summed automatically, with no change needed here.
  */
 export function sumNumericFields<T extends object>(
   rows: T[],
   keyFields: (keyof T)[],
 ): T[] {
-  const asRecord = (row: T) => row as unknown as Record<string, unknown>;
-
   const groups = new Map<string, T[]>();
   for (const row of rows) {
-    const key = keyFields.map((k) => String(asRecord(row)[k as string])).join('\u0000');
+    const key = keyFields.map((k) => String(row[k])).join('\u0000');
     const group = groups.get(key);
     if (group) group.push(row); else groups.set(key, [row]);
   }
 
   // Map preserves insertion order, so this stays in first-appearance order with no separate array.
   return [...groups.values()].map((group) => {
-    const merged = asRecord({ ...group[0] });
-    const allFields = new Set<string>();
-    for (const row of group) for (const field of Object.keys(row as object)) allFields.add(field);
-
-    for (const field of allFields) {
-      if ((keyFields as string[]).includes(field)) continue;
-      // Checked across the whole group, not just group[0] — a field a later row has but the
-      // first-seen row lacks must still be summed in, not silently dropped.
-      const isNumeric = group.some((r) => typeof asRecord(r)[field] === 'number');
-      if (isNumeric) {
-        merged[field] = group.reduce((sum, r) => sum + ((asRecord(r)[field] as number) ?? 0), 0);
-      }
-    }
-    return merged as T;
+    const merged = { ...group[0] };
+    for (const row of group.slice(1)) addNumericFields(merged, row);
+    // A key field can itself be numeric (e.g. player_id) — addNumericFields() would have summed it
+    // like any other field above, so restore group[0]'s value now that summing is done. Every row in
+    // `group` shares the same key field values by construction (that's what grouped them here), so
+    // this is always a same-value overwrite, never a real change.
+    for (const k of keyFields) merged[k] = group[0][k];
+    return merged;
   });
 }
 
@@ -286,32 +278,24 @@ function mergeBuckets<K extends string>(
 }
 
 /** Combines each segment's `ParsedDemoSabremetricsResult` (parseDemoSabremetrics's shape) into one.
- *  `SabFields` sum per player via the same shared `addNumericFields()` accumulation primitive
- *  (`util.ts`) `queries/sabremetrics.ts`'s `addSabFields()` uses for season/career totals — any
- *  future field included, no hardcoded list; weapon/economy buckets sum per (player, bucket); every
- *  fact-row array concatenates and is re-sorted into round order (`sortByRound()`, below). */
+ *  `SabFields` sum per player via `sumNumericFields()`, which itself sums via the same shared
+ *  `addNumericFields()` accumulation primitive (`util.ts`) `queries/sabremetrics.ts`'s
+ *  `addSabFields()` uses for season/career totals — any future field included, no hardcoded list;
+ *  weapon/economy buckets sum per (player, bucket) the same way; every fact-row array concatenates
+ *  and is re-sorted into round order (`sortByRound()`, below). */
 export function mergeSabremetricResults(
   segments: ParsedDemoSabremetricsResult[],
 ): ParsedDemoSabremetricsResult {
   const warnings = [...new Set(segments.flatMap((s) => s.warnings))];
 
-  const sabByPlayer = new Map<number, SabFields>();
-  for (const s of segments) {
-    for (const r of s.sabremetrics) {
-      const existing = sabByPlayer.get(r.player_id);
-      if (existing) {
-        addNumericFields(existing, r.sabremetrics);
-      } else {
-        sabByPlayer.set(r.player_id, { ...r.sabremetrics });
-      }
-    }
-  }
-  // Map preserves insertion order, so this stays in first-appearance order — same guarantee
-  // sumNumericFields() documents for its own group output.
-  const sabremetrics: DemoSabremetricStat[] = [...sabByPlayer.entries()].map(([player_id, sabremetrics]) => ({
-    player_id,
-    sabremetrics,
-  }));
+  const flatSab = segments.flatMap((s) =>
+    s.sabremetrics.map((r) => ({ player_id: r.player_id, ...r.sabremetrics })),
+  );
+  const mergedSab = sumNumericFields(flatSab, ['player_id']);
+  const sabremetrics: DemoSabremetricStat[] = mergedSab.map((row) => {
+    const { player_id, ...sabremetrics } = row;
+    return { player_id, sabremetrics: sabremetrics as SabFields };
+  });
 
   const bucketsOf = <B extends WeaponStatFields>(pick: (w: DemoWeaponStat) => B[]) =>
     segments.flatMap((s) => s.weaponStats.map((w) => ({ player_id: w.player_id, buckets: pick(w) })));

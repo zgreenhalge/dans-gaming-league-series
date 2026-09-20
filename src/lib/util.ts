@@ -466,29 +466,27 @@ export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = 
 /** Picks a gauntlet round list's final round — the one round every "is this over/who won" derivation
  * (`canonicalGauntletRankMap`, `GauntletRoundCard`) needs to single out.
  *
- * `finalRoundNumber`, when supplied, is the bracket's authoritative final round number
- * (`finalRoundNumberOf(getGauntletBracketShape(...))`) and is trusted over anything in `rounds`
- * itself: a real number returns that round if it's in `rounds`, or `undefined` if it isn't — the
+ * `finalRoundNumber`, when supplied as a real number, is the bracket's authoritative final round
+ * number (`finalRoundNumberOf(getGauntletBracketShape(...))`) and is trusted over anything in
+ * `rounds` itself: it returns that round if it's in `rounds`, or `undefined` if it isn't — the
  * bracket's final round genuinely hasn't been scheduled yet, which is structurally distinct from "no
- * round in this list happens to be flagged final." `null` means the bracket has no known final pod at
- * all (e.g. a legacy CSV-imported gauntlet with no `gauntlet_pods` data) and falls back to guessing
- * from the highest `round_number`, same as omitting the parameter entirely.
+ * round in this list happens to be flagged final."
  *
- * Omitting `finalRoundNumber` (a caller with no bracket data on hand, e.g. a hand-built round list in
- * a test) prefers a round explicitly flagged `is_final_round` (set by `getGauntletRounds()` from
- * `gauntlet_pods.is_final`) if any round in the list carries it, else falls back to the highest
- * `round_number`. Returns `undefined` for an empty list. */
+ * `null` (the bracket has no known final pod at all — e.g. a legacy CSV-imported gauntlet with no
+ * `gauntlet_pods` data) and omitting the parameter entirely (a caller with no bracket data on hand,
+ * e.g. a hand-built round list in a test) behave identically: prefer a round explicitly flagged
+ * `is_final_round` (set by `getGauntletRounds()` from `gauntlet_pods.is_final`) if any round in the
+ * list carries it, else fall back to the highest `round_number`. Returns `undefined` for an empty
+ * list. */
 export function finalRoundOf<T extends { round_number: number; is_final_round?: boolean }>(
   rounds: T[],
   finalRoundNumber?: number | null,
 ): T | undefined {
-  if (finalRoundNumber !== undefined && finalRoundNumber !== null) {
+  if (typeof finalRoundNumber === 'number') {
     return rounds.find((r) => r.round_number === finalRoundNumber);
   }
-  if (finalRoundNumber === undefined) {
-    const declared = rounds.find((r) => r.is_final_round === true);
-    if (declared) return declared;
-  }
+  const declared = rounds.find((r) => r.is_final_round === true);
+  if (declared) return declared;
   return rounds.length === 0
     ? undefined
     : rounds.reduce((latest, r) => (r.round_number > latest.round_number ? r : latest));
