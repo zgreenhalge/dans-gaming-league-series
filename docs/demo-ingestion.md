@@ -356,14 +356,14 @@ manifest exists), since the replay pipeline only ever reads a single demo and st
 continuous tick-based timeline across a genuine tick-space discontinuity is a materially different
 problem than combining discrete round-scoped facts (tracked as a follow-up).
 
-**Known limitation.** `parseDemoSabremetrics()` returns empty sabremetric/fact-row arrays and a
-generic "No live rounds found in demo" warning whenever a segment's side can't be resolved,
-regardless of whether that segment's roster resolved fine — a real distinction from a genuinely
-empty demo that this early return doesn't currently make. In a multi-segment merge this can produce
-a "resolved zero players" agreement flag on the sabremetrics side for a segment whose roster
-actually resolved every player on the score side, both surfacing on the same admin review. Not
-specific to multi-segment demos (the same conflation happens on any single unresolvable-side parse)
-and out of scope to fix without touching that early return's behavior for every caller.
+`parseDemoSabremetrics()` returns empty sabremetric/fact-row arrays whenever a segment's side can't
+be resolved or it has no live rounds at all — nothing round-scoped is computable in either case, so
+this is never a no-op-safety concern for callers that persist `sabremetrics` (`persistSabremetrics()`
+treats an empty array as a safe no-op). The warning names which of the two applies. A segment's
+resolved roster is reported separately via `resolvedPlayerIds`, populated even when `sabremetrics` is
+empty, so a multi-segment merge's agreement check (`checkSegmentAgreement()`) reads a segment whose
+roster resolved fine but whose side didn't as having resolved its real roster — not as "resolved zero
+players" — even on the same admin review where the score side shows the full roster.
 
 ## Environment
 
