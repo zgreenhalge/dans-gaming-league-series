@@ -63,6 +63,14 @@ alongside demo/replay for that match. The admin "recompute now" control
 relies solely on the `ops_errors` `system`/`0` singleton (`entity_type`/`entity_id`) for failure
 surfacing.
 
+Every recompute — score-triggered or admin-initiated — replays every played match from scratch, so a
+successful run supersedes any earlier `ehog_recompute` failure, not just the one (if any) tied to the
+match that triggered it. `resolveStaleFailures()` (`src/lib/background-jobs.ts`) sweeps every other
+`failed` `ehog_recompute` row to `succeeded` alongside the triggering call's own job-status write, so a
+transient failure (a dropped request to `/api/ehog/recompute`, say) doesn't keep flagging
+`AdminActivityFeed.tsx` as Errored once a later recompute has already corrected the data it was
+protesting.
+
 ## `constants.json` reference
 
 ### OpenSkill model
