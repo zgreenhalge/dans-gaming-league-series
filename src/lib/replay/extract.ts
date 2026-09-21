@@ -14,7 +14,8 @@ import {
   findMatchStartTick,
   type PlayerDeathRow,
 } from '../parsers/matchContext';
-import { sideForFaction, reasonToCondition, type RoundEndRow } from '../parsers/roundSides';
+import { sideForFaction, reasonToCondition, filterLiveRoundEnds, type RoundEndRow } from '../parsers/roundSides';
+import { inferSkinsStartingSide, resolveEffectiveSide, sideDisagreementWarning } from '../parsers/sideInference';
 import { orchestrateSegments } from '../parsers/segmentOrchestrator';
 import type { RosterEntry } from '../demoParser';
 import type { Faction } from '../types';
@@ -171,12 +172,30 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   ) as (PlayerDeathRow & Record<string, unknown>)[];
   const midairByTickSteam = collectMidairAttackers(demoBuffer, deathRows);
 
+  // --- Starting side: stored wins; fall back to inferring it from the demo (the round-1
+  // anchor gauntlet/knife matches have no stored value for) — same as parseDemoFile()/
+  // parseDemoSabremetrics(), which this previously diverged from: a gauntlet match's
+  // skins_starting_side is never stored, so without this fallback every gauntlet replay
+  // silently came back with zero rounds ("Starting side unknown" / "No live rounds found").
+  const matchStartTick = findMatchStartTick(demoBuffer);
+  const liveRoundEnds = filterLiveRoundEnds(roundEndRows, matchStartTick);
+  const inferredSide =
+    liveRoundEnds.length > 0
+      ? inferSkinsStartingSide(
+          demoBuffer, liveRoundEnds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
+        )
+      : null;
+  const { side: effectiveSide, disagreed } = resolveEffectiveSide(skinsSide, inferredSide);
+  if (disagreed && skinsSide !== null && inferredSide !== null) {
+    warnings.push(sideDisagreementWarning(skinsSide, inferredSide));
+  }
+
   const context = buildMatchContext(
     demoBuffer,
     roundEndRows,
     deathRows,
     steamToPlayer,
-    skinsSide,
+    effectiveSide,
     targetWinRounds,
     [],
     startingRealRound,
@@ -214,7 +233,6 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   // pull them back in as their own non-scoring segment.
   const knifeRounds: { roundNumber: number; endTick: number; winnerSide: 'CT' | 'T' | null }[] = [];
   if (includeKnifeRound) {
-    const matchStartTick = findMatchStartTick(demoBuffer);
     for (const e of roundEndRows) {
       if (e.is_warmup_period || e.winner === null || e.total_rounds_played <= 0) continue;
       if (e.tick >= matchStartTick) continue;
