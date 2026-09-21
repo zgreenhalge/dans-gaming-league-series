@@ -21,7 +21,7 @@ function noopDeps() {
     clearOpsError: async () => {},
     recordJobStatus: async () => ({}),
     advanceJobStatus: async () => ({}),
-    closeStaleEhogFailures: async () => ({}),
+    resolveStaleFailures: async () => ({}),
   };
 }
 
@@ -57,7 +57,7 @@ async function main() {
           calls.push('succeeded-write');
           return {};
         },
-        closeStaleEhogFailures: async () => {
+        resolveStaleFailures: async () => {
           calls.push('stale-failures-closed');
           return {};
         },
@@ -70,7 +70,7 @@ async function main() {
     assert.deepEqual(calls.slice(0, 2), ['running-write-settled', 'fetch-invoked']);
     assert.deepEqual(
       calls.slice(2).sort(),
-      ['ops-error-cleared', 'succeeded-write', 'stale-failures-closed'].sort(),
+      ['ops-error-cleared', 'stale-failures-closed', 'succeeded-write'],
     );
   });
 
@@ -98,7 +98,7 @@ async function main() {
           calls.push('failed-write');
           return {};
         },
-        closeStaleEhogFailures: async () => {
+        resolveStaleFailures: async () => {
           calls.push('stale-failures-closed');
           return {};
         },
@@ -126,8 +126,9 @@ async function main() {
           jobWritesAttempted++;
           return {};
         },
-        closeStaleEhogFailures: async (_admin, excludeKey) => {
+        resolveStaleFailures: async (_admin, jobType, excludeKey) => {
           sweepCalled = true;
+          assert.equal(jobType, 'ehog_recompute');
           assert.equal(excludeKey, undefined);
           return {};
         },

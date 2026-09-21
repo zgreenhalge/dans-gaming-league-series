@@ -9,35 +9,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { recordJobStatus, advanceJobStatus, type JobKey } from './background-jobs';
+import { recordJobStatus, advanceJobStatus, resolveStaleFailures, type JobKey } from './background-jobs';
 import { EHOG_RECOMPUTE_JOB_TYPE } from './jobs';
-
-/** A full recompute walks every match's history from scratch, so a successful run resolves every
- *  previously `failed` `ehog_recompute` job row, not just the one (if any) this call was triggered
- *  for — e.g. the admin "recompute now" control has no single match to key its own row against, but
- *  its success still means an earlier per-match failure (a transient recompute-endpoint error, say)
- *  no longer reflects reality. `excludeKey` skips the row `track()` already advanced to `succeeded`
- *  above, so this doesn't redundantly overwrite it. Deliberately only sweeps `failed` rows, not
- *  in-progress ones — a genuinely in-flight job elsewhere shouldn't be clobbered by this run's success. */
-export async function closeStaleEhogFailures(
-  admin: SupabaseClient,
-  excludeKey?: JobKey,
-): Promise<{ error?: string }> {
-  let query = admin
-    .from('background_jobs')
-    .update({
-      status: 'succeeded',
-      stage: 'done',
-      error_message: null,
-      finished_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('job_type', EHOG_RECOMPUTE_JOB_TYPE)
-    .eq('status', 'failed');
-  if (excludeKey) query = query.neq(excludeKey.column, excludeKey.id);
-  const { error } = await query;
-  return error ? { error: error.message } : {};
-}
 
 /** Collaborators `triggerRatingRecompute` calls through — defaults to the real fetch and
  *  background-jobs/ops-errors writers; a test injects fakes to assert write ordering without a live
@@ -48,11 +21,11 @@ interface RecomputeDeps {
   clearOpsError: typeof clearOpsError;
   recordJobStatus: typeof recordJobStatus;
   advanceJobStatus: typeof advanceJobStatus;
-  closeStaleEhogFailures: typeof closeStaleEhogFailures;
+  resolveStaleFailures: typeof resolveStaleFailures;
 }
 
 const REAL_DEPS: RecomputeDeps = {
-  fetch, recordOpsError, clearOpsError, recordJobStatus, advanceJobStatus, closeStaleEhogFailures,
+  fetch, recordOpsError, clearOpsError, recordJobStatus, advanceJobStatus, resolveStaleFailures,
 };
 
 export interface TriggerRatingRecomputeOptions {
@@ -130,10 +103,6 @@ export async function triggerRatingRecompute(
       headers: { 'x-recompute-secret': secret },
     });
     if (!res.ok) throw new Error(`recompute endpoint responded ${res.status}`);
-    const closeStale = async (): Promise<void> => {
-      const { error } = await deps.closeStaleEhogFailures(supabaseAdmin, jobKey);
-      if (error) console.error(`Could not close stale ehog_recompute failures: ${error}`);
-    };
     await Promise.all([
       deps.clearOpsError(supabaseAdmin, 'system', 0, 'ehog_recompute'),
       track(deps.advanceJobStatus, {
@@ -142,7 +111,12 @@ export async function triggerRatingRecompute(
         error_message: null,
         finished_at: new Date().toISOString(),
       }),
-      closeStale(),
+      // A full recompute walks every match's history from scratch, so its success also resolves any
+      // other match's stale `failed` ehog_recompute row (not just the one, if any, this call was
+      // triggered for) — see resolveStaleFailures()'s doc comment in background-jobs.ts.
+      deps.resolveStaleFailures(supabaseAdmin, EHOG_RECOMPUTE_JOB_TYPE, jobKey).then(({ error }) => {
+        if (error) console.error(`Could not close stale ehog_recompute failures: ${error}`);
+      }),
     ]);
   } catch (e) {
     console.error('EHOG recompute trigger failed:', e);
