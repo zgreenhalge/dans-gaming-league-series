@@ -642,7 +642,6 @@ export default function MatchTabView({
           canDispatch={canDispatchReplay}
           recordingURL={recordingURL}
           canEditRecording={canEditRecording}
-          isMultiSegmentDemo={isMultiSegmentDemo}
         />
       )}
     </>
