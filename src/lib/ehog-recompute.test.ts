@@ -14,6 +14,17 @@ import { triggerRatingRecompute } from './ehog-recompute';
 import { matchJobKey } from './background-jobs';
 import { test, report } from './test-support/miniTest';
 
+function noopDeps() {
+  return {
+    fetch: (async () => ({ ok: true }) as Response) as typeof fetch,
+    recordOpsError: async () => {},
+    clearOpsError: async () => {},
+    recordJobStatus: async () => ({}),
+    advanceJobStatus: async () => ({}),
+    resolveStaleFailures: async () => ({}),
+  };
+}
+
 const ORIGINAL_SECRET = process.env.RECOMPUTE_SECRET;
 process.env.RECOMPUTE_SECRET = 'test-secret';
 
@@ -46,9 +57,21 @@ async function main() {
           calls.push('succeeded-write');
           return {};
         },
+        resolveStaleFailures: async () => {
+          calls.push('stale-failures-closed');
+          return {};
+        },
       },
     });
-    assert.deepEqual(calls, ['running-write-settled', 'fetch-invoked', 'ops-error-cleared', 'succeeded-write']);
+    // The first two entries carry the ordering guarantee this file exists to protect (the
+    // running-status write settles before the fetch fires) — checked exactly. The post-success
+    // writes (ops-error clear, the tracked job's own succeeded write, and sweeping stale failures
+    // elsewhere) all run inside one Promise.all, so only their *membership* is asserted, not order.
+    assert.deepEqual(calls.slice(0, 2), ['running-write-settled', 'fetch-invoked']);
+    assert.deepEqual(
+      calls.slice(2).sort(),
+      ['ops-error-cleared', 'stale-failures-closed', 'succeeded-write'],
+    );
   });
 
   await test('triggerRatingRecompute — a fetch rejection cannot race an in-flight running-status write', async () => {
@@ -75,6 +98,10 @@ async function main() {
           calls.push('failed-write');
           return {};
         },
+        resolveStaleFailures: async () => {
+          calls.push('stale-failures-closed');
+          return {};
+        },
       },
     });
     // The running write must be the very first thing to complete — nothing downstream (the fetch, or
@@ -82,13 +109,15 @@ async function main() {
     assert.deepEqual(calls, ['running-write-settled', 'fetch-rejected', 'ops-error-recorded', 'failed-write']);
   });
 
-  await test('triggerRatingRecompute — no jobKey means background_jobs is never touched', async () => {
+  await test('triggerRatingRecompute — no jobKey skips the per-match job write, but still sweeps stale failures', async () => {
+    // The admin "recompute now" control has no single match to key a background_jobs row against, so
+    // it never calls recordJobStatus/advanceJobStatus — but its success still means a full history
+    // walk just ran, so any other match's stale `failed` ehog_recompute row should still get closed.
     let jobWritesAttempted = 0;
+    let sweepCalled = false;
     await triggerRatingRecompute(null as never, {
       deps: {
-        fetch: (async () => ({ ok: true }) as Response) as typeof fetch,
-        recordOpsError: async () => {},
-        clearOpsError: async () => {},
+        ...noopDeps(),
         recordJobStatus: async () => {
           jobWritesAttempted++;
           return {};
@@ -97,9 +126,16 @@ async function main() {
           jobWritesAttempted++;
           return {};
         },
+        resolveStaleFailures: async (_admin, jobType, excludeKey) => {
+          sweepCalled = true;
+          assert.equal(jobType, 'ehog_recompute');
+          assert.equal(excludeKey, undefined);
+          return {};
+        },
       },
     });
     assert.equal(jobWritesAttempted, 0);
+    assert.equal(sweepCalled, true);
   });
 
   report();

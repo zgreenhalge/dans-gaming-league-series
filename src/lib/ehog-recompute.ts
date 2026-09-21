@@ -9,7 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { recordJobStatus, advanceJobStatus, type JobKey } from './background-jobs';
+import { recordJobStatus, advanceJobStatus, resolveStaleFailures, type JobKey } from './background-jobs';
 import { EHOG_RECOMPUTE_JOB_TYPE } from './jobs';
 
 /** Collaborators `triggerRatingRecompute` calls through — defaults to the real fetch and
@@ -21,9 +21,12 @@ interface RecomputeDeps {
   clearOpsError: typeof clearOpsError;
   recordJobStatus: typeof recordJobStatus;
   advanceJobStatus: typeof advanceJobStatus;
+  resolveStaleFailures: typeof resolveStaleFailures;
 }
 
-const REAL_DEPS: RecomputeDeps = { fetch, recordOpsError, clearOpsError, recordJobStatus, advanceJobStatus };
+const REAL_DEPS: RecomputeDeps = {
+  fetch, recordOpsError, clearOpsError, recordJobStatus, advanceJobStatus, resolveStaleFailures,
+};
 
 export interface TriggerRatingRecomputeOptions {
   /** Track this invocation as a `background_jobs` row (job_type `ehog_recompute`) alongside the
@@ -107,6 +110,12 @@ export async function triggerRatingRecompute(
         stage: 'done',
         error_message: null,
         finished_at: new Date().toISOString(),
+      }),
+      // A full recompute walks every match's history from scratch, so its success also resolves any
+      // other match's stale `failed` ehog_recompute row (not just the one, if any, this call was
+      // triggered for) — see resolveStaleFailures()'s doc comment in background-jobs.ts.
+      deps.resolveStaleFailures(supabaseAdmin, EHOG_RECOMPUTE_JOB_TYPE, jobKey).then(({ error }) => {
+        if (error) console.error(`Could not close stale ehog_recompute failures: ${error}`);
       }),
     ]);
   } catch (e) {

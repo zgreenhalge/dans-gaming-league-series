@@ -143,6 +143,39 @@ export async function advanceJobStatus(
 }
 
 /**
+ * Bulk-resolve every `failed` row of `jobType` to `succeeded`, optionally skipping `excludeKey`'s own
+ * row. For a job type where *any* successful run supersedes *every* prior failure of that type —
+ * currently only `ehog_recompute`, whose every run is a full, idempotent walk over all matches rather
+ * than a per-subject partial one — a caller's own success means an earlier failure (possibly for a
+ * different `key`, possibly from a run with no `key` at all, like an admin-triggered recompute) no
+ * longer reflects reality. Without this, `jobNeedsAttention()` (`jobs.ts`) would keep flagging that
+ * stale row by its own terminal `status` forever, since nothing else ever revisits it. `excludeKey`
+ * skips the row a caller's own per-key `advanceJobStatus` call already just advanced to `succeeded`,
+ * so this doesn't redundantly overwrite it. Deliberately only sweeps `failed` rows, not in-progress
+ * ones — a genuinely in-flight job elsewhere shouldn't be clobbered by this run's success.
+ */
+export async function resolveStaleFailures(
+  admin: SupabaseClient,
+  jobType: string,
+  excludeKey?: JobKey,
+): Promise<{ error?: string }> {
+  let query = admin
+    .from('background_jobs')
+    .update({
+      status: 'succeeded',
+      stage: 'done',
+      error_message: null,
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('job_type', jobType)
+    .eq('status', 'failed');
+  if (excludeKey) query = query.neq(excludeKey.column, excludeKey.id);
+  const { error } = await query;
+  return error ? { error: error.message } : {};
+}
+
+/**
  * Dispatch the workflow for an already-claimed job. On failure, rolls the job row (and its mirrored
  * `subject` column, if given) back to `failed` with the dispatch error — so a transient dispatch
  * failure never leaves the match wedged in `queued` behind an in-flight guard. On success, the row
