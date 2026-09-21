@@ -95,9 +95,15 @@ demo manifest the same way the parse route does and calls `buildReplaySegments()
 **Knife round (gauntlet/knife matches only):** regular-season matches pre-decide sides via the
 map-ban/pick draft, so any knife round the server still plays is vestigial and stays excluded from the
 replay, same as it's excluded from the score (see `docs/demo-ingestion.md#match-start-skipping-warmup-and-stray-knife-rounds`).
-Gauntlet/knife matches have no pre-decided side — the knife round is what decides it — so
-`buildReplay()` is called with `includeKnifeRound: true` for them (`inputs.isGauntlet`, resolved by
-`getReplayInputs()`) and the knife round is pulled back in as its own leading `ReplayRound` with
+Gauntlet/knife matches have no pre-decided side — the knife round is what decides it, and
+`matches.skins_starting_side` is never stored for them — so `buildReplay()` falls back to inferring
+the starting side from the demo itself (`inferSkinsStartingSide()`, `parsers/sideInference.ts`), the
+same fallback `parseDemoFile()`/`parseDemoSabremetrics()` already use for the score/sabremetrics path;
+a stored value still wins when both exist, with a disagreement surfaced as a warning. Without this
+fallback the side is unresolvable and `buildMatchContext()` returns zero rounds regardless of how much
+of the demo actually parsed cleanly. It's also called with `includeKnifeRound: true` for these matches
+(`inputs.isGauntlet`, resolved by `getReplayInputs()`) and the knife round is pulled back in as its own
+leading `ReplayRound` with
 `isKnifeRound: true`. It doesn't count toward the score: its `round_end` event carries
 `winnerFaction: null` (only the raw `winnerSide` is known — which faction that side belongs to isn't
 decided yet) and it isn't in `context.rounds`, the source `buildRoundSides()`/side-split/score math

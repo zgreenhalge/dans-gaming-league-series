@@ -242,7 +242,11 @@ export default function ReplayPlayer({
     [payload],
   );
   const banner = useMemo(
-    () => (payload ? bannerFor(payload, roundIdx) : null),
+    // A payload can legitimately have zero rounds (e.g. a demo whose starting side couldn't be
+    // resolved) — the render body below shows "This replay has no rounds to play." for that case,
+    // but every hook runs before that early return, so this guard has to live here too rather
+    // than relying on it: bannerFor() indexes payload.rounds[roundIdx] unconditionally.
+    () => (payload && payload.rounds.length > 0 ? bannerFor(payload, roundIdx) : null),
     [payload, roundIdx],
   );
 
