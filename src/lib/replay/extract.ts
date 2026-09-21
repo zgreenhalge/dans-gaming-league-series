@@ -15,11 +15,13 @@ import {
   type PlayerDeathRow,
 } from '../parsers/matchContext';
 import { sideForFaction, reasonToCondition, type RoundEndRow } from '../parsers/roundSides';
+import { orchestrateSegments } from '../parsers/segmentOrchestrator';
 import type { RosterEntry } from '../demoParser';
 import type { Faction } from '../types';
 import {
   REPLAY_SCHEMA_VERSION,
   type ReplayPayload,
+  type ReplayPlayerMeta,
   type ReplayRound,
   type ReplayFrame,
   type ReplayPlayerFrame,
@@ -119,6 +121,12 @@ export interface BuildReplayInput {
    * pre-decided side — the knife round is what determines it — so it's worth showing.
    */
   includeKnifeRound?: boolean;
+  /** See `buildRoundSides()`'s doc (`parsers/roundSides.ts`) — 1 for a standalone demo (every
+   *  direct caller), or the match-wide starting round `buildReplaySegments()` supplies for a later
+   *  segment of a restart-interrupted match. Only affects the regulation/OT side-swap calculation;
+   *  round numbers themselves (`total_rounds_played`) already carry over correctly across segments
+   *  with no adjustment needed — see `docs/demo-ingestion.md`'s "Multi-segment demos". */
+  startingRealRound?: number;
 }
 
 export interface BuildReplayResult {
@@ -129,7 +137,10 @@ export interface BuildReplayResult {
 }
 
 export function buildReplay(input: BuildReplayInput): BuildReplayResult {
-  const { demoBuffer, matchId, map, roster, skinsSide, targetWinRounds, includeKnifeRound } = input;
+  const {
+    demoBuffer, matchId, map, roster, skinsSide, targetWinRounds, includeKnifeRound,
+    startingRealRound = 1,
+  } = input;
   const warnings: string[] = [];
   const notices: string[] = [];
 
@@ -167,6 +178,8 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     steamToPlayer,
     skinsSide,
     targetWinRounds,
+    [],
+    startingRealRound,
   );
   warnings.push(...context.warnings);
 
@@ -417,6 +430,82 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   }
 
   return { payload: meta, warnings: [...new Set(warnings)], notices: [...new Set(notices)] };
+}
+
+/**
+ * Combines each segment's already-built `BuildReplayResult` into one — pure, no Buffer/demoparser2
+ * involved (unlike `buildReplay()` itself), so it's unit-testable directly with synthetic payloads.
+ * Mirrors `mergeSegmentResults()`/`mergeSabremetricResults()` (`parsers/segmentMerge.ts`), the same
+ * pattern applied to the score/sabremetrics parse results.
+ *
+ * `rounds` concatenate across segments and sort back into round-number order (`orchestrateSegments()`
+ * parses segments in the caller's own argument order, not necessarily chronological) — no other
+ * reconciliation is needed since a demo restart only ever falls at a round boundary (MatchZy's
+ * round-backup restore restarts the interrupted round from scratch rather than resuming mid-round),
+ * so a `ReplayRound` is always fully contained in one segment, and every round's own tick space
+ * already stays local to that round's own frames/events (see `docs/replay.md` /
+ * `docs/demo-ingestion.md`'s "Multi-segment demos" — nothing in the payload compares ticks *across*
+ * rounds, even within a single demo, so a segment boundary between two rounds is indistinguishable
+ * from an ordinary round transition).
+ *
+ * `players` unions by `id` — a short/manually-started segment can resolve fewer players than others
+ * (same caveat `resolveRoster()` documents for the stats path), so the first segment to resolve a
+ * given player wins rather than only trusting one segment's roster.
+ */
+export function mergeReplayResults(segments: BuildReplayResult[]): BuildReplayResult {
+  const warnings = [...new Set(segments.flatMap((s) => s.warnings))];
+  const notices = [...new Set(segments.flatMap((s) => s.notices))];
+
+  const first = segments[0].payload;
+  const playersById = new Map<number, ReplayPlayerMeta>();
+  for (const s of segments) {
+    for (const p of s.payload.players) {
+      if (!playersById.has(p.id)) playersById.set(p.id, p);
+    }
+  }
+
+  const rounds = segments.flatMap((s) => s.payload.rounds).sort((a, b) => a.round - b.round);
+
+  return {
+    payload: {
+      version: first.version,
+      matchId: first.matchId,
+      map: first.map,
+      tickRate: first.tickRate,
+      frameRate: first.frameRate,
+      players: [...playersById.values()],
+      rounds,
+    },
+    warnings,
+    notices,
+  };
+}
+
+/**
+ * Parses a match split across multiple demo recordings (e.g. by a server restart mid-match — see
+ * `docs/demo-ingestion.md`'s "Multi-segment demos") and combines them into one replay. Thin glue over
+ * `orchestrateSegments()` (`parsers/segmentOrchestrator.ts`) — see `parseDemoFileSegments()`'s doc
+ * (`demoParser.ts`) for the shared sequencing this and that function both delegate to.
+ */
+export function buildReplaySegments(
+  input: Omit<BuildReplayInput, 'demoBuffer' | 'startingRealRound'> & { demoBuffers: Buffer[] },
+): BuildReplayResult {
+  const { demoBuffers, includeKnifeRound, ...rest } = input;
+  return orchestrateSegments(
+    demoBuffers,
+    (buf, startingRealRound) =>
+      buildReplay({
+        ...rest,
+        demoBuffer: buf,
+        startingRealRound,
+        // The knife round always precedes match start, so it can only ever appear in whichever
+        // segment is chronologically first (startingRealRound === 1) — a restart can't happen
+        // before the match has even begun.
+        includeKnifeRound: includeKnifeRound && startingRealRound === 1,
+      }),
+    mergeReplayResults,
+    (segment) => segment.payload.players.map((p) => p.id),
+  );
 }
 
 function collectEvents(

@@ -75,31 +75,14 @@ function ReplayStatusPanel({
   job,
   matchId,
   canDispatch,
-  isMultiSegmentDemo,
 }: {
   job: ReplayJobState;
   matchId: number;
   canDispatch: boolean;
-  /** True when this match's demo was recovered from multiple recordings (a server restart) — the
-   *  replay pipeline only ever reads a single demo, so dispatching here would just fail or produce
-   *  a replay of one segment alone. Shown instead of a Generate/Retry control that we already know
-   *  can't succeed. */
-  isMultiSegmentDemo: boolean;
 }) {
   const { dispatch, busy, error, isPending } = useReplayDispatch(matchId);
 
   const inFlight = job.status === 'queued' || job.status === 'running';
-
-  if (isMultiSegmentDemo && !inFlight) {
-    return (
-      <div className="border border-[var(--color-border-primary)] px-5 py-6 mt-4 text-center">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] max-w-md mx-auto">
-          2D replay isn&apos;t available for this match — its demo was recovered from multiple
-          recordings after a server restart, which the replay pipeline doesn&apos;t support yet.
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="border border-[var(--color-border-primary)] px-5 py-6 mt-4 text-center">
@@ -457,7 +440,6 @@ export default function MatchRecapTab({
   canDispatch,
   recordingURL,
   canEditRecording,
-  isMultiSegmentDemo,
 }: {
   job: ReplayJobState;
   events: ReplayEventsView | null;
@@ -467,9 +449,6 @@ export default function MatchRecapTab({
   recordingURL: string | null;
   /** Whether the current viewer may set/replace the recording URL (admins + in-match players). */
   canEditRecording: boolean;
-  /** See `ReplayStatusPanel`'s doc — recovered from multiple demo recordings, so replay generation
-   *  isn't offered. */
-  isMultiSegmentDemo: boolean;
 }) {
   const [sub, setSub] = useState<RecapSubTab>('replay');
   // This match's own heatmap (#128) — scoped to the single match.
@@ -582,7 +561,6 @@ export default function MatchRecapTab({
             job={job}
             matchId={matchId}
             canDispatch={canDispatch}
-            isMultiSegmentDemo={isMultiSegmentDemo}
           />
         ))}
       {sub === 'heatmap' && showHeatmap && matchMap && (
