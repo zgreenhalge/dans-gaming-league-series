@@ -202,25 +202,17 @@ async function main() {
   await setStage('parse-ticks');
   const { payload, warnings, notices } = await stage('assemble', () => {
     notice('parsing ticks, events, and grenades');
+    const common = {
+      matchId,
+      map: inputs.map,
+      roster: inputs.roster,
+      skinsSide: inputs.skinsSide,
+      targetWinRounds: inputs.targetWinRounds,
+      includeKnifeRound: inputs.isGauntlet,
+    };
     return demoBuffers.length > 1
-      ? buildReplaySegments({
-          demoBuffers,
-          matchId,
-          map: inputs.map,
-          roster: inputs.roster,
-          skinsSide: inputs.skinsSide,
-          targetWinRounds: inputs.targetWinRounds,
-          includeKnifeRound: inputs.isGauntlet,
-        })
-      : buildReplay({
-          demoBuffer: demoBuffers[0],
-          matchId,
-          map: inputs.map,
-          roster: inputs.roster,
-          skinsSide: inputs.skinsSide,
-          targetWinRounds: inputs.targetWinRounds,
-          includeKnifeRound: inputs.isGauntlet,
-        });
+      ? buildReplaySegments({ ...common, demoBuffers })
+      : buildReplay({ ...common, demoBuffer: demoBuffers[0] });
   });
   for (const n of notices) notice(n);
   for (const w of warnings) warning(w);

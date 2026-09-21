@@ -389,8 +389,8 @@ export default function MatchTabView({
     job: ReplayJobState;
     events: ReplayEventsView | null;
     recordingURL: string | null;
-    /** See `MatchRecapTab`'s doc — recovered from multiple demo recordings (a server restart), so
-     *  the replay pipeline (single-demo only) isn't offered for this match. */
+    /** Whether this match's demo was recovered from multiple recordings (a server restart) — see
+     *  the `hasDemoUploaded` usage below, the only remaining consumer of this field. */
     isMultiSegmentDemo: boolean;
   };
 }) {
