@@ -19,24 +19,26 @@
 import { gzipSync } from 'node:zlib';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { demoBaseName } from '../src/lib/matchzy';
-import { buildReplay } from '../src/lib/replay/extract';
+import { buildReplay, buildReplaySegments } from '../src/lib/replay/extract';
 import { buildHeatmapPoints, MAP_HEATMAP_ROLLUP_VERSION } from '../src/lib/replay/heatmap';
 import { buildMatchTraces, MAP_TRACE_ROLLUP_VERSION } from '../src/lib/replay/aggregate';
 import {
   putR2Object,
+  getR2Object,
   replayKey,
   heatmapKey,
   traceKey,
   mapHeatmapKey,
   mapTraceKey,
 } from '../src/lib/r2';
+import { getDemoManifest } from '../src/lib/demo/segmentManifest';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
 import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { matchJobKey } from '../src/lib/background-jobs';
-import { pullDemoAndClearLiveScore } from '../src/lib/demo/liveScore';
+import { pullDemoAndClearLiveScore, clearLiveScoreBestEffort } from '../src/lib/demo/liveScore';
 import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
 import { dathostServerId, sleep } from '../src/lib/dathost';
@@ -143,7 +145,25 @@ async function main() {
     return i;
   });
 
-  let demoBuffer = await stage('download-demo', async () => {
+  let demoBuffers = await stage('download-demo', async () => {
+    // A manifest means this match's demo was recovered from multiple recordings (a server restart
+    // mid-match — see docs/demo-ingestion.md's "Multi-segment demos") and uploaded manually; there's
+    // no automated DatHost-pull path for this case (segments only ever arrive via admin upload), so
+    // this reads them straight from R2 instead of going anywhere near pullDemoAndClearLiveScore —
+    // the canonical single-file key it pulls/caches at doesn't exist for a multi-segment match, and
+    // a miss there would otherwise try (and fail, or grab the wrong file) to pull fresh from DatHost.
+    const manifest = await getDemoManifest(matchId);
+    if (manifest) {
+      const buffers = await Promise.all(manifest.segments.map(async (key) => {
+        const buf = await getR2Object(key);
+        if (!buf) throw new Error(`Demo segment not found (${key}) — the upload may be incomplete.`);
+        return buf;
+      }));
+      // Mirrors pullDemoAndClearLiveScore's own "presence in R2 ends 'live'" rule for the
+      // single-file path — every segment landing in R2 is equally proof the match is over.
+      await clearLiveScoreBestEffort(supabase, matchId);
+      return buffers;
+    }
     // Pulled from DatHost directly (not pushed by MatchZy — see fetchFromDathost.ts) — this Action can
     // be dispatched as soon as the match ends, before the demo has actually landed in R2 yet, so
     // pullDemoAndClearLiveScore pulls it if it isn't already present. demoIngestInFlight is only
@@ -153,13 +173,14 @@ async function main() {
     // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
     // row and pulls immediately.
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    return pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
+    const single = await pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
       shouldWaitForConcurrentPull: demoIngestInFlight,
       getFlushFloorMs: () => demoIngestFlushFloorMs(supabase, matchId),
     });
+    return [single];
   });
 
-  demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));
+  demoBuffers = await stage('decompress', () => demoBuffers.map(gunzipMaybe));
 
   const demoIngestStatus = await stage('demo-status', () => awaitDemoIngestVerdict());
   if (demoIngestStatus !== null && DEMO_INGEST_KNOWN_BAD.has(demoIngestStatus)) {
@@ -181,15 +202,25 @@ async function main() {
   await setStage('parse-ticks');
   const { payload, warnings, notices } = await stage('assemble', () => {
     notice('parsing ticks, events, and grenades');
-    return buildReplay({
-      demoBuffer,
-      matchId,
-      map: inputs.map,
-      roster: inputs.roster,
-      skinsSide: inputs.skinsSide,
-      targetWinRounds: inputs.targetWinRounds,
-      includeKnifeRound: inputs.isGauntlet,
-    });
+    return demoBuffers.length > 1
+      ? buildReplaySegments({
+          demoBuffers,
+          matchId,
+          map: inputs.map,
+          roster: inputs.roster,
+          skinsSide: inputs.skinsSide,
+          targetWinRounds: inputs.targetWinRounds,
+          includeKnifeRound: inputs.isGauntlet,
+        })
+      : buildReplay({
+          demoBuffer: demoBuffers[0],
+          matchId,
+          map: inputs.map,
+          roster: inputs.roster,
+          skinsSide: inputs.skinsSide,
+          targetWinRounds: inputs.targetWinRounds,
+          includeKnifeRound: inputs.isGauntlet,
+        });
   });
   for (const n of notices) notice(n);
   for (const w of warnings) warning(w);

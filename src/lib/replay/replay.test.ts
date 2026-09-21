@@ -46,9 +46,9 @@ import {
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
 import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
-import { freezeDeadPositions } from './extract';
+import { freezeDeadPositions, mergeReplayResults, type BuildReplayResult } from './extract';
 import { parseOverview, workshopIdFromUrl } from './radar';
-import type { ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
+import type { ReplayFrame, ReplayPayload, ReplayPlayerFrame, ReplayPlayerMeta } from './types';
 import { test, report } from '../test-support/miniTest';
 import { round } from '../test-support/replayFixtures';
 
@@ -552,6 +552,70 @@ test('extract: freezeDeadPositions leaves alive players untouched', () => {
   freezeDeadPositions(framesByTick, [{ wanted: [0, 10] }]);
   approx(framesByTick.get(10)![0].x, 15);
   approx(framesByTick.get(10)![0].y, 25);
+});
+
+// --- extract: mergeReplayResults — combining multi-segment BuildReplayResults ---
+function pm(id: number, name = `p${id}`): ReplayPlayerMeta {
+  return { id, name, faction: 'SHIRTS', steamId: String(id) };
+}
+
+function replayResult(overrides: {
+  players?: ReplayPlayerMeta[];
+  rounds?: ReturnType<typeof round>[];
+  warnings?: string[];
+  notices?: string[];
+} = {}): BuildReplayResult {
+  const { players = [], rounds = [], warnings = [], notices = [] } = overrides;
+  return {
+    payload: {
+      version: 5,
+      matchId: 42,
+      map: 'de_dust2',
+      tickRate: 64,
+      frameRate: 16,
+      players,
+      rounds,
+    },
+    warnings,
+    notices,
+  };
+}
+
+test('extract: mergeReplayResults concatenates rounds across segments and sorts back into round-number order', () => {
+  // Segment 2 (rounds 9-16) passed before segment 1 (rounds 1-8) — argument order shouldn't matter.
+  const seg2 = replayResult({ rounds: [round({ round: 10 }), round({ round: 9 })] });
+  const seg1 = replayResult({ rounds: [round({ round: 1 }), round({ round: 2 })] });
+  const merged = mergeReplayResults([seg2, seg1]);
+  assert.deepEqual(merged.payload.rounds.map((r) => r.round), [1, 2, 9, 10]);
+});
+
+test('extract: mergeReplayResults unions players by id, first segment to resolve a player wins, in first-appearance order', () => {
+  const seg1 = replayResult({ players: [pm(1, 'Alice'), pm(2, 'Bob')] });
+  // Segment 2's own resolution of player 1 (e.g. a re-resolved name) never overrides segment 1's.
+  const seg2 = replayResult({ players: [pm(1, 'Alice (segment 2)'), pm(3, 'Carol')] });
+  const merged = mergeReplayResults([seg1, seg2]);
+  assert.deepEqual(merged.payload.players.map((p) => p.id), [1, 2, 3]);
+  assert.equal(merged.payload.players.find((p) => p.id === 1)!.name, 'Alice');
+});
+
+test('extract: mergeReplayResults dedupes warnings and notices across segments', () => {
+  const w = 'No shots captured — bullet tracers will be absent (weapon_fire?).';
+  const n = 'Captured 0 shots, 0 blinds, 0 hurts, 0 grenades.';
+  const seg1 = replayResult({ warnings: [w], notices: [n] });
+  const seg2 = replayResult({ warnings: [w], notices: [n] });
+  const merged = mergeReplayResults([seg1, seg2]);
+  assert.deepEqual(merged.warnings, [w]);
+  assert.deepEqual(merged.notices, [n]);
+});
+
+test('extract: mergeReplayResults keeps match-level fields (version, matchId, map, tickRate, frameRate) from the first segment', () => {
+  const seg1 = replayResult();
+  const seg2 = replayResult();
+  const merged = mergeReplayResults([seg1, seg2]);
+  assert.equal(merged.payload.matchId, 42);
+  assert.equal(merged.payload.map, 'de_dust2');
+  assert.equal(merged.payload.tickRate, 64);
+  assert.equal(merged.payload.frameRate, 16);
 });
 
 test('aggregate: extractPlayerTrace freezes survivors at round_end, ignoring post-round position drift', () => {
