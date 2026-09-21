@@ -350,11 +350,23 @@ residue) recognizes a multi-segment match's demo as safe once every segment its 
 confirmed present, the same all-or-nothing guarantee `demo/segments/finalize` already enforces when
 writing the manifest — not just the canonical single-file `demoKey()`.
 
-**2D replay is not supported for a multi-segment match** — the Recap tab shows an explanatory
-warning instead of a "Generate replay" control (`isMultiSegmentDemo`, threaded from whether a
-manifest exists), since the replay pipeline only ever reads a single demo and stitching a
-continuous tick-based timeline across a genuine tick-space discontinuity is a materially different
-problem than combining discrete round-scoped facts (tracked as a follow-up).
+**2D replay** combines a multi-segment match's recordings the same way score/sabremetrics do —
+`buildReplaySegments()` (`src/lib/replay/extract.ts`) is a thin wrapper over the same
+`orchestrateSegments()` every other multi-segment function delegates to. Replay data looks harder to
+stitch than score/sabremetrics at first glance (a continuous, tick-based timeline vs. discrete,
+round-scoped facts), but a `ReplayRound` is already fully self-contained — its own `startTick`/
+`endTick`/`frames`/`events`, with nothing anywhere in the payload comparing ticks *across* rounds,
+even within a single demo (`ReplayPlayer.tsx` resets all tick state on every round change). Since a
+demo restart only ever falls at a round boundary (MatchZy's round-backup restore restarts the
+interrupted round from scratch, matching the round-number-granularity assumption
+`checkSegmentAgreement()` already makes for score/sabremetrics), a `ReplayRound` is always fully
+contained in one segment — `mergeReplayResults()`'s merge is exactly "concatenate `rounds` across
+segments, sort back into round-number order," the same pattern `mergeSegmentResults()`/
+`mergeSabremetricResults()` already use for their own fact-row arrays. `scripts/replay-extract.ts`
+reads a match's demo manifest the same way the parse route does (§ above) and calls
+`buildReplaySegments()` instead of `buildReplay()` when it names more than one segment; manually
+uploaded segments work the same as DatHost-auto-pulled ones once they're in R2 under a manifest, with
+no distinction at this layer.
 
 `parseDemoSabremetrics()` returns empty sabremetric/fact-row arrays whenever a segment's side can't
 be resolved or it has no live rounds at all — nothing round-scoped is computable in either case, so

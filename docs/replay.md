@@ -70,6 +70,20 @@ structure + CT/T-by-faction + tick rate). `src/lib/replay/inputs.ts` (`getReplay
 the roster/sides/target-rounds/map from the DB and is shared by the dispatch path and the Action
 script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
 
+**`buildReplaySegments()`**, in the same file, handles a match whose demo was recovered from multiple
+recordings (a server restart mid-match — see `docs/demo-ingestion.md`'s "Multi-segment demos"). It's
+a thin wrapper over `orchestrateSegments()` (`parsers/segmentOrchestrator.ts`), same as
+`parseDemoFileSegments()`/`parseDemoSabremetricsSegments()`: parse each segment with `buildReplay()`
+(threading `startingRealRound` through to `buildMatchContext` so a later segment's regulation/OT
+side-swap lands on the right match-wide round), then `mergeReplayResults()` — a pure function,
+unit-tested directly — concatenates each segment's `rounds` and sorts back into round-number order. A
+`ReplayRound` is always fully contained in one segment (a restart only ever falls at a round
+boundary), and nothing in the payload ever compares ticks *across* rounds, even within a single demo —
+so a segment boundary between two rounds looks exactly like an ordinary round transition to the
+client player, no special playback handling needed. `scripts/replay-extract.ts` reads the match's
+demo manifest the same way the parse route does and calls `buildReplaySegments()` instead of
+`buildReplay()` whenever it names more than one segment.
+
 > **Round numbering gotcha:** `round_end` events carry `total_rounds_played` as the round that *just
 > ended* (1-based). Every other in-round event — kills, plants, defuses — is bucketed by **tick** into
 > the round whose playback window (incl. the post-round span) covers it, rather than derived from
