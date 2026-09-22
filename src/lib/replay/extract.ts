@@ -15,7 +15,7 @@ import {
   type PlayerDeathRow,
 } from '../parsers/matchContext';
 import { sideForFaction, reasonToCondition, filterLiveRoundEnds, type RoundEndRow } from '../parsers/roundSides';
-import { inferSkinsStartingSide, resolveEffectiveSide, sideDisagreementWarning } from '../parsers/sideInference';
+import { resolveStartingSide } from '../parsers/sideInference';
 import { orchestrateSegments } from '../parsers/segmentOrchestrator';
 import type { RosterEntry } from '../demoParser';
 import type { Faction } from '../types';
@@ -179,16 +179,10 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   // silently came back with zero rounds ("Starting side unknown" / "No live rounds found").
   const matchStartTick = findMatchStartTick(demoBuffer);
   const liveRoundEnds = filterLiveRoundEnds(roundEndRows, matchStartTick);
-  const inferredSide =
-    liveRoundEnds.length > 0
-      ? inferSkinsStartingSide(
-          demoBuffer, liveRoundEnds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
-        )
-      : null;
-  const { side: effectiveSide, disagreed } = resolveEffectiveSide(skinsSide, inferredSide);
-  if (disagreed && skinsSide !== null && inferredSide !== null) {
-    warnings.push(sideDisagreementWarning(skinsSide, inferredSide));
-  }
+  const { effectiveSide, disagreementWarning } = resolveStartingSide(
+    demoBuffer, liveRoundEnds, steamToPlayer, skinsSide, targetWinRounds, startingRealRound,
+  );
+  if (disagreementWarning) warnings.push(disagreementWarning);
 
   const context = buildMatchContext(
     demoBuffer,
