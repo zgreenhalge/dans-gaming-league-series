@@ -2,11 +2,7 @@ import { parseTicks } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { findMatchStartTick, getLiveRoundEndEvents } from './parsers/matchContext';
 import { buildRoundSides, reasonToCondition } from './parsers/roundSides';
-import {
-  inferSkinsStartingSide,
-  resolveEffectiveSide,
-  sideDisagreementWarning,
-} from './parsers/sideInference';
+import { resolveStartingSide } from './parsers/sideInference';
 import { mergeSegmentResults } from './parsers/segmentMerge';
 import { orchestrateSegments } from './parsers/segmentOrchestrator';
 import type { RoundHistoryEntry } from './types';
@@ -102,16 +98,10 @@ export function parseDemoFile(
 
   // --- Starting side: stored wins; fall back to inferring it from the demo (the
   // round-1 anchor gauntlet/knife matches have no stored value for). ---
-  const inferredSide =
-    liveRounds.length > 0
-      ? inferSkinsStartingSide(
-          demoBuffer, liveRounds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
-        )
-      : null;
-  const { side: effectiveSide, disagreed } = resolveEffectiveSide(skinsSide, inferredSide);
-  if (disagreed && skinsSide !== null && inferredSide !== null) {
-    warnings.push(sideDisagreementWarning(skinsSide, inferredSide));
-  }
+  const { inferredSide, effectiveSide, disagreementWarning } = resolveStartingSide(
+    demoBuffer, liveRounds, steamToPlayer, skinsSide, targetWinRounds, startingRealRound,
+  );
+  if (disagreementWarning) warnings.push(disagreementWarning);
 
   // --- Round outcomes (via shared side logic) ---
   let shirtsRoundsWon = 0;

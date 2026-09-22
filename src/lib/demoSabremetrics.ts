@@ -7,7 +7,7 @@ import type {
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import { filterLiveRoundEnds, type RoundEndRow } from './parsers/roundSides';
-import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
+import { resolveStartingSide } from './parsers/sideInference';
 import { mergeSabremetricResults } from './parsers/segmentMerge';
 import { orchestrateSegments } from './parsers/segmentOrchestrator';
 import { collectAccumulators } from './parsers/accumulators';
@@ -141,13 +141,9 @@ export function parseDemoSabremetrics(
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
   const sabLiveRounds = filterLiveRoundEnds(roundEndEvents, matchStartTick);
-  const inferredSide =
-    sabLiveRounds.length > 0
-      ? inferSkinsStartingSide(
-          demoBuffer, sabLiveRounds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
-        )
-      : null;
-  const { side: effectiveSide } = resolveEffectiveSide(skinsSide, inferredSide);
+  const { effectiveSide } = resolveStartingSide(
+    demoBuffer, sabLiveRounds, steamToPlayer, skinsSide, targetWinRounds, startingRealRound,
+  );
 
   const context = buildMatchContext(
     demoBuffer, roundEndEvents, deathEvents,

@@ -113,3 +113,45 @@ export function sideDisagreementWarning(stored: 'CT' | 'T', inferred: 'CT' | 'T'
     `Using the stored side — verify the entered result.`
   );
 }
+
+export interface StartingSideResolution {
+  /** Side inferred from the demo's round-1 `team_num` (null if unresolvable). */
+  inferredSide: 'CT' | 'T' | null;
+  /** The side to actually use for round attribution — stored wins over `inferredSide`
+   *  (see `resolveEffectiveSide()`). */
+  effectiveSide: 'CT' | 'T' | null;
+  /** Set when a stored side is contradicted by the demo; null otherwise. Whether to surface
+   *  this (push it onto a caller's own `warnings` array) is the caller's call. */
+  disagreementWarning: string | null;
+}
+
+/**
+ * The starting-side-resolution sequence every demo-parsing entry point (`parseDemoFile()`,
+ * `parseDemoSabremetrics()`, `buildReplay()`) needs before it can attribute rounds: infer the
+ * side from the demo, resolve it against any stored side, and produce the disagreement warning
+ * text when the two conflict. `liveRoundEnds` is the caller's own live-round-end rows (each
+ * already produced via `filterLiveRoundEnds()`/`getLiveRoundEndEvents()` — this doesn't
+ * re-derive them, since callers need that array for other things too); only its first entry's
+ * tick is read, to sample `team_num` at round 1.
+ */
+export function resolveStartingSide(
+  demoBuffer: Buffer,
+  liveRoundEnds: { tick: number }[],
+  steamToPlayer: ResolvedRoster,
+  storedSide: 'CT' | 'T' | null,
+  targetWinRounds: number,
+  startingRealRound = 1,
+): StartingSideResolution {
+  const inferredSide =
+    liveRoundEnds.length > 0
+      ? inferSkinsStartingSide(
+          demoBuffer, liveRoundEnds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
+        )
+      : null;
+  const { side: effectiveSide, disagreed } = resolveEffectiveSide(storedSide, inferredSide);
+  const disagreementWarning =
+    disagreed && storedSide !== null && inferredSide !== null
+      ? sideDisagreementWarning(storedSide, inferredSide)
+      : null;
+  return { inferredSide, effectiveSide, disagreementWarning };
+}
