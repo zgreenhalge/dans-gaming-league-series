@@ -11,9 +11,9 @@
 // else fall back to the staged-result review: the match has no existing confirmed score, quarantine
 // passes, zero parser warnings (also covers full roster resolution: an unresolved player throws
 // before this point, and a stored-vs-demo side disagreement pushes a warning), `skins_starting_side`
-// was STORED rather than just demo-inferred (excludes the gauntlet knife path — #137's self-derived
-// score always has a payload, but never a stored side — always manual review), and the demo-derived
-// score matches MatchZy's own `map_result` remote-log event (the independent cross-check;
+// was STORED rather than just demo-inferred for a non-gauntlet match (a gauntlet/knife match's
+// self-derived side, #137, is trusted instead — it never has a stored side to check), and the
+// demo-derived score matches MatchZy's own `map_result` remote-log event (the independent cross-check;
 // `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS, so it's direct equality).
 // The write itself is gated on `AUTO_COMMIT_ENABLED !== 'false'` — auto-commit is on by default;
 // setting the repo Actions variable to `false` is the manual override, forcing every eligible match
@@ -204,6 +204,7 @@ async function main() {
       quarantinePassed: q.ok,
       warningCount: warnings.length,
       skinsSideStored: inputs.skinsSide !== null,
+      isGauntlet: inputs.isGauntlet,
       alreadyPlayed: existing !== null,
       derived: { shirts: payload.shirts, skins: payload.skins },
       mapResult: mapResult ? { shirts: mapResult.team1.score, skins: mapResult.team2.score } : null,

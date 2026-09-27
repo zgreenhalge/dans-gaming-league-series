@@ -190,8 +190,8 @@ A clean, corroborated parse skips the human Confirm. `evaluateAutoCommit()`
 existing confirmed score (auto-commit never overwrites a played match — a disagreement always routes
 to manual review, no matter how clean the new parse is), quarantine passes, zero parser warnings
 (which also covers full roster resolution and a clean stored-vs-demo side agreement),
-`skins_starting_side` was **stored** (not just demo-inferred — this always excludes the gauntlet
-knife path, whose self-derived score, #137, never has a stored side), and the demo-derived score
+`skins_starting_side` was **stored** for a non-gauntlet match (a gauntlet/knife match's self-derived
+side, #137, is trusted instead — it never has a stored side to check), and the demo-derived score
 matches MatchZy's own `map_result` event read from `mapResultKey` (`buildMatchzyConfig` fixes
 team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `scripts/demo-ingest.ts`
 gathers the inputs, calls it after quarantine, and logs the verdict either way.

@@ -15,6 +15,7 @@ function baseInput(overrides: Partial<AutoCommitInput> = {}): AutoCommitInput {
     quarantinePassed: true,
     warningCount: 0,
     skinsSideStored: true,
+    isGauntlet: false,
     alreadyPlayed: false,
     derived: { shirts: 13, skins: 9 },
     mapResult: { shirts: 13, skins: 9 },
@@ -44,10 +45,15 @@ test('evaluateAutoCommit: any parser warning blocks auto-commit', () => {
   assert.ok(!r.eligible && /2 parser warning/.test(r.reason));
 });
 
-test('evaluateAutoCommit: a demo-inferred-only starting side blocks auto-commit', () => {
+test('evaluateAutoCommit: a demo-inferred-only starting side blocks auto-commit for a non-gauntlet match', () => {
   const r = evaluateAutoCommit(baseInput({ skinsSideStored: false }));
   assert.equal(r.eligible, false);
   assert.ok(!r.eligible && /skins_starting_side not stored/.test(r.reason));
+});
+
+test('evaluateAutoCommit: a gauntlet match is eligible despite its demo-inferred side', () => {
+  const r = evaluateAutoCommit(baseInput({ skinsSideStored: false, isGauntlet: true }));
+  assert.deepEqual(r, { eligible: true });
 });
 
 test('evaluateAutoCommit: no map_result yet blocks auto-commit', () => {
