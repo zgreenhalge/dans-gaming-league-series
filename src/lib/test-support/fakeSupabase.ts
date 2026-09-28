@@ -263,6 +263,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private upsertRows: Row[] = [];
   private upsertConflict: string[] = ['id'];
   private upsertIgnoreDuplicates = false;
+  private shouldThrowOnError = false;
 
   constructor(private table: string, private db: FakeDb) {}
 
@@ -387,12 +388,24 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     this.singleMode = true;
     return this;
   }
+  /** Mirrors real Supabase's `.throwOnError()`: an `error` result rejects the awaited chain instead
+   *  of resolving with it, so a caller than ends its write with `.throwOnError()` doesn't need its
+   *  own `if (error) throw error` check. */
+  throwOnError(): this {
+    this.shouldThrowOnError = true;
+    return this;
+  }
 
   then<TResult1 = { data: T[] | T | null; error: FakeError | null }, TResult2 = never>(
     onfulfilled?: ((value: { data: T[] | T | null; error: FakeError | null }) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
-    return this.execute().then(onfulfilled, onrejected);
+    return this.execute()
+      .then((result) => {
+        if (this.shouldThrowOnError && result.error) throw result.error;
+        return result;
+      })
+      .then(onfulfilled, onrejected);
   }
 
   private matchesRow(row: Row): boolean {
@@ -528,19 +541,34 @@ export function clientThrowingOn(client: SupabaseClient, table: string, message 
 }
 
 /** A chainable stand-in for the rest of a failing write's builder chain (`.eq()`, `.in()`,
- * `.select()`, ...) — every chain method returns the same object, so a caller that filters or
- * projects after the failing verb (e.g. `.delete().in(...)`) keeps working right up to the final
- * `await`, which resolves via `.then()` to the injected error. */
+ * `.select()`, `.throwOnError()`, ...) — any property access other than `then` returns the same
+ * proxy, so a caller that filters, projects, or calls `.throwOnError()` after the failing verb
+ * (e.g. `.delete().in(...).throwOnError()`) keeps working right up to the final `await`, with no
+ * fixed method list to keep in sync with the real builder's surface. `.throwOnError()` makes the
+ * final `await` reject with the injected error instead of resolving `{ data: null, error }`,
+ * mirroring `FakeQueryBuilder.throwOnError()` above. */
 function failingChain(error: FakeError): Record<string, unknown> {
-  const chain: Record<string, unknown> = {
-    then: (
-      onfulfilled?: ((value: { data: null; error: FakeError }) => unknown) | null,
-      onrejected?: ((reason: unknown) => unknown) | null,
-    ) => Promise.resolve({ data: null, error }).then(onfulfilled, onrejected),
-  };
-  for (const m of ['select', 'eq', 'neq', 'gt', 'gte', 'lte', 'in', 'is', 'not', 'or', 'order', 'range', 'limit', 'single', 'maybeSingle']) {
-    chain[m] = () => chain;
-  }
+  let shouldThrow = false;
+  const chain = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'then') {
+          return (
+            onfulfilled?: ((value: { data: null; error: FakeError }) => unknown) | null,
+            onrejected?: ((reason: unknown) => unknown) | null,
+          ) => (shouldThrow ? Promise.reject(error) : Promise.resolve({ data: null, error })).then(onfulfilled, onrejected);
+        }
+        if (prop === 'throwOnError') {
+          return () => {
+            shouldThrow = true;
+            return chain;
+          };
+        }
+        return () => chain;
+      },
+    },
+  );
   return chain;
 }
 

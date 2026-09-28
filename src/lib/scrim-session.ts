@@ -68,19 +68,18 @@ export async function getScrimSession(supabaseAdmin: SupabaseClient): Promise<Sc
 
 /** Ends the active scrim session, if any. Idempotent — deleting an already-absent row is a no-op. */
 export async function releaseScrimSession(supabaseAdmin: SupabaseClient): Promise<void> {
-  const { error } = await supabaseAdmin.from('scrim_sessions').delete().eq('id', 1);
-  if (error) throw error;
+  await supabaseAdmin.from('scrim_sessions').delete().eq('id', 1).throwOnError();
 }
 
 const WARNED_COLUMN = { 15: 'warned_15', 10: 'warned_10', 5: 'warned_5' } as const;
 
 /** Marks one of the three pre-match warning thresholds as sent, so `scrim-warnings.ts` fires it once. */
 export async function markScrimWarned(supabaseAdmin: SupabaseClient, threshold: 15 | 10 | 5): Promise<void> {
-  const { error } = await supabaseAdmin
+  await supabaseAdmin
     .from('scrim_sessions')
     .update({ [WARNED_COLUMN[threshold]]: true })
-    .eq('id', 1);
-  if (error) throw error;
+    .eq('id', 1)
+    .throwOnError();
 }
 
 /** Whether `threshold`'s warning has already been sent for `session` — the single source of truth for
