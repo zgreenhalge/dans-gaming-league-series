@@ -69,7 +69,6 @@ function baseProps(overrides: Partial<ComponentProps<typeof VetoSequence>> = {})
     canVeto: true,
     isGauntlet: false,
     playerFaction: 'SHIRTS',
-    gauntletPlayerIndex: null,
     isAdmin: false,
     ...overrides,
   };

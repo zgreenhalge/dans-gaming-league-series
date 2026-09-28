@@ -156,7 +156,9 @@ export async function PATCH(
   };
 
   if (isGauntlet) {
-    // Gauntlet bans are simultaneous — each player submits their own fixed slot
+    // Gauntlet bans are simultaneous and shared per faction — either player may fill or correct
+    // either of their faction's two ban slots, in any order, right up until the 4th ban locks in the
+    // auto-picked map.
     if (field === 'shirts_pick' || field === 'skins_starting_side') {
       return NextResponse.json({ error: 'Not a valid gauntlet field' }, { status: 400 });
     }
@@ -165,20 +167,8 @@ export async function PATCH(
       if (myFaction !== stepFaction) {
         return NextResponse.json({ error: "Not your faction's ban" }, { status: 403 });
       }
-      const factionPlayerIds = allStats
-        .filter((s) => s.faction === stepFaction)
-        .map((s) => s.player_id)
-        .sort((a, b) => a - b);
-      const myIndex = factionPlayerIds.indexOf(playerId);
-      const myField: VetoField =
-        stepFaction === 'SHIRTS'
-          ? (myIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
-          : (myIndex === 0 ? 'skins_ban1' : 'skins_ban2');
-      if (field !== myField) {
-        return NextResponse.json({ error: 'Not your ban slot' }, { status: 403 });
-      }
     }
-    // Allow overwriting an already-set slot (admin or correct player can correct mistakes)
+    // Allow overwriting an already-set slot (any teammate, or admin, can correct it)
   } else {
     // Regular season: enforce sequential order for new entries; allow overwriting existing ones
     if (!REGULAR_STEPS.includes(field)) {

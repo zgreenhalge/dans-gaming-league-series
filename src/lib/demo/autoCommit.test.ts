@@ -14,7 +14,7 @@ function baseInput(overrides: Partial<AutoCommitInput> = {}): AutoCommitInput {
   return {
     quarantinePassed: true,
     warningCount: 0,
-    skinsSideStored: true,
+    sideTrusted: true,
     alreadyPlayed: false,
     derived: { shirts: 13, skins: 9 },
     mapResult: { shirts: 13, skins: 9 },
@@ -44,8 +44,8 @@ test('evaluateAutoCommit: any parser warning blocks auto-commit', () => {
   assert.ok(!r.eligible && /2 parser warning/.test(r.reason));
 });
 
-test('evaluateAutoCommit: a demo-inferred-only starting side blocks auto-commit', () => {
-  const r = evaluateAutoCommit(baseInput({ skinsSideStored: false }));
+test('evaluateAutoCommit: an untrusted side blocks auto-commit', () => {
+  const r = evaluateAutoCommit(baseInput({ sideTrusted: false }));
   assert.equal(r.eligible, false);
   assert.ok(!r.eligible && /skins_starting_side not stored/.test(r.reason));
 });
