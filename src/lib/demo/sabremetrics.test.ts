@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { persistSabremetrics, clearSabremetrics } from './sabremetrics';
 import { __setTestAdminClient } from '../supabase-admin';
-import { createFakeSupabaseClient, type FakeDb } from '../test-support/fakeSupabase';
+import { createFakeSupabaseClient, clientFailingOn, type FakeDb } from '../test-support/fakeSupabase';
 import { zeroSabFields as zeroSab } from '../test-support/sabFields';
 import type { DemoSabremetricStat } from '../types';
 import { test, report } from '../test-support/miniTest';
@@ -81,6 +81,28 @@ async function main() {
     await persistSabremetrics(MATCH_ID, [{ player_id: 1, sabremetrics: zeroSab({ kills_ct: 7 }) }], pmsById);
     assert.equal(db.player_match_sabremetrics!.length, 1);
     assert.equal(db.player_match_sabremetrics![0].player_match_stats_id, 1000);
+  });
+
+  await test('persistSabremetrics: a failed upsert throws instead of silently dropping the write (#576)', async () => {
+    const db = baseDb();
+    const failing = clientFailingOn(createFakeSupabaseClient(db), 'player_match_sabremetrics', 'upsert', {
+      code: '23503', message: 'simulated upsert failure',
+    });
+    __setTestAdminClient(failing);
+    await assert.rejects(
+      () => persistSabremetrics(MATCH_ID, [{ player_id: 1, sabremetrics: zeroSab({ kills_ct: 1 }) }]),
+      (err: { message?: string }) => err.message === 'simulated upsert failure',
+    );
+  });
+
+  await test('clearSabremetrics: a failed delete throws instead of silently dropping the write (#576)', async () => {
+    const db = baseDb();
+    db.player_match_sabremetrics = [{ player_match_stats_id: 1000, ...zeroSab() }];
+    const failing = clientFailingOn(createFakeSupabaseClient(db), 'player_match_sabremetrics', 'delete', {
+      code: '23503', message: 'simulated delete failure',
+    });
+    __setTestAdminClient(failing);
+    await assert.rejects(() => clearSabremetrics(MATCH_ID), (err: { message?: string }) => err.message === 'simulated delete failure');
   });
 
   await test('clearSabremetrics: deletes every row for this match\'s resolved players', async () => {

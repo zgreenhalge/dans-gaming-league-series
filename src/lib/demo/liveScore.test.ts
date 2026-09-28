@@ -17,7 +17,7 @@ import {
   clearLiveScore,
   clearLiveScoreBestEffort,
 } from './liveScore';
-import { createFakeSupabaseClient, type FakeDb } from '../test-support/fakeSupabase';
+import { createFakeSupabaseClient, clientFailingOn, type FakeDb } from '../test-support/fakeSupabase';
 import { test, report } from '../test-support/miniTest';
 
 const MATCH_ID = 100;
@@ -167,6 +167,17 @@ async function main() {
     const written = await putLiveScoreEvent(supabase, { event: 'series_start', matchid: MATCH_ID });
     assert.equal(written, null);
     assert.equal(db.live_match_score!.length, 0);
+  });
+
+  await test('putLiveScoreEvent: a failed upsert throws instead of silently dropping the write (#576)', async () => {
+    const db: FakeDb = { live_match_score: [] };
+    const failing = clientFailingOn(createFakeSupabaseClient(db), 'live_match_score', 'upsert', {
+      code: 'TEST', message: 'simulated upsert failure',
+    });
+    await assert.rejects(
+      () => putLiveScoreEvent(failing, { event: 'going_live', matchid: MATCH_ID }),
+      (err: { message?: string }) => err.message === 'simulated upsert failure',
+    );
   });
 
   await test('getLiveScore: null when no row exists for the match', async () => {

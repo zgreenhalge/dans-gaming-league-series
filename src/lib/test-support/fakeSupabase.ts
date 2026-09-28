@@ -527,6 +527,23 @@ export function clientThrowingOn(client: SupabaseClient, table: string, message 
   } as unknown as SupabaseClient;
 }
 
+/** A chainable stand-in for the rest of a failing write's builder chain (`.eq()`, `.in()`,
+ * `.select()`, ...) — every chain method returns the same object, so a caller that filters or
+ * projects after the failing verb (e.g. `.delete().in(...)`) keeps working right up to the final
+ * `await`, which resolves via `.then()` to the injected error. */
+function failingChain(error: FakeError): Record<string, unknown> {
+  const chain: Record<string, unknown> = {
+    then: (
+      onfulfilled?: ((value: { data: null; error: FakeError }) => unknown) | null,
+      onrejected?: ((reason: unknown) => unknown) | null,
+    ) => Promise.resolve({ data: null, error }).then(onfulfilled, onrejected),
+  };
+  for (const m of ['select', 'eq', 'neq', 'gt', 'gte', 'lte', 'in', 'is', 'not', 'or', 'order', 'range', 'limit', 'single', 'maybeSingle']) {
+    chain[m] = () => chain;
+  }
+  return chain;
+}
+
 /** Wraps a client so one table's `method` resolves `{ data: null, error }` instead of landing —
  * simulating a write failure this fake's own builder has no way to produce on its own (its only
  * built-in error is `.insert()`'s primary-key collision — see this file's header). Every other
@@ -542,7 +559,7 @@ export function clientFailingOn(
     from: (t: string) => {
       const builder = client.from(t);
       if (t !== table) return builder;
-      return Object.assign(builder, { [method]: () => Promise.resolve({ data: null, error }) });
+      return Object.assign(builder, { [method]: () => failingChain(error) });
     },
     rpc: client.rpc.bind(client),
   } as unknown as SupabaseClient;
