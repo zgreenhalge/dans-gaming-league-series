@@ -21,7 +21,7 @@ import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzy
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
 import { notifyMatchLiveScore } from '@/lib/discord-notify';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
+import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey, mirrorSubjectStatus } from '@/lib/background-jobs';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
@@ -100,16 +100,17 @@ async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, mat
   }
   if (!claimed || claimed.length === 0) return;
 
-  const { error: statusErr } = await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  const subject = { table: 'matches', column: 'replay_status', id: matchId };
+  const { error: statusErr } = await mirrorSubjectStatus(supabaseAdmin, subject, 'queued');
   if (statusErr) {
-    console.error(`matchzy-log: could not set replay_status=queued for match ${matchId}: ${statusErr.message}`);
+    console.error(`matchzy-log: could not set replay_status=queued for match ${matchId}: ${statusErr}`);
   }
   const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
     jobType: REPLAY_EXTRACT_JOB_TYPE,
     key: matchJobKey(matchId),
     workflowFile: 'replay-extract.yml',
     inputs: { match_id: String(matchId) },
-    subject: { table: 'matches', column: 'replay_status', id: matchId },
+    subject,
   });
   if (!replayDispatch.ok) {
     console.error(`matchzy-log: replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);

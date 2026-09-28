@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordJobStatus, dispatchAndRecordFailure, isJobInFlight, matchJobKey } from '@/lib/background-jobs';
+import { recordJobStatus, dispatchAndRecordFailure, isJobInFlight, matchJobKey, mirrorSubjectStatus } from '@/lib/background-jobs';
 import { REPLAY_EXTRACT_JOB_TYPE as JOB_TYPE } from '@/lib/jobs';
 import { parseMatchId } from '@/lib/util';
 
@@ -72,10 +72,11 @@ export async function POST(
       { status: 500 },
     );
   }
-  const { error: statusErr } = await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  const subject = { table: 'matches', column: 'replay_status', id: matchId };
+  const { error: statusErr } = await mirrorSubjectStatus(supabaseAdmin, subject, 'queued');
   if (statusErr) {
     return NextResponse.json(
-      { error: `Could not update replay status: ${statusErr.message}` },
+      { error: `Could not update replay status: ${statusErr}` },
       { status: 500 },
     );
   }
@@ -85,7 +86,7 @@ export async function POST(
     key: matchJobKey(matchId),
     workflowFile: 'replay-extract.yml',
     inputs: { match_id: String(matchId) },
-    subject: { table: 'matches', column: 'replay_status', id: matchId },
+    subject,
   });
   if (!dispatch.ok) {
     return NextResponse.json(
