@@ -221,7 +221,11 @@ the round actually resets (#518). Such an event's `total_rounds_played` already 
 round, so `roundOf()` reattributes it back to the round it actually happened in whenever its tick
 falls strictly after that round's own `round_end` and at or before its settle tick
 (`computeSettleTicks()`, `parsers/matchContext.ts`) — a real next-round event can never land that
-early, since nothing about the next round starts until after it.
+early, since nothing about the next round starts until after it. The replay pipeline
+(`src/lib/replay/extract.ts`) applies the same tick-over-counter principle through its own
+`roundForTick()`, gated on each round's (much wider) playback window instead of the settle tick — see
+[`replay.md`](./replay.md)'s "Round numbering gotcha" for why the two windows are sized differently
+and kept as separate functions.
 
 A player can die at most once in a live round — `match_kills` enforces `unique (round, victim)` — so
 `dedupeDeathEvents()` (`parsers/matchContext.ts`) drops any second `player_death` landing on the same
