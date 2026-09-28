@@ -18,9 +18,9 @@ const REGULAR_STEPS = [
   { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
-// Gauntlet = playoffs, so `isGauntlet` is the only flag this component branches on for veto shape —
-// see docs/glossary.md's Gauntlet entry.
-// Simultaneous: each player bans their own slot independently; displayed in this order
+// Gauntlet = playoffs — see docs/glossary.md's Gauntlet entry. `gauntletShaped` (below), not the raw
+// `isGauntlet` prop, is what this component branches on for veto shape and permissions.
+// Simultaneous: either player fills either of their faction's two slots, in this display order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
   { field: 'skins_ban1', label: 'Skins ban', type: 'ban' },
@@ -66,11 +66,10 @@ interface Props {
   canVeto: boolean;
   isGauntlet: boolean;
   playerFaction: 'SHIRTS' | 'SKINS' | null;
-  gauntletPlayerIndex: 0 | 1 | null;
   isAdmin: boolean;
 }
 
-export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, playerFaction, gauntletPlayerIndex, isAdmin }: Props) {
+export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, playerFaction, isAdmin }: Props) {
   const router = useRouter();
   const mapLookup = useMapLookup();
   const [isPending, startTransition] = useTransition();
@@ -128,47 +127,35 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return displayValue(f) === null;
   })?.field as StepField | undefined;
 
-  // The slot this player owns by faction, independent of any admin override — drives the "your turn"
-  // hint, so an admin who is *also* in the match still sees it on their own slot.
-  const playerTurnField: StepField | undefined = (() => {
-    if (!canVeto) return undefined;
-    if (isGauntlet) {
-      if (!playerFaction || gauntletPlayerIndex === null) return undefined;
-      const myField: StepField =
-        playerFaction === 'SHIRTS'
-          ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
-          : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
-      return displayValue(myField) === null ? myField : undefined;
-    }
-    if (!sequenceNextField || !playerFaction) return undefined;
-    const stepFaction = sequenceNextField.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
-    return playerFaction === stepFaction ? sequenceNextField : undefined;
-  })();
-
-  // What the current user can act on for NEW entries: admins get the next slot in sequence; players
-  // get only their own faction's slot.
-  const actionableField: StepField | undefined = !canVeto
-    ? undefined
-    : isAdmin
-      ? sequenceNextField
-      : playerTurnField;
-
-  // Whether a filled tile can be overwritten by the current user
-  function isOverwritable(field: StepField): boolean {
-    if (!canVeto) return false;
-    if (optimisticFields.has(field)) return false;
-    if (isAdmin) return true;
-    if (isGauntlet) {
-      if (!playerFaction || gauntletPlayerIndex === null) return false;
-      const myField: StepField =
-        playerFaction === 'SHIRTS'
-          ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
-          : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
-      return field === myField;
-    }
+  function isMyFaction(field: StepField): boolean {
     if (!playerFaction) return false;
     const fieldFaction = field.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
     return fieldFaction === playerFaction;
+  }
+
+  // Whether the viewer could fill this still-empty field. Gauntlet-shaped bans are simultaneous and
+  // shared per faction — either player (or admin) may fill any of their faction's open slots, in any
+  // order, right up until the 4th ban locks in the auto-picked map; a regular-season pick/ban is
+  // strictly sequential, one team-wide slot at a time. Keyed on `gauntletShaped`, not the raw
+  // `isGauntlet` prop, so a match whose season-level flag never got set still gets the 4-ban
+  // permission model that matches the tile shape it's actually rendering (see `gauntletShaped` above).
+  function isFillable(field: StepField): boolean {
+    if (!canVeto || displayValue(field) !== null) return false;
+    if (!gauntletShaped && field !== sequenceNextField) return false;
+    return isAdmin || isMyFaction(field);
+  }
+
+  // Whether this still-empty field is "yours" specifically, independent of admin status — drives the
+  // "YOUR BAN/PICK/SIDE" hint, so an admin who is *also* in the match still sees it on their own slot.
+  function isYourTurn(field: StepField): boolean {
+    return isFillable(field) && isMyFaction(field);
+  }
+
+  // Whether a filled tile can be corrected by the current user
+  function isOverwritable(field: StepField): boolean {
+    if (!canVeto) return false;
+    if (optimisticFields.has(field)) return false;
+    return isAdmin || isMyFaction(field);
   }
 
   function tileCls(step: { field: string; type: string }, val: string | null, isNext: boolean) {
@@ -243,7 +230,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
 
   function handleTileClick(field: StepField) {
     const val = displayValue(field);
-    const canClick = field === actionableField || (val !== null && isOverwritable(field));
+    const canClick = isFillable(field) || (val !== null && isOverwritable(field));
     if (!canClick) return;
     setActiveField(activeField === field ? null : field);
     setError(null);
@@ -261,7 +248,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         <div className="flex items-stretch gap-1 flex-wrap p-3">
           {steps.map((s, i) => {
             const val = displayValue(s.field as StepField);
-            const isNext = s.field === actionableField;
+            const isNext = isFillable(s.field as StepField);
             const isActive = activeField === s.field;
             const banImg = s.type === 'ban' && val ? (mapLookup[mapSlug(val)]?.image_url ?? null) : null;
             return (
@@ -298,7 +285,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                   <div className={banImg ? 'relative z-10' : undefined}>
                     <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
                       {s.label}
-                      {s.field === playerTurnField && val === null && (
+                      {isYourTurn(s.field as StepField) && (
                         <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">
                           {s.type === 'pick' ? 'YOUR PICK' : s.type === 'side' ? 'YOUR SIDE' : 'YOUR BAN'}
                         </span>

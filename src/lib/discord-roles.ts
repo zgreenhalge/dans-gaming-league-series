@@ -260,7 +260,10 @@ export async function createNameRole(
 
   // Not a second clearOpsError() here -- the assign discordApiCall() above already cleared it on
   // success, and this is unreachable otherwise (the `if (!assignRes) return;` above).
-  await supabaseAdmin.from('players').update({ discord_name_role_id: role.id }).eq('id', playerId);
+  const { error: storeErr } = await supabaseAdmin.from('players').update({ discord_name_role_id: role.id }).eq('id', playerId);
+  if (storeErr) {
+    await recordOpsError(supabaseAdmin, 'player', playerId, NAME_ROLE_OPERATION, `Failed to store name role id: ${storeErr.message}`);
+  }
 }
 
 /** Renames this player's name-color role to match a new DGLS name. No-op without full config or a

@@ -203,7 +203,7 @@ export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): P
       updated_at: updatedAt,
     },
     { onConflict: 'match_id' },
-  );
+  ).throwOnError();
   return { matchId: row.matchId, shirts: row.shirts, skins: row.skins, round: row.round, players: row.players, updatedAt };
 }
 

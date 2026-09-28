@@ -36,7 +36,7 @@ export async function maybeRefreshSteamProfile(
   const profile = await fetchSteamProfile(player.steam_id);
   if (!profile) return null;
 
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('players')
     .update({
       steam_nickname: profile.name,
@@ -44,6 +44,9 @@ export async function maybeRefreshSteamProfile(
       steam_refreshed_at: new Date().toISOString(),
     })
     .eq('id', player.id);
+  if (error) {
+    console.error(`maybeRefreshSteamProfile(${player.id}): failed to persist refreshed Steam profile (non-fatal):`, error);
+  }
 
   return { steam_nickname: profile.name, steam_avatar_url: profile.image };
 }
