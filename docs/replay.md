@@ -85,12 +85,26 @@ demo manifest the same way the parse route does and calls `buildReplaySegments()
 `buildReplay()` whenever it names more than one segment.
 
 > **Round numbering gotcha:** `round_end` events carry `total_rounds_played` as the round that *just
-> ended* (1-based). Every other in-round event — kills, plants, defuses — is bucketed by **tick** into
+> ended* (1-based). Every other in-round event — kills, plants, defuses, shots, blinds, hurts, bomb
+> pickups/drops — is bucketed by **tick**, through one shared `roundForTick()` (`extract.ts`), into
 > the round whose playback window (incl. the post-round span) covers it, rather than derived from
 > `total_rounds_played + 1`: any of them can land in the post-round window *after* `round_end` has
 > already bumped the counter, where the `+1` math would misfile it into the next round (whose tick
 > precedes the live frames, so it'd never show — or, for a plant, read as happening before that round's
-> own action has started).
+> own action has started). Every collector shares this one function rather than each re-deriving its
+> own round-window scan, so a mid-round event can't attribute to a different round depending on which
+> collector reads it.
+>
+> `roundForTick()` is the replay path's counterpart to the stats path's `roundOf()`
+> (`parsers/_shared.ts`, see [`demo-ingestion.md`](./demo-ingestion.md)) — both exist to bucket a
+> mid-round event by tick instead of the naive counter offset, but they gate on deliberately different
+> windows and aren't merged into one primitive: `roundOf()` allows only the narrow gap up to the
+> engine's own round-scoped netprop reset (`computeSettleTicks()`), the correction stats need to avoid
+> double-counting a stat into the wrong round, while a replay round's window extends the full
+> `POST_ROUND_SECONDS` past `round_end` that the player deliberately keeps on-screen — a window that
+> wide would attribute stats to the wrong round far more often than the settle-tick correction it's
+> meant to fix. Each function's window is sized for what it's actually used for, so they stay separate
+> rather than sharing one implementation.
 
 **Knife round (gauntlet/knife matches only):** regular-season matches pre-decide sides via the
 map-ban/pick draft, so any knife round the server still plays is vestigial and stays excluded from the
