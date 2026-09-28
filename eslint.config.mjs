@@ -20,6 +20,36 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.{ts,tsx}"],
+    rules: {
+      // supabase-js returns `{ data, error }` instead of throwing, so a write whose result is
+      // discarded entirely — or destructured for `data` with `error` left unchecked — can fail
+      // without anyone noticing (see AGENTS.md's "Never swallow a write's outcome"). Either
+      // destructure `{ error }` and check it, or chain `.throwOnError()`. Two selectors, one per
+      // discard shape:
+      "no-restricted-syntax": [
+        "error",
+        {
+          // Shape 1: `await ....from(...)....insert|update|upsert|delete(...);` — the whole result
+          // is thrown away.
+          selector:
+            "ExpressionStatement > AwaitExpression > CallExpression:has(CallExpression[callee.property.name='from']):not([callee.property.name='throwOnError']):matches([callee.property.name=/^(insert|update|upsert|delete)$/], :has(CallExpression[callee.property.name=/^(insert|update|upsert|delete)$/]))",
+          message:
+            "This Supabase write's outcome is discarded. Destructure { error } and check it (or add .throwOnError()) — see AGENTS.md's \"Never swallow a write's outcome\".",
+        },
+        {
+          // Shape 2: `const { data } = await ....from(...)....insert|update|upsert|delete(...);` —
+          // `data` is kept but the destructuring pattern has no `error` property.
+          selector:
+            "VariableDeclarator:has(> ObjectPattern:not(:has(Property[key.name='error']))):has(AwaitExpression > CallExpression:has(CallExpression[callee.property.name='from']):not([callee.property.name='throwOnError']):matches([callee.property.name=/^(insert|update|upsert|delete)$/], :has(CallExpression[callee.property.name=/^(insert|update|upsert|delete)$/])))",
+          message:
+            "This Supabase write's { error } is never checked (only its data is read). Destructure { error } too and check it (or add .throwOnError()) — see AGENTS.md's \"Never swallow a write's outcome\".",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

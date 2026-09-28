@@ -32,7 +32,8 @@ export async function persistSabremetrics(
   if (sabRows.length > 0) {
     await supabaseAdmin
       .from('player_match_sabremetrics')
-      .upsert(sabRows, { onConflict: 'player_match_stats_id' });
+      .upsert(sabRows, { onConflict: 'player_match_stats_id' })
+      .throwOnError();
   }
 }
 
@@ -45,6 +46,7 @@ export async function clearSabremetrics(matchId: number, pmsById?: Map<number, n
     await supabaseAdmin
       .from('player_match_sabremetrics')
       .delete()
-      .in('player_match_stats_id', pmsIds);
+      .in('player_match_stats_id', pmsIds)
+      .throwOnError();
   }
 }
