@@ -20,6 +20,26 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.{ts,tsx}"],
+    rules: {
+      // supabase-js returns `{ data, error }` instead of throwing, so a write whose result is
+      // discarded entirely can fail without anyone noticing (see AGENTS.md's "Never swallow a
+      // write's outcome"). Flags a bare `await ....from(...)....insert|update|upsert|delete(...)`
+      // statement that never inspects `error` — either destructure `{ error }` and check it, or
+      // chain `.throwOnError()`.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ExpressionStatement > AwaitExpression > CallExpression:has(CallExpression[callee.property.name='from']):not([callee.property.name='throwOnError']):matches([callee.property.name=/^(insert|update|upsert|delete)$/], :has(CallExpression[callee.property.name=/^(insert|update|upsert|delete)$/]))",
+          message:
+            "This Supabase write's outcome is discarded. Destructure { error } and check it (or add .throwOnError()) — see AGENTS.md's \"Never swallow a write's outcome\".",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
