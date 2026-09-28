@@ -79,6 +79,31 @@ function isBulletWeapon(weapon: string | null): boolean {
 }
 
 /**
+ * The round whose playback window (including its post-round span) covers `tick` — the one place
+ * every replay collector decides which round a mid-round event belongs to, mirroring how
+ * `roundOf()` (`parsers/_shared.ts`) is the one place the stats path decides it. The two rules are
+ * deliberately different, not just differently named: `roundOf()` gates on each round's narrow
+ * "settle window" (up to the next round's own reset, `computeSettleTicks()`), while a replay round's
+ * window extends `POST_ROUND_SECONDS` past `round_end` so the lingering post-round moment still
+ * plays back — see `docs/replay.md`'s "Round numbering gotcha".
+ *
+ * Either way, a mid-round event is bucketed by **tick**, never by `total_rounds_played + 1`: that
+ * naive offset already reports the *next* round the instant `round_end` fires, so anything landing
+ * in the post-round window it would misfile into a round whose frames haven't started yet (a kill
+ * that never shows in the feed) or, for a plant, one that reads as starting before its own action
+ * has begun. Playback windows don't overlap, so a tick lands in at most one round.
+ */
+export function roundForTick(
+  tick: number,
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+): number | null {
+  for (const b of roundBounds) {
+    if (tick >= b.startTick && tick <= b.frameEndTick) return b.round;
+  }
+  return null;
+}
+
+/**
  * Freeze each dead player's position/facing at their last known-alive tick, in place —
  * see docs/replay.md for why every consumer of `frames` needs this done at the source.
  * `roundBounds[].wanted` is each round's own tick list in ascending order; rounds don't
@@ -365,9 +390,9 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   // --- Events + grenades + shots, bucketed per round ---
   const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds, midairByTickSteam);
   const grenadesByRound = collectGrenades(demoBuffer, contextForEvents, roundBounds, playerIdOf, interval);
-  const shotsByRound = collectShots(demoBuffer, contextForEvents, playerIdOf);
-  const blindsByRound = collectBlinds(demoBuffer, contextForEvents, playerIdOf);
-  const hurtsByRound = collectHurts(demoBuffer, contextForEvents, playerIdOf);
+  const shotsByRound = collectShots(demoBuffer, contextForEvents, roundBounds, playerIdOf);
+  const blindsByRound = collectBlinds(demoBuffer, contextForEvents, roundBounds, playerIdOf);
+  const hurtsByRound = collectHurts(demoBuffer, contextForEvents, roundBounds, playerIdOf);
   const { byRound: bombCarrierByRound, seededRounds } = collectBombCarrier(
     demoBuffer,
     contextForEvents,
@@ -535,22 +560,10 @@ function collectEvents(
     byRound.get(round)!.push(ev);
   };
 
-  // Map a tick to the round whose playback window (including the post-round span) covers
-  // it — windows don't overlap, so a tick lands in at most one round. Kills are bucketed
-  // by tick (not `total_rounds_played + 1`): a kill *after* `round_end` has the counter
-  // already incremented, so the round-counter math would misfile it into the next round
-  // where its tick falls before the live frames and the kill feed never shows it.
-  const roundForTick = (tick: number): number | null => {
-    for (const b of roundBounds) {
-      if (tick >= b.startTick && tick <= b.frameEndTick) return b.round;
-    }
-    return null;
-  };
-
   // Kills — bucketed by tick so post-round kills stay in the round that just ended.
   for (const d of deathRows) {
     if (d.is_warmup_period) continue;
-    const round = roundForTick(d.tick);
+    const round = roundForTick(d.tick, roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     const ax = pick<number>(d, ['attacker_X']);
     const ay = pick<number>(d, ['attacker_Y']);
@@ -585,7 +598,7 @@ function collectEvents(
   ]) as Record<string, unknown>[];
   for (const p of plantRows) {
     const tick = Number(p.tick ?? 0);
-    const round = roundForTick(tick);
+    const round = roundForTick(tick, roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     const siteRaw = pick<unknown>(p, ['site']);
     const site = siteRaw === 0 || siteRaw === 'A' ? 'A' : siteRaw === 1 || siteRaw === 'B' ? 'B' : null;
@@ -604,7 +617,7 @@ function collectEvents(
   ]) as Record<string, unknown>[];
   for (const d of defuseRows) {
     const tick = Number(d.tick ?? 0);
-    const round = roundForTick(tick);
+    const round = roundForTick(tick, roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     push(round, {
       type: 'defuse',
@@ -650,13 +663,6 @@ function collectGrenades(
     return byRound; // grenades are non-critical for Phase 1
   }
 
-  const roundForTick = (tick: number): number | null => {
-    for (const b of roundBounds) {
-      if (tick >= b.startTick && tick <= b.frameEndTick) return b.round;
-    }
-    return null;
-  };
-
   // Field names vary across props, so read defensively via pick() — same as the
   // frame/event collectors (the parser may emit X/Y/Z capitalized like parseTicks).
   const gx = (r: Record<string, unknown>) => pick<number>(r, ['x', 'X']);
@@ -673,7 +679,7 @@ function collectGrenades(
     if (gx(r) === null) continue; // unlocated tick
     const id = Number(pick<number>(r, ['grenade_entity_id', 'entity_id']) ?? -1);
     if (id < 0) continue;
-    const round = roundForTick(gtick(r));
+    const round = roundForTick(gtick(r), roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     const key = `${round}:${id}`;
     if (!byThrow.has(key)) byThrow.set(key, []);
@@ -740,13 +746,15 @@ function collectGrenades(
 }
 
 /**
- * Every bullet fired, bucketed per round. `weapon_fire` is a mid-round event so it
- * counts rounds *completed* — the round it belongs to is `total_rounds_played + 1`,
- * same as kills. We pull the shooter's position + eye yaw to cast the 2D tracer.
+ * Every bullet fired, bucketed per round. `weapon_fire` is a mid-round event, bucketed by tick
+ * (`roundForTick`, like kills/plants/defuses) rather than `total_rounds_played + 1` — a shot in the
+ * post-round window would otherwise misfile into the next round. We pull the shooter's position +
+ * eye yaw to cast the 2D tracer.
  */
 function collectShots(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): Map<number, ReplayShot[]> {
   const byRound = new Map<number, ReplayShot[]>();
@@ -766,8 +774,8 @@ function collectShots(
     // `weapon_fire` also fires for grenade throws and knife swings — those aren't
     // bullets and shouldn't draw a tracer. Skip anything that isn't a firearm.
     if (!isBulletWeapon(pick<string>(f, ['weapon']))) continue;
-    const round = Number(f.total_rounds_played ?? -1) + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundForTick(Number(pick<number>(f, ['tick']) ?? 0), roundBounds);
+    if (round === null || !context.liveRounds.has(round)) continue;
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push({
       tick: Number(pick<number>(f, ['tick']) ?? 0),
@@ -781,12 +789,14 @@ function collectShots(
 
 /**
  * Flash events, bucketed per round. `player_blind` carries `blind_duration` (seconds);
- * the player renders a whiteout that fades to team color over that span. Mid-round
- * event, so the round is `total_rounds_played + 1` (same as kills/shots).
+ * the player renders a whiteout that fades to team color over that span. Mid-round event,
+ * bucketed by tick (`roundForTick`, like kills/plants/defuses/shots) so a flash landing in the
+ * post-round window doesn't misfile into the next round.
  */
 function collectBlinds(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): Map<number, ReplayBlind[]> {
   const byRound = new Map<number, ReplayBlind[]>();
@@ -803,8 +813,8 @@ function collectBlinds(
 
   for (const b of rows) {
     if (b.is_warmup_period) continue;
-    const round = Number(b.total_rounds_played ?? -1) + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundForTick(Number(pick<number>(b, ['tick']) ?? 0), roundBounds);
+    if (round === null || !context.liveRounds.has(round)) continue;
     const duration = Number(pick<number>(b, ['blind_duration']) ?? 0);
     if (duration <= 0) continue;
     if (!byRound.has(round)) byRound.set(round, []);
@@ -822,11 +832,13 @@ function collectBlinds(
 /**
  * Damage events, bucketed per round. `player_hurt` fires once per damage instance —
  * fire (inferno) ticks repeatedly, so a short red blink per hurt reads as a sustained
- * burn. Mid-round event, so the round is `total_rounds_played + 1`.
+ * burn. Mid-round event, bucketed by tick (`roundForTick`, like kills/plants/defuses/
+ * shots/blinds) so trailing fire damage after `round_end` doesn't misfile into the next round.
  */
 function collectHurts(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): Map<number, ReplayHurt[]> {
   const byRound = new Map<number, ReplayHurt[]>();
@@ -842,8 +854,8 @@ function collectHurts(
 
   for (const h of rows) {
     if (h.is_warmup_period) continue;
-    const round = Number(h.total_rounds_played ?? -1) + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundForTick(Number(pick<number>(h, ['tick']) ?? 0), roundBounds);
+    if (round === null || !context.liveRounds.has(round)) continue;
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push({
       tick: Number(pick<number>(h, ['tick']) ?? 0),
@@ -866,7 +878,7 @@ function collectHurts(
 function collectBombCarrier(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number }[],
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): { byRound: Map<number, BombCarrierPoint[]>; seededRounds: number } {
   const byRound = new Map<number, BombCarrierPoint[]>();
@@ -895,7 +907,9 @@ function collectBombCarrier(
   }
   const seededRounds = byRound.size;
 
-  // 2) Pickups + drops (mid-round events → round = total_rounds_played + 1).
+  // 2) Pickups + drops — mid-round events, bucketed by tick (`roundForTick`, like every other
+  // mid-round collector above) so one landing in the post-round window doesn't misfile into the
+  // next round.
   const carrierEvent = (name: string, toCarrier: (e: Record<string, unknown>) => number | null) => {
     let rows: Record<string, unknown>[];
     try {
@@ -908,9 +922,10 @@ function collectBombCarrier(
     }
     for (const e of rows) {
       if (e.is_warmup_period) continue;
-      const round = Number(e.total_rounds_played ?? -1) + 1;
-      if (!context.liveRounds.has(round)) continue;
-      push(round, { tick: Number(pick<number>(e, ['tick']) ?? 0), carrierId: toCarrier(e) });
+      const tick = Number(pick<number>(e, ['tick']) ?? 0);
+      const round = roundForTick(tick, roundBounds);
+      if (round === null || !context.liveRounds.has(round)) continue;
+      push(round, { tick, carrierId: toCarrier(e) });
     }
   };
   carrierEvent('bomb_pickup', (e) => playerIdOf(pick<string>(e, ['user_steamid'])));

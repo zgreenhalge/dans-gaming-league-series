@@ -46,7 +46,7 @@ import {
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
 import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
-import { freezeDeadPositions, mergeReplayResults, type BuildReplayResult } from './extract';
+import { freezeDeadPositions, mergeReplayResults, roundForTick, type BuildReplayResult } from './extract';
 import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayFrame, ReplayPayload, ReplayPlayerFrame, ReplayPlayerMeta } from './types';
 import { test, report } from '../test-support/miniTest';
@@ -518,6 +518,29 @@ test('aggregate: extractPlayerTrace freezes at the last alive position on death,
   approx(later.x, 10);
   approx(later.y, 20);
   assert.equal(later.alive, false);
+});
+
+// --- extract: roundForTick — the shared round-attribution rule every replay collector uses ---
+test('roundForTick: a mid-round event after round_end but within the post-round window stays in the round that just ended', () => {
+  // Round 1's round_end (and its `total_rounds_played`) is already at 1, but its playback window
+  // (post-round span) still runs through tick 700 — a utility event landing in that gap (e.g. a
+  // molotov's trailing burn) must attribute to round 1, not the naive `total_rounds_played + 1`
+  // round 2, whose own frames don't start until tick 800.
+  const roundBounds = [
+    { round: 1, startTick: 100, frameEndTick: 700 },
+    { round: 2, startTick: 800, frameEndTick: 1400 },
+  ];
+  assert.equal(roundForTick(650, roundBounds), 1);
+  assert.equal(roundForTick(850, roundBounds), 2);
+});
+
+test('roundForTick: null before the first round and between non-adjacent round windows', () => {
+  const roundBounds = [
+    { round: 1, startTick: 100, frameEndTick: 700 },
+    { round: 2, startTick: 800, frameEndTick: 1400 },
+  ];
+  assert.equal(roundForTick(50, roundBounds), null);
+  assert.equal(roundForTick(750, roundBounds), null); // gap between round 1's and round 2's windows
 });
 
 test('extract: freezeDeadPositions freezes a dead player at their last-alive tick within their round, per player, without cross-round bleed', () => {
