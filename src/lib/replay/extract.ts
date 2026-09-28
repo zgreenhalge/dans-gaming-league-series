@@ -78,6 +78,15 @@ function isBulletWeapon(weapon: string | null): boolean {
   );
 }
 
+/** One round's playback window — the shape every replay collector's `roundForTick()` lookup needs.
+ *  The fuller `roundBounds` array built in `buildReplay()` carries more fields (`endTick`,
+ *  `freezeEndTick`, `wanted`); collectors that only need the tick-lookup take just this. */
+interface RoundPlaybackWindow {
+  round: number;
+  startTick: number;
+  frameEndTick: number;
+}
+
 /**
  * The round whose playback window (including its post-round span) covers `tick` — the one place
  * every replay collector decides which round a mid-round event belongs to, mirroring how
@@ -95,7 +104,7 @@ function isBulletWeapon(weapon: string | null): boolean {
  */
 export function roundForTick(
   tick: number,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
 ): number | null {
   for (const b of roundBounds) {
     if (tick >= b.startTick && tick <= b.frameEndTick) return b.round;
@@ -551,7 +560,7 @@ function collectEvents(
   context: ReturnType<typeof buildMatchContext>,
   playerIdOf: (s: string | null | undefined) => number | null,
   reasonByRound: Map<number, string | null>,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
   midairByTickSteam: Map<string, boolean>,
 ): Map<number, ReplayEvent[]> {
   const byRound = new Map<number, ReplayEvent[]>();
@@ -651,7 +660,7 @@ function collectEvents(
 function collectGrenades(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
   playerIdOf: (s: string | null | undefined) => number | null,
   interval: number,
 ): Map<number, ReplayGrenade[]> {
@@ -754,14 +763,13 @@ function collectGrenades(
 function collectShots(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): Map<number, ReplayShot[]> {
   const byRound = new Map<number, ReplayShot[]>();
   let rows: Record<string, unknown>[];
   try {
     rows = parseEvent(demoBuffer, 'weapon_fire', [], [
-      'total_rounds_played',
       'is_warmup_period',
       'weapon',
     ]) as Record<string, unknown>[];
@@ -774,11 +782,12 @@ function collectShots(
     // `weapon_fire` also fires for grenade throws and knife swings — those aren't
     // bullets and shouldn't draw a tracer. Skip anything that isn't a firearm.
     if (!isBulletWeapon(pick<string>(f, ['weapon']))) continue;
-    const round = roundForTick(Number(pick<number>(f, ['tick']) ?? 0), roundBounds);
+    const tick = Number(pick<number>(f, ['tick']) ?? 0);
+    const round = roundForTick(tick, roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push({
-      tick: Number(pick<number>(f, ['tick']) ?? 0),
+      tick,
       shooterId: playerIdOf(pick<string>(f, ['user_steamid'])),
     });
   }
@@ -796,14 +805,13 @@ function collectShots(
 function collectBlinds(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): Map<number, ReplayBlind[]> {
   const byRound = new Map<number, ReplayBlind[]>();
   let rows: Record<string, unknown>[];
   try {
     rows = parseEvent(demoBuffer, 'player_blind', [], [
-      'total_rounds_played',
       'is_warmup_period',
       'blind_duration',
     ]) as Record<string, unknown>[];
@@ -813,13 +821,14 @@ function collectBlinds(
 
   for (const b of rows) {
     if (b.is_warmup_period) continue;
-    const round = roundForTick(Number(pick<number>(b, ['tick']) ?? 0), roundBounds);
+    const tick = Number(pick<number>(b, ['tick']) ?? 0);
+    const round = roundForTick(tick, roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     const duration = Number(pick<number>(b, ['blind_duration']) ?? 0);
     if (duration <= 0) continue;
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push({
-      tick: Number(pick<number>(b, ['tick']) ?? 0),
+      tick,
       playerId: playerIdOf(pick<string>(b, ['user_steamid'])),
       duration,
     });
@@ -838,14 +847,13 @@ function collectBlinds(
 function collectHurts(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): Map<number, ReplayHurt[]> {
   const byRound = new Map<number, ReplayHurt[]>();
   let rows: Record<string, unknown>[];
   try {
     rows = parseEvent(demoBuffer, 'player_hurt', [], [
-      'total_rounds_played',
       'is_warmup_period',
     ]) as Record<string, unknown>[];
   } catch {
@@ -854,11 +862,12 @@ function collectHurts(
 
   for (const h of rows) {
     if (h.is_warmup_period) continue;
-    const round = roundForTick(Number(pick<number>(h, ['tick']) ?? 0), roundBounds);
+    const tick = Number(pick<number>(h, ['tick']) ?? 0);
+    const round = roundForTick(tick, roundBounds);
     if (round === null || !context.liveRounds.has(round)) continue;
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push({
-      tick: Number(pick<number>(h, ['tick']) ?? 0),
+      tick,
       playerId: playerIdOf(pick<string>(h, ['user_steamid'])),
     });
   }
@@ -878,7 +887,7 @@ function collectHurts(
 function collectBombCarrier(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  roundBounds: RoundPlaybackWindow[],
   playerIdOf: (s: string | null | undefined) => number | null,
 ): { byRound: Map<number, BombCarrierPoint[]>; seededRounds: number } {
   const byRound = new Map<number, BombCarrierPoint[]>();
@@ -914,7 +923,6 @@ function collectBombCarrier(
     let rows: Record<string, unknown>[];
     try {
       rows = parseEvent(demoBuffer, name, [], [
-        'total_rounds_played',
         'is_warmup_period',
       ]) as Record<string, unknown>[];
     } catch {
