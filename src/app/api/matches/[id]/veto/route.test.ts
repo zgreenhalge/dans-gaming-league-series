@@ -1,8 +1,9 @@
 /**
  * Route-handler harness for PATCH /api/matches/[id]/veto (#379) — exercises the route's own inline
  * admin-or-in-match access gate, the already-played/scheduling-window checks, gauntlet (simultaneous,
- * fixed-slot) vs. regular (sequential, turn-based) pick/ban rules, map-pool/side validation, the
- * gauntlet auto-pick-remaining-map step, and the auto-provision-on-veto-complete side effect.
+ * shared-per-faction-slot) vs. regular (sequential, turn-based) pick/ban rules, map-pool/side
+ * validation, the gauntlet auto-pick-remaining-map step, and the auto-provision-on-veto-complete side
+ * effect.
  *
  * Run:  npx vitest run "src/app/api/matches/[id]/veto/route.test.ts"
  */
@@ -22,8 +23,8 @@ const OUT_OF_MATCH_ID = 9;
 
 const MAP_POOL = ['Foroglio', 'Vertigo', 'Cobblestone', 'Nuke', 'Inferno'];
 
-// Gauntlet match: shirts = [10, 11] (10 gets shirts_ban, 11 gets shirts_ban2 — lower id first),
-// skins = [12, 13] (12 gets skins_ban1, 13 gets skins_ban2).
+// Gauntlet match: shirts = [10, 11], skins = [12, 13] — either player on a faction may fill either
+// of that faction's two ban slots.
 const GAUNTLET_MATCH_ID = 200;
 const G_SHIRTS1 = 10, G_SHIRTS2 = 11, G_SKINS1 = 12, G_SKINS2 = 13;
 
@@ -171,11 +172,21 @@ async function main() {
     assert.equal((await res.json()).error, "Not your faction's ban");
   });
 
-  await test('PATCH — gauntlet: a player submitting their teammate\'s ban slot is rejected (403)', async () => {
-    installFixture();
-    const res = await call(GAUNTLET_MATCH_ID, G_SHIRTS1, { field: 'shirts_ban2', value: 'Foroglio' });
-    assert.equal(res.status, 403);
-    assert.equal((await res.json()).error, 'Not your ban slot');
+  await test('PATCH — gauntlet: a player may fill either of their faction\'s two ban slots', async () => {
+    const db = installFixture();
+    assert.equal((await call(GAUNTLET_MATCH_ID, G_SHIRTS1, { field: 'shirts_ban', value: 'Foroglio' })).status, 200);
+    assert.equal((await call(GAUNTLET_MATCH_ID, G_SHIRTS1, { field: 'shirts_ban2', value: 'Vertigo' })).status, 200);
+    const m = db.matches.find((mm) => mm.id === GAUNTLET_MATCH_ID)!;
+    assert.equal(m.shirts_ban, 'Foroglio');
+    assert.equal(m.shirts_ban2, 'Vertigo');
+  });
+
+  await test('PATCH — gauntlet: a teammate may overwrite the other player\'s already-set ban', async () => {
+    const db = installFixture();
+    assert.equal((await call(GAUNTLET_MATCH_ID, G_SHIRTS1, { field: 'shirts_ban', value: 'Foroglio' })).status, 200);
+    assert.equal((await call(GAUNTLET_MATCH_ID, G_SHIRTS2, { field: 'shirts_ban', value: 'Vertigo' })).status, 200);
+    const m = db.matches.find((mm) => mm.id === GAUNTLET_MATCH_ID)!;
+    assert.equal(m.shirts_ban, 'Vertigo');
   });
 
   await test('PATCH — gauntlet: each player fills their own slot; the 4th ban auto-picks the sole remaining map', async () => {

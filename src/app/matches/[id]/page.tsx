@@ -264,7 +264,6 @@ export default async function MatchPage({
   let canVeto = false;
   let canEnterResults = false;
   let playerFaction: 'SHIRTS' | 'SKINS' | null = null;
-  let gauntletPlayerIndex: 0 | 1 | null = null;
   let vetoIsAdmin = false;
   let isCurrentUserAdmin = false;
   let canManageServer = false; // admin or in-match → can start/stop the match server
@@ -289,14 +288,6 @@ export default async function MatchPage({
       canEdit = true;
       if (myStatRow) {
         playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
-        if (season.is_gauntlet) {
-          const factionPlayerIds = stats
-            .filter((s) => s.faction === myStatRow.faction)
-            .map((s) => s.player_id)
-            .sort((a, b) => a - b);
-          const idx = factionPlayerIds.indexOf(currentPlayerId);
-          gauntletPlayerIndex = idx === 0 ? 0 : idx === 1 ? 1 : null;
-        }
       }
     }
     // Can enter results: veto complete + (in match or admin). Admins can also edit after played.
@@ -405,7 +396,6 @@ export default async function MatchPage({
                   canVeto={canVeto}
                   isGauntlet={season.is_gauntlet}
                   playerFaction={playerFaction}
-                  gauntletPlayerIndex={gauntletPlayerIndex}
                   isAdmin={vetoIsAdmin}
                 />
               </div>
