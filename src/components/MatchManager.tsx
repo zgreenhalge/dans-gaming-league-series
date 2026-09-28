@@ -157,7 +157,6 @@ export function MatchManager({
                         canVeto
                         isGauntlet={m.isGauntlet}
                         playerFaction={null}
-                        gauntletPlayerIndex={null}
                         isAdmin
                       />
                     </section>

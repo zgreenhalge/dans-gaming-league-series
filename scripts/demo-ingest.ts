@@ -10,11 +10,12 @@
 // Auto-commit predicate (D5, `evaluateAutoCommit` in `src/lib/demo/autoCommit.ts`) — ALL must hold,
 // else fall back to the staged-result review: the match has no existing confirmed score, quarantine
 // passes, zero parser warnings (also covers full roster resolution: an unresolved player throws
-// before this point, and a stored-vs-demo side disagreement pushes a warning), `skins_starting_side`
-// was STORED rather than just demo-inferred (excludes the gauntlet knife path — #137's self-derived
-// score always has a payload, but never a stored side — always manual review), and the demo-derived
-// score matches MatchZy's own `map_result` remote-log event (the independent cross-check;
-// `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS, so it's direct equality).
+// before this point, and a stored-vs-demo side disagreement pushes a warning), the starting side is
+// trusted (this script resolves that: STORED for a regular-season match, or demo-inferred for a
+// gauntlet/knife match — #137's self-derived side is trusted on its own, since it never has a stored
+// side to check), and the demo-derived score matches MatchZy's own `map_result` remote-log event (the
+// independent cross-check; `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS, so it's direct
+// equality).
 // The write itself is gated on `AUTO_COMMIT_ENABLED !== 'false'` — auto-commit is on by default;
 // setting the repo Actions variable to `false` is the manual override, forcing every eligible match
 // through the staged-result review instead (e.g. while investigating a parser issue). `writeMatchScore()`
@@ -203,7 +204,7 @@ async function main() {
     const decision = evaluateAutoCommit({
       quarantinePassed: q.ok,
       warningCount: warnings.length,
-      skinsSideStored: inputs.skinsSide !== null,
+      sideTrusted: inputs.skinsSide !== null || inputs.isGauntlet,
       alreadyPlayed: existing !== null,
       derived: { shirts: payload.shirts, skins: payload.skins },
       mapResult: mapResult ? { shirts: mapResult.team1.score, skins: mapResult.team2.score } : null,
