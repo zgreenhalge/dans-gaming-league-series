@@ -194,7 +194,7 @@ export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): P
   const row = parseLiveScoreEvent(body);
   if (!row) return null;
   const updatedAt = new Date().toISOString();
-  await admin.from('live_match_score').upsert(
+  const { error } = await admin.from('live_match_score').upsert(
     {
       match_id: row.matchId,
       shirts_score: row.shirts,
@@ -204,6 +204,7 @@ export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): P
     },
     { onConflict: 'match_id' },
   );
+  if (error) throw error;
   return { matchId: row.matchId, shirts: row.shirts, skins: row.skins, round: row.round, players: row.players, updatedAt };
 }
 
