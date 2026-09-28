@@ -389,7 +389,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     return this;
   }
   /** Mirrors real Supabase's `.throwOnError()`: an `error` result rejects the awaited chain instead
-   *  of resolving with it, so a caller than ends its write with `.throwOnError()` doesn't need its
+   *  of resolving with it, so a caller that ends its write with `.throwOnError()` doesn't need its
    *  own `if (error) throw error` check. */
   throwOnError(): this {
     this.shouldThrowOnError = true;
