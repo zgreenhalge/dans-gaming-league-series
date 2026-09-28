@@ -217,12 +217,12 @@ async function main() {
     assert.equal(createCalls.length, 2);
     const firstBody = JSON.parse(createCalls[0].init?.body as string);
     assert.equal(firstBody.name, 'Week 1 Game 1');
-    // Match 100: shirts Alice(1)+Bob(2, both linked with a name-color role), skins Carol(3)+Dave(4, unlinked),
-    // followed by a masked link to the match's own page — Discord auto-unfurls the (unwrapped) URL
-    // underneath into its own rich preview card, so no manual embed is sent at all.
+    // A masked "Game 1" link to the match's own page — Discord auto-unfurls the (unwrapped) URL
+    // underneath into its own rich preview card, so no manual embed is sent at all — followed by
+    // shirts Alice(1)+Bob(2, both linked with a name-color role) vs skins Carol(3)+Dave(4, unlinked).
     assert.equal(
       firstBody.message.content,
-      '<@&role-alice> & <@&role-bob> vs Carol & Dave — [Box Score](https://dans-gaming-league-series.vercel.app/matches/100)',
+      '[Game 1](https://dans-gaming-league-series.vercel.app/matches/100): <@&role-alice> & <@&role-bob> vs Carol & Dave',
     );
     assert.equal(firstBody.message.embeds, undefined);
 
@@ -529,10 +529,11 @@ async function main() {
     const body = JSON.parse(createCalls[0].init?.body as string);
     assert.equal(body.name, 'GAUNTLET: Round 1 Group 1');
     // Game 1 (match 200): shirts Alice(1)+Bob(2) vs skins Erin(5)+Frank(6). Game 2 (match 201): shirts
-    // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled. Each game gets its own
-    // masked link, so Discord auto-unfurls both into separate preview cards; no manual embed is sent.
-    assert.match(body.message.content, /Game 1: <@&role-alice> & <@&role-bob> vs Erin & Frank — \[Box Score\]\(https:\/\/dans-gaming-league-series\.vercel\.app\/matches\/200\)/);
-    assert.match(body.message.content, /Game 2: <@&role-alice> & Erin vs <@&role-bob> & Frank — \[Box Score\]\(https:\/\/dans-gaming-league-series\.vercel\.app\/matches\/201\)/);
+    // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled. Each game's own masked
+    // "Game N" link leads its line, so Discord auto-unfurls both into separate preview cards; no
+    // manual embed is sent.
+    assert.match(body.message.content, /\[Game 1\]\(https:\/\/dans-gaming-league-series\.vercel\.app\/matches\/200\): <@&role-alice> & <@&role-bob> vs Erin & Frank/);
+    assert.match(body.message.content, /\[Game 2\]\(https:\/\/dans-gaming-league-series\.vercel\.app\/matches\/201\): <@&role-alice> & Erin vs <@&role-bob> & Frank/);
     assert.equal(body.message.embeds, undefined);
 
     // Both games point at the same thread.
