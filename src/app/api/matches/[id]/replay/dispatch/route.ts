@@ -72,7 +72,13 @@ export async function POST(
       { status: 500 },
     );
   }
-  await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  const { error: statusErr } = await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  if (statusErr) {
+    return NextResponse.json(
+      { error: `Could not update replay status: ${statusErr.message}` },
+      { status: 500 },
+    );
+  }
 
   const dispatch = await dispatchAndRecordFailure(supabaseAdmin, {
     jobType: JOB_TYPE,

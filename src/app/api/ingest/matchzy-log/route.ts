@@ -79,7 +79,7 @@ async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, mat
   if (process.env.REPLAY_AUTO_DISPATCH === 'false') return;
 
   const now = new Date().toISOString();
-  const { data: claimed } = await supabaseAdmin
+  const { data: claimed, error: claimErr } = await supabaseAdmin
     .from('background_jobs')
     .upsert(
       {
@@ -94,9 +94,16 @@ async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, mat
       { onConflict: 'job_type,match_id', ignoreDuplicates: true },
     )
     .select('match_id');
+  if (claimErr) {
+    console.error(`matchzy-log: could not claim replay-extract job for match ${matchId}: ${claimErr.message}`);
+    return;
+  }
   if (!claimed || claimed.length === 0) return;
 
-  await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  const { error: statusErr } = await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  if (statusErr) {
+    console.error(`matchzy-log: could not set replay_status=queued for match ${matchId}: ${statusErr.message}`);
+  }
   const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
     jobType: REPLAY_EXTRACT_JOB_TYPE,
     key: matchJobKey(matchId),

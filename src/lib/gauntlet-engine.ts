@@ -189,7 +189,8 @@ export async function materializePod(
     .select('id');
   if (claimErr) throw claimErr;
   if (!claimed || claimed.length === 0) {
-    await supabaseAdmin.from('matches').delete().eq('id', match1Id);
+    const { error: cleanupErr } = await supabaseAdmin.from('matches').delete().eq('id', match1Id);
+    if (cleanupErr) throw cleanupErr;
     return;
   }
 
