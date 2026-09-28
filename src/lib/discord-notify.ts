@@ -312,13 +312,10 @@ async function getStoredMessageId(supabaseAdmin: SupabaseClient, matchId: number
  *  instead of updating in place, which is a worse UX but not a reason to break the caller's own
  *  no-throw guarantee. */
 async function rememberNotificationMessage(supabaseAdmin: SupabaseClient, matchId: number, messageId: string): Promise<void> {
-  try {
-    await supabaseAdmin
-      .from('match_discord_state')
-      .upsert({ match_id: matchId, notification_message_id: messageId }, { onConflict: 'match_id' });
-  } catch (e) {
-    console.error(`rememberNotificationMessage(${matchId}) failed (non-fatal):`, e);
-  }
+  const { error } = await supabaseAdmin
+    .from('match_discord_state')
+    .upsert({ match_id: matchId, notification_message_id: messageId }, { onConflict: 'match_id' });
+  if (error) console.error(`rememberNotificationMessage(${matchId}) failed (non-fatal):`, error);
 }
 
 /** Wraps `getMatchMeta()` so an unexpected failure (a thrown Postgres error, a client that can't
@@ -478,16 +475,24 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   // schedule_match_reminder() always upserts a match_discord_state row before this ever fires, but
   // this doesn't rely on that invariant holding across the DB/app boundary — ON CONFLICT DO NOTHING
   // first guarantees a row to claim, without ever clobbering an already-set reminder_sent_at.
-  await supabaseAdmin
+  const { error: seedErr } = await supabaseAdmin
     .from('match_discord_state')
     .upsert({ match_id: matchId, reminder_sent_at: null }, { onConflict: 'match_id', ignoreDuplicates: true });
+  if (seedErr) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_REMINDER, `Failed to seed match_discord_state: ${seedErr.message}`);
+    return;
+  }
 
-  const { data: claimed } = await supabaseAdmin
+  const { data: claimed, error: claimErr } = await supabaseAdmin
     .from('match_discord_state')
     .update({ reminder_sent_at: new Date().toISOString() })
     .eq('match_id', matchId)
     .is('reminder_sent_at', null)
     .select('match_id');
+  if (claimErr) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_REMINDER, `Failed to claim reminder: ${claimErr.message}`);
+    return;
+  }
   if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
 
   const { content, embed } = buildMatchMessage(matchId, meta, {
