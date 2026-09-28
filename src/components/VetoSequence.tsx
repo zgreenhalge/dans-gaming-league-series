@@ -18,8 +18,8 @@ const REGULAR_STEPS = [
   { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
-// Gauntlet = playoffs, so `isGauntlet` is the only flag this component branches on for veto shape —
-// see docs/glossary.md's Gauntlet entry.
+// Gauntlet = playoffs — see docs/glossary.md's Gauntlet entry. `gauntletShaped` (below), not the raw
+// `isGauntlet` prop, is what this component branches on for veto shape and permissions.
 // Simultaneous: either player fills either of their faction's two slots, in this display order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -133,22 +133,22 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return fieldFaction === playerFaction;
   }
 
-  // Whether the viewer could fill this still-empty field. Gauntlet bans are simultaneous and shared
-  // per faction — either player (or admin) may fill any of their faction's open slots, in any order,
-  // right up until the 4th ban locks in the auto-picked map; a regular-season pick/ban is strictly
-  // sequential, one team-wide slot at a time.
+  // Whether the viewer could fill this still-empty field. Gauntlet-shaped bans are simultaneous and
+  // shared per faction — either player (or admin) may fill any of their faction's open slots, in any
+  // order, right up until the 4th ban locks in the auto-picked map; a regular-season pick/ban is
+  // strictly sequential, one team-wide slot at a time. Keyed on `gauntletShaped`, not the raw
+  // `isGauntlet` prop, so a match whose season-level flag never got set still gets the 4-ban
+  // permission model that matches the tile shape it's actually rendering (see `gauntletShaped` above).
   function isFillable(field: StepField): boolean {
     if (!canVeto || displayValue(field) !== null) return false;
-    if (isGauntlet) return isAdmin || isMyFaction(field);
-    if (field !== sequenceNextField) return false;
+    if (!gauntletShaped && field !== sequenceNextField) return false;
     return isAdmin || isMyFaction(field);
   }
 
   // Whether this still-empty field is "yours" specifically, independent of admin status — drives the
   // "YOUR BAN/PICK/SIDE" hint, so an admin who is *also* in the match still sees it on their own slot.
   function isYourTurn(field: StepField): boolean {
-    if (!canVeto || displayValue(field) !== null || !isMyFaction(field)) return false;
-    return isGauntlet || field === sequenceNextField;
+    return isFillable(field) && isMyFaction(field);
   }
 
   // Whether a filled tile can be corrected by the current user

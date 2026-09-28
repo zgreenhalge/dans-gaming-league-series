@@ -7,13 +7,12 @@ export interface AutoCommitInput {
   quarantinePassed: boolean;
   /** Combined parser warning count (parseDemoFile + parseDemoSabremetrics). */
   warningCount: number;
-  /** `skins_starting_side` was STORED, not just demo-inferred. Only gates non-gauntlet matches — a
-   *  gauntlet/knife match (`isGauntlet: true`) never has a stored side (#137's self-derived score
-   *  always has a payload, but never a stored side) and is trusted on its demo-inferred side instead. */
-  skinsSideStored: boolean;
-  /** Gauntlet/knife-round season — the starting side is always demo-inferred (never stored), so this
-   *  match is exempted from the `skinsSideStored` check rather than always blocked by it. */
-  isGauntlet: boolean;
+  /** Whether the match's starting side is trustworthy enough to auto-commit on. A regular-season
+   *  match needs its `skins_starting_side` actually STORED, not just demo-inferred; a gauntlet/knife
+   *  match's side is always demo-inferred (#137's self-derived score never has a stored side) and is
+   *  trusted on its own. The caller resolves which rule applies — this predicate only cares whether
+   *  the side, however it was determined, is trustworthy. */
+  sideTrusted: boolean;
   /** The match already has a confirmed score. Auto-commit never overwrites a played match — a
    *  disagreement always routes to manual review, regardless of how clean the new parse is. */
   alreadyPlayed: boolean;
@@ -38,7 +37,7 @@ export function evaluateAutoCommit(input: AutoCommitInput): AutoCommitDecision {
   if (input.warningCount > 0) {
     return { eligible: false, reason: `${input.warningCount} parser warning(s)` };
   }
-  if (!input.isGauntlet && !input.skinsSideStored) {
+  if (!input.sideTrusted) {
     return { eligible: false, reason: 'skins_starting_side not stored (demo-inferred only)' };
   }
   if (!input.mapResult) {

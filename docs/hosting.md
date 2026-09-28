@@ -189,12 +189,14 @@ A clean, corroborated parse skips the human Confirm. `evaluateAutoCommit()`
 (`src/lib/demo/autoCommit.ts`) is the **D5 predicate** — a pure decision over: the match has no
 existing confirmed score (auto-commit never overwrites a played match — a disagreement always routes
 to manual review, no matter how clean the new parse is), quarantine passes, zero parser warnings
-(which also covers full roster resolution and a clean stored-vs-demo side agreement),
-`skins_starting_side` was **stored** for a non-gauntlet match (a gauntlet/knife match's self-derived
-side, #137, is trusted instead — it never has a stored side to check), and the demo-derived score
-matches MatchZy's own `map_result` event read from `mapResultKey` (`buildMatchzyConfig` fixes
-team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `scripts/demo-ingest.ts`
-gathers the inputs, calls it after quarantine, and logs the verdict either way.
+(which also covers full roster resolution and a clean stored-vs-demo side agreement), the starting
+side is **trusted** (`sideTrusted`, resolved by `scripts/demo-ingest.ts` rather than the predicate
+itself — `skins_starting_side` was actually stored for a regular-season match, or the match is a
+gauntlet/knife match, whose self-derived side, #137, is trusted on its own since it never has a
+stored side to check), and the demo-derived score matches MatchZy's own `map_result` event read from
+`mapResultKey` (`buildMatchzyConfig` fixes team1 = SHIRTS / team2 = SKINS, so it's a direct equality,
+no side remapping). `scripts/demo-ingest.ts` gathers the inputs, calls it after quarantine, and logs
+the verdict either way.
 
 `AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset (or
 anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, marks
