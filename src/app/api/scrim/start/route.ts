@@ -91,7 +91,15 @@ export async function POST(req: NextRequest) {
       extraCvars: `${pugModeCvarLine({ playout, friendly })}; echo ${SCRIM_BOOT_MARKER}`,
     });
   } catch (err) {
-    await releaseScrimSession(supabaseAdmin);
+    // Best-effort: releaseScrimSession() can itself throw on a failed delete, and this catch block
+    // must still return the real launchServer failure below rather than let a cleanup error replace
+    // it. A row left stuck here self-heals on the next scrim start's reconcileScrimSession() call
+    // above, since the server that failed to launch isn't live either.
+    try {
+      await releaseScrimSession(supabaseAdmin);
+    } catch (releaseErr) {
+      console.error('scrim/start: releaseScrimSession cleanup failed after a launchServer error:', releaseErr);
+    }
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Could not start the server' }, { status: 502 });
   }
 
