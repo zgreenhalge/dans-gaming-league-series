@@ -64,11 +64,13 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
           const row = (payload.new ?? payload.old) as { job_type?: string; status?: string } | null;
           if (row?.job_type !== DEMO_INGEST_JOB_TYPE) return;
           refresh();
-          // Only 'confirmed' can land the match's own score (auto-commit) with nobody around to click
-          // Confirm — every other status only changes this block's own staged-result view, which
-          // refresh() above already covers, so there's nothing router.refresh()'s full server-data
-          // refetch would pick up.
-          if (row.status === 'confirmed') router.refresh();
+          // A settled status (parsed/quarantined/confirmed/failed/dismissed) can land the match's own
+          // score (auto-commit, or a write that succeeded but whose trailing cleanup then failed the
+          // job) with nobody around to click Confirm — keep the page's own server-rendered data in
+          // sync too. The received/queued/running hops in between are the only ones skipped, since
+          // those only ever change this block's own staged-result view, which refresh() above already
+          // covers.
+          if (row.status && !DEMO_INGEST_IN_PROGRESS.has(row.status)) router.refresh();
         },
       )
       .subscribe();
