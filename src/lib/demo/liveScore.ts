@@ -11,16 +11,17 @@
 // `replay-extract.ts` both pull their demo through `pullDemoAndClearLiveScore()` below rather than
 // calling `ensureDemoInR2()` (`fetchFromDathost.ts`) directly, so the pairing can't be forgotten by a
 // future caller; whichever of them actually owns the pull clears it, and the other's redundant call is
-// a cheap no-op. `/api/matches/[id]/demo/parse` (the manual-upload path in `DemoUploadModal`) clears it
-// too, the moment it confirms the R2 read succeeded — before attempting to parse, since a demo salvaged
-// after a server issue can be partial/corrupt and fail to parse without that making it any less proof
-// the match is over. Not at `map_result` (GOTV's flush can lag well behind the event, so the demo may
-// not exist yet) and not once a score is confirmed (auto-commit or a human confirm can lag well behind
-// the demo landing, especially for a quarantined/staged-for-review match). A demo existing is proof the
-// match is over regardless of whether its stats have been derived yet, so that's the point the "Live"
-// label should stop being true. `writeMatchScore()` (`matchScore.ts`) also clears the row as a
-// fallback, for the rare case a score gets confirmed with no demo ever pulled (e.g. a manual override
-// after a failed DatHost pull) — by the time any demo-backed score lands, this has always already run.
+// a cheap no-op. `/api/matches/[id]/demo/parse` (the in-request path `DemoUploadModal` uses to edit an
+// already-played match's stats from a fresh demo) clears it too, the moment it confirms the R2 read
+// succeeded — before attempting to parse, since a demo salvaged after a server issue can be partial/
+// corrupt and fail to parse without that making it any less proof the match is over. Not at
+// `map_result` (GOTV's flush can lag well behind the event, so the demo may not exist yet) and not
+// once a score is confirmed (auto-commit or a human confirm can lag well behind the demo landing,
+// especially for a quarantined/staged-for-review match). A demo existing is proof the match is over
+// regardless of whether its stats have been derived yet, so that's the point the "Live" label should
+// stop being true. `writeMatchScore()` (`matchScore.ts`) also clears the row as a fallback, for the
+// rare case a score gets confirmed with no demo ever pulled (e.g. a manual override after a failed
+// DatHost pull) — by the time any demo-backed score lands, this has always already run.
 //
 // Field names for `round_end`'s payload match `map_result`'s confirmed shape (`matchid`,
 // `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS), plus a
