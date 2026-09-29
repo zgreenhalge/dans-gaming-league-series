@@ -168,7 +168,7 @@ export type PmsRow = { id: number; player_id: number; match_id: number };
  *  structurally-compatible fetch (e.g. `getAllSabremetrics()`'s own `id, player_id, match_id,
  *  rounds_played, faction` read) — `cache()` can't collapse two different column selections into
  *  one query the way passing `rows` explicitly can. */
-export const fetchAllPmsRows = cache((): Promise<PmsRow[]> =>
+const fetchAllPmsRows = cache((): Promise<PmsRow[]> =>
   fetchAllPages<PmsRow>((from, to) =>
     asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
   ),

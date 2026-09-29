@@ -1,6 +1,5 @@
 /**
- * Unit tests for collectSprayAccuracy — spray accuracy within sequences of 3+ rifle shots
- * (#173 phase 3.2).
+ * Unit tests for collectSprayAccuracy — spray accuracy within sequences of 3+ rifle shots.
  *
  * Run:  npx vitest run src/lib/parsers/sprayAccuracy.test.ts
  */

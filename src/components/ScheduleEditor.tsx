@@ -8,7 +8,7 @@ import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { ScheduleWarningBox } from './ScheduleWarning';
 
-export function fmtScheduled(iso: string): string {
+function fmtScheduled(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',

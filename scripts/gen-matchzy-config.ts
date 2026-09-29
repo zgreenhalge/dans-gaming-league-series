@@ -1,5 +1,5 @@
-// Generate a MatchZy match-config JSON for a DGLS match (Phase 4 head start; useful to avoid
-// hand-authoring the config). Prints the config to stdout; warnings to stderr.
+// Generate a MatchZy match-config JSON for a DGLS match (avoids hand-authoring the
+// config). Prints the config to stdout; warnings to stderr.
 //
 //   set -a; . ./.env.local; set +a
 //   tsx scripts/gen-matchzy-config.ts <matchId> > match.json

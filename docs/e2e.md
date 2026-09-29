@@ -116,7 +116,7 @@ API routes touched by `next build`'s page-data collection) — but `src/lib/supa
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` are *all*
 unset, which is exactly the state a Claude Code web session starts in with no `.env.local` and no
 real Supabase project credentials ever placed in the sandbox. That fallback serves the same
-in-memory fixture league the `queries.ts` regression harness runs against
+in-memory fixture league the `src/lib/queries-*.test.ts` regression harness runs against
 (`src/lib/test-support/fixtures.ts`) — a real, internally consistent site, just not real match data
 — so `build`/`dev` succeed with no setup at all, the same as `test`/`lint`/`typecheck`. A partial
 env (one or two of the three vars set, not zero) still hits the original "Missing Supabase env vars"

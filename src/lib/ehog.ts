@@ -80,7 +80,7 @@ function projectScenario(
     rank: aWon ? [0, 1] : [1, 0],
   });
 
-  // MoV margin multiplier — μ-only (D5), same m for all 4 players
+  // MoV margin multiplier — μ-only, same m for all 4 players
   const m = marginMultiplier(scoreA, scoreB);
 
   const deltas: Record<number, number> = {};

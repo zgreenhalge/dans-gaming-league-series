@@ -210,7 +210,7 @@ export async function materializePod(
  * can be built as soon as the regular season's roster is fixed (its full match schedule exists),
  * well before standings are final. Nothing is materialized; nothing is playable yet. Call
  * `seedBracket()` once seeds are known to fill it in. */
-export async function persistBracketShape(
+async function persistBracketShape(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   plan: BracketPlan,
@@ -299,7 +299,7 @@ export interface SeedBands {
  * persisted shape alone — works whether or not it's been seeded yet. `round1.length + byes.length`
  * is the qualifier count N the shape was built for, used by `seedBracket()`'s caller to catch a
  * roster that's drifted since the shape was built. */
-export async function getSeedBands(
+async function getSeedBands(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   qualifierCount: number,
@@ -416,7 +416,7 @@ async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number, 
  * player snapshot, then materializes every pod that becomes fully filled as a result (round 1,
  * plus any all-bye pod). Call once the regular season's standings are final — nothing about the
  * shape itself needs to change, only the previously-null seed slots. */
-export async function seedBracket(
+async function seedBracket(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   playerBySeed: Map<number, number>,

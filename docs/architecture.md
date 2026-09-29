@@ -140,7 +140,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 
 ### View: `player_season_leaderboard`
 
-Pre-aggregated per (player, season) — use this for leaderboard rendering, never compute it client-side. Filters out `is_playoff_game = true` rows. Does **not** expose `total_assists` or `total_rounds_won` — those are augmented in `getPerPlayerSeasonStats()` by reading `player_match_stats` directly.
+Pre-aggregated per (player, season) — use this for leaderboard rendering, never compute it client-side. Filters out `is_playoff_game = true` rows. Does **not** expose `total_assists` or `total_rounds_won` — those are augmented in `getSeasonBaseData()` by reading `player_match_stats` directly.
 
 ### Gauntlet seasons
 

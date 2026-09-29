@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMapCalibration } from '@/lib/queries';
 import { getR2Object, radarKey } from '@/lib/r2';
 
-// Streams a map's extracted top-down radar PNG from R2 (Phase 3). The radar lives at
+// Streams a map's extracted top-down radar PNG from R2. The radar lives at
 // the deterministic `radarKey(mapId)`; calibration gates access so we never 404 a
 // half-configured map differently from an uncalibrated one. Read-only and public,
 // consistent with the rest of the maps pages.

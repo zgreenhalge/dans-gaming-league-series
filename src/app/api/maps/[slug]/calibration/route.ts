@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMapCalibration } from '@/lib/queries';
 
-// Returns a map's radar calibration triplet (Phase 3), or `{ calibration: null }`
+// Returns a map's radar calibration triplet, or `{ calibration: null }`
 // when uncalibrated. The replay player / heatmap fetch this to decide between the
 // real radar background (calibrated) and the auto-fit grid. The radar image itself is
 // served by the sibling `…/radar` route; image pixel dimensions are read client-side

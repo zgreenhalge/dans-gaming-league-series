@@ -1,6 +1,6 @@
 # Action — demo-ingest: the one parse path for a match with no confirmed score yet.
 #
-# demo (R2 or DatHost) → parse + quarantine → auto-commit (D5 predicate, AUTO_COMMIT_ENABLED manual
+# demo (R2 or DatHost) → parse + quarantine → auto-commit (auto-commit predicate, AUTO_COMMIT_ENABLED manual
 # override) or a staged confirm-ready result (R2 `<matchId>/demo-result.json`). Heavy parsing runs
 # here, NOT on Vercel — no `MAX_DEMO_BYTES`-style ceiling. Triggered by the app via workflow_dispatch:
 # automatically from `/api/ingest/matchzy-log` on a `map_result` event, or manually via

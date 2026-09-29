@@ -847,7 +847,7 @@ export function ServerConsolePanel({
       {/* Discord slash-command registration (#396) — a stand-in for running
           scripts/register-discord-commands.ts locally, for pushing a command definition change to
           Discord from anywhere admin access reaches (no .env.local needed). Remove this panel and its
-          route together with the script once local registration is no longer the blocker it is today.
+          route once local registration is no longer needed.
           Shares the panel with the name-color-role backfill (same "manual trigger for the local
           script" reasoning) since both are one-off Discord admin actions rather than live state. */}
       <CollapsiblePanel title="Discord commands">

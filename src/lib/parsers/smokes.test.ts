@@ -1,5 +1,5 @@
 /**
- * Unit tests for collectSmokes — CT-side smokes interfering with pushes (#173 phase 3.5),
+ * Unit tests for collectSmokes — CT-side smokes interfering with pushes,
  * matching Leetify's "[CT] Smokes That Stopped a Push". detonate/expire events are paired by
  * (round, entityid) — confirmed against a real DGLS demo that both events share the same
  * entityid and detonation position.

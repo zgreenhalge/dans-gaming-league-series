@@ -210,7 +210,7 @@ user's browser — React will either warn or silently show the wrong value until
 
 1. **Locale-sensitive date/time formatting** (`toLocaleString`, `toLocaleDateString`, weekday names,
    12h vs 24h) must be **deferred to the client**. Use the `<LocalTime>` component for inline
-   formatted timestamps, or `useSyncExternalStore` (see `useIsClient()` in `MatchHeaderSection`) to
+   formatted timestamps, or `useSyncExternalStore` (see `useHasMounted()` in `src/components/useHasMounted.ts`) to
    gate formatting behind a client-only check that returns `null` during SSR.
 2. **Calendar-only dates** (no time-of-day component — e.g. season start dates, week windows) can
    render on the server if you pin both the `Date` constructor and the formatter to UTC:

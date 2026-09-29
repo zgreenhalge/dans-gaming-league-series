@@ -5,7 +5,7 @@ import { initCollector, roundOf, type RoundBounds } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
-// Rifles only, per #173 phase 3.1 — pistols/SMGs/snipers/shotguns are excluded.
+// Rifles only — pistols/SMGs/snipers/shotguns are excluded.
 export const RIFLE_WEAPONS = new Set([
   'weapon_ak47', 'weapon_m4a1', 'weapon_m4a1_silencer',
   'weapon_famas', 'weapon_galilar', 'weapon_sg556', 'weapon_aug',

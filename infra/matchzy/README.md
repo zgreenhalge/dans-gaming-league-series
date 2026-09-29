@@ -4,7 +4,7 @@ The one-time seed input (and disaster-recovery snapshot) for the DGLS match serv
 live source of truth is Supabase (`config_sets`/`config_set_files`, see `src/lib/dathost-config.ts`) —
 the `golden` config set (the production baseline) and any others are DB rows, editable from the admin
 console. The server is **reused** for matches (start on veto-complete → stop on score/demo, see
-decision D2) and is **also reconfigured in the DatHost panel for recreational modes between
+`docs/hosting.md`'s reuse model) and is **also reconfigured in the DatHost panel for recreational modes between
 matches**. So launching must re-assert a config set every time, before boot — the panel is not a
 reliable source of truth.
 

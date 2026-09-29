@@ -1,15 +1,14 @@
-// DatHost REST API client — per-match lifecycle for the DGLS match server (Phase 4 of the
-// DatHost + MatchZy initiative; see `dathost_handoff/`). Thin typed wrapper over the verified
+// DatHost REST API client — per-match lifecycle for the DGLS match server (see
+// `docs/hosting.md`). Thin typed wrapper over the verified
 // endpoints. Server-side only (uses HTTP Basic with the account API password) — never import into a
 // client component.
 //
 // Lifecycle (composed by `launchServer` in dathost-lifecycle.ts):
 //   applyConfigSet('golden') → startServer → waitUntilReady → loadMatch → (play) → stopServer
 //
-// We REUSE one persistent server (decision D2): teardown is `stopServer`, never delete. The server is
+// We REUSE one persistent server: teardown is `stopServer`, never delete. The server is
 // reconfigured in the DatHost panel for recreational modes between matches, so the `golden` config set
-// MUST be re-applied before every match to overwrite that drift. `duplicateServer`/`deleteServer`
-// exist only as the documented fallback (concurrency overflow / golden-image rebuild).
+// MUST be re-applied before every match to overwrite that drift.
 //
 // Env:
 //   DATHOST_EMAIL, DATHOST_PASSWORD   HTTP Basic creds (account email + API password)
@@ -373,14 +372,4 @@ export async function waitUntilReady(
     },
     { timeoutMs, intervalMs: opts.intervalMs ?? 3_000, timeoutMessage: `Server ${id} not ready after ${Math.round(timeoutMs / 1000)}s` },
   );
-}
-
-// --- Fallback only (concurrency overflow / golden-image rebuild) — NOT the per-match path. ---
-
-export async function duplicateServer(goldenId: string): Promise<DathostServer> {
-  return (await call('POST', `/game-servers/${goldenId}/duplicate`)) as DathostServer;
-}
-
-export async function deleteServer(id: string): Promise<void> {
-  await call('DELETE', `/game-servers/${id}`);
 }

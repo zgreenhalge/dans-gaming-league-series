@@ -1,4 +1,4 @@
-// Tear down the DatHost match server (Phase 4). Session-gated (admin or in-match). Fired when the
+// Tear down the DatHost match server. Session-gated (admin or in-match). Fired when the
 // score is reported / demo posted. Reuse model → stops the persistent server, never deletes it.
 
 import { NextRequest, NextResponse } from 'next/server';

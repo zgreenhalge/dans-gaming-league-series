@@ -33,7 +33,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById, groupPodMatches, podGamePairs } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
-import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
+import type { GauntletMatch } from './queries/gauntlet';
 import type { Season } from './types';
 import { extractSeasonNumber, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';

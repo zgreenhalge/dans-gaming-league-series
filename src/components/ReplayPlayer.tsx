@@ -23,7 +23,7 @@ const SPEEDS = [0.5, 1, 2, 4];
 const REWIND_SECONDS = 10;
 
 /** Cap the square play-field so it never dominates a wide match page. */
-export const MAX_SIDE = 520;
+const MAX_SIDE = 520;
 
 // --- Pen tool (local-only annotation overlay; never persisted) ---
 

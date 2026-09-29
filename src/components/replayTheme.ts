@@ -3,7 +3,7 @@
 import type { ReplayTheme } from '@/lib/replay/draw';
 
 /** Read a CSS custom property off an element, falling back to a literal. */
-export function cssVar(el: Element, name: string, fallback: string): string {
+function cssVar(el: Element, name: string, fallback: string): string {
   const v = getComputedStyle(el).getPropertyValue(name).trim();
   return v || fallback;
 }

@@ -1,6 +1,6 @@
 /**
- * Unit tests for collectAccuracy — AWP-excluded head accuracy (#173 phase 3.3). The plain
- * shots_fired/shots_hit/headshot_hits totals this collector used to also compute are derived at
+ * Unit tests for collectAccuracy — AWP-excluded head accuracy. The plain
+ * shots_fired/shots_hit/headshot_hits totals are derived at
  * query time instead (deriveAccuracyTotals() in queries/weaponStats.ts, #457) — see
  * queries-weaponStats.test.ts for that coverage.
  *

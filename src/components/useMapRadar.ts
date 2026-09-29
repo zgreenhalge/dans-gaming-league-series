@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { RadarCalibration } from '@/lib/replay/project';
 
 /**
- * Load a map's radar calibration + image by slug (Phase 3). Shared by the replay
+ * Load a map's radar calibration + image by slug. Shared by the replay
  * player and the map heatmap so the world→radar projection is set up identically in
  * both. Returns `calibration: null` (and a null image) for uncalibrated maps, where
  * callers fall back to auto-fit. The image's pixel size is read off the loaded

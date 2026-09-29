@@ -1,4 +1,4 @@
-// Pure helpers for the radar-build pipeline (Phase 3) — the bits worth locking with
+// Pure helpers for the radar-build pipeline — the bits worth locking with
 // tests. The fragile parts (SteamCMD download, VPK extraction, .vtex_c decode) are
 // shell orchestration and live in `scripts/radar-build.ts`; this module only does the
 // deterministic parsing those steps feed into. See `docs/replay.md`.

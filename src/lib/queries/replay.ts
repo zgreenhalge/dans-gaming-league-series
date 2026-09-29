@@ -174,7 +174,7 @@ export interface MapTraceRollup {
 }
 
 /** Project one match's compact trace artifact into the rollup-entry shape used everywhere else. */
-export function matchTraceArtifactToEntries(art: MatchTraceArtifact): MapTraceRollupEntry[] {
+function matchTraceArtifactToEntries(art: MatchTraceArtifact): MapTraceRollupEntry[] {
   return art.players.flatMap((p) =>
     p.traces.map((trace) => ({ playerId: p.playerId, faction: p.faction, tickRate: art.tickRate, trace })),
   );
@@ -200,7 +200,7 @@ export async function getMapTraces(matchIds: number[]): Promise<MapTraceRollupEn
  * Read a map's precomputed trace rollup (issue #127), or `null` if none exists for
  * this map yet, or its version doesn't match the current shape.
  */
-export async function getMapTraceRollup(slug: string): Promise<MapTraceRollup | null> {
+async function getMapTraceRollup(slug: string): Promise<MapTraceRollup | null> {
   return getVersionedR2Json<MapTraceRollup>(mapTraceKey(slug), MAP_TRACE_ROLLUP_VERSION);
 }
 

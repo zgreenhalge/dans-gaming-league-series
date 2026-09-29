@@ -4,7 +4,7 @@
 // Runtime-agnostic by construction: it talks to a structural `Ctx2D` (the subset of
 // CanvasRenderingContext2D it uses) and takes its colors from a passed `ReplayTheme`
 // instead of reading CSS — so the browser `<ReplayPlayer>` (DOM canvas, theme from
-// CSS vars) and the Phase-4 mp4 Action (`@napi-rs/canvas`, hardcoded theme) call the
+// CSS vars) and the mp4 Action (`@napi-rs/canvas`, hardcoded theme) call the
 // exact same code. There is no second draw path. See `docs/replay.md`.
 
 import type { ReplayPlayerMeta, ReplayRound } from './types';
@@ -94,7 +94,7 @@ export interface DrawSceneArgs {
   tickRate: number;
   theme: ReplayTheme;
   banner: BannerInfo;
-  /** Optional real radar background (Phase 3); falls back to a grid when absent. */
+  /** Optional real radar background; falls back to a grid when absent. */
   radar?: { image: DrawableImage; calibration: RadarCalibration } | null;
   /** Looks up a pre-tinted, pre-decoded icon sprite by (file path under `public/`, CSS color),
    *  returning `null` if it isn't loaded (or doesn't exist) yet — the kill feed and bomb marker

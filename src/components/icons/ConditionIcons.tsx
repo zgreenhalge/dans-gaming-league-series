@@ -11,7 +11,7 @@ import type { RoundCondition } from '@/lib/types';
  */
 export type ConditionIconProps = SVGProps<SVGSVGElement> & { size: number };
 
-export function SkullIcon({ size, ...props }: ConditionIconProps) {
+function SkullIcon({ size, ...props }: ConditionIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <path
@@ -24,7 +24,7 @@ export function SkullIcon({ size, ...props }: ConditionIconProps) {
   );
 }
 
-export function BombIcon({ size, ...props }: ConditionIconProps) {
+function BombIcon({ size, ...props }: ConditionIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <path
@@ -66,7 +66,7 @@ export function DefuseIcon({ size, ...props }: ConditionIconProps) {
   );
 }
 
-export function ClockIcon({ size, ...props }: ConditionIconProps) {
+function ClockIcon({ size, ...props }: ConditionIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect x="14.256" y="6.614" fill="currentColor" width="2.734" height="9.812" />

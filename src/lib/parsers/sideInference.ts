@@ -72,7 +72,7 @@ export function anchorToRoundOne(
  * and `startingRealRound` (default 1) anchor that reading back to the match's true round 1 via
  * `anchorToRoundOne()` — a no-op for the common single-segment/first-segment case.
  */
-export function inferSkinsStartingSide(
+function inferSkinsStartingSide(
   demoBuffer: Buffer,
   firstLiveRoundTick: number,
   steamToPlayer: ResolvedRoster,
@@ -107,7 +107,7 @@ export function resolveEffectiveSide(
 }
 
 /** The warning surfaced (and shown in the admin panel) when stored and demo disagree. */
-export function sideDisagreementWarning(stored: 'CT' | 'T', inferred: 'CT' | 'T'): string {
+function sideDisagreementWarning(stored: 'CT' | 'T', inferred: 'CT' | 'T'): string {
   return (
     `Stored starting side (${stored}) disagrees with the demo (skins started ${inferred}). ` +
     `Using the stored side — verify the entered result.`

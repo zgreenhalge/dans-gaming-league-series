@@ -172,7 +172,7 @@ export function splitStat(
  *  per player, mutated per match row) and via `sumSabFields()` below for season/career totals.
  *  `parsers/segmentMerge.ts`'s `mergeSabremetricResults()` accumulates a per-player `SabFields` merge
  *  across demo segments the same way. */
-export function addSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): void {
+function addSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): void {
   addNumericFields(a, b);
 }
 
@@ -308,7 +308,7 @@ export function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
  *  the total numerator) for when the denominator is zero. The shared base for every Plus stat's
  *  league-average baseline — volume-weighted (totals over totals), so a low-volume player's own
  *  rate can't swing the average as hard as a high-volume one. */
-export function leagueAvgRatio(
+function leagueAvgRatio(
   all: AggregatedSab[],
   numKey: (a: AggregatedSab) => number,
   denKey: (a: AggregatedSab) => number,

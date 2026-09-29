@@ -1,4 +1,4 @@
-// Per-match DatHost server lifecycle orchestration (Phase 4). Composes the `dathost.ts` client with
+// Per-match DatHost server lifecycle orchestration. Composes the `dathost.ts` client with
 // the match's data and persists a small server-state machine on the `match_server_state` table (one
 // row per match, `match_id` FK to `matches`) — kept off the core `matches` row since this is
 // transient orchestration state, not match data (#288).
@@ -9,7 +9,7 @@
 // Server-side only. `match_server_state` columns: server_state text, dathost_server_id text,
 // connect_string text, server_started_at timestamptz, teardown_at timestamptz. No row means `idle`.
 //
-// Reuse model (D2): teardown stops the persistent server; it never deletes it.
+// Reuse model: teardown stops the persistent server; it never deletes it.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
@@ -34,7 +34,7 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 import { notifyMatchServerLive } from './discord-notify';
 
 /** The "friendly" cvars — only asserted when the launch-time "friendly" toggle is on. */
-export const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
+const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
 
 /**
  * Cvars asserted right after boot for any launch with no roster loaded (scrim, or an admin-console
@@ -133,7 +133,7 @@ export async function stopSharedServer(supabaseAdmin: SupabaseClient, serverId: 
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
-/** Server-states in which a match currently occupies the single shared server (D2). */
+/** Server-states in which a match currently occupies the single shared server. */
 const OCCUPYING_STATES: readonly ServerState[] = ['provisioning', 'live', 'tearing_down'];
 
 /** Thrown when a provision is refused because the shared server is already in use — either another
@@ -152,7 +152,7 @@ export class ServerBusyError extends Error {
 
 /**
  * The id of another match currently occupying the shared server, or `null` if it's free (#134).
- * Since all matches reuse ONE server (D2), any *other* match in an occupying state holds it. Returns
+ * Since all matches reuse ONE server, any *other* match in an occupying state holds it. Returns
  * `null` when hosting isn't configured (no server to contend for).
  */
 export async function findServerOccupant(
@@ -180,7 +180,7 @@ export interface NearbyUnscoredMatch {
 
 /**
  * A league match scheduled within `windowMs` of right now that hasn't been scored yet, or `null`.
- * Scrims share the one physical server with league matches (D2) — a match's scheduled time passing
+ * Scrims share the one physical server with league matches — a match's scheduled time passing
  * doesn't mean the server is free, since it may still be mid-veto or mid-play. Nearest match wins if
  * more than one falls in the window.
  */
@@ -389,7 +389,7 @@ export function provisionErrorHandler(
 /**
  * Tear down the match server (reuse model → stop, never delete). Idempotent-safe.
  *
- * Because every match shares ONE persistent server (D2), an unconditional stop here would let one
+ * Because every match shares ONE persistent server, an unconditional stop here would let one
  * match kill another match's live server. Pass `onlyIfOwnsServer` (used by the score-report and
  * map_result auto-teardown) to no-op unless THIS match is the current occupant — i.e. its
  * `server_state` is still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id`
@@ -555,7 +555,7 @@ export interface ActiveServerMatch {
 
 /**
  * The match currently holding the shared server (reconciled against real DatHost state), or `null` if
- * it's idle. For the admin server console (#134/#135) — the single-server model (D2) means at most
+ * it's idle. For the admin server console (#134/#135) — the single-server model means at most
  * one occupant. Returns `null` when hosting isn't configured.
  */
 export async function getActiveServerMatch(

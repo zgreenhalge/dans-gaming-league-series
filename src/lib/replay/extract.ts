@@ -453,7 +453,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     const frames: ReplayFrame[] = b.wanted.map((tick) => ({
       tick,
       players: framesByTick.get(tick) ?? [],
-      bomb: null, // live bomb position is a documented Phase-1 limitation (see docs/replay.md)
+      bomb: null, // live bomb position is a documented limitation (see docs/replay.md)
     }));
     meta.rounds.push({
       round: b.round,
@@ -669,7 +669,7 @@ function collectGrenades(
   try {
     rows = parseGrenades(demoBuffer) as Record<string, unknown>[];
   } catch {
-    return byRound; // grenades are non-critical for Phase 1
+    return byRound; // grenades are non-critical
   }
 
   // Field names vary across props, so read defensively via pick() — same as the

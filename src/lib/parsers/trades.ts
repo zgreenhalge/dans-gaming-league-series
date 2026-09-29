@@ -118,7 +118,7 @@ export function computeTradeOpportunities(
 }
 
 /**
- * Trade kill / traded death opportunity-attempt-success counts (#173 phase 1.1).
+ * Trade kill / traded death opportunity-attempt-success counts.
  *
  * - Opportunity: a teammate (of the dying player) had a real trade opportunity per
  *   computeTradeOpportunities() — i.e. had a realistic chance to see and fight the killer, not

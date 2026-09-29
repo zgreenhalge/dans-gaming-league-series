@@ -57,7 +57,7 @@ export interface PlayerEquipmentRow {
 
 /** The full-buy equipment-value floor for a side — CT's complete kit costs more than T's (see
  *  `FULL_BUY_MIN_T`/`FULL_BUY_MIN_CT`'s comment). */
-export function fullBuyMin(side: 'CT' | 'T'): number {
+function fullBuyMin(side: 'CT' | 'T'): number {
   return side === 'CT' ? FULL_BUY_MIN_CT : FULL_BUY_MIN_T;
 }
 

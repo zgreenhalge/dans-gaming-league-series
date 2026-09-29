@@ -6,9 +6,6 @@ confirm flow ([`demo-ingestion.md`](./demo-ingestion.md)) always remains as the 
 general DatHost/MatchZy/CounterStrikeSharp knowledge — best practices, gotchas, external docs — not
 specific to DGLS's own implementation, see [`cs2-stack-reference.md`](./cs2-stack-reference.md).
 
-> The original design/rollout notes lived in a local `dathost_handoff/` scratch dir (gitignored).
-> This doc is the tracked record — update it here, not there.
-
 ## The reuse model
 
 DGLS reuses **one persistent DatHost server** for every match — teardown is `stop`, never `delete`.
@@ -123,7 +120,7 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
                                                                               │
    background_jobs(demo_ingest): received → queued ──dispatch──▶ demo-ingest.yml (GitHub Action)
                                                                               │
-       scripts/demo-ingest.ts: pull demo from DatHost (R2) + parse + quarantine + D5 predicate check
+       scripts/demo-ingest.ts: pull demo from DatHost (R2) + parse + quarantine + auto-commit predicate check
                                           │                              │
                        predicate passes, no manual override      predicate fails / manual override active
                             writeMatchScore()  status: confirmed        R2 (demoResultKey)  status: parsed | quarantined
@@ -186,7 +183,7 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
 ### Trusted auto-commit (#138)
 
 A clean, corroborated parse skips the human Confirm. `evaluateAutoCommit()`
-(`src/lib/demo/autoCommit.ts`) is the **D5 predicate** — a pure decision over: the match has no
+(`src/lib/demo/autoCommit.ts`) is the **auto-commit predicate** — a pure decision over: the match has no
 existing confirmed score (auto-commit never overwrites a played match — a disagreement always routes
 to manual review, no matter how clean the new parse is), quarantine passes, zero parser warnings
 (which also covers full roster resolution and a clean stored-vs-demo side agreement), the starting
@@ -227,7 +224,7 @@ directly instead.
 
 Reparsing an already-**confirmed** match (e.g. to backfill a newly added sabremetric) never goes
 through auto-commit — a score-unchanged reparse upserts sabremetrics directly (the shortcut above the
-D5 check), and a score-*changed* reparse is exactly what the predicate's already-confirmed check
+auto-commit check), and a score-*changed* reparse is exactly what the predicate's already-confirmed check
 excludes, so it always falls through to the staged-result review instead, regardless of how cleanly
 it parses.
 
@@ -239,7 +236,7 @@ Schema-free by design — status lives in the existing table, detail lives in th
 
 `stage` moves through `received → queued → fetch → parse → confirmed` within that — `fetch` covers the
 DatHost pull, `parse` the rest — for progress detail without a separate status. Auto-commit takes the
-`running → confirmed` status edge directly (no `parsed` stop) — the D5 predicate check and the write
+`running → confirmed` status edge directly (no `parsed` stop) — the auto-commit predicate check and the write
 both happen inside the `running` status, after the `parse` stage.
 
 ## Scrims

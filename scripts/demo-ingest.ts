@@ -6,11 +6,11 @@
 // synchronous, editable preview matters more than the size ceiling this script has none of.
 //
 // demo (R2 or DatHost) → parseDemoFile + parseDemoSabremetrics (via getReplayInputs) → quarantine
-// check → either auto-commit (writeMatchScore, D5 predicate) or stage a confirm-ready result at
+// check → either auto-commit (writeMatchScore, auto-commit predicate) or stage a confirm-ready result at
 // `demoResultKey` (R2, gzipped JSON) for the in-match review block's human Confirm. Heavy parsing
 // runs HERE, not on Vercel (no `MAX_DEMO_BYTES`-style ceiling). Mirrors `replay-extract.ts`.
 //
-// Auto-commit predicate (D5, `evaluateAutoCommit` in `src/lib/demo/autoCommit.ts`) — ALL must hold,
+// Auto-commit predicate (`evaluateAutoCommit` in `src/lib/demo/autoCommit.ts`) — ALL must hold,
 // else fall back to the staged-result review: the match has no existing confirmed score, quarantine
 // passes, zero parser warnings (also covers full roster resolution: an unresolved player throws
 // before this point, and a stored-vs-demo side disagreement pushes a warning), the starting side is
@@ -30,7 +30,7 @@
 // Reparsing an already-confirmed match (e.g. to backfill fields from a newly added collector) skips
 // both auto-commit and the staged-review step: when the freshly derived score matches the match's
 // existing `final_score`, the sabremetrics are upserted directly and the job is marked `confirmed`. A
-// derived score that differs from the stored one is exactly what the D5 predicate's `alreadyPlayed`
+// derived score that differs from the stored one is exactly what the auto-commit predicate's `alreadyPlayed`
 // check excludes — it always falls through to the staged-result review instead, regardless of how
 // cleanly the new parse corroborates against `map_result`.
 //
@@ -132,7 +132,7 @@ async function main() {
     targetWinRounds: inputs.targetWinRounds,
   });
 
-  // The match's existing confirmed score, if any — shared by the reparse shortcut below and the D5
+  // The match's existing confirmed score, if any — shared by the reparse shortcut below and the auto-commit
   // predicate's `alreadyPlayed` check (auto-commit never overwrites a played match).
   const { data: matchRow } = await supabase.from('matches').select('final_score').eq('id', matchId).maybeSingle();
   const existingScore = (matchRow as { final_score: string | null } | null)?.final_score ?? null;
@@ -212,7 +212,7 @@ async function main() {
 
   // Trusted auto-commit (#138): a clean, corroborated parse skips the human Confirm. Roster
   // resolution is already guaranteed here — an unresolved demo player throws inside parseDemoFile,
-  // well before this point — so the D5 predicate only needs to check what's left.
+  // well before this point — so the auto-commit predicate only needs to check what's left.
   if (payload !== null) {
     const mapResult = await getMapResult(matchId);
     const decision = evaluateAutoCommit({
@@ -249,7 +249,7 @@ async function main() {
           finished_at: new Date().toISOString(),
         });
         notice(
-          `demo-ingest match ${matchId}: auto-committed ${payload.shirts}-${payload.skins} (D5 predicate passed, corroborated by map_result)`,
+          `demo-ingest match ${matchId}: auto-committed ${payload.shirts}-${payload.skins} (auto-commit predicate passed, corroborated by map_result)`,
         );
         return;
       }

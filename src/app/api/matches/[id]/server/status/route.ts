@@ -1,4 +1,4 @@
-// Server status for the in-match UI to poll (Phase 4). Session-gated (admin or in-match). Returns the
+// Server status for the in-match UI to poll. Session-gated (admin or in-match). Returns the
 // server-state machine + connect string so the client can show "starting…" → join/connect links.
 
 import { NextRequest, NextResponse } from 'next/server';

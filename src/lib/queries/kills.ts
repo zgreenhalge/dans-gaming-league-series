@@ -935,7 +935,7 @@ export interface WeaponCategoryKillStat {
 
 /** Rolls `WeaponKillStat[]` up into category totals, reusing each weapon's already-resolved
  *  `killWeaponCategory()` bucket rather than reclassifying. */
-export function aggregateKillCategoryStats(stats: WeaponKillStat[]): WeaponCategoryKillStat[] {
+function aggregateKillCategoryStats(stats: WeaponKillStat[]): WeaponCategoryKillStat[] {
   const buckets = new Map<KillWeaponCategory, WeaponCategoryKillStat>();
   for (const s of stats) {
     let b = buckets.get(s.category);
