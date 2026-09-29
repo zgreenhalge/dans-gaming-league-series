@@ -140,6 +140,16 @@ export default function DemoUploadModal({
   if (!mounted) return null;
   if (alreadyPlayed && !isAdmin) return null;
 
+  // Shared by reparseExistingDemo() and handleFilesSelect()'s alreadyPlayed branch — both hand a
+  // freshly in-request-parsed result to the same editable preview.
+  function applyParsedResult(result: ParsedResult) {
+    setParsed(result);
+    setDraftStats(initDraftFromStats(result.stats));
+    if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
+    if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
+    setStage('preview');
+  }
+
   async function reparseExistingDemo() {
     setStage('parsing');
     setError(null);
@@ -164,11 +174,7 @@ export default function DemoUploadModal({
       return;
     }
     const result: ParsedResult = await parseRes.json();
-    setParsed(result);
-    setDraftStats(initDraftFromStats(result.stats));
-    if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
-    if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
-    setStage('preview');
+    applyParsedResult(result);
   }
 
   function handleOpen() {
@@ -326,13 +332,7 @@ export default function DemoUploadModal({
       }
 
       const result: ParsedResult = await parseRes.json();
-      setParsed(result);
-      setDraftStats(initDraftFromStats(result.stats));
-
-      if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
-      if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
-
-      setStage('preview');
+      applyParsedResult(result);
       return;
     }
 

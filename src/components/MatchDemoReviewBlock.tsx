@@ -61,13 +61,14 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'background_jobs', filter: `match_id=eq.${matchId}` },
         (payload) => {
-          const row = (payload.new ?? payload.old) as { job_type?: string } | null;
+          const row = (payload.new ?? payload.old) as { job_type?: string; status?: string } | null;
           if (row?.job_type !== DEMO_INGEST_JOB_TYPE) return;
           refresh();
-          // A status change can land the match's own score (auto-commit) or other server-rendered
-          // state with nobody around to click Confirm — keep the page's own data in sync too, not
-          // just this block's local staged-result view.
-          router.refresh();
+          // Only 'confirmed' can land the match's own score (auto-commit) with nobody around to click
+          // Confirm — every other status only changes this block's own staged-result view, which
+          // refresh() above already covers, so there's nothing router.refresh()'s full server-data
+          // refetch would pick up.
+          if (row.status === 'confirmed') router.refresh();
         },
       )
       .subscribe();
