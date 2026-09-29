@@ -7,7 +7,7 @@ import type { ReactElement, SVGProps } from 'react';
  */
 export type SideIconProps = SVGProps<SVGSVGElement> & { size: number };
 
-export function CtIcon({ size, ...props }: SideIconProps) {
+function CtIcon({ size, ...props }: SideIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
         <path
@@ -38,7 +38,7 @@ export function CtIcon({ size, ...props }: SideIconProps) {
   );
 }
 
-export function TIcon({ size, ...props }: SideIconProps) {
+function TIcon({ size, ...props }: SideIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 69.903 69.903" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
         <polygon

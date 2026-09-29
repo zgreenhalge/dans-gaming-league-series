@@ -7,7 +7,7 @@
 
 /** The fixed gap `discord-event-sync.ts` places between a pod's two games once its Game 1 start
  *  time is known from a synced Discord Scheduled Event. */
-export const POD_GAME_GAP_MS = 30 * 60 * 1000;
+const POD_GAME_GAP_MS = 30 * 60 * 1000;
 
 /** Game 2's `scheduled_at`, derived from Game 1's when a Discord Scheduled Event sync resolves
  *  Game 1's time — `null` in, `null` out (clearing Game 1's time clears Game 2's too). */

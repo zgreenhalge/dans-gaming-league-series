@@ -8,7 +8,7 @@ import { toSentenceCase } from '@/lib/maps';
 import { FeatureMatchIcon } from './FeatureMatch';
 import type { UpcomingGameRow } from '@/lib/queries';
 
-export function TeamNames({ players, dimmed, currentPlayerId }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean; currentPlayerId?: number | null }) {
+function TeamNames({ players, dimmed, currentPlayerId }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean; currentPlayerId?: number | null }) {
   if (players.length === 0) return <span className="opacity-50">TBD</span>;
   const cls = dimmed ? 'text-[var(--color-text-secondary)]' : '';
   return (

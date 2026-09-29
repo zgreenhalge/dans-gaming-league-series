@@ -12,7 +12,7 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 /** ops_errors `operation` key for this table's writes — exported so a caller that fails to even
  * determine a rename's "from" name (and so can't call `recordNameChange` at all) can still record
  * under the same key, letting a later successful log write clear it. */
-export const NAME_HISTORY_LOG_OPERATION = 'name_history_log';
+const NAME_HISTORY_LOG_OPERATION = 'name_history_log';
 
 /** Records that this rename's audit-log write couldn't even be attempted (e.g. its "from" name
  * couldn't be read) — same key as `recordNameChange`'s own failure, so a later successful log

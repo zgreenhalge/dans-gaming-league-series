@@ -36,8 +36,8 @@ function fromRegex(re: RegExp): Matcher {
 /** Every recorded demo lives at `MatchZy/<base>.dem` — the one directory/extension convention every
  *  demo matcher (current and legacy) shares, and the same one `scripts/dathost-cleanup.ts` checks
  *  before gating a demo's deletion on its R2 presence. Exported so both stay in sync. */
-export const DEMO_PREFIX = 'MatchZy/';
-export const DEMO_SUFFIX = '.dem';
+const DEMO_PREFIX = 'MatchZy/';
+const DEMO_SUFFIX = '.dem';
 
 export function isDemoPath(path: string): boolean {
   return path.startsWith(DEMO_PREFIX) && path.endsWith(DEMO_SUFFIX);

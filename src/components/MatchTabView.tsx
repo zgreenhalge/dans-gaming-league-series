@@ -210,7 +210,7 @@ function deltaColor(delta: number, maxAbs: number): string {
   return 'rgba(255,255,255,0.5)';
 }
 
-export function RatingProjectionTable({
+function RatingProjectionTable({
   projections,
   shirts,
   skins,

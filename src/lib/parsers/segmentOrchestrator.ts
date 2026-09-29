@@ -19,7 +19,7 @@ import { computeSegmentOffsets, checkSegmentAgreement, type SegmentRoundRange } 
  *  `parseDemoSabremetrics` into a parse-events phase and a compute phase so the offset could be
  *  derived from data already parsed — real interface complexity this tool's actual usage pattern
  *  doesn't justify. */
-export function probeSegmentRoundRange(buf: Buffer): SegmentRoundRange {
+function probeSegmentRoundRange(buf: Buffer): SegmentRoundRange {
   const liveRounds = getLiveRoundEndEvents(buf);
   return {
     firstRoundNumber: liveRounds[0]?.total_rounds_played ?? 0,

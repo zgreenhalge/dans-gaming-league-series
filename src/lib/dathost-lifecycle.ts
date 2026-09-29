@@ -34,7 +34,7 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 import { notifyMatchServerLive } from './discord-notify';
 
 /** The "friendly" cvars — only asserted when the launch-time "friendly" toggle is on. */
-export const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
+const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
 
 /**
  * Cvars asserted right after boot for any launch with no roster loaded (scrim, or an admin-console

@@ -663,7 +663,7 @@ export interface MapHeatmapRollup {
 }
 
 /** Project one match's compact heatmap artifact into the match-tagged point shape used everywhere else. */
-export function heatmapArtifactToPoints(matchId: number, art: HeatmapArtifact): MapHeatmapPoint[] {
+function heatmapArtifactToPoints(matchId: number, art: HeatmapArtifact): MapHeatmapPoint[] {
   return art.points.map((p) => ({
     matchId,
     kind: p.kind,
@@ -697,7 +697,7 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
  * the same as an empty/stale rollup — fetch whatever matches it doesn't cover via
  * `getMapHeatmap()` instead of failing.
  */
-export async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollup | null> {
+async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollup | null> {
   return getVersionedR2Json<MapHeatmapRollup>(mapHeatmapKey(slug), MAP_HEATMAP_ROLLUP_VERSION);
 }
 

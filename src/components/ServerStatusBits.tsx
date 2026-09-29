@@ -63,7 +63,7 @@ export function LiveDot() {
   );
 }
 
-export function CopyConnectButton({ connect }: { connect: string }) {
+function CopyConnectButton({ connect }: { connect: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -80,7 +80,7 @@ export function CopyConnectButton({ connect }: { connect: string }) {
   );
 }
 
-export function JoinServerButton({ connect }: { connect: string }) {
+function JoinServerButton({ connect }: { connect: string }) {
   return (
     // `steam://connect/<host>` is unreliable from a browser click (a Steam client bug, independent of
     // host format) — `steam://run/730//+connect <ip:port>` (730 = CS2) is the documented workaround
