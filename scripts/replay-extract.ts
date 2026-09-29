@@ -24,7 +24,6 @@ import { buildHeatmapPoints, MAP_HEATMAP_ROLLUP_VERSION } from '../src/lib/repla
 import { buildMatchTraces, MAP_TRACE_ROLLUP_VERSION } from '../src/lib/replay/aggregate';
 import {
   putR2Object,
-  getR2Object,
   replayKey,
   heatmapKey,
   traceKey,
@@ -32,16 +31,16 @@ import {
   mapTraceKey,
 } from '../src/lib/r2';
 import { getDemoManifest } from '../src/lib/demo/segmentManifest';
+import { resolveDemoBuffers } from '../src/lib/demo/resolveDemo';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
 import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { matchJobKey } from '../src/lib/background-jobs';
-import { pullDemoAndClearLiveScore, clearLiveScoreBestEffort } from '../src/lib/demo/liveScore';
 import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
-import { dathostServerId, sleep } from '../src/lib/dathost';
+import { sleep } from '../src/lib/dathost';
 import { notice, warning } from './gh-actions-log';
 import { createJobRunner } from './job-stage';
 
@@ -146,38 +145,19 @@ async function main() {
   });
 
   let demoBuffers = await stage('download-demo', async () => {
-    // A manifest means this match's demo was recovered from multiple recordings (a server restart
-    // mid-match — see docs/demo-ingestion.md's "Multi-segment demos") and uploaded manually; there's
-    // no automated DatHost-pull path for this case (segments only ever arrive via admin upload), so
-    // this reads them straight from R2 instead of going anywhere near pullDemoAndClearLiveScore —
-    // the canonical single-file key it pulls/caches at doesn't exist for a multi-segment match, and
-    // a miss there would otherwise try (and fail, or grab the wrong file) to pull fresh from DatHost.
+    // resolveDemoBuffers() (src/lib/demo/resolveDemo.ts, shared with demo-ingest.ts) decides manifest
+    // segments (a manual multi-segment upload — see docs/demo-ingestion.md's "Multi-segment demos")
+    // vs. a DatHost pull. demoIngestInFlight is only checked on a DatHost-pull miss (never on the
+    // common already-cached path, to skip the DB round-trip): when a demo_ingest run is actually
+    // claimed for this match (the auto-dispatch path always has one), it owns the pull, and a miss
+    // here waits briefly for its pull to land the object in R2 instead of redundantly re-pulling the
+    // same demo from DatHost. A manual "Regenerate" dispatch has no such row and pulls immediately.
     const manifest = await getDemoManifest(matchId);
-    if (manifest) {
-      const buffers = await Promise.all(manifest.segments.map(async (key) => {
-        const buf = await getR2Object(key);
-        if (!buf) throw new Error(`Demo segment not found (${key}) — the upload may be incomplete.`);
-        return buf;
-      }));
-      // Mirrors pullDemoAndClearLiveScore's own "presence in R2 ends 'live'" rule for the
-      // single-file path — every segment landing in R2 is equally proof the match is over.
-      await clearLiveScoreBestEffort(supabase, matchId);
-      return buffers;
-    }
-    // Pulled from DatHost directly (not pushed by MatchZy — see fetchFromDathost.ts) — this Action can
-    // be dispatched as soon as the match ends, before the demo has actually landed in R2 yet, so
-    // pullDemoAndClearLiveScore pulls it if it isn't already present. demoIngestInFlight is only
-    // checked on a miss (never on the common already-cached path, to skip the DB round-trip): when a
-    // demo_ingest run is actually claimed for this match (the auto-dispatch path always has one), it
-    // owns the pull, and a miss here waits briefly for its pull to land the object in R2 instead of
-    // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
-    // row and pulls immediately.
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    const single = await pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
+    return resolveDemoBuffers(supabase, matchId, manifest, baseName, {
       shouldWaitForConcurrentPull: demoIngestInFlight,
       getFlushFloorMs: () => demoIngestFlushFloorMs(supabase, matchId),
     });
-    return [single];
   });
 
   demoBuffers = await stage('decompress', () => demoBuffers.map(gunzipMaybe));

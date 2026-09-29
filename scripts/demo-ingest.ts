@@ -34,12 +34,11 @@
 // check excludes — it always falls through to the staged-result review instead, regardless of how
 // cleanly the new parse corroborates against `map_result`.
 //
-// The demo itself is read from R2 if it's already there — a manual upload's segment manifest
-// (`getDemoManifest()`, mirrors `replay-extract.ts`'s own manifest check) or a prior run's single-file
-// pull — else pulled directly from the DatHost game server's file storage (not pushed by MatchZy —
-// see `fetchFromDathost.ts` for why). A manifest means the match was split across recordings by a
-// server restart (docs/demo-ingestion.md's "Multi-segment demos"); its segments are parsed with
-// `parseDemoFileSegments`/`parseDemoSabremetricsSegments` instead of the single-buffer parsers.
+// The demo itself is resolved via `resolveDemoBuffers()` (`src/lib/demo/resolveDemo.ts`, shared with
+// `replay-extract.ts`) — see the fetch-stage comment below for the manifest-vs-DatHost decision. More
+// than one buffer means the match's demo was split across recordings by a server restart
+// (docs/demo-ingestion.md's "Multi-segment demos"); those are parsed with `parseDemoFileSegments`/
+// `parseDemoSabremetricsSegments` instead of the single-buffer parsers.
 //
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
 // NEXT_PUBLIC_SUPABASE_URL, AUTO_COMMIT_ENABLED, APP_BASE_URL + RECOMPUTE_SECRET (for the EHOG
@@ -54,12 +53,11 @@ import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { demoBaseName } from '../src/lib/matchzy';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
-import { getR2Object, putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
+import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getDemoManifest } from '../src/lib/demo/segmentManifest';
+import { resolveDemoBuffers } from '../src/lib/demo/resolveDemo';
 import { getMapResult } from '../src/lib/demo/mapResult';
-import { pullDemoAndClearLiveScore, clearLiveScoreBestEffort } from '../src/lib/demo/liveScore';
 import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
-import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
@@ -96,41 +94,31 @@ async function main() {
 
   await runner.markRunning();
 
-  // A manifest means the demo arrived as a manual multi-segment upload (never DatHost-pulled — see
-  // docs/demo-ingestion.md's "Multi-segment demos"); read its segments straight from R2 instead of
-  // going anywhere near pullDemoAndClearLiveScore, whose canonical single-file key doesn't exist for
-  // a multi-segment match. Otherwise, pull from DatHost if the single-file demo isn't already in R2
-  // (a manual upload or a reparse of an already-staged/confirmed match has it already). Reads the
-  // match's inputs first (cheap) so it can poll the same deterministic path buildMatchzyConfig set as
-  // the matchzy_demo_name_format cvar — see demoBaseName()'s doc comment. Inside the stage() wrapper
-  // (not before it) so a failure either way still gets the stage's log group/notice and reports
-  // stage: 'fetch'.
+  // getReplayInputs() (Postgres) and getDemoManifest() (an R2 read) are independent of each other, so
+  // they run concurrently. A manifest means the demo arrived as a manual multi-segment upload (never
+  // DatHost-pulled — see docs/demo-ingestion.md's "Multi-segment demos"); resolveDemoBuffers() reads
+  // its segments straight from R2 in that case, otherwise pulling the single-file demo from DatHost if
+  // it isn't already in R2 (a manual upload or a reparse of an already-staged/confirmed match has it
+  // already) — see its own doc comment (`src/lib/demo/resolveDemo.ts`). Both awaited inside the
+  // stage() wrapper (not before it) so a failure either way still gets the stage's log group/notice
+  // and reports stage: 'fetch'.
   const { inputs, raw } = await stage('fetch', async () => {
-    const inputs = await getReplayInputs(supabase, matchId);
-    const manifest = await getDemoManifest(matchId);
-    if (manifest) {
-      const buffers = await Promise.all(manifest.segments.map(async (key) => {
-        const buf = await getR2Object(key);
-        if (!buf) throw new Error(`Demo segment not found (${key}) — the upload may be incomplete.`);
-        return buf;
-      }));
-      await clearLiveScoreBestEffort(supabase, matchId);
-      return { inputs, raw: buffers };
-    }
+    const [inputs, manifest] = await Promise.all([getReplayInputs(supabase, matchId), getDemoManifest(matchId)]);
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    const single = await pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
+    const raw = await resolveDemoBuffers(supabase, matchId, manifest, baseName, {
       getFlushFloorMs: () => demoIngestFlushFloorMs(supabase, matchId),
     });
-    return { inputs, raw: [single] };
+    return { inputs, raw };
   });
 
   const { parsed, sab, warnings } = await stage('parse', async () => {
     const demoBuffers = raw.map(gunzipMaybe);
+    const isMultiSegment = demoBuffers.length > 1;
 
-    const parsed = demoBuffers.length > 1
+    const parsed = isMultiSegment
       ? parseDemoFileSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
       : parseDemoFile(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-    const sab = demoBuffers.length > 1
+    const sab = isMultiSegment
       ? parseDemoSabremetricsSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
       : parseDemoSabremetrics(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
     const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
