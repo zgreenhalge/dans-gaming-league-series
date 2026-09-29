@@ -78,6 +78,8 @@ export function CardShell({ children, subtitle, bgImage }: { children: React.Rea
       }}
     >
       {bgImage && (
+        // ImageResponse (satori) renders plain <img> only; next/image is unsupported there.
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={bgImage}
           alt=""
