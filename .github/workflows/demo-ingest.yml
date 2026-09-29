@@ -1,9 +1,11 @@
-# Action — demo-ingest (Phase 3 + trusted auto-commit, Phase 5 / #138, of #131)
+# Action — demo-ingest: the one parse path for a match with no confirmed score yet.
 #
-# demo pulled from DatHost (R2) → parse + quarantine → auto-commit (D5 predicate, AUTO_COMMIT_ENABLED
-# manual override) or a staged confirm-ready result (R2 `<matchId>/demo-result.json`). Heavy parsing
-# runs here, NOT on Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Triggered by the app via
-# workflow_dispatch (from `/api/ingest/matchzy-log` on a `map_result` event), or manually.
+# demo (R2 or DatHost) → parse + quarantine → auto-commit (D5 predicate, AUTO_COMMIT_ENABLED manual
+# override) or a staged confirm-ready result (R2 `<matchId>/demo-result.json`). Heavy parsing runs
+# here, NOT on Vercel — no `MAX_DEMO_BYTES`-style ceiling. Triggered by the app via workflow_dispatch:
+# automatically from `/api/ingest/matchzy-log` on a `map_result` event, or manually via
+# `POST /api/matches/[id]/demo/dispatch` — a first-time manual demo upload (`DemoUploadModal`) and an
+# admin-triggered reparse of an already-scored match both go through that same route.
 #
 # Idempotent: deterministic R2 key, re-dispatch overwrites. The script updates background_jobs.status
 # (received → queued → running → parsed|quarantined|confirmed|failed) so the app shows state without

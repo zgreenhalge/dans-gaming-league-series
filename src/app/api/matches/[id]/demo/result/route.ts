@@ -1,4 +1,4 @@
-// Read / dispose of a match's pending demo-ingest result (Phase 3). Session-gated (admin or in-match).
+// Read / dispose of a match's pending demo-ingest result. Session-gated (admin or in-match).
 //   GET    → the staged DemoIngestResult (from R2) + the background_jobs status, or 404 if none.
 //   DELETE → remove the R2 artifact + mark the job (confirmed | dismissed). Called by the review block
 //            after a successful confirm (→ PATCH /score) or a dismiss.

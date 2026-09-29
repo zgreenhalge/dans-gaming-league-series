@@ -1,11 +1,14 @@
-// `demo-ingest` job entry point — runs in the GitHub Action via `tsx`. Phase 3 (manual-confirm) +
-// Phase 5 (trusted auto-commit, #138) of the DatHost + MatchZy initiative.
+// `demo-ingest` job entry point — runs in the GitHub Action via `tsx`. The one parse path for a
+// match with no confirmed score yet, whether the demo arrived via an automated DatHost pull or a
+// manual browser upload (`POST /api/matches/[id]/demo/dispatch`, `DemoUploadModal`'s first-time
+// upload) — both just dispatch this same Action. The in-request `/api/matches/[id]/demo/parse`
+// route still exists for editing an already-played match's stats from a fresh demo, where a
+// synchronous, editable preview matters more than the size ceiling this script has none of.
 //
-// demo (R2) → parseDemoFile + parseDemoSabremetrics (via getReplayInputs) → quarantine check →
-// either auto-commit (writeMatchScore, D5 predicate) or stage a confirm-ready result at
+// demo (R2 or DatHost) → parseDemoFile + parseDemoSabremetrics (via getReplayInputs) → quarantine
+// check → either auto-commit (writeMatchScore, D5 predicate) or stage a confirm-ready result at
 // `demoResultKey` (R2, gzipped JSON) for the in-match review block's human Confirm. Heavy parsing
-// runs HERE, not on Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Mirrors
-// `replay-extract.ts`.
+// runs HERE, not on Vercel (no `MAX_DEMO_BYTES`-style ceiling). Mirrors `replay-extract.ts`.
 //
 // Auto-commit predicate (D5, `evaluateAutoCommit` in `src/lib/demo/autoCommit.ts`) — ALL must hold,
 // else fall back to the staged-result review: the match has no existing confirmed score, quarantine
@@ -31,8 +34,11 @@
 // check excludes — it always falls through to the staged-result review instead, regardless of how
 // cleanly the new parse corroborates against `map_result`.
 //
-// The demo itself is pulled directly from the DatHost game server's file storage (not pushed by
-// MatchZy — see `fetchFromDathost.ts` for why) at the very start of the run, if it isn't already in R2.
+// The demo itself is resolved via `resolveDemoBuffers()` (`src/lib/demo/resolveDemo.ts`, shared with
+// `replay-extract.ts`) — see the fetch-stage comment below for the manifest-vs-DatHost decision. More
+// than one buffer means the match's demo was split across recordings by a server restart
+// (docs/demo-ingestion.md's "Multi-segment demos"); those are parsed with `parseDemoFileSegments`/
+// `parseDemoSabremetricsSegments` instead of the single-buffer parsers.
 //
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
 // NEXT_PUBLIC_SUPABASE_URL, AUTO_COMMIT_ENABLED, APP_BASE_URL + RECOMPUTE_SECRET (for the EHOG
@@ -42,16 +48,16 @@
 // background_jobs.status + R2 artifacts.
 
 import { gzipSync } from 'node:zlib';
-import { parseDemoFile } from '../src/lib/demoParser';
-import { parseDemoSabremetrics } from '../src/lib/demoSabremetrics';
+import { parseDemoFile, parseDemoFileSegments } from '../src/lib/demoParser';
+import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib/demoSabremetrics';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { demoBaseName } from '../src/lib/matchzy';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
 import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
+import { getDemoManifest } from '../src/lib/demo/segmentManifest';
+import { resolveDemoBuffers } from '../src/lib/demo/resolveDemo';
 import { getMapResult } from '../src/lib/demo/mapResult';
-import { pullDemoAndClearLiveScore } from '../src/lib/demo/liveScore';
 import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
-import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
@@ -88,25 +94,33 @@ async function main() {
 
   await runner.markRunning();
 
-  // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
-  // confirmed match has it already). Reads the match's inputs first (cheap) so it can poll the same
-  // deterministic path buildMatchzyConfig set as the matchzy_demo_name_format cvar — see
-  // demoBaseName()'s doc comment. Inside the stage() wrapper (not before it) so a failure either way
-  // still gets the stage's log group/notice and reports stage: 'fetch'.
+  // getReplayInputs() (Postgres) and getDemoManifest() (an R2 read) are independent of each other, so
+  // they run concurrently. A manifest means the demo arrived as a manual multi-segment upload (never
+  // DatHost-pulled — see docs/demo-ingestion.md's "Multi-segment demos"); resolveDemoBuffers() reads
+  // its segments straight from R2 in that case, otherwise pulling the single-file demo from DatHost if
+  // it isn't already in R2 (a manual upload or a reparse of an already-staged/confirmed match has it
+  // already) — see its own doc comment (`src/lib/demo/resolveDemo.ts`). Both awaited inside the
+  // stage() wrapper (not before it) so a failure either way still gets the stage's log group/notice
+  // and reports stage: 'fetch'.
   const { inputs, raw } = await stage('fetch', async () => {
-    const inputs = await getReplayInputs(supabase, matchId);
+    const [inputs, manifest] = await Promise.all([getReplayInputs(supabase, matchId), getDemoManifest(matchId)]);
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    const raw = await pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
+    const raw = await resolveDemoBuffers(supabase, matchId, manifest, baseName, {
       getFlushFloorMs: () => demoIngestFlushFloorMs(supabase, matchId),
     });
     return { inputs, raw };
   });
 
   const { parsed, sab, warnings } = await stage('parse', async () => {
-    const demo = gunzipMaybe(raw);
+    const demoBuffers = raw.map(gunzipMaybe);
+    const isMultiSegment = demoBuffers.length > 1;
 
-    const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-    const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const parsed = isMultiSegment
+      ? parseDemoFileSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
+      : parseDemoFile(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const sab = isMultiSegment
+      ? parseDemoSabremetricsSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
+      : parseDemoSabremetrics(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
     const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
     return { parsed, sab, warnings };
   });

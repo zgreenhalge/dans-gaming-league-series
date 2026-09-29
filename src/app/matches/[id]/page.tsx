@@ -413,7 +413,7 @@ export default async function MatchPage({
             </div>
           )}
 
-          {/* Pending demo result (Phase 3) — admin/in-match review & confirm; self-hides when none. */}
+          {/* Pending demo result — admin/in-match review & confirm; self-hides when none. */}
           {canManageServer && (
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">

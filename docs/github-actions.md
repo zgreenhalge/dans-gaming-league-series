@@ -21,10 +21,13 @@ stream-process a large file safely. A Cloudflare Worker is *also* wrong for pars
 run native node addons; they're only ever suited to relaying bytes, never processing them. Parsing
 lives in Actions.
 
-> This is exactly why demo **score** parsing moves into an Action in the demo-ingestion Phase 3 (see
-> `dathost_handoff/DATHOST_PHASE0_PLAN.md`): the in-request parse route has a self-imposed
-> `MAX_DEMO_BYTES` guard because a Vercel function can OOM on a large/overtime demo. The Action has
-> no such ceiling.
+> This is exactly why demo **score** parsing for a match with no confirmed score yet runs in an Action
+> (`scripts/demo-ingest.ts`) regardless of whether the demo arrived via an automated DatHost pull or a
+> manual browser upload — see [`demo-ingestion.md`](./demo-ingestion.md). The one place a demo still
+> parses in-request is `POST /api/matches/[id]/demo/parse`, used only to edit an already-played
+> match's stats from a freshly uploaded demo, where a synchronous, editable preview matters more than
+> avoiding a size ceiling — it carries its own self-imposed `MAX_DEMO_BYTES` guard for exactly that
+> reason, since a Vercel function can OOM on a large/overtime demo. The Action has no such ceiling.
 
 ## Anatomy of a job (three actors)
 
@@ -178,4 +181,4 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
 
 See also: [`replay.md`](./replay.md) (worked example + DB schema for `background_jobs`),
 [`patterns.md`](./patterns.md) (cross-cutting conventions), [`demo-ingestion.md`](./demo-ingestion.md)
-(the demo pipeline that Phase 3 moves into an Action).
+(the demo pipeline this Action handles).

@@ -1,8 +1,10 @@
 'use client';
 
-// In-match demo review block (Phase 3, manual confirm). After a demo is auto-parsed by the
-// demo-ingest Action, this shows the staged result and lets an admin/in-match player confirm it
-// (→ existing PATCH /score) or dismiss it. Self-hides when there's nothing staged. Auto-commit is #138.
+// In-match demo review block. After a demo is parsed by the demo-ingest Action — whether dispatched
+// by an automated DatHost pull or a manual browser upload — this shows the staged result and lets an
+// admin/in-match player confirm it (→ existing PATCH /score) or dismiss it. Self-hides when there's
+// nothing staged, including once a clean, corroborated parse auto-commits with no staged result at
+// all (`evaluateAutoCommit()`, `src/lib/demo/autoCommit.ts`).
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -59,15 +61,23 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'background_jobs', filter: `match_id=eq.${matchId}` },
         (payload) => {
-          const row = (payload.new ?? payload.old) as { job_type?: string } | null;
-          if (row?.job_type === DEMO_INGEST_JOB_TYPE) refresh();
+          const row = (payload.new ?? payload.old) as { job_type?: string; status?: string } | null;
+          if (row?.job_type !== DEMO_INGEST_JOB_TYPE) return;
+          refresh();
+          // A settled status (parsed/quarantined/confirmed/failed/dismissed) can land the match's own
+          // score (auto-commit, or a write that succeeded but whose trailing cleanup then failed the
+          // job) with nobody around to click Confirm — keep the page's own server-rendered data in
+          // sync too. The received/queued/running hops in between are the only ones skipped, since
+          // those only ever change this block's own staged-result view, which refresh() above already
+          // covers.
+          if (row.status && !DEMO_INGEST_IN_PROGRESS.has(row.status)) router.refresh();
         },
       )
       .subscribe();
     return () => {
       getBrowserClient().removeChannel(channel);
     };
-  }, [matchId, refresh]);
+  }, [matchId, refresh, router]);
 
   if (!data) return null;
   const { status, result, hasDemo, stale } = data;

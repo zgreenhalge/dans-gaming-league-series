@@ -15,21 +15,27 @@ parsing library and the CS2 demo format itself, see
    match or an admin.
 2. **Client upload** — the browser (`DemoUploadModal.tsx`, opened from `MatchTabView.tsx`) PUTs the
    `.dem` straight to R2 with the presigned URL. The file never passes through the Next.js server.
-3. **Parse** — `POST /api/matches/[id]/demo/parse` fetches the object back from R2, decompresses if
-   needed, and runs two parsers over the buffer:
-   - `parseDemoFile()` (`src/lib/demoParser.ts`) — basic per-player stats (K/A/D, damage, ADR,
-     rounds, win flags) plus warnings.
-   - `parseDemoSabremetrics()` (`src/lib/demoSabremetrics.ts`) — the advanced sabremetric fields.
-   The route returns the merged result for review; it does **not** write to the DB. The reviewed
-   stats are persisted through the score-submission endpoint (`PATCH /api/matches/[id]/score`),
-   which writes basics to `player_match_stats` and upserts the sabremetric rows into
-   `player_match_sabremetrics` (keyed by `player_match_stats_id`).
+3. **Parse** — which route runs the two parsers (`parseDemoFile()`/`parseDemoSabremetrics()`, or
+   their segment-combining counterparts for a multi-segment upload — see "Multi-segment demos" below)
+   depends on whether the match already has a confirmed score:
+   - **No score yet** — the modal calls `POST /api/matches/[id]/demo/dispatch` to re-dispatch
+     `demo-ingest.yml`, the same Action an automated DatHost pull uses (see "Ingesting via the
+     demo-ingest Action" below). No size ceiling; a clean, corroborated parse auto-commits with no
+     review step, and anything else stages a result on the match page's in-match review block
+     (`MatchDemoReviewBlock.tsx`) instead.
+   - **Already played** — the modal instead calls `POST /api/matches/[id]/demo/parse`, which fetches
+     the object back from R2, decompresses if needed, runs both parsers synchronously, and returns
+     the merged result for an **editable preview** — a hand correction to one player's stats matters
+     more here than the Action's lack of a size ceiling. The route does **not** write to the DB; the
+     reviewed stats are persisted through the score-submission endpoint (`PATCH /api/matches/[id]/score`),
+     which writes basics to `player_match_stats` and upserts the sabremetric rows into
+     `player_match_sabremetrics` (keyed by `player_match_stats_id`).
 
-   As soon as the route confirms the R2 read succeeded — before either parser runs — it clears
-   `live_match_score` for the match (`clearLiveScoreBestEffort()`, `src/lib/demo/liveScore.ts`). A
-   demo present in R2 is proof the match is over even if it's a partial/corrupt recording salvaged
-   after a server issue and fails to parse, so the site-wide "Live" ticker stops showing the match
-   regardless of whether parsing (or scoring) ever succeeds.
+   Either path clears `live_match_score` for the match (`clearLiveScoreBestEffort()`,
+   `src/lib/demo/liveScore.ts`) as soon as the demo is confirmed present in R2 — before either parser
+   runs. A demo present in R2 is proof the match is over even if it's a partial/corrupt recording
+   salvaged after a server issue and fails to parse, so the site-wide "Live" ticker stops showing the
+   match regardless of whether parsing (or scoring) ever succeeds.
 
 Both parsers take the same inputs: the demo buffer, the resolved **roster**, `skins_starting_side`,
 and the season's `target_win_rounds`. The roster (which Steam player maps to which DGLS player and
@@ -57,15 +63,30 @@ and it skips if that steam id already belongs to another player. Best-effort —
 stored side), the parser infers it from the demo — see "Starting-side inference" below — so those
 matches still self-derive a score and stats with no manual entry.
 
-## Reparsing an already-confirmed match
+## Ingesting via the demo-ingest Action
 
-Demos are kept in R2 indefinitely (`demoKey(matchId)` is never deleted), so a match can be reparsed at
-any time — most commonly to backfill fields from a sabremetric collector added after the match was
-first confirmed. The admin console's Manage → Match view offers a per-match **reparse demo** button
-and a bulk **reparse all matches with demos** action; both re-dispatch `demo-ingest.yml`
-(`POST /api/matches/[id]/demo/dispatch`) exactly as a first-time parse does.
+`scripts/demo-ingest.ts`, run by `.github/workflows/demo-ingest.yml`, is the one parse path for a
+match with no confirmed score yet, dispatched via `POST /api/matches/[id]/demo/dispatch` whether the
+demo arrived through an automated DatHost pull (`POST /api/ingest/matchzy-log`'s `map_result` handler)
+or a manual browser upload (`DemoUploadModal`'s first-time upload, once the file is in R2). No size
+ceiling — heavy parsing runs in the Action, not a Vercel function (see
+[`github-actions.md`](./github-actions.md)). It reads the demo from R2 if it's already there (a
+manual upload, or a manifest for a multi-segment one — see "Multi-segment demos" below) and otherwise
+pulls it from DatHost, then quarantines and evaluates the auto-commit predicate
+(`evaluateAutoCommit()`, `src/lib/demo/autoCommit.ts`): a clean parse that's quarantine-clean, warning-
+free, side-trusted, and corroborated by MatchZy's own `map_result` writes the score
+(`writeMatchScore()`) with no human step at all. Anything else — quarantined, an unresolved starting
+side, a mismatch against `map_result` — stages the parsed result at `demoResultKey(matchId)` (R2,
+gzipped JSON) for the in-match review block (`MatchDemoReviewBlock.tsx`) to confirm or dismiss.
+Confirming writes the same `PATCH /api/matches/[id]/score` a hand-entered score does.
 
-The Action (`scripts/demo-ingest.ts`) treats a reparse of an already-scored match specially: if the
+Demos are kept in R2 indefinitely (`demoKey(matchId)` is never deleted), so an already-scored match
+can be reparsed at any time — most commonly to backfill fields from a sabremetric collector added
+after the match was first confirmed. The admin console's Manage → Match view offers a per-match
+**reparse demo** button and a bulk **reparse all matches with demos** action; both re-dispatch
+`demo-ingest.yml` the same way first-time ingestion does.
+
+The Action treats a reparse of an already-scored match specially: if the
 freshly derived score matches the match's existing `final_score`, it upserts the refreshed
 sabremetrics directly (via `persistSabremetrics()`, shared with `PATCH /score`) and marks the job
 `confirmed` — no staged review. If the derived score differs from the stored one, it falls through to
@@ -320,12 +341,15 @@ case; the multi-segment functions are additive, used only when a match actually 
 **Admin upload path.** `DemoUploadModal.tsx`'s file input accepts more than one file — selecting 2+
 uploads each to its own R2 key (`demoSegmentKey(matchId, i)`) instead of the canonical `demoKey()`,
 then writes a manifest (`demo/segments/finalize`, `src/lib/demo/segmentManifest.ts`) naming all of
-them once every upload has actually succeeded (server-verified, not just client-assumed). `POST
-/api/matches/[id]/demo/parse` checks for a manifest first and, if present, downloads every listed
-segment and calls the multi-segment functions instead of the single-buffer ones; a single-file
-upload is entirely unchanged and never touches a manifest. Uploading a single file for a match that
-previously had a multi-segment manifest deletes the stale manifest, so a corrected full re-upload
-always wins over old segments rather than the parse route silently continuing to combine them.
+them once every upload has actually succeeded (server-verified, not just client-assumed). Both
+downstream parse paths check for a manifest first and, if present, read every listed segment and call
+the multi-segment functions instead of the single-buffer ones: `scripts/demo-ingest.ts` for a
+first-time upload (dispatched the same way as any other match with no score yet — see "Ingesting via
+the demo-ingest Action" above), and `POST /api/matches/[id]/demo/parse` for editing an already-played
+match from a fresh multi-segment demo. A single-file upload is entirely unchanged and never touches a
+manifest. Uploading a single file for a match that previously had a multi-segment manifest deletes the
+stale manifest, so a corrected full re-upload always wins over old segments rather than either parse
+path silently continuing to combine them.
 
 Editing an already-played match with a multi-segment demo re-parses it through the same manifest
 check (`MatchTabView.tsx` passes `isMultiSegmentDemo` into `DemoUploadModal`'s `hasDemoUploaded`
@@ -367,8 +391,8 @@ interrupted round from scratch, matching the round-number-granularity assumption
 contained in one segment — `mergeReplayResults()`'s merge is exactly "concatenate `rounds` across
 segments, sort back into round-number order," the same pattern `mergeSegmentResults()`/
 `mergeSabremetricResults()` already use for their own fact-row arrays. `scripts/replay-extract.ts`
-reads a match's demo manifest the same way the parse route does (§ above) and calls
-`buildReplaySegments()` instead of `buildReplay()` when it names more than one segment; manually
+reads a match's demo manifest the same way `scripts/demo-ingest.ts` and the parse route do (§ above)
+and calls `buildReplaySegments()` instead of `buildReplay()` when it names more than one segment; manually
 uploaded segments work the same as DatHost-auto-pulled ones once they're in R2 under a manifest, with
 no distinction at this layer.
 

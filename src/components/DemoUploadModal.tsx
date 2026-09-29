@@ -140,6 +140,16 @@ export default function DemoUploadModal({
   if (!mounted) return null;
   if (alreadyPlayed && !isAdmin) return null;
 
+  // Shared by reparseExistingDemo() and handleFilesSelect()'s alreadyPlayed branch — both hand a
+  // freshly in-request-parsed result to the same editable preview.
+  function applyParsedResult(result: ParsedResult) {
+    setParsed(result);
+    setDraftStats(initDraftFromStats(result.stats));
+    if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
+    if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
+    setStage('preview');
+  }
+
   async function reparseExistingDemo() {
     setStage('parsing');
     setError(null);
@@ -164,11 +174,7 @@ export default function DemoUploadModal({
       return;
     }
     const result: ParsedResult = await parseRes.json();
-    setParsed(result);
-    setDraftStats(initDraftFromStats(result.stats));
-    if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
-    if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
-    setStage('preview');
+    applyParsedResult(result);
   }
 
   function handleOpen() {
@@ -313,24 +319,38 @@ export default function DemoUploadModal({
       }
     }
 
-    // Step 4: trigger server-side parsing (auto-detects the manifest for a multi-segment upload)
-    setStage('parsing');
-    const parseRes = await fetch(`/api/matches/${matchId}/demo/parse`, { method: 'POST' });
-    if (!parseRes.ok) {
-      const json = await parseRes.json().catch(() => ({}));
-      setError(json.error ?? 'Demo parsing failed.');
-      setStage('idle');
+    if (alreadyPlayed) {
+      // Correcting an already-played match's stats from a freshly uploaded demo — parse in-request
+      // so the admin gets an editable preview before saving, same as reparseExistingDemo().
+      setStage('parsing');
+      const parseRes = await fetch(`/api/matches/${matchId}/demo/parse`, { method: 'POST' });
+      if (!parseRes.ok) {
+        const json = await parseRes.json().catch(() => ({}));
+        setError(json.error ?? 'Demo parsing failed.');
+        setStage('idle');
+        return;
+      }
+
+      const result: ParsedResult = await parseRes.json();
+      applyParsedResult(result);
       return;
     }
 
-    const result: ParsedResult = await parseRes.json();
-    setParsed(result);
-    setDraftStats(initDraftFromStats(result.stats));
-
-    if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
-    if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
-
-    setStage('preview');
+    // First-time ingestion — no existing score to protect, so this runs through the demo-ingest
+    // Action (no size ceiling) exactly like an automated DatHost pull. A clean, corroborated parse
+    // auto-commits with no further action here; anything else (quarantine, an unresolved side, a
+    // mismatch against MatchZy's own map_result) stages in the in-match review block below instead of
+    // asking for confirmation up front. Nothing left for this modal to show — close it.
+    setStage('parsing');
+    const dispatchRes = await fetch(`/api/matches/${matchId}/demo/dispatch`, { method: 'POST' });
+    if (!dispatchRes.ok) {
+      const json = await dispatchRes.json().catch(() => ({}));
+      setError(json.error ?? 'Failed to start demo processing.');
+      setStage('idle');
+      return;
+    }
+    setOpen(false);
+    router.refresh();
   }
 
   async function handleSubmit() {
@@ -502,7 +522,7 @@ export default function DemoUploadModal({
               <div className="flex flex-col items-center gap-3 py-8">
                 <div className="w-6 h-6 border-2 border-[var(--color-border-primary)] border-t-[var(--color-accent-green-fg)] rounded-full animate-spin" />
                 <p className="text-[12px] text-[var(--color-text-secondary)]">
-                  Analyzing demo…
+                  {alreadyPlayed ? 'Analyzing demo…' : 'Queuing demo for processing…'}
                 </p>
               </div>
             )}
