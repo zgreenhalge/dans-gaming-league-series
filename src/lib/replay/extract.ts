@@ -453,7 +453,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     const frames: ReplayFrame[] = b.wanted.map((tick) => ({
       tick,
       players: framesByTick.get(tick) ?? [],
-      bomb: null, // live bomb position is a documented Phase-1 limitation (see docs/replay.md)
+      bomb: null, // live bomb position is a documented limitation (see docs/replay.md)
     }));
     meta.rounds.push({
       round: b.round,
