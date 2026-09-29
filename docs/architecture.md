@@ -66,9 +66,9 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint one or more presigned Cloudflare R2 URLs to upload `.dem` file(s) — more than one for a match split across recordings by a server restart (see [`demo-ingestion.md`](./demo-ingestion.md#multi-segment-demos-a-match-split-by-a-server-restart)) |
 | `POST` | `/api/matches/[id]/demo/segments/finalize` | Write the manifest naming a multi-segment upload's segment keys, once every one is confirmed present in R2 ([`demo-ingestion.md`](./demo-ingestion.md#multi-segment-demos-a-match-split-by-a-server-restart)) |
-| `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo (single file, or every segment a manifest names) into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
-| `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged auto-ingest result ([`hosting.md`](./hosting.md)) |
-| `POST` | `/api/matches/[id]/demo/dispatch` | Re-parse the demo already in R2 (manual counterpart to `ingest/matchzy-log`'s auto-dispatch) |
+| `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo (single file, or every segment a manifest names) in-request, for editing an already-played match's stats from a fresh demo (see [`demo-ingestion.md`](./demo-ingestion.md)) |
+| `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged demo-ingest result ([`hosting.md`](./hosting.md)) |
+| `POST` | `/api/matches/[id]/demo/dispatch` | Dispatch `demo-ingest.yml` for the demo already in R2 — first-time ingestion for a manual upload, or a re-parse of an already-scored match (manual counterpart to `ingest/matchzy-log`'s auto-dispatch) |
 | `GET/POST` | `/api/matches/[id]/server/{status,provision,teardown}` | Per-match DatHost server lifecycle ([`hosting.md`](./hosting.md)) |
 | `GET` | `/api/matches/[id]/matchzy-config` | Machine-auth MatchZy config (`matchzy_loadmatch_url` target) |
 | `POST` | `/api/ingest/matchzy-log` | Machine-auth: MatchZy remote-log events — `map_result` records the job, dispatches parse, tears down the server; `going_live`/`round_end` feed the live score |
@@ -486,7 +486,7 @@ Wired into twenty-nine operations today:
 | `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route, `/api/ingest/matchzy-log`, and `POST /api/matches/[id]/server/teardown` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
 | `weapon_stats_persist` | `match` | `persistWeaponStats()`/`clearWeaponStats()`'s hook in the score route |
-| `live_score_clear` | `match` | `clearLiveScoreBestEffort()` (`liveScore.ts`), called by `pullDemoAndClearLiveScore()`, by `POST /api/matches/[id]/demo/parse` as soon as it confirms the demo is present in R2 (whether or not it goes on to parse cleanly), and by `writeMatchScore()`'s fallback |
+| `live_score_clear` | `match` | `clearLiveScoreBestEffort()` (`liveScore.ts`), called by `pullDemoAndClearLiveScore()`, by `scripts/demo-ingest.ts`'s own manifest-segment fetch, by `POST /api/matches/[id]/demo/parse` as soon as it confirms the demo is present in R2 (whether or not it goes on to parse cleanly), and by `writeMatchScore()`'s fallback |
 | `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
 | `schedule_generate` | `season` (regular) | `generateSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) `generate_season_schedule_draft()` RPC call erroring |
