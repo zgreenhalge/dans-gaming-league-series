@@ -137,16 +137,6 @@ export function parseMatchId(id: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-export function relativeTime(iso: string): string {
-  const diff = new Date(iso).getTime() - Date.now();
-  const days = Math.round(diff / 86_400_000);
-  if (days > 1) return `in ${days} days`;
-  if (days === 1) return 'tomorrow';
-  if (days === 0) return 'today';
-  if (days === -1) return 'yesterday';
-  return `${Math.abs(days)} days ago`;
-}
-
 export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
@@ -355,12 +345,6 @@ export function rateGradientColor(rate: number): string {
     return `color-mix(in srgb, white ${Math.round((t / 50) * 100)}%, var(--color-t))`;
   }
   return `color-mix(in srgb, var(--color-ct) ${Math.round(((t - 50) / 50) * 100)}%, white)`;
-}
-
-/** Faint→green color-mix for a 0-100 win rate — the higher the win rate, the deeper the green. Used by the H2H matrix, detail cards, profile partner bars, and scouting cards. */
-export function winRateColor(winRate: number): string {
-  const t = Math.max(0, Math.min(100, winRate));
-  return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t)}%, var(--color-bg-secondary))`;
 }
 
 /** CSS color for a side — the site-wide CT=blue / T=orange convention (round-history strip,
