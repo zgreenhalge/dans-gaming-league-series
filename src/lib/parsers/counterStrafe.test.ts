@@ -1,5 +1,5 @@
 /**
- * Unit tests for collectCounterStrafe — counter-strafing % (#173 phase 3.1). Speed is derived
+ * Unit tests for collectCounterStrafe — counter-strafing %. Speed is derived
  * from a 1-tick position delta (this parser exposes no direct velocity read — confirmed against
  * a real DGLS demo), so these fixtures supply position rows at the fire tick and one tick prior.
  *

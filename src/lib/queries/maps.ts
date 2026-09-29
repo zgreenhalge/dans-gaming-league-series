@@ -605,7 +605,7 @@ export async function getMapsForWorkshopPicker(): Promise<WorkshopMapOption[]> {
   return options;
 }
 
-/** A map's radar calibration triplet (Phase 3). `null` when the map isn't calibrated. */
+/** A map's radar calibration triplet. `null` when the map isn't calibrated. */
 export interface MapCalibration {
   mapId: number;
   posX: number;

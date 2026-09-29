@@ -1,6 +1,6 @@
 'use client';
 
-// In-match server panel (Phase 4). Once the 5-stage veto completes, this drives the hosting UX:
+// In-match server panel. Once the 5-stage veto completes, this drives the hosting UX:
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
 // Updates via Supabase Realtime on the match's `match_server_state` row (no polling) — the table is

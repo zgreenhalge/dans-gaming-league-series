@@ -1,4 +1,4 @@
-// Provision the DatHost match server for a match (Phase 4). Session-gated (admin or in-match). Fired
+// Provision the DatHost match server for a match. Session-gated (admin or in-match). Fired
 // when the 5-stage veto completes. Returns immediately with `provisioning`; the boot + loadmatch
 // (~15–20s) runs in `after()` and the client polls `…/server/status` for the connect string.
 

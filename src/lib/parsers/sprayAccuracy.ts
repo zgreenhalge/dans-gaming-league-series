@@ -21,7 +21,7 @@ const SPRAY_GAP_SECONDS = 0.25;
 const MIN_SPRAY_SHOTS = 3;
 
 /**
- * Spray accuracy (#173 phase 3.2): bullets hit / bullets fired within sequences of 3+
+ * Spray accuracy: bullets hit / bullets fired within sequences of 3+
  * consecutive rifle shots from the same weapon. Reports the overall total, not a per-rifle
  * breakdown (that would need per-weapon columns or a child table — deferred).
  */

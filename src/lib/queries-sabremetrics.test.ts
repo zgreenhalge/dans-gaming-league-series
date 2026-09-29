@@ -1,10 +1,8 @@
 /**
  * Regression harness for queries.ts's sabremetrics functions (#63) — getAllSabremetrics,
  * getSabremetricSeasonTotals — plus the shared Plus-stat composite (#163): aggregateRows,
- * chokeScore, computeLeagueAverages, computePlusStats. That composite used to be duplicated
- * (SabremetricsLeaderboardView.tsx's own copy, and a third, already-drifted copy in
- * scripts/match-context.ts with a stale Utility+ formula and different zero-denominator
- * fallbacks); it now lives here as the one implementation both consume.
+ * chokeScore, computeLeagueAverages, computePlusStats. That composite is the one
+ * implementation shared by SabremetricsLeaderboardView.tsx and scripts/match-context.ts.
  *
  * Run:  npx vitest run src/lib/queries-sabremetrics.test.ts
  */

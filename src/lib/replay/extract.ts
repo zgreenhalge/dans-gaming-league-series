@@ -669,7 +669,7 @@ function collectGrenades(
   try {
     rows = parseGrenades(demoBuffer) as Record<string, unknown>[];
   } catch {
-    return byRound; // grenades are non-critical for Phase 1
+    return byRound; // grenades are non-critical
   }
 
   // Field names vary across props, so read defensively via pick() — same as the

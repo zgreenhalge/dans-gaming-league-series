@@ -11,7 +11,6 @@ Add --grid to --calibration to sweep MOV_M_MIN/MOV_M_MAX/EHOG_SCALE/EHOG_LAMBDA 
 Brier per combination.
 
 See ehog/engine.py for the rating math.
-See ehog_handoff/schema.sql for the required DB migration.
 
 Setup:
   pip install supabase openskill python-dotenv

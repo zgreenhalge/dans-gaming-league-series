@@ -160,12 +160,12 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Career stats** — aggregated across seasons, always subject to the same `useSeasonFilter()`
   rules (`includeRegular` / `includeGauntlet` / `selectedSeason` / career) as every other view.
   See `getCareerLeaderboard()` and `CareerStatsView.tsx` — don't build a one-off filter.
-- **Trusted auto-commit / D5 predicate** — `evaluateAutoCommit()` (`src/lib/demo/autoCommit.ts`)
+- **Trusted auto-commit predicate** — `evaluateAutoCommit()` (`src/lib/demo/autoCommit.ts`)
   decides whether a parsed demo's score writes to the match automatically, skipping the human
   Confirm step. On by default; `AUTO_COMMIT_ENABLED=false` is the manual override. See
   [`hosting.md`](./hosting.md#trusted-auto-commit-138).
 - **`map_result`** — MatchZy's own end-of-map webhook event, POSTed to `matchzy_remote_log_url` and
-  captured at `mapResultKey`; the independent cross-check the D5 predicate corroborates the
+  captured at `mapResultKey`; the independent cross-check the auto-commit predicate corroborates the
   demo-derived score against.
 
 ## Where things live (file map)

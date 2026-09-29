@@ -1,15 +1,15 @@
 // World (CS2 units) → canvas-pixel projection for the 2D replay.
 //
 // Runtime-agnostic and pure (no DOM, no React): the browser `<ReplayPlayer>`, the
-// admin calibration overlay (Phase 3), the map heatmap, and the headless mp4 render
-// (Phase 4) all share this one module so a position never plots two different ways.
+// admin calibration overlay, the map heatmap, and the headless mp4 render
+// all share this one module so a position never plots two different ways.
 // See `docs/replay.md`.
 //
 // Two modes behind one `Projector` interface:
 //   - auto-fit   — fit the bounding box of every position into the canvas (no map
 //                  calibration needed; works on every map day one).
 //   - calibrated — use a map's radar triplet (`radar_pos_x/y`, `radar_scale`) to plot
-//                  onto its real top-down radar image (Phase 3).
+//                  onto its real top-down radar image.
 
 import type { ReplayPayload, Point } from './types';
 
@@ -20,7 +20,7 @@ export interface Projector {
   scaleLength(worldLen: number): number;
 }
 
-/** A map's radar calibration, as stored on the `maps` row (Phase 3). */
+/** A map's radar calibration, as stored on the `maps` row. */
 export interface RadarCalibration {
   /** World coords of the radar image's top-left corner. */
   posX: number;

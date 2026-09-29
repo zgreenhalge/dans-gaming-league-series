@@ -14,13 +14,13 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 const AWP_HURT_WEAPON = 'awp';
 
 /**
- * AWP-excluded head accuracy (#173 phase 3.3) — the one accuracy breakdown with no cheaper
+ * AWP-excluded head accuracy — the one accuracy breakdown with no cheaper
  * source: `player_match_weapon_stats`'s per-category buckets can't isolate the AWP from the rest of
  * the "sniper" category, so this stays a dedicated collector even though the plain
- * `shots_fired`/`shots_hit`/`headshot_hits` totals (once computed here too) are now derived at
+ * `shots_fired`/`shots_hit`/`headshot_hits` totals are derived at
  * query time from `player_match_weapon_stats` instead (`deriveAccuracyTotals()` in
  * `queries/weaponStats.ts` — both are the identical `WEAPON_CATEGORY`-gated, self-kill/teamkill
- * excluded event set, just one buckets by category and this used to sum flat). "Raw" because it
+ * excluded event set, just one buckets by category and this sums flat). "Raw" because it
  * isn't gated on the enemy having been spotted — see docs/calculations.md for why that gate isn't
  * implemented.
  */

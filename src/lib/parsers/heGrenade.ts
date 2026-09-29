@@ -12,7 +12,7 @@ const HE_FIRE_WEAPON = 'weapon_hegrenade';
 const HE_HURT_WEAPON = 'hegrenade';
 
 /**
- * HE grenade throws and enemy damage dealt (#173 phase 2.1). Damage to teammates/self isn't
+ * HE grenade throws and enemy damage dealt. Damage to teammates/self isn't
  * credited, matching the enemy-only intent of the existing utility_damage accumulator.
  */
 export function collectHeGrenades(

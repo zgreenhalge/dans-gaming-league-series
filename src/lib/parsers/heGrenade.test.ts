@@ -1,5 +1,5 @@
 /**
- * Unit tests for collectHeGrenades — HE grenade throws and enemy damage (#173 phase 2.1).
+ * Unit tests for collectHeGrenades — HE grenade throws and enemy damage.
  * weapon_fire and player_hurt name the same weapon differently (weapon_hegrenade vs
  * hegrenade) — the throw/damage split exercises both.
  *

@@ -95,7 +95,7 @@ export function neededSmokeTicks(
 }
 
 /**
- * Smokes interfering with pushes (#173 phase 3.5): a smoke counts as "blocking" if an enemy of
+ * Smokes interfering with pushes: a smoke counts as "blocking" if an enemy of
  * the thrower came within SMOKE_BLOCK_RADIUS of its detonation position at any sampled tick
  * during its life. Position-based, not a true visibility/render check — see the issue for why
  * that's out of scope. CT-only, matching Leetify's own "[CT] Smokes That Stopped a Push" — a

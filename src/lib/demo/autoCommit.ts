@@ -1,4 +1,4 @@
-// Trusted auto-commit predicate (D5, issue #138) — pure decision logic, no I/O. Kept separate from
+// Trusted auto-commit predicate (issue #138) — pure decision logic, no I/O. Kept separate from
 // the demo-ingest Action (which gathers the inputs and performs the write) so the rule is
 // independently readable and testable, mirroring `quarantine.ts`'s split between decision and caller.
 
@@ -24,7 +24,7 @@ export interface AutoCommitInput {
 
 export type AutoCommitDecision = { eligible: true } | { eligible: false; reason: string };
 
-/** Evaluate the D5 predicate. `eligible` means every check passed — the caller still gates the
+/** Evaluate the auto-commit predicate. `eligible` means every check passed — the caller still gates the
  *  actual write on `AUTO_COMMIT_ENABLED` (the manual override: `false` evaluates + logs without
  *  writing). */
 export function evaluateAutoCommit(input: AutoCommitInput): AutoCommitDecision {

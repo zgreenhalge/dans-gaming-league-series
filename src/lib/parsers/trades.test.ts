@@ -1,6 +1,5 @@
 /**
- * Unit tests for collectTrades — trade-kill/traded-death opportunity/attempt/success counts
- * (#173 phase 1.1). The success condition must stay in lockstep with kast.ts's "Traded" KAST
+ * Unit tests for collectTrades — trade-kill/traded-death opportunity/attempt/success counts. The success condition must stay in lockstep with kast.ts's "Traded" KAST
  * qualifier (same trade window, same permissive same-side check), so a few cases here mirror
  * kast.test.ts's trade cases directly.
  *

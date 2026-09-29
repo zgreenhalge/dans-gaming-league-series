@@ -1,5 +1,4 @@
-// Messy-demo heuristics for the demo-ingestion pipeline (Phase 3 of the DatHost + MatchZy
-// initiative — see dathost_handoff/DATHOST_PHASE0_PLAN.md). A demo that trips any check is
+// Messy-demo heuristics for the demo-ingestion pipeline. A demo that trips any check is
 // *quarantined* (flagged, not auto-processed) so a human handles it via the existing manual flow.
 //
 // These are pure, deterministic functions over a parsed demo's round outcomes — no I/O — so they're

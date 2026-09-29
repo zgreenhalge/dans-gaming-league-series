@@ -1,5 +1,5 @@
 /**
- * Unit tests for `evaluateAutoCommit()` — the D5 trusted auto-commit predicate (#138). Every check
+ * Unit tests for `evaluateAutoCommit()` — the trusted auto-commit predicate (#138). Every check
  * must hold for a match to skip the human Confirm step, so this locks each gate individually (in
  * the order the function checks them) plus the fully-eligible pass case.
  *
