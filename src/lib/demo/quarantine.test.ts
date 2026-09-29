@@ -1,7 +1,7 @@
 /**
- * Unit tests for the demo quarantine heuristics . Synthetic inputs only,
+ * Unit tests for the demo quarantine heuristics. Synthetic inputs only,
  * so this is fast and dependency-free — it proves each flag fires and that clean matches pass. A
- * real *messy* demo (backup/restore) is validated separately during the Phase-0/3 spike; here we
+ * real *messy* demo (backup/restore) is validated separately; here we
  * lock the logic so a refactor can't silently stop quarantining bad demos.
  *
  * Run:  npx vitest run src/lib/demo/quarantine.test.ts

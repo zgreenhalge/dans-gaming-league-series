@@ -20,7 +20,7 @@ const AWP_HURT_WEAPON = 'awp';
  * `shots_fired`/`shots_hit`/`headshot_hits` totals are derived at
  * query time from `player_match_weapon_stats` instead (`deriveAccuracyTotals()` in
  * `queries/weaponStats.ts` — both are the identical `WEAPON_CATEGORY`-gated, self-kill/teamkill
- * excluded event set, just one buckets by category and this sums flat). "Raw" because it
+ * excluded event set, this one sums flat while those bucket by category). "Raw" because it
  * isn't gated on the enemy having been spotted — see docs/calculations.md for why that gate isn't
  * implemented.
  */
