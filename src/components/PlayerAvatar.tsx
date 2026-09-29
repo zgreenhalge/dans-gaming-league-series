@@ -32,6 +32,8 @@ export default function PlayerAvatar({
         : placeholderStyle}
     >
       {imageUrl ? (
+        // Steam avatar URLs are arbitrary remote hosts, so next/image's remotePatterns can't allowlist them.
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={imageUrl} alt={`${name}'s avatar`} className="w-full h-full object-cover" />
       ) : (
         <span className={`${text} font-bold select-none`} style={{ color: 'var(--color-site-accent)' }}>

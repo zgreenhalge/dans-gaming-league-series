@@ -59,7 +59,7 @@ jobs:
         with:
           # Node 22+ for native WebSocket — @supabase/supabase-js eagerly constructs a
           # Realtime client at createClient() and throws on Node 20 without it.
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies

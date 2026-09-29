@@ -78,7 +78,7 @@ lives in Actions.
 2. **Workflow — `.github/workflows/<job>.yml`.** `workflow_dispatch` (and optionally
    `repository_dispatch`) inputs; `concurrency` backstop with **`cancel-in-progress: false`** (a
    cancelled run never reaches the script's `fail()` handler, so it would orphan the status at
-   `running`); pinned action SHAs; `node-version: 22` (Supabase Realtime needs native WebSocket);
+   `running`); pinned action SHAs; `node-version-file: .nvmrc` (Node 22+; Supabase Realtime needs native WebSocket);
    `npm ci`; secrets passed as `env`; one line: `npx tsx scripts/<job>.ts`.
 
 3. **Job script — `scripts/<job>.ts`, run via `tsx`.** Reuses the **same `src/lib/*` code as the
