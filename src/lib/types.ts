@@ -186,8 +186,8 @@ export interface PlayerMatchSabremetrics {
   // deriveOpeningDuelCounts()/deriveTwoKRoundCounts()/deriveSideSplitCounts()/deriveClutchCounts(),
   // queries/weaponStats.ts's deriveAccuracyTotals(), and queries/utility.ts's
   // deriveUtilityCounts(). flashes_thrown stays stored — it needs `weapon_fire` events, which no
-  // fact table carries. damage_ct/_t stays stored too — summed from `match_damage_events` rows at parse
-  // time (collectDamageBySide() in parsers/weaponStats.ts).
+  // fact table carries. damage_ct/_t is stored — summed from `match_damage_events` rows at parse time
+  // (collectDamageBySide() in parsers/weaponStats.ts).
   kast_rounds: number;
   utility_damage: number;
   flashes_thrown: number;

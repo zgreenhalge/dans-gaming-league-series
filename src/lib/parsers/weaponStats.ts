@@ -245,36 +245,34 @@ const STARTING_HEALTH = 100;
 /**
  * Sets each row's `damage` to the health its victim actually lost on that hit: the victim's health
  * before the hit (the previous hit's `health` for the same round and victim, or `STARTING_HEALTH`
- * for their first) minus their health after it. This is how the engine credits damage — its own
- * per-round damage counter rises by exactly this amount per hit — and it differs from
- * `player_hurt`'s raw `dmg_health` two ways: `dmg_health` isn't capped at what the victim had left
- * (a kill's finishing hit(s) report more than the victim's remaining health, most visibly on
- * shotguns whose pellets aren't individually capped), and it's truncated per hit while health drops
- * by the rounded amount, so a running total of `dmg_health` drifts a few points high over a round
- * (#491, #518). Health is shared across every attacker who hits a given victim that round — a
- * self-damage or teamdamage hit draws from the same pool a kill shot does — so this walks per
- * (round, victim) in ascending tick order (ties keep their original relative order —
- * `hurtEvents` is already tick-ordered, and `Array.prototype.sort` is stable). Mutates `rows` in
- * place; `healthAfter[i]` is the victim's health after `rows[i]`.
+ * for their first) minus their health after it. This is how the engine credits damage. It is not
+ * `player_hurt`'s raw `dmg_health`, which is truncated per hit (health drops by the rounded amount)
+ * and isn't capped at what the victim had left, so a kill's finishing hit(s) report more than the
+ * remaining health, most visibly on shotguns whose pellets aren't individually capped. Health is
+ * shared across every attacker who hits a given victim that round — a self-damage or teamdamage hit
+ * draws from the same pool a kill shot does — so this walks per (round, victim) in ascending tick
+ * order (ties keep their original relative order — `hurtEvents` is already tick-ordered, and
+ * `Array.prototype.sort` is stable). Mutates each pair's `row` in place; `healthAfter` is the
+ * victim's health after that hit.
  */
-function applyHealthLost(rows: DamageEventFactRow[], healthAfter: number[]): void {
-  const byRoundVictim = new Map<string, number[]>();
-  rows.forEach((r, i) => {
-    const key = `${r.round_number}:${r.victim_steamid}`;
+function applyHealthLost(hits: { row: DamageEventFactRow; healthAfter: number }[]): void {
+  const byRoundVictim = new Map<string, typeof hits>();
+  for (const hit of hits) {
+    const key = `${hit.row.round_number}:${hit.row.victim_steamid}`;
     let group = byRoundVictim.get(key);
     if (!group) {
       group = [];
       byRoundVictim.set(key, group);
     }
-    group.push(i);
-  });
+    group.push(hit);
+  }
 
   for (const group of byRoundVictim.values()) {
-    group.sort((a, b) => rows[a].tick - rows[b].tick);
+    group.sort((a, b) => a.row.tick - b.row.tick);
     let health = STARTING_HEALTH;
-    for (const i of group) {
-      rows[i].damage = Math.max(0, health - healthAfter[i]);
-      health = healthAfter[i];
+    for (const { row, healthAfter } of group) {
+      row.damage = Math.max(0, health - healthAfter);
+      health = healthAfter;
     }
   }
 }
@@ -297,8 +295,7 @@ export function collectMatchDamageEvents(
   steamIds: string[],
 ): DamageEventFactRow[] {
   const steamSet = new Set(steamIds);
-  const rows: DamageEventFactRow[] = [];
-  const healthAfter: number[] = [];
+  const hits: { row: DamageEventFactRow; healthAfter: number }[] = [];
 
   for (const h of hurtEvents) {
     const round = roundOf(h, context);
@@ -309,20 +306,22 @@ export function collectMatchDamageEvents(
 
     const attacker = h.attacker_steamid && steamSet.has(h.attacker_steamid) ? h.attacker_steamid : null;
 
-    rows.push({
-      round_number: round,
-      attacker_steamid: attacker,
-      victim_steamid: victim,
-      weapon: h.weapon,
-      damage: h.dmg_health,
-      hitgroup: h.hitgroup,
-      tick: h.tick,
+    hits.push({
+      row: {
+        round_number: round,
+        attacker_steamid: attacker,
+        victim_steamid: victim,
+        weapon: h.weapon,
+        damage: h.dmg_health,
+        hitgroup: h.hitgroup,
+        tick: h.tick,
+      },
+      healthAfter: h.health,
     });
-    healthAfter.push(h.health);
   }
 
-  applyHealthLost(rows, healthAfter);
-  return rows;
+  applyHealthLost(hits);
+  return hits.map((h) => h.row);
 }
 
 /**

@@ -151,14 +151,13 @@ export interface MatchContext {
  * *by* `round_officially_ended`'s own tick, so reading there instead of one tick earlier would read
  * the reset, not the settled value. `roundOf()` also uses this window to reattribute trailing events
  * to the round they happened in. The next round's tick is found dynamically per round rather than
- * assumed at a fixed offset — the gap is usually ~320 ticks (5s) but isn't always (an observed
- * outlier of 960 in real data).
+ * assumed at a fixed offset — the gap is usually ~320 ticks (5s) but isn't always.
  *
  * The match's last round has no following `round_officially_ended` — no next round is ever created,
  * so nothing ever triggers the reset. Its own `round_end` tick is therefore already the settled
  * value (the netprops are flat from `round_end` through the rest of the recorded demo). Using
  * `round_end`'s own tick — rather than a fixed offset past it — also sidesteps demo recordings that
- * stop within a few hundred ticks of the match's last `round_end` (#518): an offset tick can land
+ * stop within a few hundred ticks of the match's last `round_end`: an offset tick can land
  * past the end of the recorded demo and read nothing at all.
  */
 export function computeSettleTicks(

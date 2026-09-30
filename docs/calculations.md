@@ -90,9 +90,8 @@ it (the previous hit's `health` for the same round and victim, or 100 for the fi
 health after it (`applyHealthLost()` in `src/lib/parsers/weaponStats.ts`). That is how the engine
 credits damage. `player_hurt`'s raw `dmg_health` differs two ways: it isn't capped at what the victim
 had left (a kill's finishing hit(s) report more than the remaining health), and it is truncated per
-hit while health drops by the rounded amount, so a running total of `dmg_health` drifts a few points
-high over a round. Health is shared across every attacker who hits a victim that round, including
-self-damage and teamdamage.
+hit while health drops by the rounded amount. Health is shared across every attacker who hits a
+victim that round, including self-damage and teamdamage.
 
 `utility_damage` is the engine's match-cumulative `ActionTrackingServices.m_iUtilityDamage`, read
 once at the last round's settle tick (`computeSettleTicks()` in `src/lib/parsers/matchContext.ts`,
