@@ -63,6 +63,24 @@ test('aggregateMapPickBanStats: shirts_pick wins over picked_map when both are p
   assert.equal(out[0].map, 'Train Yard');
 });
 
+test('aggregateMapPickBanStats: per-map CT/T W-L follows the side chosen by the team that did not pick the map', () => {
+  const win = [{ is_win: true }];
+  const loss = [{ is_win: false }];
+  const matches = [
+    // shirts picked Palais, skins chose CT and won -> CT win
+    match({ shirts_pick: 'Palais', skins_starting_side: 'CT', skins_stats: win, shirts_stats: loss }),
+    // skins picked Palais, shirts chose the side opposite skins' T start (CT) and lost -> CT loss
+    match({ picked_map: 'Palais', skins_starting_side: 'T', skins_stats: win, shirts_stats: loss }),
+    // no resolvable winner -> not counted
+    match({ shirts_pick: 'Palais', skins_starting_side: 'T' }),
+  ];
+  const [palais] = aggregateMapPickBanStats(matches);
+  assert.deepEqual(
+    { ctWins: palais.ctWins, ctLosses: palais.ctLosses, tWins: palais.tWins, tLosses: palais.tLosses },
+    { ctWins: 1, ctLosses: 1, tWins: 0, tLosses: 0 },
+  );
+});
+
 test('aggregateMapPickBanStats: unplayed ("0-0" pre-staged) matches are excluded', () => {
   const matches = [
     match({ shirts_pick: 'Palais', final_score: '0-0' }),

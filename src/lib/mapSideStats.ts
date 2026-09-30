@@ -63,8 +63,12 @@ export interface MapPickBanStat {
   picked: number;
   banned: number;
   noPicked: number;
-  ctPicked: number;
-  tPicked: number;
+  /** Matches on this map where CT / T was the side chosen (see `resolveSideChoice()`), split by
+   *  whether the team that chose it won. Excludes matches with no resolvable winner. */
+  ctWins: number;
+  ctLosses: number;
+  tWins: number;
+  tLosses: number;
   pickedAndWon: number;
   avgRounds: number;
 }
@@ -133,19 +137,33 @@ function getWinningFaction(m: MatchPickBanInput): 'SHIRTS' | 'SKINS' | null {
   return null;
 }
 
+/** The side chosen for a played match and whether the team that chose it won (`null` when the
+ *  match has no resolvable winner). The side is chosen by the team that didn't pick the map:
+ *  when shirts picked the map, skins chose `skins_starting_side`; otherwise shirts chose the
+ *  opposite. `null` when the match is unplayed or has no `skins_starting_side`. */
+function resolveSideChoice(m: MatchPickBanInput): { side: 'CT' | 'T'; won: boolean | null } | null {
+  if (!isPlayedScore(m.final_score) || !m.skins_starting_side) return null;
+  const skinsChose = m.shirts_pick != null;
+  const side = skinsChose ? m.skins_starting_side : oppositeSide(m.skins_starting_side);
+  const winner = getWinningFaction(m);
+  return { side, won: winner === null ? null : winner === (skinsChose ? 'SKINS' : 'SHIRTS') };
+}
+
 interface MapPickBanBucket {
   display: string;
   picked: number;
   banned: number;
   noPicked: number;
-  ctPicked: number;
-  tPicked: number;
+  ctWins: number;
+  ctLosses: number;
+  tWins: number;
+  tLosses: number;
   pickedAndWon: number;
   totalRounds: number;
 }
 
 function emptyBucket(display: string): MapPickBanBucket {
-  return { display, picked: 0, banned: 0, noPicked: 0, ctPicked: 0, tPicked: 0, pickedAndWon: 0, totalRounds: 0 };
+  return { display, picked: 0, banned: 0, noPicked: 0, ctWins: 0, ctLosses: 0, tWins: 0, tLosses: 0, pickedAndWon: 0, totalRounds: 0 };
 }
 
 export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickBanStat[] {
@@ -167,8 +185,11 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
       const b = getBucket(name);
       b.picked++;
 
-      if (m.skins_starting_side === 'CT') b.ctPicked++;
-      else if (m.skins_starting_side === 'T') b.tPicked++;
+      const choice = resolveSideChoice(m);
+      if (choice && choice.won !== null) {
+        const key = `${choice.side === 'CT' ? 'ct' : 't'}${choice.won ? 'Wins' : 'Losses'}` as const;
+        b[key]++;
+      }
 
       // shirts picked when shirts_pick is set; otherwise skins picked via picked_map
       const shirtsPicked = m.shirts_pick != null;
@@ -184,13 +205,15 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
   }
 
   return Array.from(buckets.values())
-    .map(({ display, picked, banned, noPicked, ctPicked, tPicked, pickedAndWon, totalRounds }) => ({
+    .map(({ display, picked, banned, noPicked, ctWins, ctLosses, tWins, tLosses, pickedAndWon, totalRounds }) => ({
       map: display,
       picked,
       banned,
       noPicked,
-      ctPicked,
-      tPicked,
+      ctWins,
+      ctLosses,
+      tWins,
+      tLosses,
       pickedAndWon,
       avgRounds: picked > 0 ? totalRounds / picked : 0,
     }))
@@ -262,23 +285,11 @@ export function aggregatePerSideStats(
   const t = { wins: 0, losses: 0 };
 
   for (const m of matches) {
-    if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
-
-    // pickedSide = side chosen by the team that didn't pick the map
-    const shirtsPicked = m.shirts_pick != null;
-    const pickedSide = shirtsPicked
-      ? m.skins_starting_side
-      : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
-
-    const winner = getWinningFaction(m);
-    // The team that picked this side is whichever team plays it
-    // If skins starts on skins_starting_side and pickedSide === skins_starting_side → skins picked it
-    const pickedBySkins = pickedSide === m.skins_starting_side;
-    const sideTeamWon = pickedBySkins ? winner === 'SKINS' : winner === 'SHIRTS';
-
-    const bucket = pickedSide === 'CT' ? ct : t;
-    if (sideTeamWon) bucket.wins++;
-    else if (winner) bucket.losses++;
+    const choice = resolveSideChoice(m);
+    if (!choice || choice.won === null) continue;
+    const bucket = choice.side === 'CT' ? ct : t;
+    if (choice.won) bucket.wins++;
+    else bucket.losses++;
   }
 
   const roundTally = tallyRoundsBySide(rounds);
