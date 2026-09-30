@@ -52,9 +52,8 @@ export function makeContext(opts: {
     }
   }
 
-  // Defaults to each round's own endTick (no trailing post-round action, matching
-  // accumulators.test.ts's note that collectAccumulators() isn't exercised through this fixture) —
-  // pass a round's settleTick explicitly to model a real settle window and exercise roundOf()'s
+  // Defaults to each round's own endTick (no trailing post-round action) — pass a round's
+  // settleTick explicitly to model a real settle window and exercise roundOf()'s
   // trailing-action correction.
   const settleTicks = Int32Array.from(
     opts.rounds.map((r, i) => r.settleTick ?? rounds[i].endTick),
