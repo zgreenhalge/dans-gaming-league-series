@@ -585,65 +585,55 @@ function MapsAndSidesSection({
 }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Score Distribution sits in this top 2-col row on a single map page (paired with
-          per-side stats); on a multi-map page it moves to its own row below instead, paired
-          with Win Condition there, alongside the pick/ban table here, so four panels don't
-          fight for two columns. */}
-      {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
-      {!singleMap && <div>
-        <div className="flex items-baseline justify-between mb-3">
-          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
-        </div>
-        {mapPickBanStats.length === 0 ? (
-          <EmptyState message="No map data." />
-        ) : (
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-            <table className="w-full min-w-max border-collapse text-[12px]">
-              <thead>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <Th align="left">Map</Th>
-                  <Th align="right">Picks</Th>
-                  <Th align="right">Bans</Th>
-                  <Th align="right">No-picks</Th>
-                  <Th align="right">CT</Th>
-                  <Th align="right">T</Th>
-                  <Th align="right">Pick &amp; won</Th>
-                  <Th align="right">Avg rounds</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {mapPickBanStats.map((m) => (
-                  <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                    <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
-                      <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Pick/ban is per-map, so it only exists on multi-map pages; it gets the full width its
+          columns need. CT/T pick counts live in the per-side table's "Times Picked", not here. */}
+      {!singleMap && (
+        <div>
+          <div className="flex items-baseline justify-between mb-3">
+            <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
           </div>
-        )}
-      </div>}
-
-      {/* Per-Side Stats */}
-      <PerSideStatsTable perSideStats={perSideStats} />
-      </div>
-      {!singleMap ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
-          {winConditions && <WinConditionTable dist={winConditions} />}
+          {mapPickBanStats.length === 0 ? (
+            <EmptyState message="No map data." />
+          ) : (
+            <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+              <table className="w-full min-w-max border-collapse text-[12px]">
+                <thead>
+                  <tr className="bg-[var(--color-bg-secondary)]">
+                    <Th align="left">Map</Th>
+                    <Th align="right">Picks</Th>
+                    <Th align="right">Bans</Th>
+                    <Th align="right">No-picks</Th>
+                    <Th align="right">Pick &amp; won</Th>
+                    <Th align="right">Avg rounds</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mapPickBanStats.map((m) => (
+                    <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                      <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
+                        <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                      <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      ) : (
-        winConditions && <WinConditionTable dist={winConditions} />
       )}
+
+      {/* The three small summary tables share one row on every page, so single-map and
+          multi-map layouts differ only by the pick/ban table above. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <PerSideStatsTable perSideStats={perSideStats} />
+        {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
+        {winConditions && <WinConditionTable dist={winConditions} />}
+      </div>
     </div>
   );
 }
