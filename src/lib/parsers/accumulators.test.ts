@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { SPLIT_PROPS, SPLIT_FIELDS, UNSPLIT_PROPS, UNSPLIT_FIELDS } from './accumulators';
+import { UNSPLIT_PROPS, UNSPLIT_FIELDS } from './accumulators';
 import { test, report } from '../test-support/miniTest';
 
 test('accumulators: the engine\'s ungated m_iEnemiesFlashed accumulator is never read here', () => {
@@ -22,15 +22,6 @@ test('accumulators: the engine\'s ungated m_iEnemiesFlashed accumulator is never
 
 test('accumulators: UNSPLIT_FIELDS only maps utility_damage', () => {
   assert.deepEqual(UNSPLIT_FIELDS, { m_iUtilityDamage: 'utility_damage' });
-});
-
-test('accumulators: every SPLIT_PROPS entry has a ct/t field mapping', () => {
-  for (const prop of SPLIT_PROPS) {
-    const fields = SPLIT_FIELDS[prop];
-    assert.ok(fields, `missing SPLIT_FIELDS entry for ${prop}`);
-    assert.ok(fields.ct, `missing ct field for ${prop}`);
-    assert.ok(fields.t, `missing t field for ${prop}`);
-  }
 });
 
 report();

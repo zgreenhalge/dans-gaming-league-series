@@ -37,7 +37,7 @@ import {
   type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
 import {
-  collectWeaponClassStats, collectEconomyStats, collectMatchKills, collectMatchDamageEvents,
+  collectWeaponClassStats, collectEconomyStats, collectMatchKills, collectMatchDamageEvents, collectDamageBySide,
 } from './parsers/weaponStats';
 
 const ZERO: SabFields = {
@@ -116,7 +116,7 @@ export function parseDemoSabremetrics(
   ) as BombEventRow[];
 
   const hurtEvents = parseEvent(
-    demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health', 'hitgroup'],
+    demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health', 'health', 'hitgroup'],
   ) as PlayerHurtRow[];
 
   const smokeDetonateEvents = parseEvent(
@@ -184,7 +184,7 @@ export function parseDemoSabremetrics(
   const liveDeathEvents = dedupeDeathEvents(deathEvents, context);
   warnings.push(...context.warnings);
 
-  // 4. Accumulator-based stats (split basic + headshots + unsplit utility/flashed)
+  // 4. Accumulator-based stats (utility damage)
   const accStats = collectAccumulators(demoBuffer, context, steamIds);
 
   // Trade opportunities need each teammate's position at the moment of a death, to gate out
@@ -390,6 +390,7 @@ export function parseDemoSabremetrics(
   }));
 
   const damageEventFacts = collectMatchDamageEvents(hurtEvents, context, steamIds);
+  const damageBySide = collectDamageBySide(damageEventFacts, context);
   const matchDamageEvents: DemoMatchDamageEvent[] = damageEventFacts.map((e) => ({
     round_number: e.round_number,
     attacker_player_id: playerIdOf(e.attacker_steamid),
@@ -406,6 +407,7 @@ export function parseDemoSabremetrics(
     sabremetrics: {
       ...ZERO,
       ...accStats.get(steamId),
+      ...damageBySide.get(steamId),
       ...kastStats.get(steamId),
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),

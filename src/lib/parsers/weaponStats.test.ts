@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import {
   collectWeaponClassStats, collectEconomyStats, collectMatchKills, collectMatchDamageEvents,
+  collectDamageBySide,
   type WeaponBreakdownRow,
 } from './weaponStats';
 import { makeContext, hurt, death } from './matchContextFixture';
@@ -229,8 +230,8 @@ test('collectMatchDamageEvents: one row per hit, with resolved attacker/victim/w
 
 test('collectMatchDamageEvents: multiple hits on the same victim in the same round each produce their own row', () => {
   const hurts = [
-    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 20 }),
-    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 30 }),
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 20, health: 80 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 30, health: 50 }),
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectMatchDamageEvents(hurts, ctx, ids);
@@ -270,21 +271,35 @@ test('collectMatchDamageEvents: an unresolved attacker (world/fall damage) is nu
   assert.equal(out[0].attacker_steamid, null);
 });
 
-test('collectMatchDamageEvents: damage is clamped to the victim\'s health remaining, not the raw dmg_health, mirroring m_iDamage', () => {
+test('collectMatchDamageEvents: damage is the health the victim actually lost, capped at what they had left', () => {
   const hurts = [
-    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60, health: 40 }),
     // Nominal 60 would put the victim at -20; only 40 health was actually left to lose.
-    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60, health: 0 }),
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectMatchDamageEvents(hurts, ctx, ids);
   assert.deepEqual(out.map((r) => r.damage), [60, 40]);
 });
 
-test('collectMatchDamageEvents: a hit with no health left to lose is clamped to zero, not dropped', () => {
+test('collectMatchDamageEvents: per-hit truncation in dmg_health doesn\'t accumulate into the total', () => {
+  // dmg_health is truncated per hit (26/26/33/33) while the victim's health drops by the rounded
+  // amounts (26/27/34/13), so the total is the victim's 100 health, not an inflated running sum.
   const hurts = [
-    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 100 }),
-    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 20 }),
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 26, health: 74 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 26, health: 47 }),
+    hurt({ round: 1, tick: 109, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 33, health: 13 }),
+    hurt({ round: 1, tick: 113, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 33, health: 0 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.deepEqual(out.map((r) => r.damage), [26, 27, 34, 13]);
+});
+
+test('collectMatchDamageEvents: a hit that takes no health is zero damage, not dropped', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 100, health: 0 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 20, health: 0 }),
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectMatchDamageEvents(hurts, ctx, ids);
@@ -293,8 +308,8 @@ test('collectMatchDamageEvents: a hit with no health left to lose is clamped to 
 
 test('collectMatchDamageEvents: the health pool is shared across every attacker who hits the same victim that round', () => {
   const hurts = [
-    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'c', weapon: 'hegrenade', dmgHealth: 70 }), // self-damage
-    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }), // finishing blow
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'c', weapon: 'hegrenade', dmgHealth: 70, health: 30 }), // self-damage
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60, health: 0 }), // finishing blow
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectMatchDamageEvents(hurts, ctx, ids);
@@ -303,27 +318,57 @@ test('collectMatchDamageEvents: the health pool is shared across every attacker 
 
 test('collectMatchDamageEvents: health resets each round and doesn\'t leak across victims', () => {
   const hurts = [
-    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 90 }),
-    hurt({ round: 1, tick: 102, victim: 'd', attacker: 'a', weapon: 'ak47', dmgHealth: 90 }),
-    hurt({ round: 2, tick: 1101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 90 }),
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 90, health: 10 }),
+    hurt({ round: 1, tick: 102, victim: 'd', attacker: 'a', weapon: 'ak47', dmgHealth: 90, health: 10 }),
+    hurt({ round: 2, tick: 1101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 90, health: 10 }),
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectMatchDamageEvents(hurts, ctx, ids);
   assert.deepEqual(out.map((r) => r.damage), [90, 90, 90]);
 });
 
-test('collectMatchDamageEvents: clamping doesn\'t depend on the input already being tick-ordered', () => {
+test('collectMatchDamageEvents: health lost doesn\'t depend on the input already being tick-ordered', () => {
   const hurts = [
-    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
-    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60, health: 0 }),
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60, health: 40 }),
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectMatchDamageEvents(hurts, ctx, ids);
-  // Earlier tick (101) absorbs the full 60 first; the later tick (105) only has 40 left, regardless
-  // of which order the events arrive in.
+  // Earlier tick (101) takes its 60 first; the later tick (105) only has 40 left, regardless of
+  // which order the events arrive in.
   const byTick = new Map(out.map((r) => [r.tick, r.damage]));
   assert.equal(byTick.get(101), 60);
   assert.equal(byTick.get(105), 40);
+});
+
+test('collectDamageBySide: enemy damage is credited to the attacker\'s side that round', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 40, health: 60 }),
+    hurt({ round: 2, tick: 1101, victim: 'd', attacker: 'a', weapon: 'ak47', dmgHealth: 30, health: 70 }),
+  ];
+  const ctx = makeContext({
+    rounds, sides, sidesByRound: { 2: { a: 'T', b: 'T', c: 'CT', d: 'CT' } },
+  });
+  const out = collectDamageBySide(collectMatchDamageEvents(hurts, ctx, ids), ctx);
+  assert.deepEqual(out.get('a'), { damage_ct: 40, damage_t: 30 });
+});
+
+test('collectDamageBySide: self-damage, teamdamage and world damage are not credited', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'a', attacker: 'a', weapon: 'hegrenade', dmgHealth: 20, health: 80 }), // self
+    hurt({ round: 1, tick: 102, victim: 'b', attacker: 'a', weapon: 'ak47', dmgHealth: 20, health: 80 }), // team
+    hurt({ round: 1, tick: 103, victim: 'c', attacker: null, weapon: 'world', dmgHealth: 20, health: 80 }), // world
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectDamageBySide(collectMatchDamageEvents(hurts, ctx, ids), ctx);
+  assert.equal(out.size, 0);
+});
+
+test('collectDamageBySide: empty when the starting side is unresolved', () => {
+  const hurts = [hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 40, health: 60 })];
+  const ctx = makeContext({ rounds, sides, hasSides: false });
+  const out = collectDamageBySide(collectMatchDamageEvents(hurts, ctx, ids), ctx);
+  assert.equal(out.size, 0);
 });
 
 report();

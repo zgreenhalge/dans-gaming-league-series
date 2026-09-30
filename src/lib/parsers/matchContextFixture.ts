@@ -125,6 +125,8 @@ export function hurt(opts: {
   attacker?: string | null;
   weapon?: string;
   dmgHealth?: number;
+  /** Victim's health after the hit. Defaults to a hit taken from full health: `100 - dmgHealth`. */
+  health?: number;
   hitgroup?: string;
 }): PlayerHurtRow {
   return {
@@ -134,6 +136,7 @@ export function hurt(opts: {
     attacker_steamid: opts.attacker ?? null,
     weapon: opts.weapon ?? '',
     dmg_health: opts.dmgHealth ?? 0,
+    health: opts.health ?? Math.max(0, 100 - (opts.dmgHealth ?? 0)),
     hitgroup: opts.hitgroup ?? 'chest',
   };
 }
