@@ -111,6 +111,10 @@ export interface PlayerHurtRow {
   user_steamid: string | null;
   weapon: string;
   dmg_health: number;
+  /** The victim's health *after* this hit. Successive values per (round, victim) give the exact
+   *  health lost per hit (`collectMatchDamageEvents()`) — `dmg_health` itself is truncated per
+   *  hit and isn't capped at the victim's remaining health. */
+  health: number;
   hitgroup: string;
 }
 
@@ -139,26 +143,22 @@ export interface MatchContext {
 }
 
 /**
- * A round-scoped engine netprop (e.g. `m_flTotalRoundDamageDealt`) resets not at `round_end`'s own
- * tick, but ~`mp_round_restart_delay` later, at the next round's `round_officially_ended`/
- * `round_start` — real trailing action can still land in that gap (a player still alive and
- * shooting during the post-round delay), and reading the netprop exactly at `round_end` misses it
- * (#491). The "settle tick" is the latest tick still guaranteed to be *before* that reset: one tick
- * before the next `round_officially_ended` tick after this round's `endTick` — the reset is already
- * complete *by* `round_officially_ended`'s own tick (confirmed against real data: sampling exactly
- * at that tick already reads 0), so reading there instead of one tick earlier would read the reset,
- * not the settled value. The next round's tick is found dynamically per round rather than assumed at
- * a fixed offset — the gap is usually ~320 ticks (5s) but isn't always (an observed outlier of 960 in
- * real data).
+ * A round-scoped engine netprop resets not at `round_end`'s own tick, but ~`mp_round_restart_delay`
+ * later, at the next round's `round_officially_ended`/`round_start` — and real trailing action can
+ * still land in that gap (a player still alive and shooting during the post-round delay). The
+ * "settle tick" is the latest tick still guaranteed to be *before* that reset: one tick before the
+ * next `round_officially_ended` tick after this round's `endTick` — the reset is already complete
+ * *by* `round_officially_ended`'s own tick, so reading there instead of one tick earlier would read
+ * the reset, not the settled value. `roundOf()` also uses this window to reattribute trailing events
+ * to the round they happened in. The next round's tick is found dynamically per round rather than
+ * assumed at a fixed offset — the gap is usually ~320 ticks (5s) but isn't always.
  *
  * The match's last round has no following `round_officially_ended` — no next round is ever created,
- * so nothing ever triggers the reset this function otherwise settles ahead of. Its own `round_end`
- * tick is therefore already the settled value (confirmed against real matches: the netprop is flat
- * from `round_end` through the rest of the recorded demo, hundreds of ticks past where a real reset
- * would show). Using `round_end`'s own tick — rather than a fixed offset past it — also sidesteps a
- * real failure mode: demo recording frequently stops within a few hundred ticks of the match's last
- * `round_end` (#518), so an offset tick can land past the end of the recorded demo and read nothing
- * at all, silently zeroing that round for every player.
+ * so nothing ever triggers the reset. Its own `round_end` tick is therefore already the settled
+ * value (the netprops are flat from `round_end` through the rest of the recorded demo). Using
+ * `round_end`'s own tick — rather than a fixed offset past it — also sidesteps demo recordings that
+ * stop within a few hundred ticks of the match's last `round_end`: an offset tick can land
+ * past the end of the recorded demo and read nothing at all.
  */
 export function computeSettleTicks(
   rounds: RoundSideInfo[],

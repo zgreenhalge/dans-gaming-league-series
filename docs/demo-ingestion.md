@@ -103,7 +103,7 @@ recorded score.
 | `rosterResolver.ts` | Steam-id → DGLS player + faction resolution |
 | `matchContext.ts` | Per-round/per-death context shared by the collectors |
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
-| `accumulators.ts` | Per-side damage deltas from round-end accumulator ticks (`damage_ct`/`damage_t`) — K/A/D/headshot splits aren't collected here; they're derived at query time from `match_kills` (`deriveSideSplitCounts()` in `queries/kills.ts`) |
+| `accumulators.ts` | Engine accumulators read straight off the demo (`utility_damage`) — K/A/D/headshot splits aren't collected here; they're derived at query time from `match_kills` (`deriveSideSplitCounts()` in `queries/kills.ts`). `damage_ct`/`damage_t` come from `collectDamageBySide()` in `weaponStats.ts` instead — see [`calculations.md`](./calculations.md) |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
 | `utility.ts` | Flashes thrown — the one utility stat still collected here, since it needs `weapon_fire` events no fact table carries. Every other flash stat (flash assists, enemies flashed, teamflash, etc., feeding `Utility+`) is derived at query time from `match_utility_throws` — see "Kill, round, and utility fact tables" below |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
@@ -209,15 +209,17 @@ above: a new derived stat is a query change, not a new table.
   separate reconciliation against `match_utility_throws` needed. `attacker_steamid` is nulled out when
   it's not a known roster player (world/fall damage), matching `collectMatchKills()`'s handling of
   unresolvable attackers. `damage` is health actually lost, not the event's raw `dmg_health` —
-  `clampToHealthRemaining()` walks each round's hits per victim in tick order and floors every hit
-  against whatever health that victim had left (shared across every attacker who hits them that
-  round, including self-damage and teamdamage), the same way the engine's own `m_iDamage` accumulator
-  behaves; an unclamped sum overcounts a match's total damage significantly, since a kill's finishing
-  hit(s) routinely report more nominal damage than the victim had left (most visibly on shotguns).
+  `applyHealthLost()` walks each round's hits per victim in tick order and takes the drop in that
+  victim's `health` (the event's post-hit health field) from one hit to the next, starting at 100
+  (shared across every attacker who hits them that round, including self-damage and teamdamage),
+  which is exactly how the engine credits damage. A running sum of `dmg_health` overcounts: a kill's
+  finishing hit(s) routinely report more nominal damage than the victim had left (most visibly on
+  shotguns), and per-hit truncation drifts the total a few points high over a round.
   `src/lib/demo/matchDamageEvents.ts` persists it via `replaceMatchRows()`, resolving both
   attacker/victim to `player_match_stats_id`; a hit whose victim has no resolvable row is dropped,
-  matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are computed independently
-  of this table — see [`calculations.md`](./calculations.md).
+  matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are summed from these rows
+  (enemy hits only, by the attacker's side) by `collectDamageBySide()` — see
+  [`calculations.md`](./calculations.md).
 
 ## Match start (skipping warmup and stray knife rounds)
 

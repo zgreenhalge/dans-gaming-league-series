@@ -5,6 +5,7 @@ import { WEAPON_CATEGORY, stripWeaponPrefix } from './weaponClasses';
 import type { EconomyType } from './economy';
 import { HITGROUP_HEAD } from './constants';
 import { roundOf } from './_shared';
+import type { SabFields } from '../types';
 
 export interface WeaponBreakdownRow {
   bucket: string;
@@ -238,41 +239,40 @@ export interface DamageEventFactRow {
 }
 
 /** A live round always starts every player at full health, with no mid-round regen (no health kits
- *  in Wingman) — the ceiling `clampToHealthRemaining()` clamps each round's damage against. */
+ *  in Wingman) — the baseline `applyHealthLost()` measures each victim's first hit against. */
 const STARTING_HEALTH = 100;
 
 /**
- * Clamps each row's `damage` down to what the victim actually had left that round, mirroring the
- * engine's own `m_iDamage` accumulator (`docs/calculations.md`) rather than `player_hurt`'s raw
- * `dmg_health` — a `player_hurt` event's damage isn't itself capped at the victim's remaining
- * health, so a kill's finishing hit(s) routinely report more "damage" than the victim had left
- * (most visibly on shotguns, whose per-pellet damage isn't individually capped either), and a
- * straight sum of unclamped rows overcounts a match's total damage by a large margin (#491). Health
- * is shared across every attacker who hits a given victim that round — a self-damage or teamdamage
- * hit draws from the same pool a kill shot does —
- * so this clamps per (round, victim) regardless of who's hitting them, walking hits in ascending
- * tick order (ties keep their original relative order — `hurtEvents` is already tick-ordered, and
- * `Array.prototype.sort` is stable) and flooring each one against whatever health remained. Mutates
- * `rows` in place.
+ * Sets each row's `damage` to the health its victim actually lost on that hit: the victim's health
+ * before the hit (the previous hit's `health` for the same round and victim, or `STARTING_HEALTH`
+ * for their first) minus their health after it. This is how the engine credits damage. It is not
+ * `player_hurt`'s raw `dmg_health`, which is truncated per hit (health drops by the rounded amount)
+ * and isn't capped at what the victim had left, so a kill's finishing hit(s) report more than the
+ * remaining health, most visibly on shotguns whose pellets aren't individually capped. Health is
+ * shared across every attacker who hits a given victim that round — a self-damage or teamdamage hit
+ * draws from the same pool a kill shot does — so this walks per (round, victim) in ascending tick
+ * order (ties keep their original relative order — `hurtEvents` is already tick-ordered, and
+ * `Array.prototype.sort` is stable). Mutates each pair's `row` in place; `healthAfter` is the
+ * victim's health after that hit.
  */
-function clampToHealthRemaining(rows: DamageEventFactRow[]): void {
-  const byRoundVictim = new Map<string, DamageEventFactRow[]>();
-  for (const r of rows) {
-    const key = `${r.round_number}:${r.victim_steamid}`;
+function applyHealthLost(hits: { row: DamageEventFactRow; healthAfter: number }[]): void {
+  const byRoundVictim = new Map<string, typeof hits>();
+  for (const hit of hits) {
+    const key = `${hit.row.round_number}:${hit.row.victim_steamid}`;
     let group = byRoundVictim.get(key);
     if (!group) {
       group = [];
       byRoundVictim.set(key, group);
     }
-    group.push(r);
+    group.push(hit);
   }
 
   for (const group of byRoundVictim.values()) {
-    group.sort((a, b) => a.tick - b.tick);
-    let remaining = STARTING_HEALTH;
-    for (const r of group) {
-      r.damage = Math.min(r.damage, remaining);
-      remaining -= r.damage;
+    group.sort((a, b) => a.row.tick - b.row.tick);
+    let health = STARTING_HEALTH;
+    for (const { row, healthAfter } of group) {
+      row.damage = Math.max(0, health - healthAfter);
+      health = healthAfter;
     }
   }
 }
@@ -287,7 +287,7 @@ function clampToHealthRemaining(rows: DamageEventFactRow[]): void {
  * `weapon` — grenade/utility damage (`hegrenade`, `molotov`/`inferno`) included alongside guns, so
  * this table needs no separate reconciliation against `match_utility_throws` (which only tracks
  * flash-blind instances, not damage) to cover utility. `damage` is health actually lost, not the
- * event's raw `dmg_health` — see `clampToHealthRemaining()`.
+ * event's raw `dmg_health` — see `applyHealthLost()`.
  */
 export function collectMatchDamageEvents(
   hurtEvents: PlayerHurtRow[],
@@ -295,7 +295,7 @@ export function collectMatchDamageEvents(
   steamIds: string[],
 ): DamageEventFactRow[] {
   const steamSet = new Set(steamIds);
-  const rows: DamageEventFactRow[] = [];
+  const hits: { row: DamageEventFactRow; healthAfter: number }[] = [];
 
   for (const h of hurtEvents) {
     const round = roundOf(h, context);
@@ -306,17 +306,53 @@ export function collectMatchDamageEvents(
 
     const attacker = h.attacker_steamid && steamSet.has(h.attacker_steamid) ? h.attacker_steamid : null;
 
-    rows.push({
-      round_number: round,
-      attacker_steamid: attacker,
-      victim_steamid: victim,
-      weapon: h.weapon,
-      damage: h.dmg_health,
-      hitgroup: h.hitgroup,
-      tick: h.tick,
+    hits.push({
+      row: {
+        round_number: round,
+        attacker_steamid: attacker,
+        victim_steamid: victim,
+        weapon: h.weapon,
+        damage: h.dmg_health,
+        hitgroup: h.hitgroup,
+        tick: h.tick,
+      },
+      healthAfter: h.health,
     });
   }
 
-  clampToHealthRemaining(rows);
-  return rows;
+  applyHealthLost(hits);
+  return hits.map((h) => h.row);
+}
+
+/**
+ * Per-player `damage_ct`/`damage_t`: health lost by enemies, summed from `collectMatchDamageEvents()`
+ * rows and split by the attacker's side that round. Self-damage and teamdamage don't count — the
+ * same rule the engine's own damage counters follow — and neither does damage to anything that
+ * isn't a player (breakable props raise the engine's per-round damage netprop but never produce a
+ * `player_hurt` event). Empty when the starting side is unresolved, since there is no side to split by.
+ */
+export function collectDamageBySide(
+  damageEvents: DamageEventFactRow[],
+  context: MatchContext,
+): Map<string, Partial<SabFields>> {
+  const out = new Map<string, Partial<SabFields>>();
+  if (!context.hasSides) return out;
+
+  for (const e of damageEvents) {
+    const attacker = e.attacker_steamid;
+    if (!attacker || attacker === e.victim_steamid) continue;
+    if (isTeamKill(attacker, e.victim_steamid, context)) continue;
+
+    const side = context.playerSides.get(attacker)?.get(e.round_number);
+    if (!side) continue;
+
+    let partial = out.get(attacker);
+    if (!partial) {
+      partial = {};
+      out.set(attacker, partial);
+    }
+    const key = side === 'CT' ? 'damage_ct' : 'damage_t';
+    partial[key] = (partial[key] ?? 0) + e.damage;
+  }
+  return out;
 }

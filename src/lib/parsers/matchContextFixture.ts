@@ -52,9 +52,8 @@ export function makeContext(opts: {
     }
   }
 
-  // Defaults to each round's own endTick (no trailing post-round action, matching
-  // accumulators.test.ts's note that collectAccumulators() isn't exercised through this fixture) —
-  // pass a round's settleTick explicitly to model a real settle window and exercise roundOf()'s
+  // Defaults to each round's own endTick (no trailing post-round action) — pass a round's
+  // settleTick explicitly to model a real settle window and exercise roundOf()'s
   // trailing-action correction.
   const settleTicks = Int32Array.from(
     opts.rounds.map((r, i) => r.settleTick ?? rounds[i].endTick),
@@ -125,6 +124,8 @@ export function hurt(opts: {
   attacker?: string | null;
   weapon?: string;
   dmgHealth?: number;
+  /** Victim's health after the hit. Defaults to a hit taken from full health: `100 - dmgHealth`. */
+  health?: number;
   hitgroup?: string;
 }): PlayerHurtRow {
   return {
@@ -134,6 +135,7 @@ export function hurt(opts: {
     attacker_steamid: opts.attacker ?? null,
     weapon: opts.weapon ?? '',
     dmg_health: opts.dmgHealth ?? 0,
+    health: opts.health ?? Math.max(0, 100 - (opts.dmgHealth ?? 0)),
     hitgroup: opts.hitgroup ?? 'chest',
   };
 }

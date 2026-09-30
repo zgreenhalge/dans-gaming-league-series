@@ -76,32 +76,28 @@ Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `matc
 (`match_rounds.shirts_side` for that round + the player's fixed match `faction`) and summing with
 `deriveSideSplitCounts()` (both `src/lib/queries/kills.ts`) — not collected during parsing.
 
-**CT/T splits for damage** (`damage_ct`/`damage_t`) are read directly from the engine's
-`ActionTrackingServices.m_flTotalRoundDamageDealt` — already scoped to the current round (it resets
-rather than accumulating), so the raw value is credited straight to the player's side that round, no
-delta arithmetic needed — implemented in `src/lib/parsers/accumulators.ts`. The sibling `m_iDamage`
-accumulator is match-cumulative rather than per-round and updates one round late relative to the
-round_end event, so delta-computing a side split from it would misattribute each round's damage to
-the following round's side; `m_flTotalRoundDamageDealt` has no such lag.
+**CT/T splits for damage** (`damage_ct`/`damage_t`) sum `match_damage_events` `damage` (see
+[`architecture.md`](./architecture.md)) by the attacker's side that round — `collectDamageBySide()`
+in `src/lib/parsers/weaponStats.ts`, using the same per-round `playerSides` the other collectors
+read. Only enemy damage counts: self-damage, teamdamage, and world/fall damage (a null attacker) are
+skipped, matching the engine's own damage counters. The engine's per-round
+`ActionTrackingServices.m_flTotalRoundDamageDealt` isn't read, because it also counts damage to
+breakable props, which produce no `player_hurt` event and expose no per-hit amount to subtract back
+out; the fact rows only ever hold player hits.
 
-The read itself happens at each round's **settle tick**, not `round_end`'s own tick —
-`computeSettleTicks()` (`src/lib/parsers/matchContext.ts`). The engine doesn't reset
-`m_flTotalRoundDamageDealt` when `round_end` fires; it resets ~`mp_round_restart_delay` later, at the
-next round's `round_officially_ended`/`round_start`. Real action can still land in that gap (a player
-still alive and shooting during the post-round delay before the next round is created), and it's
-credited to the just-ended round's still-live counter — reading exactly at `round_end` is too early
-to see it and silently loses that damage. The settle tick is one tick before the next round's actual
-`round_officially_ended` tick, looked up per round rather than assumed at a fixed offset (real demos
-show the gap is usually ~320 ticks but not always) — one tick *before*, not at, since the reset is
-already complete by `round_officially_ended`'s own tick. The match's last round has no following
-round to provide one — and, with no next round ever created, nothing ever triggers the reset either,
-so its own `round_end` tick is already the settled value (confirmed against real matches: the netprop
-is flat from `round_end` through the rest of the recorded demo). This also sidesteps demo recordings
-that stop within a few hundred ticks of the match's last `round_end` — common enough in practice that
-a fixed offset past `round_end` risks landing after the recording ends and reading nothing at all.
+`match_damage_events.damage` is the health the victim actually lost on that hit: their health before
+it (the previous hit's `health` for the same round and victim, or 100 for the first) minus their
+health after it (`applyHealthLost()` in `src/lib/parsers/weaponStats.ts`). That is how the engine
+credits damage. `player_hurt`'s raw `dmg_health` differs two ways: it isn't capped at what the victim
+had left (a kill's finishing hit(s) report more than the remaining health), and it is truncated per
+hit while health drops by the rounded amount. Health is shared across every attacker who hits a
+victim that round, including self-damage and teamdamage.
 
-`match_damage_events` (see [`architecture.md`](./architecture.md)) is a separate granular per-hit
-fact table for damage, one row per `player_hurt` event with health-loss-clamped `damage`.
+`utility_damage` is the engine's match-cumulative `ActionTrackingServices.m_iUtilityDamage`, read
+once at the last round's settle tick (`computeSettleTicks()` in `src/lib/parsers/matchContext.ts`,
+also the window `roundOf()` uses to attribute trailing action — see
+[`demo-ingestion.md`](./demo-ingestion.md)). It counts enemy grenade/fire health loss only, so
+props don't contaminate it.
 
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played. Two different denominators feed this, depending on
