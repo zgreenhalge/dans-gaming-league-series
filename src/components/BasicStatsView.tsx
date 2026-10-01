@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
@@ -570,6 +570,80 @@ function WinConditionTable({ dist }: { dist: WinConditionBreakdown }) {
   );
 }
 
+const SIDE_DIVIDER = 'border-l border-[var(--color-border-primary)]';
+
+/** Per-map pick/ban/no-pick counts, then (after a divider) how often the side chosen for each map
+ *  was CT or T and how the choosing team fared. RWR% has no per-map breakdown (round rows
+ *  carry no map), so it appears only on the "All maps" totals row from `perSideStats`. */
+function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: MapPickBanStat[]; perSideStats: PerSideStat[] }) {
+  const ct = perSideStats.find((s) => s.side === 'CT');
+  const t = perSideStats.find((s) => s.side === 'T');
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
+      </div>
+      {mapPickBanStats.length === 0 ? (
+        <EmptyState message="No map data." />
+      ) : (
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead>
+              <tr className="bg-[var(--color-bg-secondary)]">
+                <Th align="left">Map</Th>
+                <Th align="right">Picks</Th>
+                <Th align="right">Bans</Th>
+                <Th align="right">No-picks</Th>
+                <Th align="right">Avg rounds</Th>
+                <Th align="right">Pick &amp; won</Th>
+                <Th align="right" className={SIDE_DIVIDER}>CT picked</Th>
+                <Th align="right">CT W-L</Th>
+                <Th align="right">CT RWR%</Th>
+                <Th align="right" className={SIDE_DIVIDER}>T picked</Th>
+                <Th align="right">T W-L</Th>
+                <Th align="right">T RWR%</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {mapPickBanStats.map((m) => (
+                <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)]">
+                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
+                    <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.ctWins + m.ctLosses}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctWins}-{m.ctLosses}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
+                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.tWins + m.tLosses}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tWins}-{m.tLosses}</td>
+                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
+                </tr>
+              ))}
+            </tbody>
+            {ct && t && (
+              <tfoot>
+                <tr className="bg-[var(--color-bg-secondary)]">
+                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold" colSpan={6}>All maps</td>
+                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{ct.numTimesPicked}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{ct.wins}-{ct.losses}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(ct)}</td>
+                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{t.numTimesPicked}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{t.wins}-{t.losses}</td>
+                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(t)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MapsAndSidesSection({
   singleMap,
   scoreDistribution,
@@ -583,67 +657,17 @@ function MapsAndSidesSection({
   mapPickBanStats: MapPickBanStat[];
   perSideStats: PerSideStat[];
 }) {
+  // Multi-map pages fold the per-side figures into the pick/ban table; a single map has no
+  // pick/ban table, so it keeps the standalone per-side panel.
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Score Distribution sits in this top 2-col row on a single map page (paired with
-          per-side stats); on a multi-map page it moves to its own row below instead, paired
-          with Win Condition there, alongside the pick/ban table here, so four panels don't
-          fight for two columns. */}
-      {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
-      {!singleMap && <div>
-        <div className="flex items-baseline justify-between mb-3">
-          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
-        </div>
-        {mapPickBanStats.length === 0 ? (
-          <EmptyState message="No map data." />
-        ) : (
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-            <table className="w-full min-w-max border-collapse text-[12px]">
-              <thead>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <Th align="left">Map</Th>
-                  <Th align="right">Picks</Th>
-                  <Th align="right">Bans</Th>
-                  <Th align="right">No-picks</Th>
-                  <Th align="right">CT</Th>
-                  <Th align="right">T</Th>
-                  <Th align="right">Pick &amp; won</Th>
-                  <Th align="right">Avg rounds</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {mapPickBanStats.map((m) => (
-                  <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                    <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
-                      <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>}
+      {!singleMap && <MapPickBanTable mapPickBanStats={mapPickBanStats} perSideStats={perSideStats} />}
 
-      {/* Per-Side Stats */}
-      <PerSideStatsTable perSideStats={perSideStats} />
+      <div className={`grid grid-cols-1 gap-6 ${singleMap ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+        {singleMap && <PerSideStatsTable perSideStats={perSideStats} />}
+        {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
+        {winConditions && <WinConditionTable dist={winConditions} />}
       </div>
-      {!singleMap ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
-          {winConditions && <WinConditionTable dist={winConditions} />}
-        </div>
-      ) : (
-        winConditions && <WinConditionTable dist={winConditions} />
-      )}
     </div>
   );
 }
