@@ -1,4 +1,4 @@
-import type { PerSideStat } from '@/lib/mapSideStats';
+import { formatRoundWinPct, type PerSideStat } from '@/lib/mapSideStats';
 import EmptyState from './EmptyState';
 import Th from './Th';
 
@@ -31,7 +31,7 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
                   <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
                   <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
                   <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                    {s.roundsPlayed > 0 ? `${((s.roundsWon / s.roundsPlayed) * 100).toFixed(0)}%` : '—'}
+                    {formatRoundWinPct(s)}
                   </td>
                 </tr>
               ))}

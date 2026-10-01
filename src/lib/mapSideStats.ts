@@ -82,6 +82,11 @@ export interface PerSideStat {
   roundsPlayed: number;
 }
 
+/** Round win rate for a side as a whole-percent string, or an em-dash when no rounds were played. */
+export function formatRoundWinPct(s: PerSideStat): string {
+  return s.roundsPlayed > 0 ? `${((s.roundsWon / s.roundsPlayed) * 100).toFixed(0)}%` : '—';
+}
+
 /** A `match_rounds` row (or the subset of it round-win-by-side/win-condition aggregation needs). */
 export interface RoundOutcome {
   winner_side: 'CT' | 'T';
@@ -187,8 +192,11 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
 
       const choice = resolveSideChoice(m);
       if (choice && choice.won !== null) {
-        const key = `${choice.side === 'CT' ? 'ct' : 't'}${choice.won ? 'Wins' : 'Losses'}` as const;
-        b[key]++;
+        if (choice.side === 'CT') {
+          if (choice.won) b.ctWins++;
+          else b.ctLosses++;
+        } else if (choice.won) b.tWins++;
+        else b.tLosses++;
       }
 
       // shirts picked when shirts_pick is set; otherwise skins picked via picked_map

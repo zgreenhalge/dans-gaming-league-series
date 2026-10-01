@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
@@ -572,8 +572,6 @@ function WinConditionTable({ dist }: { dist: WinConditionBreakdown }) {
 
 const SIDE_DIVIDER = 'border-l border-[var(--color-border-primary)]';
 
-const roundWinPct = (s: PerSideStat) => (s.roundsPlayed > 0 ? `${((s.roundsWon / s.roundsPlayed) * 100).toFixed(0)}%` : '—');
-
 /** Per-map pick/ban/no-pick counts, then (after a divider) how often the side chosen for each map
  *  was CT or T and how the choosing team fared. RWR% has no per-map breakdown (round rows
  *  carry no map), so it appears only on the "All maps" totals row from `perSideStats`. */
@@ -632,10 +630,10 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
                   <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold" colSpan={6}>All maps</td>
                   <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{ct.numTimesPicked}</td>
                   <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{ct.wins}-{ct.losses}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{roundWinPct(ct)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(ct)}</td>
                   <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{t.numTimesPicked}</td>
                   <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{t.wins}-{t.losses}</td>
-                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{roundWinPct(t)}</td>
+                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(t)}</td>
                 </tr>
               </tfoot>
             )}
