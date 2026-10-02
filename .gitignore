@@ -62,3 +62,6 @@ next-env.d.ts
 # Supabase CLI local state
 /supabase/.branches
 /supabase/.temp
+
+# Real-demo corpus download cache (scripts/fetch-demo-fixtures.ts)
+/.demo-fixtures/

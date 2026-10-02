@@ -407,6 +407,46 @@ empty, so a multi-segment merge's agreement check (`checkSegmentAgreement()`) re
 roster resolved fine but whose side didn't as having resolved its real roster — not as "resolved zero
 players" — even on the same admin review where the score side shows the full roster.
 
+## Real-demo corpus
+
+The per-collector unit tests (`src/lib/parsers/*.test.ts`) run on hand-built event rows
+(`matchContextFixture.ts`), which only cover shapes their author modeled. The real-demo corpus runs
+the production parsers on actual demos, through the same entry points `scripts/demo-ingest.ts` calls
+(`parseDemoFile` + `parseDemoSabremetrics`, and their `*Segments` variants for a restart-split match),
+and asserts `checkDemoParseInvariants()` (`parsers/demoInvariants.ts`) for each:
+
+- zero parser warnings
+- the derived score equals the match's confirmed `final_score`
+- `round_history` has the confirmed live round count and is contiguous
+- `matchRounds` covers exactly the rounds in `round_history`
+- every `matchKills` row sits in a live round, and no player dies twice in one round
+
+**What's committed and what isn't.** Demos run tens to hundreds of MB, so `parsers/realDemos/corpus.json`
+lists each one by R2 key with its confirmed score and round count, and nothing else. The demo files
+and each match's roster/side/target (`inputs.json`, read from the DB so no Steam IDs are committed) live in a
+gitignored directory (`./.demo-fixtures`, or `DEMO_FIXTURE_DIR`). `npm run demo-fixtures:fetch`
+(`scripts/fetch-demo-fixtures.ts`, needs the R2 and Supabase env) fills it; `realDemoCorpus.test.ts`
+skips any entry whose files are absent, so `npm test` passes without them.
+
+**What the corpus covers.** Each entry is chosen for a distinct demo shape, recorded in its `shape`
+field:
+
+| Shape | Distinguishing facts |
+|---|---|
+| No warmup, no restart | one `begin_new_match` at tick 1; `total_rounds_played` starts at 0 |
+| Warmup then restart | two `begin_new_match`; a warmup `round_end` at `total_rounds_played` 0; warmup deaths whose round number collides with live round 1 |
+| Knife round | three `begin_new_match`; a knife `round_end` before the live start |
+| Knife round, no stored side | as above, with the starting side inferred from the demo |
+| No `begin_new_match` event | `matchStartTick` falls back to 0; `total_rounds_played` starts at 1 |
+| Multi-segment | a server restart splits the recording; each segment has its own tick space |
+
+No demo in the league's history has gone to overtime, so overtime round numbering and side swaps are
+covered only by `roundSides.test.ts`'s hand-built fixtures.
+
+**Adding a demo.** When a real match exposes a parser bug, add that match to `corpus.json` (its `shape`
+says what it exercises), run `npm run demo-fixtures:fetch`, and confirm the new entry fails before the
+fix and passes after.
+
 ## Environment
 
 The demo path needs Cloudflare R2 credentials (in addition to the standard env vars in the root

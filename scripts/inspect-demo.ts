@@ -41,10 +41,8 @@
 //   --json               print the full raw parser output as JSON instead of the readable report.
 
 import { readFileSync } from 'node:fs';
-import {
-  parseDemoFile, parseDemoFileSegments, type RosterEntry, type DemoPlayerStat,
-} from '../src/lib/demoParser';
-import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib/demoSabremetrics';
+import type { RosterEntry, DemoPlayerStat } from '../src/lib/demoParser';
+import { parseDemoBuffers } from '../src/lib/demo/parseDemo';
 import { deriveKillCreditCounts, type KillCreditFlags } from '../src/lib/queries';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { getAdminClient } from '../src/lib/supabase-admin';
@@ -170,12 +168,7 @@ async function main() {
 
   // Run the EXACT production parsers (same call as the parse route) — the single-buffer or
   // multi-segment entry point depending on how many --demo files were given.
-  const result = isMultiSegment
-    ? parseDemoFileSegments(demoBuffers, roster, skinsSide, targetWinRounds)
-    : parseDemoFile(demoBuffers[0], roster, skinsSide, targetWinRounds);
-  const sabre = isMultiSegment
-    ? parseDemoSabremetricsSegments(demoBuffers, roster, skinsSide, targetWinRounds)
-    : parseDemoSabremetrics(demoBuffers[0], roster, skinsSide, targetWinRounds);
+  const { parsed: result, sab: sabre } = parseDemoBuffers(demoBuffers, roster, skinsSide, targetWinRounds);
   const warnings = [...new Set([...result.warnings, ...sabre.warnings])];
 
   if (args.json) {
