@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { parseDemoFile, parseDemoFileSegments } from '@/lib/demoParser';
-import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '@/lib/demoSabremetrics';
+import { parseDemoBuffers } from '@/lib/demo/parseDemo';
 import { getReplayInputs } from '@/lib/replay/inputs';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { getDemoManifest } from '@/lib/demo/segmentManifest';
@@ -98,12 +97,9 @@ export async function POST(
 
   let result, sabremetricsResult;
   try {
-    result = demoBuffers.length > 1
-      ? parseDemoFileSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
-      : parseDemoFile(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-    sabremetricsResult = demoBuffers.length > 1
-      ? parseDemoSabremetricsSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
-      : parseDemoSabremetrics(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    ({ parsed: result, sab: sabremetricsResult } = parseDemoBuffers(
+      demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds,
+    ));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 422 });

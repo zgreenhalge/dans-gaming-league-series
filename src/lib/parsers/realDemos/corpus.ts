@@ -9,7 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { RosterEntry } from '../../demoParser';
+import type { ReplayInputs } from '../../replay/inputs';
 import corpusJson from './corpus.json';
 
 export interface CorpusEntry {
@@ -24,13 +24,8 @@ export interface CorpusEntry {
   expectedRounds: number;
 }
 
-/** What the parsers need besides the demo bytes — `ReplayInputs` (`src/lib/replay/inputs.ts`), minus
- *  the fields that only feed the replay pipeline. */
-export interface FixtureInputs {
-  roster: RosterEntry[];
-  skinsSide: 'CT' | 'T' | null;
-  targetWinRounds: number;
-}
+/** What the parsers need besides the demo bytes — the slice of `ReplayInputs` they read. */
+export type FixtureInputs = Pick<ReplayInputs, 'roster' | 'skinsSide' | 'targetWinRounds'>;
 
 export const CORPUS = corpusJson as CorpusEntry[];
 

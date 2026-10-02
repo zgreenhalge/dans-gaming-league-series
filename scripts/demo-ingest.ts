@@ -37,8 +37,8 @@
 // The demo itself is resolved via `resolveDemoBuffers()` (`src/lib/demo/resolveDemo.ts`, shared with
 // `replay-extract.ts`) — see the fetch-stage comment below for the manifest-vs-DatHost decision. More
 // than one buffer means the match's demo was split across recordings by a server restart
-// (docs/demo-ingestion.md's "Multi-segment demos"); those are parsed with `parseDemoFileSegments`/
-// `parseDemoSabremetricsSegments` instead of the single-buffer parsers.
+// (docs/demo-ingestion.md's "Multi-segment demos"); those are parsed through the multi-segment
+// parsers by `parseDemoBuffers()` (`src/lib/demo/parseDemo.ts`) instead of the single-buffer ones.
 //
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
 // NEXT_PUBLIC_SUPABASE_URL, AUTO_COMMIT_ENABLED, APP_BASE_URL + RECOMPUTE_SECRET (for the EHOG
@@ -48,8 +48,7 @@
 // background_jobs.status + R2 artifacts.
 
 import { gzipSync } from 'node:zlib';
-import { parseDemoFile, parseDemoFileSegments } from '../src/lib/demoParser';
-import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../src/lib/demoSabremetrics';
+import { parseDemoBuffers } from '../src/lib/demo/parseDemo';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { demoBaseName } from '../src/lib/matchzy';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
@@ -112,15 +111,7 @@ async function main() {
   });
 
   const { parsed, sab, warnings } = await stage('parse', async () => {
-    const demoBuffers = raw.map(gunzipMaybe);
-    const isMultiSegment = demoBuffers.length > 1;
-
-    const parsed = isMultiSegment
-      ? parseDemoFileSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
-      : parseDemoFile(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-    const sab = isMultiSegment
-      ? parseDemoSabremetricsSegments(demoBuffers, inputs.roster, inputs.skinsSide, inputs.targetWinRounds)
-      : parseDemoSabremetrics(demoBuffers[0], inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const { parsed, sab } = parseDemoBuffers(raw.map(gunzipMaybe), inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
     const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
     return { parsed, sab, warnings };
   });

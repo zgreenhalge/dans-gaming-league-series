@@ -20,6 +20,8 @@ import { CORPUS, fixturePath, inputsPath, type FixtureInputs } from '../src/lib/
 
 const force = process.argv.includes('--force');
 
+// Streams to disk rather than using `getR2Object()`, which buffers the whole object — demos run to
+// hundreds of MB.
 async function download(key: string): Promise<void> {
   const dest = fixturePath(key);
   if (!force && fs.existsSync(dest)) return;
@@ -34,15 +36,20 @@ async function download(key: string): Promise<void> {
 
 async function main() {
   const supabase = getAdminClient();
-  for (const entry of CORPUS) {
-    await Promise.all(entry.keys.map(download));
-    const dest = inputsPath(entry.matchId);
-    if (force || !fs.existsSync(dest)) {
-      const { roster, skinsSide, targetWinRounds } = await getReplayInputs(supabase, entry.matchId);
-      const inputs: FixtureInputs = { roster, skinsSide, targetWinRounds };
-      fs.writeFileSync(dest, JSON.stringify(inputs, null, 2));
-      console.log(`wrote ${dest}`);
-    }
+  await Promise.all(
+    CORPUS.map(async (entry) => {
+      await Promise.all([...entry.keys.map(download), writeInputs(entry.matchId)]);
+    }),
+  );
+
+  async function writeInputs(matchId: number): Promise<void> {
+    const dest = inputsPath(matchId);
+    if (!force && fs.existsSync(dest)) return;
+    const { roster, skinsSide, targetWinRounds } = await getReplayInputs(supabase, matchId);
+    const inputs: FixtureInputs = { roster, skinsSide, targetWinRounds };
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, JSON.stringify(inputs, null, 2));
+    console.log(`wrote ${dest}`);
   }
 }
 

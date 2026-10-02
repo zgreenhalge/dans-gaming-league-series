@@ -11,8 +11,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { parseDemoFile, parseDemoFileSegments } from '../demoParser';
-import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../demoSabremetrics';
+import { parseDemoBuffers } from '../demo/parseDemo';
 import { gunzipMaybe } from '../gzip';
 import { parseScore } from '../util';
 import { checkDemoParseInvariants } from './demoInvariants';
@@ -27,13 +26,7 @@ describe('real-demo corpus', () => {
       () => {
         const { roster, skinsSide, targetWinRounds } = loadInputs(entry);
         const buffers = entry.keys.map((k) => gunzipMaybe(fs.readFileSync(fixturePath(k))));
-        const multi = buffers.length > 1;
-        const parsed = multi
-          ? parseDemoFileSegments(buffers, roster, skinsSide, targetWinRounds)
-          : parseDemoFile(buffers[0], roster, skinsSide, targetWinRounds);
-        const sab = multi
-          ? parseDemoSabremetricsSegments(buffers, roster, skinsSide, targetWinRounds)
-          : parseDemoSabremetrics(buffers[0], roster, skinsSide, targetWinRounds);
+        const { parsed, sab } = parseDemoBuffers(buffers, roster, skinsSide, targetWinRounds);
 
         const score = parseScore(entry.expectedScore)!;
         const violations = checkDemoParseInvariants(parsed, sab, { ...score, rounds: entry.expectedRounds });
