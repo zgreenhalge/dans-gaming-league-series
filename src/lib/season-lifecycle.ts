@@ -168,7 +168,7 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
     throw updErr;
   }
 
-  const linkedGauntlet = await getLinkedGauntlet(season.name);
+  const linkedGauntlet = await getLinkedGauntlet(season.name, supabaseAdmin);
   const revokeNow = !linkedGauntlet || linkedGauntlet.status === 'ARCHIVED';
 
   await Promise.all([
@@ -212,7 +212,7 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
   // Checked separately from the gauntlet's own status so a run that archived the gauntlet but then
   // failed to archive its paired regular season retries just the outstanding half next time,
   // instead of short-circuiting on `season.status === 'ARCHIVED'` and stranding the partial state.
-  const regularSeason = await getLinkedRegularSeason(season.name);
+  const regularSeason = await getLinkedRegularSeason(season.name, supabaseAdmin);
   const gauntletNeedsArchive = season.status !== 'ARCHIVED';
   const regularNeedsArchive = regularSeason != null && regularSeason.status !== 'ARCHIVED';
   if (!gauntletNeedsArchive && !regularNeedsArchive) return;

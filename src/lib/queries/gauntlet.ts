@@ -537,11 +537,13 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
  * materialized yet. Used (via `match1_id`/`match2_id`) to resolve a match's pod sibling for
  * scheduling (`PATCH /api/matches/[id]/schedule`) and cross-linking (the match page, via
  * `getGauntletPodSibling()`) — both of a pod's games share one `player_match_stats` roster
- * reshuffled across two factions, so they're always scheduled and played as a pair. */
+ * reshuffled across two factions, so they're always scheduled and played as a pair. Takes an optional
+ * `client` for callers outside a Next.js request (a GitHub Actions script has no anon key). */
 export async function getGauntletPodForMatch(
   matchId: number,
+  client: SupabaseClient = supabase,
 ): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('gauntlet_pods')
     .select('advance_rule, is_final, match1_id, match2_id')
     .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
