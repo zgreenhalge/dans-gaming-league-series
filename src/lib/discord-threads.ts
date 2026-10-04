@@ -596,7 +596,7 @@ export async function publishPodThreads(
  *  (`publishPodThreads()` points both at the same thread id). No-ops (not an error) for a match with
  *  no resolvable pod. */
 export async function closeGauntletPodThreadIfDone(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const pod = await getGauntletPodForMatch(matchId);
+  const pod = await getGauntletPodForMatch(matchId, supabaseAdmin);
   if (!pod) return;
 
   const { data, error } = await supabaseAdmin
