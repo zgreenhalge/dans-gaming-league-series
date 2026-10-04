@@ -1,0 +1,57 @@
+[
+  {
+    "matchId": 35,
+    "keys": [
+      "35/game.dem"
+    ],
+    "shape": "No warmup and no restart: a single begin_new_match at tick 1, total_rounds_played counts from 0",
+    "expectedScore": "13-3",
+    "expectedRounds": 16
+  },
+  {
+    "matchId": 59,
+    "keys": [
+      "59/game.dem"
+    ],
+    "shape": "Warmup then restart: two begin_new_match, a warmup round_end at total_rounds_played 0, and warmup deaths that share a live round's number",
+    "expectedScore": "2-13",
+    "expectedRounds": 15
+  },
+  {
+    "matchId": 45,
+    "keys": [
+      "45/game.dem"
+    ],
+    "shape": "Knife round: three begin_new_match, a knife round_end at total_rounds_played 1 before the live start, stored starting side",
+    "expectedScore": "13-2",
+    "expectedRounds": 15
+  },
+  {
+    "matchId": 118,
+    "keys": [
+      "118/game.dem"
+    ],
+    "shape": "Gauntlet knife round: three begin_new_match, no stored starting side (inferred from the demo)",
+    "expectedScore": "6-13",
+    "expectedRounds": 19
+  },
+  {
+    "matchId": 121,
+    "keys": [
+      "121/game.dem"
+    ],
+    "shape": "No begin_new_match event at all: matchStartTick falls back to 0, total_rounds_played counts from 1",
+    "expectedScore": "3-13",
+    "expectedRounds": 16
+  },
+  {
+    "matchId": 120,
+    "keys": [
+      "120/segment-0.dem",
+      "120/segment-1.dem"
+    ],
+    "shape": "Multi-segment gauntlet match: a server restart splits the recording in two, each segment with its own tick space and its own begin_new_match sequence",
+    "expectedScore": "13-10",
+    "expectedRounds": 23
+  }
+]

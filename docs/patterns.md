@@ -102,6 +102,26 @@ not inside it. Apply the same split to `dathost.ts`, `gh-dispatch.ts`, `r2.ts`, 
 the client thin and untested, and pull anything with real branching out to where it can be tested
 without a network boundary.
 
+## Logic that runs outside `npm test` still gets a test that runs inside it
+
+Anything whose only production home is a GitHub Action (`scripts/*.ts`, see
+[`github-actions.md`](./github-actions.md)) or another workflow outside the `npm test` / `npm run build`
+loop has no natural moment where a failure is seen before it reaches real data. Give it one:
+
+- **Keep the script a thin shell.** Decisions, derivations, and parsing live in `src/lib/**` functions
+  that take plain inputs (a buffer, a roster, rows) and return plain outputs, so the script is only
+  fetch → call → persist. `parseDemoFile()` / `parseDemoSabremetrics()` are the model: `demo-ingest.ts`
+  and a vitest file call the same functions.
+- **Test with realistic input, not only hand-built input.** A hand-built fixture encodes the author's
+  assumptions, so it cannot surface a shape nobody modeled. Where the input is a real artifact (a demo),
+  keep a small corpus of real ones and assert match-level invariants over them — see
+  [`demo-ingestion.md`](./demo-ingestion.md)'s "Real-demo corpus".
+- **Assert facts about the whole result, not one algorithm.** Cross-cutting invariants (every row maps
+  to a live round, no entity dies twice in a round, the derived score equals the confirmed score) catch
+  a bug in any one collector even when that collector's own unit tests pass.
+- **A missing external fixture skips; it never fails.** A corpus that needs credentials or a large
+  download is opt-in locally, so a plain checkout's `npm test` stays green and offline.
+
 ## Don't caption a page instead of designing it
 
 A page never gets a subheading whose only job is to narrate what the UI below it already shows

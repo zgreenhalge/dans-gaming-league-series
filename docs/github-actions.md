@@ -176,7 +176,11 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
 5. **Local dry-run** — `set -a; . ./.env.local; set +a` then `MATCH_ID=<id> npx tsx scripts/<job>.ts`.
    (Tip: `scripts/dump-roster.ts` and `scripts/inspect-demo.ts` are read-only harnesses that run
    the same shared lib locally.)
-6. **Docs** — note job-specific details in the owning doc (e.g. `replay.md`, `demo-ingestion.md`); the
+6. **Test the logic that only runs here** — factor the job's decisions into `src/lib/**` functions and
+   cover them in `npm test`, per [`patterns.md`](./patterns.md)'s "Logic that runs outside `npm test`
+   still gets a test that runs inside it". A job that consumes a real artifact gets a corpus of real ones
+   (the demo pipeline's is in [`demo-ingestion.md`](./demo-ingestion.md)).
+7. **Docs** — note job-specific details in the owning doc (e.g. `replay.md`, `demo-ingestion.md`); the
    *generic* pattern stays here.
 
 See also: [`replay.md`](./replay.md) (worked example + DB schema for `background_jobs`),

@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "demo-fixtures:fetch": "tsx scripts/fetch-demo-fixtures.ts",
     "db:start": "sh -c 'command -v supabase >/dev/null 2>&1 && exec supabase start || exec npx --yes supabase start'",
     "db:stop": "sh -c 'command -v supabase >/dev/null 2>&1 && exec supabase stop || exec npx --yes supabase stop'"
   },
