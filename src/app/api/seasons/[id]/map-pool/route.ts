@@ -43,7 +43,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { error } = await supabaseAdmin
     .from('seasons')
-    .update({ map_pool: input.mapPool.length > 0 ? input.mapPool : null })
+    .update({ map_pool: input.mapPool })
     .eq('id', seasonId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

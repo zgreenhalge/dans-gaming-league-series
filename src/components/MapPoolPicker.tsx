@@ -34,6 +34,7 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
   const [newMapName, setNewMapName] = useState('');
   const [newMapWorkshopUrl, setNewMapWorkshopUrl] = useState('');
 
+  const canAdd = !!newMapName.trim() && !!newMapWorkshopUrl.trim();
   const allMaps = [...new Set([...knownMaps, ...addedMaps.map((m) => m.name)])].sort();
 
   function toggle(map: string) {
@@ -104,9 +105,9 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
             <button
               type="button"
               onClick={addNewMap}
-              disabled={!newMapName.trim() || !newMapWorkshopUrl.trim()}
+              disabled={!canAdd}
               className={`tracked text-[10px] font-semibold px-3 py-2 border transition-colors ${
-                newMapName.trim() && newMapWorkshopUrl.trim()
+                canAdd
                   ? 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110'
                   : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)] opacity-40'
               }`}

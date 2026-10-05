@@ -3,7 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toSentenceCase } from '@/lib/maps';
+import { hasMapPool } from '@/lib/season-map-pool';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { useAsyncAction } from './useAsyncAction';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 
 interface Props {
@@ -19,14 +21,11 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
   const router = useRouter();
   const selection = useMapPoolSelection(mapPool ?? []);
   const [editing, setEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const { busy: saving, error, run } = useAsyncAction();
   const [isPending, startTransition] = useTransition();
 
   async function save() {
-    setError(null);
-    setSaving(true);
-    try {
+    await run(async () => {
       const res = await fetch(`/api/seasons/${seasonId}/map-pool`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -34,25 +33,23 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to save map pool.');
-        return;
+        throw new Error(body.error ?? 'Failed to save map pool.');
       }
       setEditing(false);
       startTransition(() => router.refresh());
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   const busy = saving || isPending;
+  const hasPool = hasMapPool(mapPool);
 
   if (!editing) {
     return (
       <div className="flex items-center gap-3 flex-wrap">
         <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
           Maps:{' '}
-          {mapPool && mapPool.length > 0 ? (
-            mapPool.map(toSentenceCase).join(', ')
+          {hasPool ? (
+            mapPool!.map(toSentenceCase).join(', ')
           ) : (
             <span className="opacity-60">TBD</span>
           )}
@@ -62,7 +59,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
             onClick={() => setEditing(true)}
             className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
           >
-            {mapPool && mapPool.length > 0 ? 'Edit' : 'Set map pool'}
+            {hasPool ? 'Edit' : 'Set map pool'}
           </button>
         )}
       </div>
@@ -84,7 +81,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
         </button>
         <button
           type="button"
-          onClick={() => { setEditing(false); setError(null); }}
+          onClick={() => setEditing(false)}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel

@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       name,
       status: 'UPCOMING',
       is_gauntlet: false,
-      map_pool: input.mapPool.length > 0 ? input.mapPool : null,
+      map_pool: input.mapPool,
       target_win_rounds: 13,
     })
     .select('*')

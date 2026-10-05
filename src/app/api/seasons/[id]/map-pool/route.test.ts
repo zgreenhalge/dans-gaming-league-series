@@ -76,6 +76,22 @@ async function main() {
     assert.equal(db.seasons.find((s) => s.id === UPCOMING_ID)!.map_pool, null);
   });
 
+  await test('PATCH — duplicate names are collapsed, so a pool of repeats is rejected (400)', async () => {
+    installFixture();
+    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { map_pool: ['a', 'A', 'a', 'a', 'a'] })).status, 400);
+  });
+
+  await test('PATCH — pool names are trimmed and lowercased', async () => {
+    const db = installFixture();
+    await call(UPCOMING_ID, ADMIN_ID, { map_pool: [' A', 'B', 'c', 'd', 'E '] });
+    assert.deepEqual(db.seasons.find((s) => s.id === UPCOMING_ID)!.map_pool, FIVE);
+  });
+
+  await test('PATCH — a null new_maps entry is a 400, not a crash', async () => {
+    installFixture();
+    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { map_pool: FIVE, new_maps: [null] })).status, 400);
+  });
+
   await test('PATCH — a non-UPCOMING season is rejected (400)', async () => {
     installFixture();
     assert.equal((await call(ACTIVE_ID, ADMIN_ID, { map_pool: FIVE })).status, 400);
