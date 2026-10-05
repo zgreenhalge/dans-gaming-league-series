@@ -20,7 +20,7 @@ import { CreateGauntletForm } from './CreateGauntletForm';
 import { GauntletLifecycleList, type GauntletRow } from './GauntletLifecycleList';
 import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './ArmedConfirmButton';
 
 export interface SeasonSummary {
   id: number;
@@ -130,6 +130,14 @@ export function SeasonManager({
                       </div>
                     )}
                   </div>
+                  {!s.isGauntlet && s.status !== 'UPCOMING' && (
+                    <Link
+                      href={`/admin/seasons/feedback/${s.id}`}
+                      className={`shrink-0 ${ADMIN_SMALL_BUTTON_CLS}`}
+                    >
+                      Feedback
+                    </Link>
+                  )}
                   {s.status === 'UPCOMING' && !s.isGauntlet && (
                     <div className="shrink-0 flex items-center gap-3">
                       <MarkSeasonActiveButton seasonId={s.id} canEdit seasonStatus={s.status} />

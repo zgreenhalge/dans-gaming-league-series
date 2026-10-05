@@ -16,6 +16,7 @@ import {
   getLinkedRegularSeason,
   getRegularSeasonLightView,
   getGauntletSeasonLightView,
+  getSeasonFeedbackView,
   type RegularSeasonLightView,
   type GauntletSeasonLightView,
   type GauntletRound,
@@ -28,6 +29,9 @@ import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
+import { FeedbackBanner } from '@/components/FeedbackBanner';
+import { SeasonFeedbackTabs } from '@/components/SeasonFeedbackTabs';
+import { buildFeedbackTabs } from '@/components/feedbackTabs';
 import { authOptions } from '@/lib/authOptions';
 import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
@@ -251,7 +255,7 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialLight, leaderboard, matchSummaries] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialLight, leaderboard, matchSummaries, feedbackView] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
@@ -261,6 +265,7 @@ export default async function SeasonPage({
       : getRegularSeasonLightView(seasonId, seasonNumber, playersById),
     leaderboardPromise,
     matchSummariesPromise,
+    getSeasonFeedbackView(seasonId, currentPlayerId),
   ]);
 
   // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
@@ -277,6 +282,8 @@ export default async function SeasonPage({
   if (!showGauntletTab && initialLightData.kind === 'gauntlet') {
     initialLightData = { kind: 'regular', data: await getRegularSeasonLightView(seasonId, seasonNumber, playersById) };
   }
+
+  const feedbackTabs = buildFeedbackTabs(season.id, feedbackView);
 
   const matchCount = matchSummaries.matches.length;
   // `matchSummaries.matches` is already sorted ascending by week/match number, so the last entry's
@@ -335,6 +342,7 @@ export default async function SeasonPage({
             {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
           </div>
         )}
+        <FeedbackBanner seasonId={season.id} view={feedbackView} />
         <Suspense>
           <UrlStateProvider>
             {showGauntletTab && linkedGauntlet ? (
@@ -353,21 +361,24 @@ export default async function SeasonPage({
                 seasonNumber={seasonNumber}
                 initialView={initialView}
                 initialLightData={initialLightData}
+                feedbackTabs={feedbackTabs}
               />
             ) : initialLightData.kind === 'regular' ? (
-              <SeasonTabView
-                kind="regular"
-                seasonId={season.id}
-                leaderboard={leaderboard}
-                schedule={initialLightData.data.schedule}
-                seasonStartDate={season.start_date}
-                seasonStatus={season.status}
-                mapPool={season.map_pool}
-                currentPlayerId={currentPlayerId}
-                h2hData={initialLightData.data.h2hData}
-                ehogRatings={initialLightData.data.ehogRatings}
-                hasAdvancedStats={initialLightData.data.hasAdvancedStats}
-              />
+              <SeasonFeedbackTabs feedbackTabs={feedbackTabs}>
+                <SeasonTabView
+                  kind="regular"
+                  seasonId={season.id}
+                  leaderboard={leaderboard}
+                  schedule={initialLightData.data.schedule}
+                  seasonStartDate={season.start_date}
+                  seasonStatus={season.status}
+                  mapPool={season.map_pool}
+                  currentPlayerId={currentPlayerId}
+                  h2hData={initialLightData.data.h2hData}
+                  ehogRatings={initialLightData.data.ehogRatings}
+                  hasAdvancedStats={initialLightData.data.hasAdvancedStats}
+                />
+              </SeasonFeedbackTabs>
             ) : (
               // Unreachable: `showGauntletTab` false guarantees `initialLightData.kind === 'regular'`
               // — either there was never a gauntlet-kind fetch to begin with, or the fallback above

@@ -464,6 +464,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
           results.push(existing);
         } else {
           const row: Row = { ...incoming };
+          if (row.id === undefined) row.id = nextId(table);
           table.push(row);
           results.push(row);
         }
