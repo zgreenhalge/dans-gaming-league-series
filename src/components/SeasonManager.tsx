@@ -131,12 +131,14 @@ export function SeasonManager({
                     )}
                   </div>
                   {!s.isGauntlet && s.status !== 'UPCOMING' && (
-                    <Link
-                      href={`/admin/seasons/feedback/${s.id}`}
-                      className={`shrink-0 ${ADMIN_SMALL_BUTTON_CLS}`}
-                    >
-                      Feedback
-                    </Link>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <Link href={`/admin/seasons/survey/${s.id}`} className={ADMIN_SMALL_BUTTON_CLS}>
+                        Survey
+                      </Link>
+                      <Link href={`/admin/seasons/superlatives/${s.id}`} className={ADMIN_SMALL_BUTTON_CLS}>
+                        Superlatives
+                      </Link>
+                    </div>
                   )}
                   {s.status === 'UPCOMING' && !s.isGauntlet && (
                     <div className="shrink-0 flex items-center gap-3">
