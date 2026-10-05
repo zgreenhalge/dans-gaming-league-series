@@ -2,9 +2,10 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season } from '../types';
-import { allMatchesPlayed, extractSeasonNumber } from '../util';
+import { allMatchesPlayed, extractSeasonNumber, isPlayedScore } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
+import { batchedIn } from './_shared';
 import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics, type SabremetricMatchRow } from './sabremetrics';
@@ -158,6 +159,43 @@ export async function getSeasonParticipants(seasonId: number, playersById?: Map<
     }
   }
   return [...byId.values()].sort((a, b) => a.player_name.localeCompare(b.player_name));
+}
+
+/** Players who actually played in a regular season — on a match with a played score, in the season
+ *  itself or its paired gauntlet. Narrower than `getSeasonParticipants()`, which also counts a
+ *  rostered player whose matches are still unplayed; this is the "took part" signal the post-season
+ *  survey and superlatives vote gate on. Sorted by player name. */
+export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+  const season = await getSeason(seasonId);
+  if (!season) return [];
+  const gauntlet = season.is_gauntlet ? null : await getLinkedGauntlet(season.name);
+  const seasonIds = [seasonId, ...(gauntlet ? [gauntlet.id] : [])];
+
+  const [resolvedPlayersById, { data: weekRows, error: weekErr }] = await Promise.all([
+    playersById ?? getPlayersById(),
+    supabase.from('weeks').select('id').in('season_id', seasonIds),
+  ]);
+  if (weekErr) throw weekErr;
+
+  const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
+  if (weekIds.length === 0) return [];
+  const matchRows = await batchedIn<{ id: number; final_score: string | null }>('matches', 'week_id', weekIds, 'id, final_score');
+  const playedMatchIds = matchRows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
+  if (playedMatchIds.length === 0) return [];
+  const statRows = await batchedIn<{ player_id: number }>('player_match_stats', 'match_id', playedMatchIds, 'player_id');
+
+  const entries: SeasonRosterEntry[] = [];
+  for (const playerId of new Set(statRows.map((r) => r.player_id))) {
+    const player = resolvedPlayersById.get(playerId);
+    if (!player) continue;
+    entries.push({
+      player_id: playerId,
+      player_name: player.name,
+      steam_avatar_url: player.steam_avatar_url,
+      discord_id: player.discord_id,
+    });
+  }
+  return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
 }
 
 export interface RegularSeasonLightView {
