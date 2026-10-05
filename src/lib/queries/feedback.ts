@@ -172,51 +172,45 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
   return { ...results, eligibleCount: eligible.length };
 }
 
-/** What the season page's Survey and Superlatives tabs show a given viewer. */
-export interface SeasonFeedbackView {
-  /** Present while the survey is open and the viewer played the season. */
-  survey: { questions: SurveyQuestion[]; answers: SurveyAnswers; responded: boolean } | null;
-  /** A ballot while voting is open and the viewer played the season; the public tallies once voting
-   *  has closed with at least one vote cast; otherwise absent. */
-  superlatives:
-    | { mode: 'ballot'; superlatives: Superlative[]; nominees: { id: number; name: string }[]; votes: Record<number, number> }
-    | { mode: 'results'; results: SuperlativeResults }
-    | null;
+/** What the season page's Survey tab shows a viewer: their form, while the survey is open and they
+ *  played the season. Null (no tab) otherwise — for a signed-out or ineligible viewer, a closed
+ *  survey, or a season with none. Independent of the superlatives vote. */
+export interface SurveyTabView {
+  questions: SurveyQuestion[];
+  answers: SurveyAnswers;
+  responded: boolean;
 }
 
-/** Resolves both feedback tabs for one viewer (`playerId` null = signed out). Cheap open-state reads
- *  run first so a season with nothing open never pays for the eligibility lookup, and a season with
- *  nothing configured costs two small queries. A closed vote's public tally needs no eligibility
- *  lookup and is independent of the survey, so it resolves for every viewer whatever else is open. */
-export async function getSeasonFeedbackView(seasonId: number, playerId: number | null): Promise<SeasonFeedbackView> {
-  const [survey, poll] = await Promise.all([getSurveyForSeason(seasonId), getSuperlativePoll(seasonId)]);
-  const surveyOpen = survey && isSurveyOpen(survey) ? survey : null;
-  const ballotOpen = poll?.isOpen && poll.superlatives.length > 0 ? poll : null;
+export async function getSeasonSurveyView(seasonId: number, playerId: number | null): Promise<SurveyTabView | null> {
+  const survey = await getSurveyForSeason(seasonId);
+  if (!survey || !isSurveyOpen(survey) || playerId == null) return null;
+  if (!(await getSeasonPlayedPlayers(seasonId)).some((p) => p.player_id === playerId)) return null;
+  return { questions: survey.questions, ...(await getPlayerSurveyAnswers(survey.id, playerId)) };
+}
 
-  const view: SeasonFeedbackView = { survey: null, superlatives: null };
+/** What the season page's Superlatives tab shows a viewer: a ballot while voting is open and they
+ *  played the season; the public tallies once voting has closed with at least one vote cast; null (no
+ *  tab) otherwise — including a vote that was set up but never opened. Independent of the survey. */
+export type SuperlativesTabView =
+  | { mode: 'ballot'; superlatives: Superlative[]; nominees: { id: number; name: string }[]; votes: Record<number, number> }
+  | { mode: 'results'; results: SuperlativeResults };
 
-  if ((surveyOpen || ballotOpen) && playerId != null) {
-    const eligible = await getSeasonPlayedPlayers(seasonId);
-    if (eligible.some((p) => p.player_id === playerId)) {
-      const [mine, votes] = await Promise.all([
-        surveyOpen ? getPlayerSurveyAnswers(surveyOpen.id, playerId) : null,
-        ballotOpen ? getPlayerSuperlativeVotes(ballotOpen.superlatives.map((s) => s.id), playerId) : null,
-      ]);
-      if (surveyOpen && mine) view.survey = { questions: surveyOpen.questions, ...mine };
-      if (ballotOpen && votes) {
-        view.superlatives = {
-          mode: 'ballot',
-          superlatives: ballotOpen.superlatives,
-          nominees: eligible.map((p) => ({ id: p.player_id, name: p.player_name })),
-          votes,
-        };
-      }
-    }
-  }
+export async function getSeasonSuperlativesView(seasonId: number, playerId: number | null): Promise<SuperlativesTabView | null> {
+  const poll = await getSuperlativePoll(seasonId);
+  if (!poll || poll.superlatives.length === 0) return null;
 
-  if (!ballotOpen && poll && poll.superlatives.length > 0) {
+  if (!poll.isOpen) {
     const results = await tallyPoll(poll);
-    if (results.superlatives.some((s) => s.totalVotes > 0)) view.superlatives = { mode: 'results', results };
+    return results.superlatives.some((s) => s.totalVotes > 0) ? { mode: 'results', results } : null;
   }
-  return view;
+
+  if (playerId == null) return null;
+  const eligible = await getSeasonPlayedPlayers(seasonId);
+  if (!eligible.some((p) => p.player_id === playerId)) return null;
+  return {
+    mode: 'ballot',
+    superlatives: poll.superlatives,
+    nominees: eligible.map((p) => ({ id: p.player_id, name: p.player_name })),
+    votes: await getPlayerSuperlativeVotes(poll.superlatives.map((s) => s.id), playerId),
+  };
 }
