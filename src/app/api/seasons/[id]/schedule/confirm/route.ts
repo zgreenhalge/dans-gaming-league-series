@@ -5,6 +5,7 @@ import { getSeason } from '@/lib/queries';
 import { confirmSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-schedule-draft-engine';
 import { activateSeasonBestEffort } from '@/lib/season-lifecycle';
 import { after } from '@/lib/after';
+import { hasMapPool } from '@/lib/season-map-pool';
 
 /**
  * Confirms a regular season's matchup draft — materializes it into real `weeks`/`matches`/
@@ -40,6 +41,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
   if (season.status !== 'UPCOMING') {
     return NextResponse.json({ error: 'Season must be UPCOMING to confirm its matchup draft' }, { status: 400 });
+  }
+
+  // Confirming auto-activates the season, and a live season needs its map pool for vetoes.
+  if (!hasMapPool(season.map_pool)) {
+    return NextResponse.json({ error: 'Set the season’s map pool before confirming its schedule' }, { status: 409 });
   }
 
   let result;

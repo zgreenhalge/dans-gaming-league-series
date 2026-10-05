@@ -3,36 +3,7 @@ import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
-import { mapSlug } from '@/lib/maps';
-
-type NewMap = { name: string; workshopUrl: string };
-
-function extractWorkshopId(url: string): string | null {
-  const match = url.match(/[?&]id=(\d+)/);
-  return match ? match[1] : null;
-}
-
-async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | null> {
-  const fileId = extractWorkshopId(workshopUrl);
-  if (!fileId) return null;
-  try {
-    const res = await fetch(
-      'https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `itemcount=1&publishedfileids[0]=${fileId}`,
-      },
-    );
-    const data = await res.json();
-    const detail = data?.response?.publishedfiledetails?.[0];
-    return detail?.preview_url ?? null;
-  } catch {
-    return null;
-  }
-}
-
-const WORKSHOP_URL_RE = /^https:\/\/steamcommunity\.com\/sharedfiles\/filedetails\/\?id=\d+/;
+import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
 
 export async function POST(req: NextRequest) {
   const session = await requireSession();
@@ -47,21 +18,9 @@ export async function POST(req: NextRequest) {
   const supabaseAdmin = getAdminClient();
 
   const body = await req.json().catch(() => null);
-  const mapPool: string[] = Array.isArray(body?.map_pool) ? body.map_pool : [];
-  const newMaps: NewMap[] = Array.isArray(body?.new_maps) ? body.new_maps : [];
-
-  if (mapPool.length !== 5) {
-    return NextResponse.json({ error: 'Exactly 5 maps are required' }, { status: 400 });
-  }
-
-  if (mapPool.some((m) => typeof m !== 'string' || !m.trim())) {
-    return NextResponse.json({ error: 'Map pool entries must be non-empty strings' }, { status: 400 });
-  }
-
-  for (const m of newMaps) {
-    if (!m.name?.trim() || !WORKSHOP_URL_RE.test(m.workshopUrl ?? '')) {
-      return NextResponse.json({ error: 'New maps must have a name and valid Steam Workshop URL' }, { status: 400 });
-    }
+  const input = parseMapPoolInput(body);
+  if (!input.ok) {
+    return NextResponse.json({ error: input.error }, { status: 400 });
   }
 
   const { data: seasons, error: fetchErr } = await supabaseAdmin
@@ -81,25 +40,9 @@ export async function POST(req: NextRequest) {
 
   const name = `Season ${maxNum + 1} Regular Season`;
 
-  // Upsert new maps into the maps table, fetching preview images from Steam
-  if (newMaps.length > 0) {
-    const rows = await Promise.all(
-      newMaps.map(async (m) => {
-        const previewUrl = await fetchWorkshopPreviewImage(m.workshopUrl);
-        return {
-          name: m.name.trim().toLowerCase(),
-          slug: mapSlug(m.name),
-          workshop_url: m.workshopUrl,
-          image_url: previewUrl,
-        };
-      }),
-    );
-    const { error: mapErr } = await supabaseAdmin
-      .from('maps')
-      .upsert(rows, { onConflict: 'slug' });
-    if (mapErr) {
-      return NextResponse.json({ error: mapErr.message }, { status: 500 });
-    }
+  const mapErr = await upsertNewMaps(supabaseAdmin, input.newMaps);
+  if (mapErr) {
+    return NextResponse.json({ error: mapErr }, { status: 500 });
   }
 
   const { data: created, error: insertErr } = await supabaseAdmin
@@ -108,7 +51,7 @@ export async function POST(req: NextRequest) {
       name,
       status: 'UPCOMING',
       is_gauntlet: false,
-      map_pool: mapPool,
+      map_pool: input.mapPool.length > 0 ? input.mapPool : null,
       target_win_rounds: 13,
     })
     .select('*')

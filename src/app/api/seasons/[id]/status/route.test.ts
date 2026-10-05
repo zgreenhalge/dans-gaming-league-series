@@ -23,6 +23,7 @@ const UPCOMING_SEASON_ID = 10;
 const GAUNTLET_SEASON_ID = 11;
 const ACTIVE_SEASON_ID = 12;
 const UPCOMING_NO_LEADERBOARD_ID = 13;
+const NO_POOL_SEASON_ID = 14;
 
 function makeDb(): FakeDb {
   return {
@@ -31,13 +32,14 @@ function makeDb(): FakeDb {
       { id: PLAYER_ID, is_admin: false },
     ],
     seasons: [
-      { id: UPCOMING_SEASON_ID, name: 'Season 9', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: UPCOMING_SEASON_ID, name: 'Season 9', status: 'UPCOMING', is_gauntlet: false, map_pool: ['a', 'b', 'c', 'd', 'e'], target_win_rounds: 13 },
       // A distinct season number from UPCOMING_SEASON_ID's "Season 9" — this row exists purely to
       // exercise the "season itself is a gauntlet" 404 branch, and must not collide with the
       // "Season 9 Gauntlet" name activateSeason() derives and creates for UPCOMING_SEASON_ID below.
       { id: GAUNTLET_SEASON_ID, name: 'Season 77 Gauntlet', status: 'UPCOMING', is_gauntlet: true, target_win_rounds: 13 },
+      { id: NO_POOL_SEASON_ID, name: 'Season 11', status: 'UPCOMING', is_gauntlet: false, map_pool: null, target_win_rounds: 13 },
       { id: ACTIVE_SEASON_ID, name: 'Season 8', status: 'ACTIVE', is_gauntlet: false, target_win_rounds: 13 },
-      { id: UPCOMING_NO_LEADERBOARD_ID, name: 'Season 10', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: UPCOMING_NO_LEADERBOARD_ID, name: 'Season 10', status: 'UPCOMING', is_gauntlet: false, map_pool: ['a', 'b', 'c', 'd', 'e'], target_win_rounds: 13 },
     ],
     player_season_leaderboard: [1, 2, 3, 4].map((id, i) => ({
       season_id: UPCOMING_SEASON_ID, player_id: id, player_name: `Player ${id}`, win_rate_percentage: 100 - i * 10,
@@ -137,6 +139,13 @@ async function main() {
     assert.equal(body.gauntletBuilt, false);
     assert.ok(typeof body.gauntletBuildError === 'string' && body.gauntletBuildError.length > 0);
     assert.equal(db.seasons.find((s) => s.id === UPCOMING_NO_LEADERBOARD_ID)!.status, 'ACTIVE');
+  });
+
+  await test('PATCH — a season with no map pool can\'t go live (409)', async () => {
+    const db = installFixture();
+    const res = await call(NO_POOL_SEASON_ID, ADMIN_ID, { status: 'ACTIVE' });
+    assert.equal(res.status, 409);
+    assert.equal(db.seasons.find((s) => s.id === NO_POOL_SEASON_ID)!.status, 'UPCOMING');
   });
 
   __setTestSession(undefined);
