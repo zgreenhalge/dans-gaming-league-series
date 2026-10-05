@@ -587,6 +587,21 @@ export const getMapLookup = cache(async (client: SupabaseClient = supabase): Pro
   return lookup;
 });
 
+/** Every map name a season's pool could pick from: the `maps` table plus any name already used in a
+ *  season's pool, lowercased and sorted. Feeds the map-pool picker. */
+export async function getKnownMapNames(): Promise<string[]> {
+  const [mapLookup, seasonsRes] = await Promise.all([
+    getMapLookup(),
+    supabase.from('seasons').select('map_pool'),
+  ]);
+  if (seasonsRes.error) throw seasonsRes.error;
+  const names = new Set<string>(Object.keys(mapLookup));
+  for (const s of (seasonsRes.data ?? []) as { map_pool: string[] | null }[]) {
+    for (const m of s.map_pool ?? []) names.add(m.trim().toLowerCase());
+  }
+  return Array.from(names).sort();
+}
+
 export interface WorkshopMapOption {
   name: string;
   workshopId: string;

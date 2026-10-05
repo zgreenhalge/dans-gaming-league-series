@@ -25,6 +25,7 @@ const READY_DRAFT_SEASON_ID = 11;
 const INCOMPLETE_DRAFT_SEASON_ID = 12;
 const ALREADY_MATERIALIZED_SEASON_ID = 13;
 const ACTIVE_SEASON_ID = 14;
+const NO_POOL_SEASON_ID = 15;
 
 const ROSTER = [1, 2, 3, 4, 5, 6, 7];
 // The real generator's full plan (guaranteed round-robin-complete) for READY_DRAFT_SEASON_ID; just
@@ -67,10 +68,11 @@ function makeDb(): FakeDb {
       ...ROSTER.filter((id) => id !== ADMIN_ID && id !== PLAYER_ID).map((id) => ({ id, is_admin: false, name: `Player ${id}` })),
     ],
     seasons: [
-      { id: NO_DRAFT_SEASON_ID, name: 'Season 20', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
-      { id: READY_DRAFT_SEASON_ID, name: 'Season 21', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
-      { id: INCOMPLETE_DRAFT_SEASON_ID, name: 'Season 22', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
-      { id: ALREADY_MATERIALIZED_SEASON_ID, name: 'Season 23', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: NO_DRAFT_SEASON_ID, name: 'Season 20', status: 'UPCOMING', is_gauntlet: false, map_pool: ['a', 'b', 'c', 'd', 'e'], target_win_rounds: 13 },
+      { id: READY_DRAFT_SEASON_ID, name: 'Season 21', status: 'UPCOMING', is_gauntlet: false, map_pool: ['a', 'b', 'c', 'd', 'e'], target_win_rounds: 13 },
+      { id: INCOMPLETE_DRAFT_SEASON_ID, name: 'Season 22', status: 'UPCOMING', is_gauntlet: false, map_pool: ['a', 'b', 'c', 'd', 'e'], target_win_rounds: 13 },
+      { id: ALREADY_MATERIALIZED_SEASON_ID, name: 'Season 23', status: 'UPCOMING', is_gauntlet: false, map_pool: ['a', 'b', 'c', 'd', 'e'], target_win_rounds: 13 },
+      { id: NO_POOL_SEASON_ID, name: 'Season 25', status: 'UPCOMING', is_gauntlet: false, map_pool: null, target_win_rounds: 13 },
       { id: ACTIVE_SEASON_ID, name: 'Season 24', status: 'ACTIVE', is_gauntlet: false, target_win_rounds: 13 },
     ],
     season_players: [
@@ -126,6 +128,12 @@ async function main() {
   await test('POST — a season that isn\'t UPCOMING is rejected (400)', async () => {
     installFixture();
     assert.equal((await call(ACTIVE_SEASON_ID, ADMIN_ID)).status, 400);
+  });
+
+  await test('POST — a season with no map pool can\'t confirm its schedule (409)', async () => {
+    installFixture();
+    const res = await call(NO_POOL_SEASON_ID, ADMIN_ID);
+    assert.equal(res.status, 409);
   });
 
   await test('POST — no draft exists yet (400)', async () => {
