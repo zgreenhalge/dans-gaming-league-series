@@ -11,7 +11,7 @@ import {
   ADMIN_ID, ALICE_ID, BOB_ID, CARA_ID, REGULAR_SEASON_ID, installFeedbackFixture, resetFeedbackFixture,
 } from '@/lib/test-support/feedbackFixture';
 import { __setTestSession } from '@/lib/session';
-import { getPlayerSuperlativeVotes, getSuperlativeResults, getSeasonFeedbackView } from '@/lib/queries';
+import { getPlayerSuperlativeVotes, getSuperlativeResults, getSeasonSuperlativesView } from '@/lib/queries';
 import type { FakeDb } from '@/lib/test-support/fakeSupabase';
 import { PUT } from './route';
 
@@ -84,29 +84,24 @@ test('tallies are anonymous and ordered', async () => {
   resetFeedbackFixture();
 });
 
-test('season feedback view: ballot for an eligible viewer, nothing for others, results once closed', async () => {
+test('superlatives view: ballot for an eligible viewer, nothing for others, results once closed', async () => {
   const db = installFeedbackFixture(ALICE_ID);
   seedPoll(db);
 
-  const ballot = await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID);
-  assert.equal(ballot.survey, null);
-  assert.equal(ballot.superlatives?.mode, 'ballot');
-  assert.deepEqual(
-    ballot.superlatives?.mode === 'ballot' ? ballot.superlatives.nominees.map((n) => n.id) : [],
-    [ADMIN_ID, ALICE_ID, BOB_ID],
-  );
-  assert.deepEqual(await getSeasonFeedbackView(REGULAR_SEASON_ID, CARA_ID), { survey: null, superlatives: null });
-  assert.deepEqual(await getSeasonFeedbackView(REGULAR_SEASON_ID, null), { survey: null, superlatives: null });
+  const ballot = await getSeasonSuperlativesView(REGULAR_SEASON_ID, ALICE_ID);
+  assert.equal(ballot?.mode, 'ballot');
+  assert.deepEqual(ballot?.mode === 'ballot' ? ballot.nominees.map((n) => n.id) : [], [ADMIN_ID, ALICE_ID, BOB_ID]);
+  assert.equal(await getSeasonSuperlativesView(REGULAR_SEASON_ID, CARA_ID), null);
+  assert.equal(await getSeasonSuperlativesView(REGULAR_SEASON_ID, null), null);
 
   // Closed with no votes cast: nothing to show anyone.
   db.superlative_polls[0].is_open = false;
-  assert.deepEqual(await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID), { survey: null, superlatives: null });
+  assert.equal(await getSeasonSuperlativesView(REGULAR_SEASON_ID, ALICE_ID), null);
 
   // Closed with a vote cast: public results, even for a signed-out viewer or one who didn't play.
   db.superlative_votes.push({ id: 1, superlative_id: 1, voter_player_id: ALICE_ID, nominee_player_id: BOB_ID });
   for (const viewer of [null, CARA_ID, ALICE_ID]) {
-    const view = await getSeasonFeedbackView(REGULAR_SEASON_ID, viewer);
-    assert.equal(view.superlatives?.mode, 'results');
+    assert.equal((await getSeasonSuperlativesView(REGULAR_SEASON_ID, viewer))?.mode, 'results');
   }
   resetFeedbackFixture();
 });

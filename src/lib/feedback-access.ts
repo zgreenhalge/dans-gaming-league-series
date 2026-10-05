@@ -7,7 +7,7 @@
 import { requireSession } from './session';
 import { requireAdminAccess } from './admin-access';
 import { getAdminClient } from './supabase-admin';
-import { getSeason, getSeasonPlayedPlayers } from './queries';
+import { getSeason, getSeasonPlayedPlayers, hasPlayedSeason } from './queries';
 import { parseSeasonId } from './util';
 import type { SeasonRosterEntry } from './queries';
 import type { AccessResult } from './access-control';
@@ -35,7 +35,7 @@ export async function requireSeasonFeedbackAccess(rawSeasonId: string): Promise<
   if (!season || season.is_gauntlet) return { ok: false, status: 404, error: 'Regular season not found' };
 
   const eligible = await getSeasonPlayedPlayers(seasonId);
-  if (!eligible.some((p) => p.player_id === playerId)) {
+  if (!hasPlayedSeason(eligible, playerId)) {
     return { ok: false, status: 403, error: 'Only players who played this season can respond' };
   }
   return { ok: true, seasonId, supabaseAdmin: getAdminClient(), playerId, eligible };

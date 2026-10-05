@@ -4,7 +4,7 @@ import { getSurveyForSeason } from '@/lib/queries';
 import type { Json } from '@/lib/database.types';
 import { buildSurveyQuestions, validateCustomQuestions } from '@/lib/survey';
 
-/** Sends a season's post-season survey: the admin's custom questions followed by the core ones.
+/** Opens a season's post-season survey: the admin's custom questions followed by the core ones.
  *  One survey per season; it starts open. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);

@@ -29,7 +29,8 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), a Quick actions panel (shortcuts for global tools like bulk demo re-parse), an Activity feed (every `background_jobs` row across all four pipelines plus live `ops_errors`, one newest-first list tagged Errored / In Progress / Completed and narrowed by tag/type/range filter chips, plus a separate History view), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
 | `/admin/seasons/gauntlet/manual/[id]` | Manual gauntlet pod editor — a full drag/pick/validate/save flow, kept as its own route rather than folded into the console |
 | `/admin/seasons/schedule/[id]` | Regular-season Schedule Editor — hand-edit any match slot, then confirm. Generation itself happens on `/seasons/[id]` (`SeasonScheduleEntryPoint`, shown to admins while `UPCOMING`): if no schedule draft exists yet, that's where the doubleheader-policy choice and "Generate Schedule" live, landing here immediately after; once one exists, that same spot is just an "Edit Schedule" link here |
-| `/admin/seasons/feedback/[id]` | Admin view of a regular season's survey (custom-question builder, open/close, anonymised results) and superlatives vote (choose superlatives, open/close, tallies) — linked as "Feedback" from each non-upcoming regular season row in Manage → Season. A gauntlet season's id redirects to its paired regular season |
+| `/admin/seasons/survey/[id]` | Admin view of a regular season's post-season survey: custom-question builder, open/close, anonymised results. Linked as "Survey" from each non-upcoming regular season row in Manage → Season. A gauntlet season's id redirects to its paired regular season |
+| `/admin/seasons/superlatives/[id]` | Admin view of a regular season's superlatives vote: choose superlatives, open/close voting, tallies. Linked as "Superlatives" from the same Manage → Season row; independent of the survey page. A gauntlet season's id redirects to its paired regular season |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
 `/career-stats` is a permanent redirect to `/statistics`, not a standalone page.
@@ -96,7 +97,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
 | `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only. Best-effort grants/revokes the `@Participants` Discord role (#397) for that one player if they're linked |
-| `POST/PATCH` | `/api/seasons/[id]/survey` | Send a regular season's post-season survey (`{ questions }` — custom questions, stored ahead of the core ones; one per season, starts open), or close/reopen it (`{ open }`) (admin only) |
+| `POST/PATCH` | `/api/seasons/[id]/survey` | Open a regular season's post-season survey (`{ questions }` — custom questions, stored ahead of the core ones; one per season, starts open), or close/reopen it (`{ open }`) (admin only) |
 | `PUT` | `/api/seasons/[id]/survey/response` | Save the caller's survey answers (`{ answers: { [questionId]: value } }`). Players who played the season only (`requireSeasonFeedbackAccess()`); one response per player, edited in place while the survey is open — answers left out are cleared |
 | `POST/DELETE/PATCH` | `/api/seasons/[id]/superlatives` | Add a superlative (`{ title }`, creating the season's vote, closed, on the first), remove one and its votes (`{ superlative_id }`), or open/close voting (`{ open }`; needs at least one superlative) (admin only) |
 | `PUT` | `/api/seasons/[id]/superlatives/votes` | Save the caller's ballot (`{ votes: [{ superlative_id, nominee_player_id }] }`). Players who played the season only; nominees are any player who played, the voter included; replaced in place while voting is open — superlatives left out are cleared |
@@ -147,7 +148,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `background_jobs` | Background-job state machine, one row per (`job_type`, `match_id`/`map_id`). `job_type` is `replay_extract`/`radar_build` ([`replay.md`](./replay.md)), `demo_ingest` ([`hosting.md`](./hosting.md)), or `ehog_recompute` ([`ehog.md`](./ehog.md)); tracks `status`/`stage`/`error_message` + GitHub Action run refs. |
 | `gauntlet_pods` | One row per pod in a gauntlet bracket: `season_id`, `round_number` (== `weeks.week_number`), `pod_index`, `advance_rule` (`single`/`wildcard`), `is_final`, `week_id`, `match1_id`/`match2_id` (set once materialized). Frozen at bracket creation — nothing re-derives it. |
 | `gauntlet_pod_slots` | The 4 slots (`slot_index` 0-3) feeding each pod: `source_kind` (`seed`/`pod`), `source_seed` (for seed slots) or `source_pod_id` (the advancement edge, for pod slots), and the resolved `player_id`. |
-| `surveys` / `survey_responses` | A regular season's post-season survey (#113). `surveys` is one row per season: `questions` (jsonb) is a snapshot taken when the survey is sent — an array of `{ id, kind, prompt, is_core }`, the admin's custom questions then the core ones (`CORE_SURVEY_QUESTIONS`, `src/lib/survey.ts`), `id` being the 1-based position and `kind` `rating` (1–5), `yes_no`, or `text` — so a survey's results stay readable whatever the core list later becomes; `closed_at` is null while open. `survey_responses` is one row per `(survey, player)` whose `answers` (jsonb) maps question id → value (number / boolean / string; unanswered questions have no key), so saving a response is a single upsert. The row's `player_id` exists only to enforce one-per-player and prefill that player's own editor (`getPlayerSurveyAnswers()`); `getSurveyResults()` (`queries/feedback.ts`) selects the `answers` column alone |
+| `surveys` / `survey_responses` | A regular season's post-season survey (#113). `surveys` is one row per season: `questions` (jsonb) is a snapshot taken when the survey is opened — an array of `{ id, kind, prompt, is_core }`, the admin's custom questions then the core ones (`CORE_SURVEY_QUESTIONS`, `src/lib/survey.ts`), `id` being the 1-based position and `kind` `rating` (1–5), `yes_no`, or `text` — so a survey's results stay readable whatever the core list later becomes; `closed_at` is null while open. `survey_responses` is one row per `(survey, player)` whose `answers` (jsonb) maps question id → value (number / boolean / string; unanswered questions have no key), so saving a response is a single upsert. The row's `player_id` exists only to enforce one-per-player and prefill that player's own editor (`getPlayerSurveyAnswers()`); `getSurveyResults()` (`queries/feedback.ts`) selects the `answers` column alone |
 | `superlative_polls` / `superlatives` / `superlative_votes` | A regular season's player-voted superlatives. `superlative_polls` is one row per season with `is_open` (the admin builds the list while closed). `superlatives` are the admin-chosen titles ("Best Teammate", …); every player who played the season is a valid nominee for every one. `superlative_votes` is one row per `(superlative, voter)` naming `nominee_player_id` — a self-vote is allowed. Tallies (`getSuperlativeResults()`) are per-nominee counts only, never voters |
 | `ops_errors` | Generic best-effort-operation-failure surface: `entity_type` (`season`/`match`/`system`), `entity_id` (`0` for the `system` singleton), `operation`, `message`, `occurred_at`, `dismissed_at` (`null` while live). Unique on `(entity_type, entity_id, operation)`. See "Surfacing best-effort failures". |
 | `scrim_sessions` | Singleton table (`id` pinned to `1`) tracking the one active scrim, if any: `started_by` (owner, for the stop-authorization check), `warned_15`/`warned_10`/`warned_5` (pre-match warning one-shots). See [`hosting.md`](./hosting.md)'s Scrims section. |
@@ -415,18 +416,21 @@ eligibility rule: a player may respond if they appear on a played match (`isPlay
 season or its paired gauntlet — `getSeasonPlayedPlayers()` (`queries/seasons.ts`). A rostered player
 whose only matches are unplayed placeholders is not eligible, and being an admin neither grants nor
 removes eligibility. The route gate (`requireSeasonFeedbackAccess()`, `feedback-access.ts`) and the
-season page's tabs (`getSeasonFeedbackView()`) both read it from `getSeasonPlayedPlayers()`, which
+season page's tabs (`getSeasonSurveyView()` / `getSeasonSuperlativesView()`) both read it from `getSeasonPlayedPlayers()`, which
 shares one cached lookup per request.
 
-The two are independent: an admin sets each up and opens/closes it from `/admin/seasons/feedback/[id]`.
-The survey is sent once with its question list fixed; the superlatives list can change until voting
+The two are independent flows: an admin sets each up and opens/closes it on its own page
+(`/admin/seasons/survey/[id]`, `/admin/seasons/superlatives/[id]`), either can exist without the other,
+and a player answers each on its own tab. Both admin panels share one open/close control
+(`FeedbackOpenControl`): opening is the primary button, closing the small bordered one.
+The survey is opened once with its question list fixed; the superlatives list can change until voting
 opens (and removing one deletes its votes). Neither can be answered unless open, and answers are
 editable until closed.
 
-**Season-page tabs.** `getSeasonFeedbackView()` resolves, per viewer, which tabs exist, and
-`buildFeedbackTabs()` (`src/components/feedbackTabs.tsx`) renders their bodies server-side. A tab is
-shown only when this viewer has something to do or see (the "gate a tab on data" rule in
-[`patterns.md`](./patterns.md)):
+**Season-page tabs.** `getSeasonSurveyView()` and `getSeasonSuperlativesView()` each resolve, per
+viewer, whether their own tab exists, and `buildSurveyTab()` / `buildSuperlativesTab()`
+(`src/components/feedbackTabs.tsx`) render the bodies server-side. A tab is shown only when this
+viewer has something to do or see (the "gate a tab on data" rule in [`patterns.md`](./patterns.md)):
 
 - **Survey** — while the survey is open and the viewer played the season: the form (`SurveyForm`).
   Survey results are admin-only.
@@ -441,7 +445,7 @@ The tabs sit in the same top-level row as Regular Season / Gauntlet (`TopTabBar`
 with something unanswered straight to the tab (`?view=survey` / `?view=superlatives`).
 
 Survey and superlatives belong to the regular season; a gauntlet shares them. A gauntlet season's
-page and its admin feedback page both redirect to the paired regular season, and the API routes take
+page and its admin survey/superlatives pages both redirect to the paired regular season, and the API routes take
 the regular season's id.
 
 **Anonymity.** Results queries aggregate by question or superlative and never return the

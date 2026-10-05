@@ -1,6 +1,6 @@
 'use client';
 
-// Admin view of a season's post-season survey: before one is sent, a builder for the custom
+// Admin view of a season's post-season survey: before one is opened, a builder for the custom
 // questions (shown ahead of the fixed core questions); afterward, the open/close control and the
 // anonymised results.
 
@@ -10,6 +10,8 @@ import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import SectionLabel from './SectionLabel';
+import { FeedbackOpenControl } from './FeedbackOpenControl';
+import { RemoveXButton } from './RemoveXButton';
 import {
   CORE_SURVEY_QUESTIONS,
   MAX_CUSTOM_QUESTIONS,
@@ -31,7 +33,6 @@ const KIND_LABEL: Record<SurveyQuestionKind, string> = {
 export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; survey: SurveyResultsData | null }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className="font-display text-[20px] font-semibold">Post-season survey</div>
       {survey ? <SurveyResults seasonId={seasonId} survey={survey} /> : <SurveyBuilder seasonId={seasonId} />}
     </section>
   );
@@ -46,7 +47,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
     setCustom((prev) => prev.map((q, k) => (k === i ? { ...q, ...patch } : q)));
   }
 
-  async function send() {
+  async function open() {
     await run(async () => {
       await sendFeedbackRequest('POST', `/api/seasons/${seasonId}/survey`, { questions: custom });
       router.refresh();
@@ -75,9 +76,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
-                Remove
-              </button>
+              <RemoveXButton label="Remove question" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} disabled={busy} />
             </div>
           ))}
         </div>
@@ -103,11 +102,11 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
       <div className="flex items-center gap-4">
         <button
           type="button"
-          onClick={send}
+          onClick={open}
           disabled={busy || custom.some((q) => !q.prompt.trim())}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
-          {busy ? 'Sending…' : 'Send survey'}
+          {busy ? 'Opening…' : 'Open survey'}
         </button>
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
@@ -128,15 +127,15 @@ function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyR
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-3 font-mono text-[12px]">
-        <span className="text-[var(--color-text-secondary)]">
-          {survey.isOpen ? 'Open' : 'Closed'} · {survey.responseCount} of {survey.eligibleCount} players responded
-        </span>
-        <button type="button" onClick={() => setOpen(!survey.isOpen)} disabled={busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
-          {survey.isOpen ? 'Close survey' : 'Reopen survey'}
-        </button>
-        {error && <span className="text-[var(--color-accent-red-fg)]">{error}</span>}
-      </div>
+      <FeedbackOpenControl
+        isOpen={survey.isOpen}
+        status={`${survey.responseCount} of ${survey.eligibleCount} players responded`}
+        openLabel="Open survey"
+        closeLabel="Close survey"
+        busy={busy}
+        onToggle={() => setOpen(!survey.isOpen)}
+      />
+      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
       {survey.summaries.map((q) => (
         <div key={q.question_id} className="flex flex-col gap-2 border-t border-[var(--color-border-tertiary)] pt-4">

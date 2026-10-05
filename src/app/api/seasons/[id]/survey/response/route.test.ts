@@ -12,7 +12,7 @@ import {
 } from '@/lib/test-support/feedbackFixture';
 import { __setTestSession } from '@/lib/session';
 import { sessionFor } from '@/lib/test-support/nextRequest';
-import { getSurveyForSeason, getSurveyResults, getPlayerSurveyAnswers, getSeasonFeedbackView } from '@/lib/queries';
+import { getSurveyForSeason, getSurveyResults, getPlayerSurveyAnswers, getSeasonSurveyView, getSeasonSuperlativesView } from '@/lib/queries';
 import type { FakeDb } from '@/lib/test-support/fakeSupabase';
 import { PUT } from './route';
 
@@ -106,36 +106,41 @@ test('results are anonymous: aggregates only, no player ids anywhere', async () 
   resetFeedbackFixture();
 });
 
-test('season feedback view: the survey tab exists only while open, for a viewer who played', async () => {
+test('survey view: the tab exists only while open, for a viewer who played', async () => {
   const db = installFeedbackFixture(ALICE_ID);
   seedSurvey(db);
   await put(REGULAR_SEASON_ID, { answers: { 1: 4 } });
 
-  const view = await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID);
-  assert.equal(view.survey?.responded, true);
-  assert.deepEqual(view.survey?.answers, { 1: 4 });
-  assert.equal(view.survey?.questions.length, 3);
-  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, CARA_ID)).survey, null);
-  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, null)).survey, null);
+  const view = await getSeasonSurveyView(REGULAR_SEASON_ID, ALICE_ID);
+  assert.equal(view?.responded, true);
+  assert.deepEqual(view?.answers, { 1: 4 });
+  assert.equal(view?.questions.length, 3);
+  assert.equal(await getSeasonSurveyView(REGULAR_SEASON_ID, CARA_ID), null);
+  assert.equal(await getSeasonSurveyView(REGULAR_SEASON_ID, null), null);
 
   db.surveys[0].closed_at = '2026-02-01';
-  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID)).survey, null);
+  assert.equal(await getSeasonSurveyView(REGULAR_SEASON_ID, ALICE_ID), null);
   resetFeedbackFixture();
 });
 
-test('season feedback view: a closed vote\'s public results show even while the survey is open', async () => {
+test('the two flows are independent: a closed vote\'s results and an open survey each resolve on their own', async () => {
   const db = installFeedbackFixture(ALICE_ID);
   seedSurvey(db);
   db.superlative_polls.push({ season_id: REGULAR_SEASON_ID, is_open: false });
   db.superlatives.push({ id: 1, season_id: REGULAR_SEASON_ID, position: 1, title: 'MVP' });
   db.superlative_votes.push({ id: 1, superlative_id: 1, voter_player_id: ALICE_ID, nominee_player_id: BOB_ID });
 
-  for (const viewer of [ALICE_ID, CARA_ID, null]) {
-    const view = await getSeasonFeedbackView(REGULAR_SEASON_ID, viewer);
-    assert.equal(view.superlatives?.mode, 'results');
-  }
-  assert.ok((await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID)).survey);
-  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, CARA_ID)).survey, null);
+  assert.ok(await getSeasonSurveyView(REGULAR_SEASON_ID, ALICE_ID));
+  assert.equal((await getSeasonSuperlativesView(REGULAR_SEASON_ID, ALICE_ID))?.mode, 'results');
+  // Only the vote has anything for a viewer who didn't play.
+  assert.equal(await getSeasonSurveyView(REGULAR_SEASON_ID, CARA_ID), null);
+  assert.equal((await getSeasonSuperlativesView(REGULAR_SEASON_ID, CARA_ID))?.mode, 'results');
+
+  // A survey with no vote configured at all.
+  db.superlative_polls.length = 0;
+  db.superlatives.length = 0;
+  assert.ok(await getSeasonSurveyView(REGULAR_SEASON_ID, ALICE_ID));
+  assert.equal(await getSeasonSuperlativesView(REGULAR_SEASON_ID, ALICE_ID), null);
   resetFeedbackFixture();
 });
 

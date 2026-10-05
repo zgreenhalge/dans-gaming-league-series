@@ -17,7 +17,8 @@ import {
   getLinkedRegularSeason,
   getRegularSeasonLightView,
   getGauntletSeasonLightView,
-  getSeasonFeedbackView,
+  getSeasonSurveyView,
+  getSeasonSuperlativesView,
   type RegularSeasonLightView,
   type GauntletSeasonLightView,
   type GauntletRound,
@@ -33,7 +34,7 @@ import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { SeasonFeedbackTabs } from '@/components/SeasonFeedbackTabs';
-import { buildFeedbackTabs } from '@/components/feedbackTabs';
+import { buildSurveyTab, buildSuperlativesTab } from '@/components/feedbackTabs';
 import { authOptions } from '@/lib/authOptions';
 import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
@@ -257,7 +258,7 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, knownMaps, initialLight, leaderboard, matchSummaries, feedbackView] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
@@ -268,7 +269,8 @@ export default async function SeasonPage({
       : getRegularSeasonLightView(seasonId, seasonNumber, playersById),
     leaderboardPromise,
     matchSummariesPromise,
-    getSeasonFeedbackView(seasonId, currentPlayerId),
+    getSeasonSurveyView(seasonId, currentPlayerId),
+    getSeasonSuperlativesView(seasonId, currentPlayerId),
   ]);
 
   // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
@@ -286,7 +288,7 @@ export default async function SeasonPage({
     initialLightData = { kind: 'regular', data: await getRegularSeasonLightView(seasonId, seasonNumber, playersById) };
   }
 
-  const feedbackTabs = buildFeedbackTabs(season.id, feedbackView);
+  const feedbackTabs = [...buildSurveyTab(season.id, surveyView), ...buildSuperlativesTab(season.id, superlativesView)];
 
   const matchCount = matchSummaries.matches.length;
   // `matchSummaries.matches` is already sorted ascending by week/match number, so the last entry's
@@ -355,7 +357,7 @@ export default async function SeasonPage({
             {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
           </div>
         )}
-        <FeedbackBanner seasonId={season.id} view={feedbackView} />
+        <FeedbackBanner seasonId={season.id} survey={surveyView} superlatives={superlativesView} />
         <Suspense>
           <UrlStateProvider>
             {showGauntletTab && linkedGauntlet ? (
