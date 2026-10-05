@@ -1483,6 +1483,267 @@ export type Database = {
         }
         Relationships: []
       }
+      superlative_polls: {
+        Row: {
+          is_open: boolean
+          season_id: number
+        }
+        Insert: {
+          is_open?: boolean
+          season_id: number
+        }
+        Update: {
+          is_open?: boolean
+          season_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "superlative_polls_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      superlative_votes: {
+        Row: {
+          id: number
+          nominee_player_id: number
+          superlative_id: number
+          voted_at: string
+          voter_player_id: number
+        }
+        Insert: {
+          id?: never
+          nominee_player_id: number
+          superlative_id: number
+          voted_at?: string
+          voter_player_id: number
+        }
+        Update: {
+          id?: never
+          nominee_player_id?: number
+          superlative_id?: number
+          voted_at?: string
+          voter_player_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "superlative_votes_nominee_player_id_fkey"
+            columns: ["nominee_player_id"]
+            isOneToOne: false
+            referencedRelation: "player_season_leaderboard"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "superlative_votes_nominee_player_id_fkey"
+            columns: ["nominee_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "superlative_votes_superlative_id_fkey"
+            columns: ["superlative_id"]
+            isOneToOne: false
+            referencedRelation: "superlatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "superlative_votes_voter_player_id_fkey"
+            columns: ["voter_player_id"]
+            isOneToOne: false
+            referencedRelation: "player_season_leaderboard"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "superlative_votes_voter_player_id_fkey"
+            columns: ["voter_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      superlatives: {
+        Row: {
+          id: number
+          position: number
+          season_id: number
+          title: string
+        }
+        Insert: {
+          id?: never
+          position: number
+          season_id: number
+          title: string
+        }
+        Update: {
+          id?: never
+          position?: number
+          season_id?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "superlatives_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_answers: {
+        Row: {
+          answer_number: number | null
+          answer_text: string | null
+          id: number
+          question_id: number
+          response_id: number
+        }
+        Insert: {
+          answer_number?: number | null
+          answer_text?: string | null
+          id?: never
+          question_id: number
+          response_id: number
+        }
+        Update: {
+          answer_number?: number | null
+          answer_text?: string | null
+          id?: never
+          question_id?: number
+          response_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "survey_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_answers_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "survey_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_questions: {
+        Row: {
+          id: number
+          is_core: boolean
+          kind: string
+          position: number
+          prompt: string
+          survey_id: number
+        }
+        Insert: {
+          id?: never
+          is_core?: boolean
+          kind: string
+          position: number
+          prompt: string
+          survey_id: number
+        }
+        Update: {
+          id?: never
+          is_core?: boolean
+          kind?: string
+          position?: number
+          prompt?: string
+          survey_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_questions_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_responses: {
+        Row: {
+          id: number
+          player_id: number
+          submitted_at: string
+          survey_id: number
+          updated_at: string
+        }
+        Insert: {
+          id?: never
+          player_id: number
+          submitted_at?: string
+          survey_id: number
+          updated_at?: string
+        }
+        Update: {
+          id?: never
+          player_id?: number
+          submitted_at?: string
+          survey_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_responses_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player_season_leaderboard"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "survey_responses_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_responses_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      surveys: {
+        Row: {
+          closed_at: string | null
+          id: number
+          opened_at: string
+          season_id: number
+        }
+        Insert: {
+          closed_at?: string | null
+          id?: never
+          opened_at?: string
+          season_id: number
+        }
+        Update: {
+          closed_at?: string | null
+          id?: never
+          opened_at?: string
+          season_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "surveys_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weeks: {
         Row: {
           bye_player_id: number | null
