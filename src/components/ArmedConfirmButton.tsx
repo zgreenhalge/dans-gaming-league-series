@@ -18,9 +18,18 @@ const CONFIRM_VARIANT: Record<'primary' | 'danger', string> = {
 export const ADMIN_PRIMARY_BUTTON_CLS =
   'tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all';
 
+/** The small bordered admin button (row actions, "Remove", "Close survey"). Append `disabled:opacity-40`
+ * at the call site when the action can be busy. */
+export const ADMIN_SMALL_BUTTON_CLS =
+  'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors';
+
+/** The standard single-line text input / select / textarea used by admin forms and player-facing
+ * forms. */
+export const FORM_INPUT_CLS =
+  'font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]';
+
 const TRIGGER_STYLE: Record<'bordered' | 'link', string> = {
-  bordered:
-    'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors',
+  bordered: ADMIN_SMALL_BUTTON_CLS,
   link: 'font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted',
 };
 

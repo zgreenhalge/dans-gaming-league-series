@@ -59,10 +59,10 @@ test('stores a ballot, allows a self-vote, and edits replace it (omitted superla
     (await put({ votes: [{ superlative_id: 1, nominee_player_id: ALICE_ID }, { superlative_id: 2, nominee_player_id: BOB_ID }] })).status,
     200,
   );
-  assert.deepEqual(await getPlayerSuperlativeVotes(REGULAR_SEASON_ID, ALICE_ID), { 1: ALICE_ID, 2: BOB_ID });
+  assert.deepEqual(await getPlayerSuperlativeVotes([1, 2], ALICE_ID), { 1: ALICE_ID, 2: BOB_ID });
 
   assert.equal((await put({ votes: [{ superlative_id: 1, nominee_player_id: ADMIN_ID }] })).status, 200);
-  assert.deepEqual(await getPlayerSuperlativeVotes(REGULAR_SEASON_ID, ALICE_ID), { 1: ADMIN_ID });
+  assert.deepEqual(await getPlayerSuperlativeVotes([1, 2], ALICE_ID), { 1: ADMIN_ID });
   assert.equal(db.superlative_votes.length, 1);
   resetFeedbackFixture();
 });

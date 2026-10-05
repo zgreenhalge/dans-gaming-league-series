@@ -161,31 +161,37 @@ export async function getSeasonParticipants(seasonId: number, playersById?: Map<
   return [...byId.values()].sort((a, b) => a.player_name.localeCompare(b.player_name));
 }
 
-/** Players who actually played in a regular season — on a match with a played score, in the season
- *  itself or its paired gauntlet. Narrower than `getSeasonParticipants()`, which also counts a
- *  rostered player whose matches are still unplayed; this is the "took part" signal the post-season
- *  survey and superlatives vote gate on. Sorted by player name. */
-export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+/** Ids of the players who played in a regular season — on a match with a played score, in the season
+ *  itself or its paired gauntlet. `cache()`-wrapped on `seasonId` alone (the weeks → matches → stats
+ *  walk is the expensive part) so every caller in one request shares it. */
+const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[]> => {
   const season = await getSeason(seasonId);
   if (!season) return [];
   const gauntlet = season.is_gauntlet ? null : await getLinkedGauntlet(season.name);
-  const seasonIds = [seasonId, ...(gauntlet ? [gauntlet.id] : [])];
 
-  const [resolvedPlayersById, { data: weekRows, error: weekErr }] = await Promise.all([
-    playersById ?? getPlayersById(),
-    supabase.from('weeks').select('id').in('season_id', seasonIds),
-  ]);
+  const { data: weekRows, error: weekErr } = await supabase
+    .from('weeks')
+    .select('id')
+    .in('season_id', [seasonId, ...(gauntlet ? [gauntlet.id] : [])]);
   if (weekErr) throw weekErr;
 
-  const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
+  const weekIds = (weekRows ?? []).map((w) => w.id);
   if (weekIds.length === 0) return [];
   const matchRows = await batchedIn<{ id: number; final_score: string | null }>('matches', 'week_id', weekIds, 'id, final_score');
   const playedMatchIds = matchRows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
   if (playedMatchIds.length === 0) return [];
   const statRows = await batchedIn<{ player_id: number }>('player_match_stats', 'match_id', playedMatchIds, 'player_id');
+  return [...new Set(statRows.map((r) => r.player_id))];
+});
 
+/** Players who actually played in a regular season (see `getSeasonPlayedPlayerIds()`). Narrower than
+ *  `getSeasonParticipants()`, which also counts a rostered player whose matches are still unplayed;
+ *  this is the "took part" signal the post-season survey and superlatives vote gate on. Sorted by
+ *  player name. */
+export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+  const [playerIds, resolvedPlayersById] = await Promise.all([getSeasonPlayedPlayerIds(seasonId), playersById ?? getPlayersById()]);
   const entries: SeasonRosterEntry[] = [];
-  for (const playerId of new Set(statRows.map((r) => r.player_id))) {
+  for (const playerId of playerIds) {
     const player = resolvedPlayersById.get(playerId);
     if (!player) continue;
     entries.push({

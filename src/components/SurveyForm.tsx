@@ -7,16 +7,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
-import { RATING_LABELS, RATING_MAX, RATING_MIN, MAX_TEXT_ANSWER_LENGTH, type SurveyQuestionKind } from '@/lib/survey';
+import { sendFeedbackRequest } from './feedbackRequest';
+import { ADMIN_PRIMARY_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { RATING_LABELS, RATING_MAX, RATING_MIN, MAX_TEXT_ANSWER_LENGTH, type SurveyAnswers, type SurveyQuestion } from '@/lib/survey';
 
-type AnswerValue = number | boolean | string;
-
-export interface SurveyFormQuestion {
-  id: number;
-  kind: SurveyQuestionKind;
-  prompt: string;
-}
+type AnswerValue = SurveyAnswers[string];
 
 const CHOICE_CLS =
   'tracked text-[11px] font-semibold px-3 py-2 border transition-colors';
@@ -32,34 +27,29 @@ export function SurveyForm({
   responded,
 }: {
   seasonId: number;
-  questions: SurveyFormQuestion[];
-  initialAnswers: Record<number, AnswerValue>;
+  questions: SurveyQuestion[];
+  initialAnswers: SurveyAnswers;
   responded: boolean;
 }) {
   const router = useRouter();
-  const [answers, setAnswers] = useState<Record<number, AnswerValue>>(initialAnswers);
+  const [answers, setAnswers] = useState<SurveyAnswers>(initialAnswers);
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useAsyncAction();
 
   function setAnswer(id: number, value: AnswerValue | undefined) {
+    const key = String(id);
     setSaved(false);
     setAnswers((prev) => {
       const next = { ...prev };
-      if (value === undefined) delete next[id];
-      else next[id] = value;
+      if (value === undefined) delete next[key];
+      else next[key] = value;
       return next;
     });
   }
 
   async function save() {
     await run(async () => {
-      const res = await fetch(`/api/seasons/${seasonId}/survey/response`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? 'Failed to save your answers.');
+      await sendFeedbackRequest('PUT', `/api/seasons/${seasonId}/survey/response`, { answers });
       setSaved(true);
       router.refresh();
     });
@@ -68,7 +58,7 @@ export function SurveyForm({
   return (
     <div className="flex flex-col gap-8">
       {questions.map((q, i) => {
-        const value = answers[q.id];
+        const value = answers[String(q.id)];
         return (
           <div key={q.id} className="flex flex-col gap-3">
             <div className="font-display text-[16px] font-semibold">
@@ -111,7 +101,7 @@ export function SurveyForm({
                 onChange={(e) => setAnswer(q.id, e.target.value)}
                 maxLength={MAX_TEXT_ANSWER_LENGTH}
                 rows={4}
-                className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+                className={FORM_INPUT_CLS}
               />
             )}
           </div>

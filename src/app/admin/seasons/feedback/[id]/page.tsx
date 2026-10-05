@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { SurveyAdminPanel } from '@/components/SurveyAdminPanel';
 import { SuperlativesAdminPanel } from '@/components/SuperlativesAdminPanel';
-import { getSeason, getLinkedRegularSeason, getSurveyResults, getSuperlativeResults, isSurveyOpen } from '@/lib/queries';
+import { getSeason, getLinkedRegularSeason, getSurveyResults, getSuperlativeResults } from '@/lib/queries';
 import { seasonTitle } from '@/lib/util';
 
 export const metadata = {
@@ -42,17 +42,7 @@ export default async function SeasonFeedbackPage({ params }: { params: Promise<{
           {seasonTitle(season.name)} Feedback
         </div>
         <div className="flex flex-col gap-12">
-          <SurveyAdminPanel
-            seasonId={seasonId}
-            survey={
-              survey && {
-                isOpen: isSurveyOpen(survey.survey),
-                responseCount: survey.responseCount,
-                eligibleCount: survey.eligibleCount,
-                summaries: survey.summaries,
-              }
-            }
-          />
+          <SurveyAdminPanel seasonId={seasonId} survey={survey} />
           <SuperlativesAdminPanel seasonId={seasonId} poll={poll} />
         </div>
       </main>

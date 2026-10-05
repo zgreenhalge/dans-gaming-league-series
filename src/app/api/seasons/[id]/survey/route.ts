@@ -7,12 +7,9 @@ import { buildSurveyQuestions, validateCustomQuestions } from '@/lib/survey';
 /** Sends a season's post-season survey: the admin's custom questions followed by the core ones.
  *  One survey per season; it starts open. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
-
-  const access = await requireSeasonFeedbackAdmin(seasonId);
+  const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { questions?: unknown } | null;
   const custom = validateCustomQuestions(body?.questions);
@@ -41,12 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 /** Closes or reopens a season's survey (`{ open: boolean }`). Closing keeps every answer; players
  *  just can no longer submit or edit. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
-
-  const access = await requireSeasonFeedbackAdmin(seasonId);
+  const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { open?: unknown } | null;
   if (typeof body?.open !== 'boolean') return NextResponse.json({ error: 'open must be a boolean' }, { status: 400 });

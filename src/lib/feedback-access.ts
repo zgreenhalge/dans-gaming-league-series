@@ -1,8 +1,8 @@
-// Shared session gate for the post-season survey and the superlatives vote: the caller must be
-// signed in, the season must be a regular season, and the caller must have played in it. The admin
-// flag doesn't bypass the eligibility check — an admin who didn't play can set a survey up and read
-// its results but doesn't get a response of their own. Mirrors `season-roster-access.ts`'s shape
-// (one small gate file per access shape, returning the shared `AccessResult<T>`).
+// Session gates for the post-season survey and the superlatives vote. Both take the raw `[id]` route
+// segment and return the parsed `seasonId` with the gate's result, so a handler opens with one call
+// instead of its own parse/validate/gate preamble. The season must be a regular one. The admin flag
+// doesn't bypass the player gate's eligibility check — an admin who didn't play can set a survey up
+// and read its results but doesn't get a response of their own.
 
 import { requireSession } from './session';
 import { requireAdminAccess } from './admin-access';
@@ -11,15 +11,23 @@ import { getSeason, getSeasonPlayedPlayers } from './queries';
 import type { SeasonRosterEntry } from './queries';
 import type { AccessResult } from './access-control';
 
-export type SeasonFeedbackEligibility = AccessResult<{
+type SupabaseAdmin = ReturnType<typeof getAdminClient>;
+
+export type SeasonFeedbackAccess = AccessResult<{
+  seasonId: number;
+  supabaseAdmin: SupabaseAdmin;
   playerId: number;
   /** Everyone who played in the season — the valid superlative nominees. */
   eligible: SeasonRosterEntry[];
 }>;
 
-/** The access rules without the session read, so a Server Component page (which reads the session
- *  via `getSession()`) and a route handler (`requireSession()`) apply the identical check. */
-export async function checkSeasonFeedbackEligibility(seasonId: number, playerId: number | null | undefined): Promise<SeasonFeedbackEligibility> {
+/** Player gate: the caller must be signed in and have played in the season. */
+export async function requireSeasonFeedbackAccess(rawSeasonId: string): Promise<SeasonFeedbackAccess> {
+  const seasonId = Number(rawSeasonId);
+  if (!Number.isFinite(seasonId)) return { ok: false, status: 400, error: 'Invalid season id' };
+
+  const session = await requireSession();
+  const playerId = session?.user?.playerId;
   if (!playerId) return { ok: false, status: 401, error: 'Unauthorized' };
 
   const season = await getSeason(seasonId);
@@ -29,31 +37,20 @@ export async function checkSeasonFeedbackEligibility(seasonId: number, playerId:
   if (!eligible.some((p) => p.player_id === playerId)) {
     return { ok: false, status: 403, error: 'Only players who played this season can respond' };
   }
-  return { ok: true, playerId, eligible };
+  return { ok: true, seasonId, supabaseAdmin: getAdminClient(), playerId, eligible };
 }
 
-export type SeasonFeedbackAccess = AccessResult<{
-  supabaseAdmin: ReturnType<typeof getAdminClient>;
-  playerId: number;
-  eligible: SeasonRosterEntry[];
-}>;
+export type SeasonFeedbackAdminAccess = AccessResult<{ seasonId: number; supabaseAdmin: SupabaseAdmin }>;
 
-export async function requireSeasonFeedbackAccess(seasonId: number): Promise<SeasonFeedbackAccess> {
-  const session = await requireSession();
-  const eligibility = await checkSeasonFeedbackEligibility(seasonId, session?.user?.playerId);
-  if (!eligibility.ok) return eligibility;
-  return { ...eligibility, supabaseAdmin: getAdminClient() };
-}
+/** Admin gate for setting up and controlling a season's survey or superlatives. No eligibility
+ *  check — admins manage these for seasons they may not have played in. */
+export async function requireSeasonFeedbackAdmin(rawSeasonId: string): Promise<SeasonFeedbackAdminAccess> {
+  const seasonId = Number(rawSeasonId);
+  if (!Number.isFinite(seasonId)) return { ok: false, status: 400, error: 'Invalid season id' };
 
-export type SeasonFeedbackAdminAccess = AccessResult<{ supabaseAdmin: ReturnType<typeof getAdminClient> }>;
-
-/** Admin gate for setting up and controlling a season's survey or superlatives: the caller must be
- *  an admin and the season must be a regular one. No eligibility check — admins manage these for
- *  seasons they may not have played in. */
-export async function requireSeasonFeedbackAdmin(seasonId: number): Promise<SeasonFeedbackAdminAccess> {
   const access = await requireAdminAccess();
   if (!access.ok) return access;
   const season = await getSeason(seasonId);
   if (!season || season.is_gauntlet) return { ok: false, status: 404, error: 'Regular season not found' };
-  return { ok: true, supabaseAdmin: getAdminClient() };
+  return { ok: true, seasonId, supabaseAdmin: getAdminClient() };
 }

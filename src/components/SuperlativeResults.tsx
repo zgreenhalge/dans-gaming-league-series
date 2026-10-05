@@ -10,7 +10,7 @@ export function SuperlativeResultsPanel({ results }: { results: SuperlativeResul
   return (
     <div className="flex flex-col gap-6">
       <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        {results.voterCount} of {results.eligibleCount} players voted
+        {results.voterCount} {results.voterCount === 1 ? 'player' : 'players'} voted
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {withVotes.map((s) => {

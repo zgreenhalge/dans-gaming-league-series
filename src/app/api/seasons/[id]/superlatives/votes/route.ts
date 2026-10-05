@@ -8,12 +8,9 @@ import { validateSuperlativeVotes } from '@/lib/survey';
  *  left out has its vote cleared. Any player who played the season is a valid nominee, the voter
  *  included. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
-
-  const access = await requireSeasonFeedbackAccess(seasonId);
+  const access = await requireSeasonFeedbackAccess((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const poll = await getSuperlativePoll(seasonId);
   if (!poll || poll.superlatives.length === 0) return NextResponse.json({ error: 'No superlatives vote for this season' }, { status: 404 });

@@ -3,20 +3,12 @@ import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { getSuperlativePoll } from '@/lib/queries';
 import { validateSuperlativeTitle } from '@/lib/survey';
 
-async function adminSeasonId(params: Promise<{ id: string }>) {
-  const seasonId = Number((await params).id);
-  if (!Number.isFinite(seasonId)) return { error: NextResponse.json({ error: 'Invalid season id' }, { status: 400 }) };
-  const access = await requireSeasonFeedbackAdmin(seasonId);
-  if (!access.ok) return { error: NextResponse.json({ error: access.error }, { status: access.status }) };
-  return { seasonId, access };
-}
-
 /** Adds a superlative (`{ title }`) to a season's vote, creating the vote (closed) if this is the
  *  first one. Every player who played the season can be nominated for it. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await adminSeasonId(params);
-  if (ctx.error) return ctx.error;
-  const { seasonId, access } = ctx;
+  const access = await requireSeasonFeedbackAdmin((await params).id);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { title?: unknown } | null;
   const title = validateSuperlativeTitle(body?.title);
@@ -48,9 +40,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 /** Removes a superlative (`{ superlative_id }`) and every vote cast for it. */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await adminSeasonId(params);
-  if (ctx.error) return ctx.error;
-  const { seasonId, access } = ctx;
+  const access = await requireSeasonFeedbackAdmin((await params).id);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { superlative_id?: unknown } | null;
   const superlativeId = Number(body?.superlative_id);
@@ -68,9 +60,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
 /** Opens or closes voting (`{ open: boolean }`). A vote with no superlatives can't be opened. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await adminSeasonId(params);
-  if (ctx.error) return ctx.error;
-  const { seasonId, access } = ctx;
+  const access = await requireSeasonFeedbackAdmin((await params).id);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { open?: unknown } | null;
   if (typeof body?.open !== 'boolean') return NextResponse.json({ error: 'open must be a boolean' }, { status: 400 });

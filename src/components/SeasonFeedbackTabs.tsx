@@ -16,7 +16,7 @@ export function SeasonFeedbackTabs({ feedbackTabs, children }: { feedbackTabs: F
   const [rawTab, setTab] = useTabState(KEYS, 'season', 'view');
   const tabs: { key: Key; label: string }[] = [
     { key: 'season', label: 'Season' },
-    ...feedbackTabs.map(({ key, label }) => ({ key, label })),
+    ...feedbackTabs,
   ];
   const tab = resolveTab(rawTab, tabs);
 

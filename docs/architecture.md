@@ -409,12 +409,13 @@ tracks a `droppedPlayerIds` set as ephemeral UI state, and a dropped player's se
 
 ### Post-season survey and superlatives
 
-Both are per *regular* season (a gauntlet season id is a 404 for every route) and share one
+Both are per *regular* season (a gauntlet season id is a 404 for every API route) and share one
 eligibility rule: a player may respond if they appear on a played match (`isPlayedScore()`) in the
 season or its paired gauntlet — `getSeasonPlayedPlayers()` (`queries/seasons.ts`). A rostered player
 whose only matches are unplayed placeholders is not eligible, and being an admin neither grants nor
-removes eligibility. `checkSeasonFeedbackEligibility()` (`feedback-access.ts`) applies the rule for
-both the route gate and the player pages, so they can't disagree.
+removes eligibility. The route gate (`requireSeasonFeedbackAccess()`, `feedback-access.ts`) and the
+season page's tabs (`getSeasonFeedbackView()`) both read it from `getSeasonPlayedPlayers()`, which
+shares one cached lookup per request.
 
 The two are independent: an admin sets each up and opens/closes it from `/admin/seasons/feedback/[id]`.
 The survey is sent once with its question list fixed; the superlatives list can change until voting

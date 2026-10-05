@@ -23,7 +23,7 @@ export interface SurveyQuestionInput {
   prompt: string;
 }
 
-/** The questions every survey ends with, in order. Copied into `survey_questions` when a survey is
+/** The questions every survey ends with, in order. Copied into `surveys.questions` when a survey is
  *  created, so editing this list only affects surveys created afterward. */
 export const CORE_SURVEY_QUESTIONS: readonly SurveyQuestionInput[] = [
   { kind: 'rating', prompt: 'How did you feel about the length of games?' },

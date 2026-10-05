@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { tabCls } from '@/lib/util';
+import TabBar from './TabBar';
 
 /** A season-page tab whose body the server already rendered — the survey form, the superlatives
  *  ballot, or the superlatives results. */
@@ -22,7 +23,7 @@ export default function TopTabBar<T extends string>({
   setTab: (t: T) => void;
 }) {
   return (
-    <div role="tablist" className="flex flex-wrap border-b border-[var(--color-border-primary)] mb-6">
+    <TabBar bordered className="mb-6">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -34,6 +35,6 @@ export default function TopTabBar<T extends string>({
           {t.label}
         </button>
       ))}
-    </div>
+    </TabBar>
   );
 }

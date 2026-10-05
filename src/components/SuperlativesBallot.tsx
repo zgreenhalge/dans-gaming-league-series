@@ -7,7 +7,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { sendFeedbackRequest } from './feedbackRequest';
+import { ADMIN_PRIMARY_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 
 export function SuperlativesBallot({
   seasonId,
@@ -37,18 +38,12 @@ export function SuperlativesBallot({
 
   async function save() {
     await run(async () => {
-      const res = await fetch(`/api/seasons/${seasonId}/superlatives/votes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          votes: Object.entries(votes).map(([superlative_id, nominee_player_id]) => ({
-            superlative_id: Number(superlative_id),
-            nominee_player_id,
-          })),
-        }),
+      await sendFeedbackRequest('PUT', `/api/seasons/${seasonId}/superlatives/votes`, {
+        votes: Object.entries(votes).map(([superlative_id, nominee_player_id]) => ({
+          superlative_id: Number(superlative_id),
+          nominee_player_id,
+        })),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? 'Failed to save your votes.');
       setSaved(true);
       router.refresh();
     });
@@ -62,7 +57,7 @@ export function SuperlativesBallot({
           <select
             value={votes[s.id] ?? ''}
             onChange={(e) => setVote(s.id, e.target.value === '' ? null : Number(e.target.value))}
-            className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+            className={FORM_INPUT_CLS}
           >
             <option value="">No vote</option>
             {nominees.map((p) => (

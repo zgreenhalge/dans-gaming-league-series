@@ -7,12 +7,9 @@ import { validateSurveyAnswers } from '@/lib/survey';
  *  has one response per survey; calling this again while the survey is open replaces it — answers
  *  left out (or blanked) are cleared. One upsert, so a save is all-or-nothing. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
-
-  const access = await requireSeasonFeedbackAccess(seasonId);
+  const access = await requireSeasonFeedbackAccess((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { seasonId } = access;
 
   const survey = await getSurveyForSeason(seasonId);
   if (!survey) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });

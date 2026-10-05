@@ -6,28 +6,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackAdminRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { sendFeedbackRequest } from './feedbackRequest';
+import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
+import type { SuperlativeAdminResults } from '@/lib/queries';
 
-const INPUT_CLS =
-  'font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]';
-const SMALL_BUTTON_CLS =
-  'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40';
 
-export interface SuperlativesAdminData {
-  isOpen: boolean;
-  voterCount: number;
-  eligibleCount: number;
-  superlatives: {
-    id: number;
-    title: string;
-    totalVotes: number;
-    nominees: { player_id: number; player_name: string; votes: number }[];
-  }[];
-}
-
-export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; poll: SuperlativesAdminData | null }) {
+export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; poll: SuperlativeAdminResults | null }) {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const { busy, error, run } = useAsyncAction();
@@ -53,7 +38,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
             type="button"
             onClick={() => mutate(() => sendFeedbackRequest('PATCH', url, { open: !poll.isOpen }))}
             disabled={busy}
-            className={SMALL_BUTTON_CLS}
+            className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}
           >
             {poll.isOpen ? 'Close voting' : 'Open voting'}
           </button>
@@ -68,7 +53,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
               type="button"
               onClick={() => mutate(() => sendFeedbackRequest('DELETE', url, { superlative_id: s.id }))}
               disabled={busy}
-              className={SMALL_BUTTON_CLS}
+              className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}
             >
               Remove
             </button>
@@ -103,7 +88,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
           onChange={(e) => setTitle(e.target.value)}
           maxLength={MAX_SUPERLATIVE_TITLE_LENGTH}
           placeholder="New superlative, e.g. Best Teammate"
-          className={`${INPUT_CLS} flex-1 min-w-[220px]`}
+          className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
         />
         <button type="submit" disabled={busy || !title.trim()} className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}>
           Add superlative

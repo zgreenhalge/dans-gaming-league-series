@@ -7,8 +7,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackAdminRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { sendFeedbackRequest } from './feedbackRequest';
+import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import SectionLabel from './SectionLabel';
 import {
   CORE_SURVEY_QUESTIONS,
@@ -18,8 +18,8 @@ import {
   RATING_MIN,
   type SurveyQuestionInput,
   type SurveyQuestionKind,
-  type SurveyQuestionSummary,
 } from '@/lib/survey';
+import type { SurveyResults as SurveyResultsData } from '@/lib/queries';
 
 const KIND_LABEL: Record<SurveyQuestionKind, string> = {
   rating: '1–5 rating',
@@ -27,19 +27,8 @@ const KIND_LABEL: Record<SurveyQuestionKind, string> = {
   text: 'Free text',
 };
 
-const INPUT_CLS =
-  'font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]';
-const SMALL_BUTTON_CLS =
-  'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40';
 
-export interface SurveyAdminData {
-  isOpen: boolean;
-  responseCount: number;
-  eligibleCount: number;
-  summaries: SurveyQuestionSummary[];
-}
-
-export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; survey: SurveyAdminData | null }) {
+export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; survey: SurveyResultsData | null }) {
   return (
     <section className="flex flex-col gap-4">
       <div className="font-display text-[20px] font-semibold">Post-season survey</div>
@@ -77,16 +66,16 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
                 onChange={(e) => update(i, { prompt: e.target.value })}
                 maxLength={MAX_PROMPT_LENGTH}
                 placeholder="Question"
-                className={`${INPUT_CLS} flex-1 min-w-[220px]`}
+                className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
               />
-              <select value={q.kind} onChange={(e) => update(i, { kind: e.target.value as SurveyQuestionKind })} className={INPUT_CLS}>
+              <select value={q.kind} onChange={(e) => update(i, { kind: e.target.value as SurveyQuestionKind })} className={FORM_INPUT_CLS}>
                 {(Object.keys(KIND_LABEL) as SurveyQuestionKind[]).map((k) => (
                   <option key={k} value={k}>
                     {KIND_LABEL[k]}
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} className={SMALL_BUTTON_CLS}>
+              <button type="button" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
                 Remove
               </button>
             </div>
@@ -96,7 +85,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
           type="button"
           onClick={() => setCustom((prev) => [...prev, { kind: 'rating', prompt: '' }])}
           disabled={custom.length >= MAX_CUSTOM_QUESTIONS}
-          className={`${SMALL_BUTTON_CLS} mt-3`}
+          className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40 mt-3`}
         >
           + Add question
         </button>
@@ -126,7 +115,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
   );
 }
 
-function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyAdminData }) {
+function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyResultsData }) {
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
 
@@ -143,7 +132,7 @@ function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyA
         <span className="text-[var(--color-text-secondary)]">
           {survey.isOpen ? 'Open' : 'Closed'} · {survey.responseCount} of {survey.eligibleCount} players responded
         </span>
-        <button type="button" onClick={() => setOpen(!survey.isOpen)} disabled={busy} className={SMALL_BUTTON_CLS}>
+        <button type="button" onClick={() => setOpen(!survey.isOpen)} disabled={busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
           {survey.isOpen ? 'Close survey' : 'Reopen survey'}
         </button>
         {error && <span className="text-[var(--color-accent-red-fg)]">{error}</span>}

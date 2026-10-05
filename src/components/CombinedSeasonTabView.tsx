@@ -13,8 +13,8 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 // server-rendered and need no fetching here.
 type DataTab = 'regular' | 'gauntlet';
 type TopTab = DataTab | FeedbackTab['key'];
-const TOP_TABS: readonly TopTab[] = ['regular', 'gauntlet', 'survey', 'superlatives'];
 const NO_FEEDBACK_TABS: FeedbackTab[] = [];
+const TOP_TABS: readonly TopTab[] = ['regular', 'gauntlet', 'survey', 'superlatives'];
 
 type LightCache = { regular?: RegularSeasonLightView; gauntlet?: GauntletSeasonLightView };
 type StatsCache = { regular?: SeasonStatsView; gauntlet?: SeasonStatsView };
@@ -64,7 +64,7 @@ export default function CombinedSeasonTabView({
   const tabs: { key: TopTab; label: string }[] = [
     { key: 'regular', label: 'Regular Season' },
     { key: 'gauntlet', label: 'Gauntlet' },
-    ...feedbackTabs.map(({ key, label }) => ({ key, label })),
+    ...feedbackTabs,
   ];
   const topTab = resolveTab(rawTopTab, tabs);
   // Null while a feedback tab is showing — the data effects below have nothing to fetch for those.

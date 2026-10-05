@@ -54,6 +54,7 @@ export async function getPlayerSurveyAnswers(
 
 export interface SurveyResults {
   survey: Survey;
+  isOpen: boolean;
   responseCount: number;
   eligibleCount: number;
   summaries: SurveyQuestionSummary[];
@@ -74,6 +75,7 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   const answers = (responses ?? []).map((r) => r.answers as SurveyAnswers);
   return {
     survey,
+    isOpen: isSurveyOpen(survey),
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
@@ -107,19 +109,16 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
 }
 
-/** One player's own ballot, keyed by superlative id → nominee player id — for prefilling their editor. */
-export async function getPlayerSuperlativeVotes(seasonId: number, playerId: number): Promise<Record<number, number>> {
-  const { data: superlatives, error } = await supabase.from('superlatives').select('id').eq('season_id', seasonId);
-  if (error) throw error;
-  const ids = (superlatives ?? []).map((s) => s.id);
-  if (ids.length === 0) return {};
-
-  const { data: votes, error: votesErr } = await supabase
+/** One player's own ballot over the given superlatives, keyed by superlative id → nominee player id —
+ *  for prefilling their editor. */
+export async function getPlayerSuperlativeVotes(superlativeIds: number[], playerId: number): Promise<Record<number, number>> {
+  if (superlativeIds.length === 0) return {};
+  const { data: votes, error } = await supabase
     .from('superlative_votes')
     .select('superlative_id, nominee_player_id')
     .eq('voter_player_id', playerId)
-    .in('superlative_id', ids);
-  if (votesErr) throw votesErr;
+    .in('superlative_id', superlativeIds);
+  if (error) throw error;
   return Object.fromEntries((votes ?? []).map((v) => [v.superlative_id, v.nominee_player_id]));
 }
 
@@ -132,26 +131,28 @@ export interface SuperlativeResults {
   isOpen: boolean;
   /** Distinct players who cast at least one vote. */
   voterCount: number;
-  eligibleCount: number;
   superlatives: SuperlativeResult[];
 }
 
-async function tallyPoll(seasonId: number, poll: SuperlativePoll): Promise<SuperlativeResults> {
-  const [votes, eligible, playersById] = await Promise.all([
+/** The admin view adds how many players were eligible to vote. */
+export interface SuperlativeAdminResults extends SuperlativeResults {
+  eligibleCount: number;
+}
+
+async function tallyPoll(poll: SuperlativePoll): Promise<SuperlativeResults> {
+  const [votes, playersById] = await Promise.all([
     batchedIn<{ superlative_id: number; voter_player_id: number; nominee_player_id: number }>(
       'superlative_votes',
       'superlative_id',
       poll.superlatives.map((s) => s.id),
       'superlative_id, voter_player_id, nominee_player_id',
     ),
-    getSeasonPlayedPlayers(seasonId),
     getPlayersById(),
   ]);
 
   return {
     isOpen: poll.isOpen,
     voterCount: new Set(votes.map((v) => v.voter_player_id)).size,
-    eligibleCount: eligible.length,
     superlatives: poll.superlatives.map((s) => {
       const nominees = tallyVotes(votes.filter((v) => v.superlative_id === s.id).map((v) => v.nominee_player_id)).map(
         (t) => ({ player_id: t.player_id, player_name: playersById.get(t.player_id)?.name ?? `Player ${t.player_id}`, votes: t.votes }),
@@ -161,10 +162,13 @@ async function tallyPoll(seasonId: number, poll: SuperlativePoll): Promise<Super
   };
 }
 
-/** Anonymised vote tallies per superlative, or null if none have been set up. */
-export async function getSuperlativeResults(seasonId: number): Promise<SuperlativeResults | null> {
+/** Anonymised vote tallies per superlative plus the eligible-voter count, or null if none have been
+ *  set up. */
+export async function getSuperlativeResults(seasonId: number): Promise<SuperlativeAdminResults | null> {
   const poll = await getSuperlativePoll(seasonId);
-  return poll ? tallyPoll(seasonId, poll) : null;
+  if (!poll) return null;
+  const [results, eligible] = await Promise.all([tallyPoll(poll), getSeasonPlayedPlayers(seasonId)]);
+  return { ...results, eligibleCount: eligible.length };
 }
 
 /** What the season page's Survey and Superlatives tabs show a given viewer. */
@@ -181,31 +185,38 @@ export interface SeasonFeedbackView {
 
 /** Resolves both feedback tabs for one viewer (`playerId` null = signed out). Cheap open-state reads
  *  run first so a season with nothing open never pays for the eligibility lookup, and a season with
- *  nothing configured costs two small queries. */
+ *  nothing configured costs two small queries. A closed vote's public tally skips the eligibility
+ *  lookup entirely. */
 export async function getSeasonFeedbackView(seasonId: number, playerId: number | null): Promise<SeasonFeedbackView> {
   const [survey, poll] = await Promise.all([getSurveyForSeason(seasonId), getSuperlativePoll(seasonId)]);
   const surveyOpen = survey && isSurveyOpen(survey) ? survey : null;
   const ballotOpen = poll?.isOpen && poll.superlatives.length > 0 ? poll : null;
 
-  const eligible = playerId != null && (surveyOpen || ballotOpen) ? await getSeasonPlayedPlayers(seasonId) : [];
-  const viewerEligible = playerId != null && eligible.some((p) => p.player_id === playerId);
-
   const view: SeasonFeedbackView = { survey: null, superlatives: null };
-  if (surveyOpen && viewerEligible) {
-    const mine = await getPlayerSurveyAnswers(surveyOpen.id, playerId!);
-    view.survey = { questions: surveyOpen.questions, ...mine };
-  }
-  if (ballotOpen) {
-    if (viewerEligible) {
+
+  if (surveyOpen || ballotOpen) {
+    if (playerId == null) return view;
+    const eligible = await getSeasonPlayedPlayers(seasonId);
+    if (!eligible.some((p) => p.player_id === playerId)) return view;
+
+    const [mine, votes] = await Promise.all([
+      surveyOpen ? getPlayerSurveyAnswers(surveyOpen.id, playerId) : null,
+      ballotOpen ? getPlayerSuperlativeVotes(ballotOpen.superlatives.map((s) => s.id), playerId) : null,
+    ]);
+    if (surveyOpen && mine) view.survey = { questions: surveyOpen.questions, ...mine };
+    if (ballotOpen && votes) {
       view.superlatives = {
         mode: 'ballot',
         superlatives: ballotOpen.superlatives,
         nominees: eligible.map((p) => ({ id: p.player_id, name: p.player_name })),
-        votes: await getPlayerSuperlativeVotes(seasonId, playerId!),
+        votes,
       };
     }
-  } else if (poll && poll.superlatives.length > 0) {
-    const results = await tallyPoll(seasonId, poll);
+    return view;
+  }
+
+  if (poll && poll.superlatives.length > 0) {
+    const results = await tallyPoll(poll);
     if (results.superlatives.some((s) => s.totalVotes > 0)) view.superlatives = { mode: 'results', results };
   }
   return view;
