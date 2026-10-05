@@ -13,7 +13,7 @@ import {
   type SurveyQuestionSummary,
 } from '../survey';
 import { getPlayersById } from './player';
-import { getSeasonPlayedPlayers } from './seasons';
+import { getSeasonPlayedPlayers, hasPlayedSeason } from './seasons';
 import { batchedIn } from './_shared';
 
 export interface Survey {
@@ -27,7 +27,7 @@ export function isSurveyOpen(survey: Survey): boolean {
   return survey.closed_at == null;
 }
 
-/** A season's survey with its questions in display order, or null if none has been sent. */
+/** A season's survey with its questions in display order, or null if none has been opened. */
 export async function getSurveyForSeason(seasonId: number): Promise<Survey | null> {
   const { data, error } = await supabase
     .from('surveys')
@@ -61,7 +61,7 @@ export interface SurveyResults {
   summaries: SurveyQuestionSummary[];
 }
 
-/** Anonymised results for a season's survey, or null if none has been sent. */
+/** Anonymised results for a season's survey, or null if none has been opened. */
 export async function getSurveyResults(seasonId: number): Promise<SurveyResults | null> {
   const survey = await getSurveyForSeason(seasonId);
   if (!survey) return null;
@@ -184,8 +184,8 @@ export interface SurveyTabView {
 export async function getSeasonSurveyView(seasonId: number, playerId: number | null): Promise<SurveyTabView | null> {
   const survey = await getSurveyForSeason(seasonId);
   if (!survey || !isSurveyOpen(survey) || playerId == null) return null;
-  if (!(await getSeasonPlayedPlayers(seasonId)).some((p) => p.player_id === playerId)) return null;
-  return { questions: survey.questions, ...(await getPlayerSurveyAnswers(survey.id, playerId)) };
+  const [played, mine] = await Promise.all([getSeasonPlayedPlayers(seasonId), getPlayerSurveyAnswers(survey.id, playerId)]);
+  return hasPlayedSeason(played, playerId) ? { questions: survey.questions, ...mine } : null;
 }
 
 /** What the season page's Superlatives tab shows a viewer: a ballot while voting is open and they
@@ -205,12 +205,15 @@ export async function getSeasonSuperlativesView(seasonId: number, playerId: numb
   }
 
   if (playerId == null) return null;
-  const eligible = await getSeasonPlayedPlayers(seasonId);
-  if (!eligible.some((p) => p.player_id === playerId)) return null;
+  const [played, votes] = await Promise.all([
+    getSeasonPlayedPlayers(seasonId),
+    getPlayerSuperlativeVotes(poll.superlatives.map((s) => s.id), playerId),
+  ]);
+  if (!hasPlayedSeason(played, playerId)) return null;
   return {
     mode: 'ballot',
     superlatives: poll.superlatives,
-    nominees: eligible.map((p) => ({ id: p.player_id, name: p.player_name })),
-    votes: await getPlayerSuperlativeVotes(poll.superlatives.map((s) => s.id), playerId),
+    nominees: played.map((p) => ({ id: p.player_id, name: p.player_name })),
+    votes,
   };
 }

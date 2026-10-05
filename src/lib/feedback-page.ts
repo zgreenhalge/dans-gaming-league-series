@@ -1,8 +1,5 @@
-// Shared lookup for the admin survey and superlatives pages: resolves the page's `[id]` segment to
-// its regular season. A gauntlet shares its regular season's survey and superlatives, so a gauntlet
-// id redirects to the paired regular season's page (`basePath` + its id); anything else that isn't a
-// regular season is a 404. Calls Next's `notFound()`/`redirect()`, which throw — it only returns a
-// season.
+// Resolves an admin survey/superlatives page's `[id]` to its regular season. A gauntlet id redirects
+// to the paired regular season (`basePath` + its id); anything else that isn't one is a 404.
 
 import { notFound, redirect } from 'next/navigation';
 import { getLinkedRegularSeason, getSeason } from './queries';

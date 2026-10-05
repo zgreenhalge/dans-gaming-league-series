@@ -1,8 +1,7 @@
 'use client';
 
-// The open/close control shared by the survey and superlatives admin panels, so the two flows read
-// and look the same: a status line ("Open · 3 of 14 players voted") and one action — opening is the
-// primary (green) button, closing the small bordered one.
+// Status line plus one open/close button, shared by the survey and superlatives admin panels.
+// Opening is the primary button, closing the small bordered one.
 
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './ArmedConfirmButton';
 

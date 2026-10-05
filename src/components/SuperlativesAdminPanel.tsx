@@ -13,7 +13,6 @@ import { RemoveXButton } from './RemoveXButton';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
 import type { SuperlativeAdminResults } from '@/lib/queries';
 
-
 export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; poll: SuperlativeAdminResults | null }) {
   const router = useRouter();
   const [title, setTitle] = useState('');

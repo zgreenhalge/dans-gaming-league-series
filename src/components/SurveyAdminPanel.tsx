@@ -1,6 +1,6 @@
 'use client';
 
-// Admin view of a season's post-season survey: before one is sent, a builder for the custom
+// Admin view of a season's post-season survey: before one is opened, a builder for the custom
 // questions (shown ahead of the fixed core questions); afterward, the open/close control and the
 // anonymised results.
 

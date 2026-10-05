@@ -204,6 +204,12 @@ export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
 }
 
+/** Whether `playerId` is among a season's played players (`getSeasonPlayedPlayers()`'s result) — the one
+ *  eligibility predicate the survey and superlatives gates and views all share. */
+export function hasPlayedSeason(played: SeasonRosterEntry[], playerId: number): boolean {
+  return played.some((p) => p.player_id === playerId);
+}
+
 export interface RegularSeasonLightView {
   schedule: WeekWithMatches[];
   h2hData: H2HData;
