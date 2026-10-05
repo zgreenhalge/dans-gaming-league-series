@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { activateSeason } from '@/lib/season-lifecycle';
+import { hasMapPool } from '@/lib/season-map-pool';
 
 /**
  * Regular-season status transitions. Only UPCOMING -> ACTIVE ("go live") is supported today —
@@ -38,6 +39,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (season.status !== 'UPCOMING') {
     return NextResponse.json({ error: `Season is ${season.status}, not UPCOMING` }, { status: 409 });
+  }
+
+  if (!hasMapPool(season.map_pool)) {
+    return NextResponse.json({ error: 'Set the season’s map pool before going live' }, { status: 409 });
   }
 
   try {
