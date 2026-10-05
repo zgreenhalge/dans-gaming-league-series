@@ -1,0 +1,130 @@
+'use client';
+
+// The player-facing post-season survey. Answers are keyed by question id; every question is
+// optional, and clicking a selected rating/yes-no choice again clears it. Saving again edits the
+// player's existing response (see `PUT /api/seasons/[id]/survey/response`).
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAsyncAction } from './useAsyncAction';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { RATING_LABELS, RATING_MAX, RATING_MIN, MAX_TEXT_ANSWER_LENGTH, type SurveyQuestionKind } from '@/lib/survey';
+
+type AnswerValue = number | boolean | string;
+
+export interface SurveyFormQuestion {
+  id: number;
+  kind: SurveyQuestionKind;
+  prompt: string;
+}
+
+const CHOICE_CLS =
+  'tracked text-[11px] font-semibold px-3 py-2 border transition-colors';
+const CHOICE_IDLE =
+  'border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]';
+const CHOICE_ACTIVE =
+  'border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)]';
+
+export function SurveyForm({
+  seasonId,
+  questions,
+  initialAnswers,
+  responded,
+}: {
+  seasonId: number;
+  questions: SurveyFormQuestion[];
+  initialAnswers: Record<number, AnswerValue>;
+  responded: boolean;
+}) {
+  const router = useRouter();
+  const [answers, setAnswers] = useState<Record<number, AnswerValue>>(initialAnswers);
+  const [saved, setSaved] = useState(false);
+  const { busy, error, run } = useAsyncAction();
+
+  function setAnswer(id: number, value: AnswerValue | undefined) {
+    setSaved(false);
+    setAnswers((prev) => {
+      const next = { ...prev };
+      if (value === undefined) delete next[id];
+      else next[id] = value;
+      return next;
+    });
+  }
+
+  async function save() {
+    await run(async () => {
+      const res = await fetch(`/api/seasons/${seasonId}/survey/response`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? 'Failed to save your answers.');
+      setSaved(true);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      {questions.map((q, i) => {
+        const value = answers[q.id];
+        return (
+          <div key={q.id} className="flex flex-col gap-3">
+            <div className="font-display text-[16px] font-semibold">
+              <span className="font-mono text-[11px] text-[var(--color-text-secondary)] mr-2">{i + 1}.</span>
+              {q.prompt}
+            </div>
+            {q.kind === 'rating' && (
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: RATING_MAX - RATING_MIN + 1 }, (_, k) => RATING_MIN + k).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setAnswer(q.id, value === n ? undefined : n)}
+                    aria-pressed={value === n}
+                    className={`${CHOICE_CLS} ${value === n ? CHOICE_ACTIVE : CHOICE_IDLE}`}
+                  >
+                    {n} · {RATING_LABELS[n]}
+                  </button>
+                ))}
+              </div>
+            )}
+            {q.kind === 'yes_no' && (
+              <div className="flex gap-2">
+                {[true, false].map((choice) => (
+                  <button
+                    key={String(choice)}
+                    type="button"
+                    onClick={() => setAnswer(q.id, value === choice ? undefined : choice)}
+                    aria-pressed={value === choice}
+                    className={`${CHOICE_CLS} ${value === choice ? CHOICE_ACTIVE : CHOICE_IDLE}`}
+                  >
+                    {choice ? 'Yes' : 'No'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {q.kind === 'text' && (
+              <textarea
+                value={typeof value === 'string' ? value : ''}
+                onChange={(e) => setAnswer(q.id, e.target.value)}
+                maxLength={MAX_TEXT_ANSWER_LENGTH}
+                rows={4}
+                className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+              />
+            )}
+          </div>
+        );
+      })}
+
+      <div className="flex items-center gap-4">
+        <button type="button" onClick={save} disabled={busy} className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}>
+          {busy ? 'Saving…' : responded || saved ? 'Update Answers' : 'Submit Survey'}
+        </button>
+        {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
+        {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      </div>
+    </div>
+  );
+}

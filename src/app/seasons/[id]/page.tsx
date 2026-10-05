@@ -16,6 +16,7 @@ import {
   getLinkedRegularSeason,
   getRegularSeasonLightView,
   getGauntletSeasonLightView,
+  getPlayerFeedbackStatus,
   type RegularSeasonLightView,
   type GauntletSeasonLightView,
   type GauntletRound,
@@ -28,6 +29,7 @@ import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
+import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { authOptions } from '@/lib/authOptions';
 import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
@@ -251,7 +253,7 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialLight, leaderboard, matchSummaries] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialLight, leaderboard, matchSummaries, feedbackStatus] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
@@ -261,6 +263,7 @@ export default async function SeasonPage({
       : getRegularSeasonLightView(seasonId, seasonNumber, playersById),
     leaderboardPromise,
     matchSummariesPromise,
+    currentPlayerId != null ? getPlayerFeedbackStatus(seasonId, currentPlayerId) : Promise.resolve(null),
   ]);
 
   // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
@@ -335,6 +338,7 @@ export default async function SeasonPage({
             {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
           </div>
         )}
+        <FeedbackBanner seasonId={season.id} status={feedbackStatus} />
         <Suspense>
           <UrlStateProvider>
             {showGauntletTab && linkedGauntlet ? (

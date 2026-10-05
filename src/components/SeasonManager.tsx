@@ -130,6 +130,14 @@ export function SeasonManager({
                       </div>
                     )}
                   </div>
+                  {!s.isGauntlet && s.status !== 'UPCOMING' && (
+                    <Link
+                      href={`/admin/seasons/feedback/${s.id}`}
+                      className="shrink-0 tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+                    >
+                      Feedback
+                    </Link>
+                  )}
                   {s.status === 'UPCOMING' && !s.isGauntlet && (
                     <div className="shrink-0 flex items-center gap-3">
                       <MarkSeasonActiveButton seasonId={s.id} canEdit seasonStatus={s.status} />
