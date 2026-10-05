@@ -8,6 +8,7 @@ import {
   getSeasonLeaderboard,
   getSeasonMatchSummaries,
   getSeasonRoster,
+  getKnownMapNames,
   getPlayersById,
   hasSeasonScheduleDraft,
   getGauntletBracketShape,
@@ -27,6 +28,7 @@ import { UrlStateProvider } from '@/components/UrlStateProvider';
 import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
+import { SeasonMapPoolPanel } from '@/components/SeasonMapPoolPanel';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
@@ -255,11 +257,12 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialLight, leaderboard, matchSummaries, feedbackView] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, knownMaps, initialLight, leaderboard, matchSummaries, feedbackView] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
     isUpcoming ? getSeasonRoster(seasonId, playersById) : Promise.resolve([]),
+    isUpcoming && isAdmin ? getKnownMapNames() : Promise.resolve([]),
     initialView === 'gauntlet' && linkedGauntlet
       ? getGauntletSeasonLightView(linkedGauntlet.id, seasonNumber, playersById)
       : getRegularSeasonLightView(seasonId, seasonNumber, playersById),
@@ -329,6 +332,16 @@ export default async function SeasonPage({
               seasonStatus={season.status}
             />
           </div>
+          {isUpcoming && (
+            <div className="mt-2">
+              <SeasonMapPoolPanel
+                seasonId={season.id}
+                mapPool={season.map_pool}
+                knownMaps={knownMaps}
+                canEdit={isAdmin}
+              />
+            </div>
+          )}
         </div>
         {isUpcoming && (
           <div className="mb-10 flex flex-col gap-3">

@@ -1,6 +1,6 @@
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateSeasonForm } from '@/components/CreateSeasonForm';
-import { getSeasons, getMapLookup } from '@/lib/queries';
+import { getSeasons, getKnownMapNames } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 
 export const metadata = {
@@ -10,13 +10,13 @@ export const metadata = {
 
 /**
  * Its own page rather than an inline panel in the admin console's Manage -> Season view (issue
- * #262) — season creation is a deliberate, occasional, multi-field flow (map pool + new-map entry),
+ * #262) — season creation is a deliberate, occasional, multi-field flow (optional map pool + new-map entry),
  * not a quick action that belongs collapsed alongside a season list.
  */
 // Admin gate lives in this route group's layout.tsx (#336) — this page doesn't need the session
 // itself.
 export default async function NewSeasonPage() {
-  const [seasons, mapLookup] = await Promise.all([getSeasons(), getMapLookup()]);
+  const [seasons, knownMaps] = await Promise.all([getSeasons(), getKnownMapNames()]);
 
   let maxNum = 0;
   for (const s of seasons) {
@@ -25,14 +25,6 @@ export default async function NewSeasonPage() {
     if (n !== null && n > maxNum) maxNum = n;
   }
   const nextName = `Season ${maxNum + 1} Regular Season`;
-
-  const knownMaps = new Set<string>(Object.keys(mapLookup));
-  for (const s of seasons) {
-    for (const m of s.map_pool ?? []) {
-      knownMaps.add(m.trim().toLowerCase());
-    }
-  }
-  const sortedMaps = Array.from(knownMaps).sort();
 
   return (
     <div className="min-h-screen">
@@ -49,10 +41,10 @@ export default async function NewSeasonPage() {
             Create Season
           </div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            This will create <span className="text-[var(--color-text-primary)] font-semibold">{nextName}</span> with status UPCOMING.
+            This will create <span className="text-[var(--color-text-primary)] font-semibold">{nextName}</span> with status UPCOMING. Signups can open without a map pool; set it later from the season page.
           </div>
         </div>
-        <CreateSeasonForm knownMaps={sortedMaps} />
+        <CreateSeasonForm knownMaps={knownMaps} />
       </main>
     </div>
   );
