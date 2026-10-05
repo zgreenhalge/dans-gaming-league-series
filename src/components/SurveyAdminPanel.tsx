@@ -76,7 +76,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
                   </option>
                 ))}
               </select>
-              <RemoveXButton label="Remove question" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} />
+              <RemoveXButton label="Remove question" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} disabled={busy} />
             </div>
           ))}
         </div>
