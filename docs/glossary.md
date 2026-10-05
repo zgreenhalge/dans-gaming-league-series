@@ -109,7 +109,8 @@ so you don't have to reverse-engineer them from scratch each time.
   buy-in, map pool size/quality, league overall, interest in returning, comments); superlatives are
   admin-chosen awards ("Best Teammate") each voted on by the players, with any player who played the
   season nominable. Only players who played (a played match in the season or its paired gauntlet)
-  may respond, once each, editable while open; results are anonymous. See
+  may respond, once each, editable while open; results are anonymous. They appear as Survey and
+  Superlatives tabs on the season page (superlative results are public once voting closes). See
   [`architecture.md`](./architecture.md#post-season-survey-and-superlatives).
 - **Pod** — the atomic unit of a gauntlet bracket: 4 players, 2 games, two distinct partner
   pairings (guaranteeing exactly one 2-0 and one 0-2 regardless of results). A pod's
@@ -194,7 +195,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Played match's own H2H tab | `src/components/MatchH2H.tsx` |
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
 | Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
-| Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts`, `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/seasons/[id]/survey/`, `src/app/seasons/[id]/superlatives/`, `src/app/admin/seasons/feedback/[id]/`, `src/components/Survey*.tsx` / `Superlatives*.tsx` / `FeedbackBanner.tsx` |
+| Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts`, `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/feedback/[id]/`, `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `FeedbackBanner.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
 | Pages (routes) | `src/app/**` — see the route table in [`architecture.md`](./architecture.md) |
 | Historical CSV ingestion (Python, not deployed) | `ingestion/` |

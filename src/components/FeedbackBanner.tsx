@@ -1,8 +1,9 @@
 // Season-page banner asking a signed-in player who played the season to take its open survey and/or
-// cast their superlatives votes. Renders nothing when neither is open (the caller passes null).
+// cast their superlatives votes — each link opens the matching tab. Renders nothing when the viewer
+// has nothing open to answer.
 
 import Link from 'next/link';
-import type { PlayerFeedbackStatus } from '@/lib/queries';
+import type { SeasonFeedbackView } from '@/lib/queries';
 
 function Ask({ href, label, answered }: { href: string; label: string; answered: boolean }) {
   return (
@@ -15,13 +16,14 @@ function Ask({ href, label, answered }: { href: string; label: string; answered:
   );
 }
 
-export function FeedbackBanner({ seasonId, status }: { seasonId: number; status: PlayerFeedbackStatus | null }) {
-  if (!status) return null;
+export function FeedbackBanner({ seasonId, view }: { seasonId: number; view: SeasonFeedbackView }) {
+  const ballot = view.superlatives?.mode === 'ballot' ? view.superlatives : null;
+  if (!view.survey && !ballot) return null;
   return (
     <div className="mb-8 flex flex-col gap-2">
-      {status.survey && <Ask href={`/seasons/${seasonId}/survey`} label="Post-season survey" answered={status.survey.answered} />}
-      {status.superlatives && (
-        <Ask href={`/seasons/${seasonId}/superlatives`} label="Vote on the season's superlatives" answered={status.superlatives.answered} />
+      {view.survey && <Ask href={`/seasons/${seasonId}?view=survey`} label="Post-season survey" answered={view.survey.responded} />}
+      {ballot && (
+        <Ask href={`/seasons/${seasonId}?view=superlatives`} label="Vote on the season's superlatives" answered={Object.keys(ballot.votes).length > 0} />
       )}
     </div>
   );

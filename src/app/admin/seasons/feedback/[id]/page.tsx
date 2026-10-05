@@ -1,8 +1,8 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { SurveyAdminPanel } from '@/components/SurveyAdminPanel';
 import { SuperlativesAdminPanel } from '@/components/SuperlativesAdminPanel';
-import { getSeason, getSurveyResults, getSuperlativeResults, isSurveyOpen } from '@/lib/queries';
+import { getSeason, getLinkedRegularSeason, getSurveyResults, getSuperlativeResults, isSurveyOpen } from '@/lib/queries';
 import { seasonTitle } from '@/lib/util';
 
 export const metadata = {
@@ -17,12 +17,15 @@ export default async function SeasonFeedbackPage({ params }: { params: Promise<{
   const seasonId = Number((await params).id);
   if (!Number.isFinite(seasonId)) notFound();
 
-  const [season, survey, poll] = await Promise.all([
-    getSeason(seasonId),
-    getSurveyResults(seasonId),
-    getSuperlativeResults(seasonId),
-  ]);
-  if (!season || season.is_gauntlet) notFound();
+  const season = await getSeason(seasonId);
+  if (!season) notFound();
+  // A gauntlet shares its regular season's survey and superlatives — send its id to the paired one.
+  if (season.is_gauntlet) {
+    const linked = await getLinkedRegularSeason(season.name);
+    if (linked) redirect(`/admin/seasons/feedback/${linked.id}`);
+    notFound();
+  }
+  const [survey, poll] = await Promise.all([getSurveyResults(seasonId), getSuperlativeResults(seasonId)]);
 
   return (
     <div className="min-h-screen">
