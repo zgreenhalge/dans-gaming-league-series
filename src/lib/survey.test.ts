@@ -90,6 +90,10 @@ test('validateSuperlativeVotes checks superlatives, nominees, and one vote per s
     false,
   );
   assert.equal(validateSuperlativeVotes([1], [10], 'x').ok, false);
+  // Ids are not coerced: a boolean, string, or array never stands in for a real id.
+  assert.equal(validateSuperlativeVotes([1], [10], [{ superlative_id: true, nominee_player_id: 10 }]).ok, false);
+  assert.equal(validateSuperlativeVotes([1], [10], [{ superlative_id: 1, nominee_player_id: '10' }]).ok, false);
+  assert.equal(validateSuperlativeVotes([1], [10], [{ superlative_id: [1], nominee_player_id: 10 }]).ok, false);
 });
 
 test('tallyVotes orders by votes, then player id', () => {

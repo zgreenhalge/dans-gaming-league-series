@@ -20,6 +20,7 @@ import {
   deriveRwr,
   deriveAdr,
   parseMatchId,
+  parseSeasonId,
   weekWindow,
   matchLabel,
   seasonTitle,
@@ -354,3 +355,9 @@ test('finalRoundNumberOf: returns the final pod\'s round_number, or null when no
 });
 
 report();
+
+// --- parseSeasonId: same contract as parseMatchId ---
+test('parseSeasonId: accepts a positive integer string; rejects the rest', () => {
+  assert.equal(parseSeasonId('12'), 12);
+  for (const bad of ['0', '-1', '1.5', 'abc', '', ' ', '2147483648']) assert.equal(parseSeasonId(bad), null);
+});

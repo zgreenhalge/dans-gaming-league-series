@@ -39,10 +39,8 @@ export function SuperlativesBallot({
   async function save() {
     await run(async () => {
       await sendFeedbackRequest('PUT', `/api/seasons/${seasonId}/superlatives/votes`, {
-        votes: Object.entries(votes).map(([superlative_id, nominee_player_id]) => ({
-          superlative_id: Number(superlative_id),
-          nominee_player_id,
-        })),
+        // Skips a vote for a superlative the admin has since removed, which the server would reject.
+        votes: superlatives.flatMap((s) => (votes[s.id] != null ? [{ superlative_id: s.id, nominee_player_id: votes[s.id] }] : [])),
       });
       setSaved(true);
       router.refresh();

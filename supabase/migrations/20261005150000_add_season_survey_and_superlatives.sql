@@ -3,7 +3,8 @@
 -- respond, once each, and can edit their answers while the form is open.
 --
 -- `survey_responses.player_id` / `superlative_votes.voter_player_id` exist to enforce
--- one-submission-per-player and to prefill that same player's editor. No results query selects them.
+-- one-submission-per-player and to prefill that same player's editor. No results query returns them
+-- (the vote tally reads the voter id only to count distinct voters).
 
 -- ── Survey ──────────────────────────────────────────────────────────────────────────────────────
 

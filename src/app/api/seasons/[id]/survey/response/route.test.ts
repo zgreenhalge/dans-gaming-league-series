@@ -123,4 +123,20 @@ test('season feedback view: the survey tab exists only while open, for a viewer 
   resetFeedbackFixture();
 });
 
+test('season feedback view: a closed vote\'s public results show even while the survey is open', async () => {
+  const db = installFeedbackFixture(ALICE_ID);
+  seedSurvey(db);
+  db.superlative_polls.push({ season_id: REGULAR_SEASON_ID, is_open: false });
+  db.superlatives.push({ id: 1, season_id: REGULAR_SEASON_ID, position: 1, title: 'MVP' });
+  db.superlative_votes.push({ id: 1, superlative_id: 1, voter_player_id: ALICE_ID, nominee_player_id: BOB_ID });
+
+  for (const viewer of [ALICE_ID, CARA_ID, null]) {
+    const view = await getSeasonFeedbackView(REGULAR_SEASON_ID, viewer);
+    assert.equal(view.superlatives?.mode, 'results');
+  }
+  assert.ok((await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID)).survey);
+  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, CARA_ID)).survey, null);
+  resetFeedbackFixture();
+});
+
 report();

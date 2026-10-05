@@ -128,13 +128,26 @@ export function groupByMap<T>(
   return buckets;
 }
 
+// Postgres `integer` ceiling — an id beyond it can't exist and would error in the query instead of
+// reading as "not found".
+const MAX_INT4 = 2_147_483_647;
+
+function parsePositiveId(id: string): number | null {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 && n <= MAX_INT4 ? n : null;
+}
+
 /**
  * Parse a route's `[id]` segment into a positive integer match id, or `null` if it isn't one.
  * Shared by every match-scoped API route so the param contract is identical everywhere.
  */
 export function parseMatchId(id: string): number | null {
-  const n = Number(id);
-  return Number.isInteger(n) && n > 0 ? n : null;
+  return parsePositiveId(id);
+}
+
+/** `parseMatchId()`'s season-scoped counterpart — same contract, for a `[id]` season segment. */
+export function parseSeasonId(id: string): number | null {
+  return parsePositiveId(id);
 }
 
 export function fmtWindowDate(d: Date): string {

@@ -45,8 +45,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { superlative_id?: unknown } | null;
-  const superlativeId = Number(body?.superlative_id);
-  if (!Number.isFinite(superlativeId)) return NextResponse.json({ error: 'superlative_id is required' }, { status: 400 });
+  const superlativeId = body?.superlative_id;
+  if (typeof superlativeId !== 'number') return NextResponse.json({ error: 'superlative_id is required' }, { status: 400 });
 
   const poll = await getSuperlativePoll(seasonId);
   if (!poll?.superlatives.some((s) => s.id === superlativeId)) {

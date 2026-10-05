@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
-import { resolveTab, useTabState } from './useTabState';
+import { useTabState } from './useTabState';
 import TopTabBar, { type FeedbackTab } from './TopTabBar';
 import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
 import type { BracketPod, RegularSeasonLightView, GauntletSeasonLightView, SeasonStatsView } from '@/lib/queries';
@@ -66,7 +66,8 @@ export default function CombinedSeasonTabView({
     { key: 'gauntlet', label: 'Gauntlet' },
     ...feedbackTabs,
   ];
-  const topTab = resolveTab(rawTopTab, tabs);
+  // A URL naming a feedback tab this viewer doesn't have falls back to the server's chosen view.
+  const topTab = tabs.some((t) => t.key === rawTopTab) ? rawTopTab : initialView;
   // Null while a feedback tab is showing — the data effects below have nothing to fetch for those.
   const dataTab: DataTab | null = topTab === 'regular' || topTab === 'gauntlet' ? topTab : null;
   const [subTab, setSubTab] = useTabState(SEASON_TABS, 'leaderboard');

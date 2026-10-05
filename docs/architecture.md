@@ -443,11 +443,11 @@ Survey and superlatives belong to the regular season; a gauntlet shares them. A 
 page and its admin feedback page both redirect to the paired regular season, and the API routes take
 the regular season's id.
 
-**Anonymity.** Results queries aggregate by question or superlative and never select the
-responder/voter id, and `summarizeSurvey()`/`tallyVotes()` (`src/lib/survey.ts`) take only answer
+**Anonymity.** Results queries aggregate by question or superlative and never return the
+responder/voter id (the vote tally reads the voter id only to count distinct voters), and `summarizeSurvey()`/`tallyVotes()` (`src/lib/survey.ts`) take only answer
 values — so no results view can show who answered what. Those id columns sit in ordinary tables, so
 protecting them from direct API reads is the repo-wide RLS rollout's job, same as every other table.
-Any new read path for results must keep selecting around them.
+Any new read path for results must keep returning aggregates only.
 
 ### Season status lifecycle
 

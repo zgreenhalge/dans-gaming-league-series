@@ -194,10 +194,11 @@ export function validateSuperlativeVotes(
   const votes: SuperlativeVoteInput[] = [];
   for (const raw of input) {
     const v = raw as { superlative_id?: unknown; nominee_player_id?: unknown } | null;
-    const superlativeId = Number(v?.superlative_id);
-    const nomineeId = Number(v?.nominee_player_id);
-    if (!validSuperlatives.has(superlativeId)) return { ok: false, error: 'Unknown superlative' };
-    if (!validNominees.has(nomineeId)) return { ok: false, error: 'Nominee did not play this season' };
+    // Ids must arrive as numbers — `Number()` would turn `true`, `null`, or `[1]` into a real id.
+    const superlativeId = v?.superlative_id;
+    const nomineeId = v?.nominee_player_id;
+    if (typeof superlativeId !== 'number' || !validSuperlatives.has(superlativeId)) return { ok: false, error: 'Unknown superlative' };
+    if (typeof nomineeId !== 'number' || !validNominees.has(nomineeId)) return { ok: false, error: 'Nominee did not play this season' };
     if (seen.has(superlativeId)) return { ok: false, error: 'One vote per superlative' };
     seen.add(superlativeId);
     votes.push({ superlative_id: superlativeId, nominee_player_id: nomineeId });

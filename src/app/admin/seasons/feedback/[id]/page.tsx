@@ -3,7 +3,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { SurveyAdminPanel } from '@/components/SurveyAdminPanel';
 import { SuperlativesAdminPanel } from '@/components/SuperlativesAdminPanel';
 import { getSeason, getLinkedRegularSeason, getSurveyResults, getSuperlativeResults } from '@/lib/queries';
-import { seasonTitle } from '@/lib/util';
+import { parseSeasonId, seasonTitle } from '@/lib/util';
 
 export const metadata = {
   title: 'Season Feedback',
@@ -14,8 +14,8 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function SeasonFeedbackPage({ params }: { params: Promise<{ id: string }> }) {
-  const seasonId = Number((await params).id);
-  if (!Number.isFinite(seasonId)) notFound();
+  const seasonId = parseSeasonId((await params).id);
+  if (seasonId == null) notFound();
 
   const season = await getSeason(seasonId);
   if (!season) notFound();

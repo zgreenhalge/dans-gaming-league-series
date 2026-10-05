@@ -1,9 +1,9 @@
 'use client';
 
 // Top-level tabs for a season page that has no gauntlet tab (`CombinedSeasonTabView` owns the bar
-// when there is one): the season's own content plus the Survey / Superlatives tabs. Only rendered
-// when at least one feedback tab exists, so a season with nothing to ask or show keeps its plain
-// layout.
+// when there is one): the season's own content plus the Survey / Superlatives tabs. With no feedback
+// tab to show it renders the season content alone, so a season with nothing to ask or show keeps
+// its plain layout.
 
 import type { ReactNode } from 'react';
 import TopTabBar, { type FeedbackTab } from './TopTabBar';
@@ -19,6 +19,8 @@ export function SeasonFeedbackTabs({ feedbackTabs, children }: { feedbackTabs: F
     ...feedbackTabs,
   ];
   const tab = resolveTab(rawTab, tabs);
+
+  if (feedbackTabs.length === 0) return <>{children}</>;
 
   return (
     <>
