@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   CORE_SURVEY_QUESTIONS,
-  buildSurveyQuestionRows,
+  buildSurveyQuestions,
   summarizeSurvey,
   tallyVotes,
   validateCustomQuestions,
@@ -12,18 +12,18 @@ import {
 import { test, report } from './test-support/miniTest';
 
 const questions = [
-  { id: 1, position: 1, kind: 'rating' as const, prompt: 'r', is_core: false },
-  { id: 2, position: 2, kind: 'yes_no' as const, prompt: 'y', is_core: true },
-  { id: 3, position: 3, kind: 'text' as const, prompt: 't', is_core: true },
+  { id: 1, kind: 'rating' as const, prompt: 'r', is_core: false },
+  { id: 2, kind: 'yes_no' as const, prompt: 'y', is_core: true },
+  { id: 3, kind: 'text' as const, prompt: 't', is_core: true },
 ];
 
-test('buildSurveyQuestionRows puts custom questions first, then core, numbered from 1', () => {
-  const rows = buildSurveyQuestionRows([{ kind: 'text', prompt: 'Custom?' }]);
-  assert.equal(rows.length, CORE_SURVEY_QUESTIONS.length + 1);
-  assert.deepEqual(rows[0], { kind: 'text', prompt: 'Custom?', is_core: false, position: 1 });
-  assert.equal(rows[1].prompt, CORE_SURVEY_QUESTIONS[0].prompt);
-  assert.ok(rows.slice(1).every((r) => r.is_core));
-  assert.deepEqual(rows.map((r) => r.position), rows.map((_, i) => i + 1));
+test('buildSurveyQuestions puts custom questions first, then core, with ids numbered from 1', () => {
+  const built = buildSurveyQuestions([{ kind: 'text', prompt: 'Custom?' }]);
+  assert.equal(built.length, CORE_SURVEY_QUESTIONS.length + 1);
+  assert.deepEqual(built[0], { kind: 'text', prompt: 'Custom?', is_core: false, id: 1 });
+  assert.equal(built[1].prompt, CORE_SURVEY_QUESTIONS[0].prompt);
+  assert.ok(built.slice(1).every((q) => q.is_core));
+  assert.deepEqual(built.map((q) => q.id), built.map((_, i) => i + 1));
 });
 
 test('validateCustomQuestions trims prompts and rejects bad input', () => {
@@ -38,17 +38,12 @@ test('validateCustomQuestions trims prompts and rejects bad input', () => {
   assert.equal(validateCustomQuestions(Array.from({ length: 21 }, () => ({ kind: 'text', prompt: 'x' }))).ok, false);
 });
 
-test('validateSurveyAnswers maps answers by kind and drops blanks', () => {
-  const result = validateSurveyAnswers(questions, { 1: 4, 2: true, 3: '  great  ' });
-  assert.deepEqual(result, {
+test('validateSurveyAnswers keeps typed answers and drops blanks', () => {
+  assert.deepEqual(validateSurveyAnswers(questions, { 1: 4, 2: false, 3: '  great  ' }), {
     ok: true,
-    value: [
-      { question_id: 1, answer_number: 4, answer_text: null },
-      { question_id: 2, answer_number: 1, answer_text: null },
-      { question_id: 3, answer_number: null, answer_text: 'great' },
-    ],
+    value: { 1: 4, 2: false, 3: 'great' },
   });
-  assert.deepEqual(validateSurveyAnswers(questions, { 1: null, 3: '   ' }), { ok: true, value: [] });
+  assert.deepEqual(validateSurveyAnswers(questions, { 1: null, 3: '   ' }), { ok: true, value: {} });
 });
 
 test('validateSurveyAnswers rejects wrong shapes, out-of-range ratings, and unknown questions', () => {
@@ -61,14 +56,11 @@ test('validateSurveyAnswers rejects wrong shapes, out-of-range ratings, and unkn
   assert.equal(validateSurveyAnswers(questions, [1, 2]).ok, false);
 });
 
-test('summarizeSurvey rolls up ratings, yes/no, and text without any player linkage', () => {
+test('summarizeSurvey rolls up ratings, yes/no, and text across responses', () => {
   const summaries = summarizeSurvey(questions, [
-    { question_id: 1, answer_number: 4, answer_text: null },
-    { question_id: 1, answer_number: 2, answer_text: null },
-    { question_id: 2, answer_number: 1, answer_text: null },
-    { question_id: 2, answer_number: 1, answer_text: null },
-    { question_id: 2, answer_number: 0, answer_text: null },
-    { question_id: 3, answer_number: null, answer_text: 'fun' },
+    { 1: 4, 2: true, 3: 'fun' },
+    { 1: 2, 2: true },
+    { 2: false },
   ]);
   assert.equal(summaries[0].average, 3);
   assert.deepEqual(summaries[0].distribution, [0, 1, 0, 1, 0]);

@@ -1511,21 +1511,18 @@ export type Database = {
           id: number
           nominee_player_id: number
           superlative_id: number
-          voted_at: string
           voter_player_id: number
         }
         Insert: {
           id?: never
           nominee_player_id: number
           superlative_id: number
-          voted_at?: string
           voter_player_id: number
         }
         Update: {
           id?: never
           nominee_player_id?: number
           superlative_id?: number
-          voted_at?: string
           voter_player_id?: number
         }
         Relationships: [
@@ -1595,82 +1592,9 @@ export type Database = {
           },
         ]
       }
-      survey_answers: {
-        Row: {
-          answer_number: number | null
-          answer_text: string | null
-          id: number
-          question_id: number
-          response_id: number
-        }
-        Insert: {
-          answer_number?: number | null
-          answer_text?: string | null
-          id?: never
-          question_id: number
-          response_id: number
-        }
-        Update: {
-          answer_number?: number | null
-          answer_text?: string | null
-          id?: never
-          question_id?: number
-          response_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "survey_answers_question_id_fkey"
-            columns: ["question_id"]
-            isOneToOne: false
-            referencedRelation: "survey_questions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "survey_answers_response_id_fkey"
-            columns: ["response_id"]
-            isOneToOne: false
-            referencedRelation: "survey_responses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      survey_questions: {
-        Row: {
-          id: number
-          is_core: boolean
-          kind: string
-          position: number
-          prompt: string
-          survey_id: number
-        }
-        Insert: {
-          id?: never
-          is_core?: boolean
-          kind: string
-          position: number
-          prompt: string
-          survey_id: number
-        }
-        Update: {
-          id?: never
-          is_core?: boolean
-          kind?: string
-          position?: number
-          prompt?: string
-          survey_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "survey_questions_survey_id_fkey"
-            columns: ["survey_id"]
-            isOneToOne: false
-            referencedRelation: "surveys"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       survey_responses: {
         Row: {
+          answers: Json
           id: number
           player_id: number
           submitted_at: string
@@ -1678,6 +1602,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          answers?: Json
           id?: never
           player_id: number
           submitted_at?: string
@@ -1685,6 +1610,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          answers?: Json
           id?: never
           player_id?: number
           submitted_at?: string
@@ -1719,19 +1645,19 @@ export type Database = {
         Row: {
           closed_at: string | null
           id: number
-          opened_at: string
+          questions: Json
           season_id: number
         }
         Insert: {
           closed_at?: string | null
           id?: never
-          opened_at?: string
+          questions: Json
           season_id: number
         }
         Update: {
           closed_at?: string | null
           id?: never
-          opened_at?: string
+          questions?: Json
           season_id?: number
         }
         Relationships: [

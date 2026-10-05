@@ -12,7 +12,7 @@ import {
 } from '@/lib/test-support/feedbackFixture';
 import { __setTestSession } from '@/lib/session';
 import { sessionFor } from '@/lib/test-support/nextRequest';
-import { getSurveyForSeason, getSurveyResults, getPlayerSurveyAnswers } from '@/lib/queries';
+import { getSurveyForSeason, getSurveyResults, getPlayerSurveyAnswers, getSeasonFeedbackView } from '@/lib/queries';
 import type { FakeDb } from '@/lib/test-support/fakeSupabase';
 import { PUT } from './route';
 
@@ -23,12 +23,16 @@ const put = (seasonId: number | string, body: unknown) =>
 
 /** Seeds a survey directly (rather than via the admin route) with one rating, one yes/no, one text. */
 function seedSurvey(db: FakeDb, closed = false) {
-  db.surveys.push({ id: 1, season_id: REGULAR_SEASON_ID, opened_at: '2026-01-01', closed_at: closed ? '2026-02-01' : null });
-  db.survey_questions.push(
-    { id: 1, survey_id: 1, position: 1, kind: 'rating', prompt: 'Rate it', is_core: false },
-    { id: 2, survey_id: 1, position: 2, kind: 'yes_no', prompt: 'Again?', is_core: true },
-    { id: 3, survey_id: 1, position: 3, kind: 'text', prompt: 'Comments?', is_core: true },
-  );
+  db.surveys.push({
+    id: 1,
+    season_id: REGULAR_SEASON_ID,
+    closed_at: closed ? '2026-02-01' : null,
+    questions: [
+      { id: 1, kind: 'rating', prompt: 'Rate it', is_core: false },
+      { id: 2, kind: 'yes_no', prompt: 'Again?', is_core: true },
+      { id: 3, kind: 'text', prompt: 'Comments?', is_core: true },
+    ],
+  });
 }
 
 test('rejects unauthenticated (401), ineligible (403), gauntlet (404), and a missing survey (404)', async () => {
@@ -66,11 +70,11 @@ test('stores a response, then edits it in place — one response per player, omi
   seedSurvey(db);
   assert.equal((await put(REGULAR_SEASON_ID, { answers: { 1: 4, 2: true, 3: 'fun' } })).status, 200);
   assert.equal(db.survey_responses.length, 1);
-  assert.equal(db.survey_answers.length, 3);
+  assert.deepEqual(db.survey_responses[0].answers, { 1: 4, 2: true, 3: 'fun' });
 
   assert.equal((await put(REGULAR_SEASON_ID, { answers: { 1: 2, 2: false } })).status, 200);
   assert.equal(db.survey_responses.length, 1);
-  assert.equal(db.survey_answers.length, 2);
+  assert.deepEqual(db.survey_responses[0].answers, { 1: 2, 2: false });
   const mine = await getPlayerSurveyAnswers(1, ALICE_ID);
   assert.deepEqual(mine, { responded: true, answers: { 1: 2, 2: false } });
   resetFeedbackFixture();
@@ -97,8 +101,25 @@ test('results are anonymous: aggregates only, no player ids anywhere', async () 
   assert.equal(results.summaries[0].average, 3);
   assert.deepEqual([results.summaries[1].yes, results.summaries[1].no], [1, 1]);
   assert.deepEqual([...results.summaries[2].texts].sort(), ['fun', 'meh']);
-  assert.ok(!JSON.stringify(results).includes('player_id'));
   assert.ok(await getSurveyForSeason(REGULAR_SEASON_ID));
+  assert.ok(!JSON.stringify(results).includes('player'));
+  resetFeedbackFixture();
+});
+
+test('season feedback view: the survey tab exists only while open, for a viewer who played', async () => {
+  const db = installFeedbackFixture(ALICE_ID);
+  seedSurvey(db);
+  await put(REGULAR_SEASON_ID, { answers: { 1: 4 } });
+
+  const view = await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID);
+  assert.equal(view.survey?.responded, true);
+  assert.deepEqual(view.survey?.answers, { 1: 4 });
+  assert.equal(view.survey?.questions.length, 3);
+  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, CARA_ID)).survey, null);
+  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, null)).survey, null);
+
+  db.surveys[0].closed_at = '2026-02-01';
+  assert.equal((await getSeasonFeedbackView(REGULAR_SEASON_ID, ALICE_ID)).survey, null);
   resetFeedbackFixture();
 });
 

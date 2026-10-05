@@ -29,7 +29,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (parsed.value.length > 0) {
     const { error: upsertErr } = await access.supabaseAdmin.from('superlative_votes').upsert(
-      parsed.value.map((v) => ({ ...v, voter_player_id: access.playerId, voted_at: new Date().toISOString() })),
+      parsed.value.map((v) => ({ ...v, voter_player_id: access.playerId })),
       { onConflict: 'superlative_id,voter_player_id' },
     );
     if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 });

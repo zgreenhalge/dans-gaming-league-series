@@ -1,13 +1,14 @@
-// Post-season survey and superlatives vote reads. Results are anonymous by construction: the
-// summarising queries never return which player gave an answer or cast a vote — the response/voter
-// ids exist in the tables only to enforce one submission per player and to prefill that same
-// player's own editor (`getPlayerSurveyAnswers()`, `getPlayerSuperlativeVotes()`).
+// Post-season survey and superlatives vote reads. Results queries aggregate by question or
+// superlative and never return which player gave an answer or cast a vote — the responder/voter id
+// columns exist to enforce one submission per player and to prefill that same player's own editor
+// (`getPlayerSurveyAnswers()`, `getPlayerSuperlativeVotes()`).
 
 import { supabase } from '../supabase';
 import {
   summarizeSurvey,
   tallyVotes,
-  type SurveyQuestionKind,
+  type SurveyAnswers,
+  type SurveyQuestion,
   type SurveyQuestionSummary,
 } from '../survey';
 import { getPlayersById } from './player';
@@ -17,20 +18,7 @@ import { batchedIn } from './_shared';
 export interface Survey {
   id: number;
   season_id: number;
-  opened_at: string;
   closed_at: string | null;
-}
-
-export interface SurveyQuestion {
-  id: number;
-  position: number;
-  kind: SurveyQuestionKind;
-  prompt: string;
-  is_core: boolean;
-}
-
-export interface SurveyWithQuestions {
-  survey: Survey;
   questions: SurveyQuestion[];
 }
 
@@ -38,61 +26,34 @@ export function isSurveyOpen(survey: Survey): boolean {
   return survey.closed_at == null;
 }
 
-/** A season's survey and its questions in display order, or null if none has been sent. */
-export async function getSurveyForSeason(seasonId: number): Promise<SurveyWithQuestions | null> {
-  const { data: survey, error } = await supabase
+/** A season's survey with its questions in display order, or null if none has been sent. */
+export async function getSurveyForSeason(seasonId: number): Promise<Survey | null> {
+  const { data, error } = await supabase
     .from('surveys')
-    .select('id, season_id, opened_at, closed_at')
+    .select('id, season_id, closed_at, questions')
     .eq('season_id', seasonId)
     .maybeSingle();
   if (error) throw error;
-  if (!survey) return null;
-
-  const { data: questions, error: questionsErr } = await supabase
-    .from('survey_questions')
-    .select('id, position, kind, prompt, is_core')
-    .eq('survey_id', survey.id)
-    .order('position', { ascending: true });
-  if (questionsErr) throw questionsErr;
-  return { survey, questions: (questions ?? []) as SurveyQuestion[] };
+  return data ? { ...data, questions: data.questions as unknown as SurveyQuestion[] } : null;
 }
 
-/** One player's own saved answers, keyed by question id (`rating` → number, `yes_no` → boolean,
- *  `text` → string) — for prefilling their editor — plus whether they have responded at all. */
+/** One player's own saved answers — for prefilling their editor — plus whether they have responded. */
 export async function getPlayerSurveyAnswers(
   surveyId: number,
   playerId: number,
-): Promise<{ responded: boolean; answers: Record<number, number | boolean | string> }> {
-  const { data: response, error } = await supabase
+): Promise<{ responded: boolean; answers: SurveyAnswers }> {
+  const { data, error } = await supabase
     .from('survey_responses')
-    .select('id')
+    .select('answers')
     .eq('survey_id', surveyId)
     .eq('player_id', playerId)
     .maybeSingle();
   if (error) throw error;
-  if (!response) return { responded: false, answers: {} };
-
-  const [{ data: answerRows, error: answersErr }, { data: questionRows, error: questionsErr }] = await Promise.all([
-    supabase.from('survey_answers').select('question_id, answer_number, answer_text').eq('response_id', response.id),
-    supabase.from('survey_questions').select('id, kind').eq('survey_id', surveyId),
-  ]);
-  if (answersErr) throw answersErr;
-  if (questionsErr) throw questionsErr;
-
-  const kindById = new Map((questionRows ?? []).map((q) => [q.id, q.kind as SurveyQuestionKind]));
-  const answers: Record<number, number | boolean | string> = {};
-  for (const a of answerRows ?? []) {
-    const kind = kindById.get(a.question_id);
-    if (kind === 'text') {
-      if (a.answer_text != null) answers[a.question_id] = a.answer_text;
-    } else if (a.answer_number != null) {
-      answers[a.question_id] = kind === 'yes_no' ? a.answer_number === 1 : a.answer_number;
-    }
-  }
-  return { responded: true, answers };
+  return data ? { responded: true, answers: data.answers as SurveyAnswers } : { responded: false, answers: {} };
 }
 
-export interface SurveyResults extends SurveyWithQuestions {
+export interface SurveyResults {
+  survey: Survey;
   responseCount: number;
   eligibleCount: number;
   summaries: SurveyQuestionSummary[];
@@ -100,26 +61,22 @@ export interface SurveyResults extends SurveyWithQuestions {
 
 /** Anonymised results for a season's survey, or null if none has been sent. */
 export async function getSurveyResults(seasonId: number): Promise<SurveyResults | null> {
-  const found = await getSurveyForSeason(seasonId);
-  if (!found) return null;
+  const survey = await getSurveyForSeason(seasonId);
+  if (!survey) return null;
 
-  const [{ data: responses, error }, answers, eligible] = await Promise.all([
-    supabase.from('survey_responses').select('id').eq('survey_id', found.survey.id),
-    batchedIn<{ question_id: number; answer_number: number | null; answer_text: string | null }>(
-      'survey_answers',
-      'question_id',
-      found.questions.map((q) => q.id),
-      'question_id, answer_number, answer_text',
-    ),
+  // Selects the `answers` column only — never `player_id`.
+  const [{ data: responses, error }, eligible] = await Promise.all([
+    supabase.from('survey_responses').select('answers').eq('survey_id', survey.id),
     getSeasonPlayedPlayers(seasonId),
   ]);
   if (error) throw error;
 
+  const answers = (responses ?? []).map((r) => r.answers as SurveyAnswers);
   return {
-    ...found,
-    responseCount: (responses ?? []).length,
+    survey,
+    responseCount: answers.length,
     eligibleCount: eligible.length,
-    summaries: summarizeSurvey(found.questions, answers),
+    summaries: summarizeSurvey(survey.questions, answers),
   };
 }
 
@@ -179,11 +136,7 @@ export interface SuperlativeResults {
   superlatives: SuperlativeResult[];
 }
 
-/** Anonymised vote tallies per superlative, or null if none have been set up. */
-export async function getSuperlativeResults(seasonId: number): Promise<SuperlativeResults | null> {
-  const poll = await getSuperlativePoll(seasonId);
-  if (!poll) return null;
-
+async function tallyPoll(seasonId: number, poll: SuperlativePoll): Promise<SuperlativeResults> {
   const [votes, eligible, playersById] = await Promise.all([
     batchedIn<{ superlative_id: number; voter_player_id: number; nominee_player_id: number }>(
       'superlative_votes',
@@ -208,32 +161,52 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
   };
 }
 
-export interface PlayerFeedbackStatus {
-  /** Null when the season has no open survey. */
-  survey: { answered: boolean } | null;
-  /** Null when the season has no open superlatives vote. */
-  superlatives: { answered: boolean } | null;
+/** Anonymised vote tallies per superlative, or null if none have been set up. */
+export async function getSuperlativeResults(seasonId: number): Promise<SuperlativeResults | null> {
+  const poll = await getSuperlativePoll(seasonId);
+  return poll ? tallyPoll(seasonId, poll) : null;
 }
 
-/** What a signed-in player is being asked for on a season right now — an open survey and/or an open
- *  superlatives vote — and whether they've already answered. Null if nothing is open or the player
- *  didn't play in the season. Cheap open-state checks run first so a season with nothing open never
- *  pays for the eligibility lookup. */
-export async function getPlayerFeedbackStatus(seasonId: number, playerId: number): Promise<PlayerFeedbackStatus | null> {
-  const [surveyFound, poll] = await Promise.all([getSurveyForSeason(seasonId), getSuperlativePoll(seasonId)]);
-  const surveyOpen = surveyFound && isSurveyOpen(surveyFound.survey) ? surveyFound : null;
-  const pollOpen = poll?.isOpen && poll.superlatives.length > 0 ? poll : null;
-  if (!surveyOpen && !pollOpen) return null;
+/** What the season page's Survey and Superlatives tabs show a given viewer. */
+export interface SeasonFeedbackView {
+  /** Present while the survey is open and the viewer played the season. */
+  survey: { questions: SurveyQuestion[]; answers: SurveyAnswers; responded: boolean } | null;
+  /** A ballot while voting is open and the viewer played the season; the public tallies once voting
+   *  has closed with at least one vote cast; otherwise absent. */
+  superlatives:
+    | { mode: 'ballot'; superlatives: Superlative[]; nominees: { id: number; name: string }[]; votes: Record<number, number> }
+    | { mode: 'results'; results: SuperlativeResults }
+    | null;
+}
 
-  const eligible = await getSeasonPlayedPlayers(seasonId);
-  if (!eligible.some((p) => p.player_id === playerId)) return null;
+/** Resolves both feedback tabs for one viewer (`playerId` null = signed out). Cheap open-state reads
+ *  run first so a season with nothing open never pays for the eligibility lookup, and a season with
+ *  nothing configured costs two small queries. */
+export async function getSeasonFeedbackView(seasonId: number, playerId: number | null): Promise<SeasonFeedbackView> {
+  const [survey, poll] = await Promise.all([getSurveyForSeason(seasonId), getSuperlativePoll(seasonId)]);
+  const surveyOpen = survey && isSurveyOpen(survey) ? survey : null;
+  const ballotOpen = poll?.isOpen && poll.superlatives.length > 0 ? poll : null;
 
-  const [surveyAnswers, votes] = await Promise.all([
-    surveyOpen ? getPlayerSurveyAnswers(surveyOpen.survey.id, playerId) : null,
-    pollOpen ? getPlayerSuperlativeVotes(seasonId, playerId) : null,
-  ]);
-  return {
-    survey: surveyOpen ? { answered: surveyAnswers!.responded } : null,
-    superlatives: pollOpen ? { answered: Object.keys(votes!).length > 0 } : null,
-  };
+  const eligible = playerId != null && (surveyOpen || ballotOpen) ? await getSeasonPlayedPlayers(seasonId) : [];
+  const viewerEligible = playerId != null && eligible.some((p) => p.player_id === playerId);
+
+  const view: SeasonFeedbackView = { survey: null, superlatives: null };
+  if (surveyOpen && viewerEligible) {
+    const mine = await getPlayerSurveyAnswers(surveyOpen.id, playerId!);
+    view.survey = { questions: surveyOpen.questions, ...mine };
+  }
+  if (ballotOpen) {
+    if (viewerEligible) {
+      view.superlatives = {
+        mode: 'ballot',
+        superlatives: ballotOpen.superlatives,
+        nominees: eligible.map((p) => ({ id: p.player_id, name: p.player_name })),
+        votes: await getPlayerSuperlativeVotes(seasonId, playerId!),
+      };
+    }
+  } else if (poll && poll.superlatives.length > 0) {
+    const results = await tallyPoll(seasonId, poll);
+    if (results.superlatives.some((s) => s.totalVotes > 0)) view.superlatives = { mode: 'results', results };
+  }
+  return view;
 }

@@ -52,8 +52,10 @@ test('POST — creates an open survey with custom questions followed by the core
   assert.equal(res.status, 201);
   assert.equal(db.surveys.length, 1);
   assert.equal(db.surveys[0].closed_at ?? null, null);
-  const prompts = [...db.survey_questions].sort((a, b) => (a.position as number) - (b.position as number)).map((q) => q.prompt);
-  assert.deepEqual(prompts, ['Favorite map?', ...CORE_SURVEY_QUESTIONS.map((q) => q.prompt)]);
+  const questions = db.surveys[0].questions as { id: number; prompt: string; is_core: boolean }[];
+  assert.deepEqual(questions.map((q) => q.prompt), ['Favorite map?', ...CORE_SURVEY_QUESTIONS.map((q) => q.prompt)]);
+  assert.deepEqual(questions.map((q) => q.id), questions.map((_, i) => i + 1));
+  assert.deepEqual(questions.map((q) => q.is_core), [false, ...CORE_SURVEY_QUESTIONS.map(() => true)]);
   resetFeedbackFixture();
 });
 

@@ -39,18 +39,20 @@ export const CORE_SURVEY_QUESTIONS: readonly SurveyQuestionInput[] = [
 
 const KINDS: readonly SurveyQuestionKind[] = ['rating', 'yes_no', 'text'];
 
-export interface SurveyQuestionRow extends SurveyQuestionInput {
-  position: number;
+/** A question as stored in `surveys.questions` — `id` is its 1-based position in the survey, which
+ *  is also the key its answer is filed under in `survey_responses.answers`. */
+export interface SurveyQuestion extends SurveyQuestionInput {
+  id: number;
   is_core: boolean;
 }
 
-/** The `survey_questions` rows for a new survey: the admin's custom questions first, then the core
- *  ones, numbered from 1. */
-export function buildSurveyQuestionRows(custom: SurveyQuestionInput[]): SurveyQuestionRow[] {
+/** The question list for a new survey: the admin's custom questions first, then the core ones,
+ *  numbered from 1. */
+export function buildSurveyQuestions(custom: SurveyQuestionInput[]): SurveyQuestion[] {
   return [
     ...custom.map((q) => ({ ...q, is_core: false })),
     ...CORE_SURVEY_QUESTIONS.map((q) => ({ ...q, is_core: true })),
-  ].map((q, i) => ({ ...q, position: i + 1 }));
+  ].map((q, i) => ({ ...q, id: i + 1 }));
 }
 
 type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -77,19 +79,17 @@ export function validateCustomQuestions(input: unknown): Validated<SurveyQuestio
   return { ok: true, value: questions };
 }
 
-export interface SurveyAnswerRow {
-  question_id: number;
-  answer_number: number | null;
-  answer_text: string | null;
-}
+/** One player's answers as stored in `survey_responses.answers`, keyed by question id: a rating is
+ *  a number, yes/no a boolean, text a string. Unanswered questions have no key. */
+export type SurveyAnswers = Record<string, number | boolean | string>;
 
-/** Validates a player's submitted answers (`{ [questionId]: value }`) against the survey's
- *  questions and returns the rows to store. Every question is optional — a missing or blank answer
- *  is simply not stored — but an answer that is present must match its question's kind. */
+/** Validates a player's submitted answers against the survey's questions and returns the object to
+ *  store. Every question is optional — a missing or blank answer is simply left out — but an answer
+ *  that is present must match its question's kind. */
 export function validateSurveyAnswers(
   questions: { id: number; kind: SurveyQuestionKind }[],
   input: unknown,
-): Validated<SurveyAnswerRow[]> {
+): Validated<SurveyAnswers> {
   if (input == null || typeof input !== 'object' || Array.isArray(input)) {
     return { ok: false, error: 'answers must be an object keyed by question id' };
   }
@@ -97,7 +97,7 @@ export function validateSurveyAnswers(
   const entries = Object.entries(input as Record<string, unknown>);
   if (entries.some(([id]) => !byId.has(id))) return { ok: false, error: 'Unknown question in answers' };
 
-  const rows: SurveyAnswerRow[] = [];
+  const answers: SurveyAnswers = {};
   for (const [id, value] of entries) {
     if (value == null || value === '') continue;
     const q = byId.get(id)!;
@@ -105,10 +105,10 @@ export function validateSurveyAnswers(
       if (!Number.isInteger(value) || (value as number) < RATING_MIN || (value as number) > RATING_MAX) {
         return { ok: false, error: `Ratings must be whole numbers from ${RATING_MIN} to ${RATING_MAX}` };
       }
-      rows.push({ question_id: q.id, answer_number: value as number, answer_text: null });
+      answers[id] = value as number;
     } else if (q.kind === 'yes_no') {
       if (typeof value !== 'boolean') return { ok: false, error: 'Yes/no answers must be true or false' };
-      rows.push({ question_id: q.id, answer_number: value ? 1 : 0, answer_text: null });
+      answers[id] = value;
     } else {
       if (typeof value !== 'string') return { ok: false, error: 'Text answers must be strings' };
       const text = value.trim();
@@ -116,15 +116,14 @@ export function validateSurveyAnswers(
       if (text.length > MAX_TEXT_ANSWER_LENGTH) {
         return { ok: false, error: `Text answers are limited to ${MAX_TEXT_ANSWER_LENGTH} characters` };
       }
-      rows.push({ question_id: q.id, answer_number: null, answer_text: text });
+      answers[id] = text;
     }
   }
-  return { ok: true, value: rows };
+  return { ok: true, value: answers };
 }
 
 export interface SurveyQuestionSummary {
   question_id: number;
-  position: number;
   kind: SurveyQuestionKind;
   prompt: string;
   is_core: boolean;
@@ -137,43 +136,32 @@ export interface SurveyQuestionSummary {
   /** `yes_no` only. */
   yes: number;
   no: number;
-  /** `text` only — the answers, in submission order, with nothing linking them to a player. */
+  /** `text` only — the answers, with nothing linking them to a player. */
   texts: string[];
 }
 
-/** Rolls raw answers up per question. Takes only the answer values — never who gave them — so the
- *  result is anonymous by construction. */
-export function summarizeSurvey(
-  questions: { id: number; position: number; kind: SurveyQuestionKind; prompt: string; is_core: boolean }[],
-  answers: { question_id: number; answer_number: number | null; answer_text: string | null }[],
-): SurveyQuestionSummary[] {
-  return [...questions]
-    .sort((a, b) => a.position - b.position)
-    .map((q) => {
-      const mine = answers.filter((a) => a.question_id === q.id);
-      const numbers = mine.map((a) => a.answer_number).filter((n): n is number => n != null);
-      const distribution = Array.from({ length: RATING_MAX - RATING_MIN + 1 }, () => 0);
-      let yes = 0;
-      let no = 0;
-      if (q.kind === 'rating') for (const n of numbers) distribution[n - RATING_MIN] += 1;
-      if (q.kind === 'yes_no') {
-        yes = numbers.filter((n) => n === 1).length;
-        no = numbers.length - yes;
-      }
-      return {
-        question_id: q.id,
-        position: q.position,
-        kind: q.kind,
-        prompt: q.prompt,
-        is_core: q.is_core,
-        answered: q.kind === 'text' ? mine.filter((a) => a.answer_text).length : numbers.length,
-        average: q.kind === 'rating' && numbers.length > 0 ? numbers.reduce((s, n) => s + n, 0) / numbers.length : null,
-        distribution,
-        yes,
-        no,
-        texts: q.kind === 'text' ? mine.map((a) => a.answer_text).filter((t): t is string => !!t) : [],
-      };
-    });
+/** Rolls responses up per question, in question order. Takes only the answer objects — never who
+ *  gave them — so the result carries no player identity. */
+export function summarizeSurvey(questions: SurveyQuestion[], responses: SurveyAnswers[]): SurveyQuestionSummary[] {
+  return questions.map((q) => {
+    const values = responses.map((r) => r[String(q.id)]).filter((v) => v !== undefined);
+    const numbers = values.filter((v): v is number => typeof v === 'number');
+    const distribution = Array.from({ length: RATING_MAX - RATING_MIN + 1 }, () => 0);
+    if (q.kind === 'rating') for (const n of numbers) distribution[n - RATING_MIN] += 1;
+    const yes = q.kind === 'yes_no' ? values.filter((v) => v === true).length : 0;
+    return {
+      question_id: q.id,
+      kind: q.kind,
+      prompt: q.prompt,
+      is_core: q.is_core,
+      answered: values.length,
+      average: q.kind === 'rating' && numbers.length > 0 ? numbers.reduce((sum, n) => sum + n, 0) / numbers.length : null,
+      distribution,
+      yes,
+      no: q.kind === 'yes_no' ? values.length - yes : 0,
+      texts: q.kind === 'text' ? values.filter((v): v is string => typeof v === 'string') : [],
+    };
+  });
 }
 
 /** Validates a superlative title typed by an admin. */
