@@ -9,9 +9,11 @@ import {
   getAllGauntletSummaries,
   getGauntletStats,
   isPlayerAdmin,
+  getPlayerRosterSeasonIds,
   type GauntletSummary,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
+import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { seasonTitle, extractSeasonNumber, canonicalSort } from '@/lib/util';
 
 export const revalidate = 60;
@@ -86,7 +88,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
   );
 }
 
-function UpcomingSeasonRow({ season, leaderboard }: { season: Season; leaderboard: LeaderboardRowWithId[] }) {
+function UpcomingSeasonRow({ season, leaderboard, needsSignup }: { season: Season; leaderboard: LeaderboardRowWithId[]; needsSignup: boolean }) {
   const meta = [
     leaderboard.length > 0 && `${leaderboard.length} players`,
     season.start_date &&
@@ -111,16 +113,7 @@ function UpcomingSeasonRow({ season, leaderboard }: { season: Season; leaderboar
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">{meta}</div>
         )}
       </div>
-      <span
-        className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold border shrink-0"
-        style={{
-          color: 'var(--color-site-accent)',
-          background: 'color-mix(in srgb, var(--color-site-accent) 12%, transparent)',
-          borderColor: 'var(--color-site-accent)',
-        }}
-      >
-        Soon
-      </span>
+      <UpcomingSeasonTag needsSignup={needsSignup} />
     </Link>
   );
 }
@@ -215,7 +208,11 @@ export default async function SeasonsPage() {
     getServerSession(authOptions),
   ]);
 
-  const isAdmin = session?.user?.playerId ? await isPlayerAdmin(session.user.playerId) : false;
+  const playerId = session?.user?.playerId ?? null;
+  const [isAdmin, rosterSeasonIds] = await Promise.all([
+    playerId != null ? isPlayerAdmin(playerId) : false,
+    playerId != null ? getPlayerRosterSeasonIds(playerId) : new Set<number>(),
+  ]);
 
   const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
   const upcoming = seasons.filter((s) => !s.is_gauntlet && s.status === 'UPCOMING');
@@ -276,6 +273,7 @@ export default async function SeasonsPage() {
                   key={s.id}
                   season={s}
                   leaderboard={allLeaderboards.get(s.id) ?? []}
+                  needsSignup={!rosterSeasonIds.has(s.id)}
                 />
               ))}
             </div>

@@ -119,6 +119,14 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
 }
 
+/** Ids of the seasons a player is on the explicit roster (`season_players`) of — what "have I
+ *  signed up for this season" means while a season is UPCOMING. */
+export async function getPlayerRosterSeasonIds(playerId: number): Promise<Set<number>> {
+  const { data, error } = await supabase.from('season_players').select('season_id').eq('player_id', playerId);
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => (r as { season_id: number }).season_id));
+}
+
 /** Everyone currently part of a season, unioning `season_players` with anyone who already has a
  *  scheduled or played match under it (`weeks` → `matches` → `player_match_stats`). `season_players`
  *  alone is the pre-schedule signup list; once a schedule exists, a season's real participants are
