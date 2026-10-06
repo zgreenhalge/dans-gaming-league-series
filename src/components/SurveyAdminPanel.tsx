@@ -1,8 +1,9 @@
 'use client';
 
-// Admin view of a season's post-season survey: before one is opened, a builder for the question list
-// (custom questions and the fixed core ones, in any order); afterward, the open/close control, the
-// anonymised results, and a reset that deletes the survey and its responses to return to the builder.
+// Admin view of a season's post-season survey: a builder for the question list (custom questions and
+// the fixed core ones, in any order) until the survey is opened; once it is open or has responses,
+// the open/close control, the anonymised results, and a reset that closes the survey and deletes its
+// responses, which unlocks the builder again.
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -20,7 +21,9 @@ import {
   MAX_CUSTOM_QUESTIONS,
   MAX_PROMPT_LENGTH,
   RATING_LABELS,
+  questionsToDrafts,
   RATING_MIN,
+  type SurveyQuestion,
   type SurveyQuestionDraft,
   type SurveyQuestionInput,
   type SurveyQuestionKind,
@@ -37,30 +40,47 @@ const KIND_LABEL: Record<SurveyQuestionKind, string> = {
 export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; survey: SurveyResultsData | null }) {
   return (
     <section className="flex flex-col gap-4">
-      {survey ? <SurveyResults seasonId={seasonId} survey={survey} /> : <SurveyBuilder seasonId={seasonId} />}
+      {!survey ? (
+        <SurveyBuilder seasonId={seasonId} />
+      ) : survey.isOpen || survey.responseCount > 0 ? (
+        <SurveyResults seasonId={seasonId} survey={survey} />
+      ) : (
+        <SurveyBuilder seasonId={seasonId} existing={survey.survey.questions} />
+      )}
     </section>
   );
 }
 
 type KeyedDraft = SurveyQuestionDraft & { key: string };
 
-function SurveyBuilder({ seasonId }: { seasonId: number }) {
+/** The question builder: with no `existing` list it creates and opens the survey; with one (a closed
+ *  survey that has no responses) it saves edits to that list, optionally opening the survey too. */
+function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: SurveyQuestion[] }) {
   const router = useRouter();
+  const url = `/api/seasons/${seasonId}/survey`;
   // The whole question list in display order: custom questions are editable, core ones fixed text.
   // `key` is a stable row identity (the server ignores it), so a row keeps its focus and drag state
   // as others are added, removed, or moved.
-  const [drafts, setDrafts] = useState<KeyedDraft[]>(() => CORE_SURVEY_QUESTIONS.map((_, core) => ({ core, key: `core-${core}` })));
+  const [drafts, setDrafts] = useState<KeyedDraft[]>(() =>
+    (existing ? questionsToDrafts(existing) : CORE_SURVEY_QUESTIONS.map((_, core) => ({ core }))).map((d, i) => ({ ...d, key: `initial-${i}` })),
+  );
   const nextKey = useRef(0);
   const { busy, error, run } = useAsyncAction();
   const customCount = drafts.filter((d) => !isCoreDraft(d)).length;
+  const invalid = drafts.some((q) => !isCoreDraft(q) && !q.prompt.trim());
 
   function update(i: number, patch: Partial<SurveyQuestionInput>) {
     setDrafts((prev) => prev.map((q, k) => (k === i ? { ...q, ...patch } : q)));
   }
 
-  async function open() {
+  async function submit(openAfter: boolean) {
     await run(async () => {
-      await sendFeedbackRequest('POST', `/api/seasons/${seasonId}/survey`, { questions: drafts });
+      if (!existing) {
+        await sendFeedbackRequest('POST', url, { questions: drafts });
+      } else {
+        await sendFeedbackRequest('PUT', url, { questions: drafts });
+        if (openAfter) await sendFeedbackRequest('PATCH', url, { open: true });
+      }
       router.refresh();
     });
   }
@@ -118,15 +138,20 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
         </button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <button
           type="button"
-          onClick={open}
-          disabled={busy || drafts.some((q) => !isCoreDraft(q) && !q.prompt.trim())}
+          onClick={() => submit(true)}
+          disabled={invalid || busy}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
-          {busy ? 'Opening…' : 'Open survey'}
+          {busy ? 'Saving…' : existing ? 'Save & open survey' : 'Open survey'}
         </button>
+        {existing && (
+          <button type="button" onClick={() => submit(false)} disabled={invalid || busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+            Save questions
+          </button>
+        )}
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
     </div>
@@ -157,7 +182,7 @@ function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyR
       <FeedbackResetControl
         url={`/api/seasons/${seasonId}/survey`}
         triggerLabel="Reset survey"
-        confirmLabel="Delete survey & all responses"
+        confirmLabel="Delete all responses & close survey"
       />
       {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
 

@@ -38,6 +38,15 @@ export async function getSurveyForSeason(seasonId: number): Promise<Survey | nul
   return data ? { ...data, questions: data.questions as unknown as SurveyQuestion[] } : null;
 }
 
+/** True once players can or did respond: the survey is open, or any response exists. Its questions
+ *  are frozen from then on, so no answer lands on a question list the player didn't see. */
+export async function isSurveyLocked(survey: Survey): Promise<boolean> {
+  if (isSurveyOpen(survey)) return true;
+  const { data, error } = await supabase.from('survey_responses').select('id').eq('survey_id', survey.id).limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** One player's own saved answers — for prefilling their editor — plus whether they have responded. */
 export async function getPlayerSurveyAnswers(
   surveyId: number,

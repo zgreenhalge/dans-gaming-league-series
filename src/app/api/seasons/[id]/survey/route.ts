@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { getSurveyForSeason } from '@/lib/queries';
+import { getSurveyForSeason, isSurveyLocked } from '@/lib/queries';
 import type { Json } from '@/lib/database.types';
 import { buildSurveyQuestions, validateQuestionDrafts } from '@/lib/survey';
 
 /** Opens a season's post-season survey with the admin's question order: custom questions and
  *  `{ core: index }` references in display order, any core questions left out following them. One
- *  survey per season; it starts open, and its questions are fixed from then on. */
+ *  survey per season; it starts open, and its questions are fixed while it is open or has responses. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -57,8 +57,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-/** Admin reset: deletes the season's survey and every response, returning the season to the
- *  question builder. */
+/** Replaces a survey's questions (`{ questions }`, same shape as the POST). Refused (409) while the
+ *  survey is open or has any response. */
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireSeasonFeedbackAdmin((await params).id);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
+  const body = (await req.json().catch(() => null)) as { questions?: unknown } | null;
+  const drafts = validateQuestionDrafts(body?.questions);
+  if (!drafts.ok) return NextResponse.json({ error: drafts.error }, { status: 400 });
+
+  const existing = await getSurveyForSeason(access.seasonId);
+  if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
+  if (await isSurveyLocked(existing)) {
+    return NextResponse.json({ error: 'The survey has opened — its questions can no longer be changed' }, { status: 409 });
+  }
+
+  const { error } = await access.supabaseAdmin
+    .from('surveys')
+    .update({ questions: buildSurveyQuestions(drafts.value) as unknown as Json })
+    .eq('id', existing.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
+/** Admin reset: closes the survey and deletes every response. The questions are kept, and — with no
+ *  responses and the survey closed — can be edited again. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -66,18 +90,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const existing = await getSurveyForSeason(access.seasonId);
   if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
 
-  // Closing first stops new submissions while the delete runs; responses go before the survey row so
-  // a failure part-way leaves a closed survey rather than orphaned answers.
+  // Close first: if the delete then fails, no new responses can land while the admin retries.
   const { error: closeErr } = await access.supabaseAdmin
     .from('surveys')
     .update({ closed_at: new Date().toISOString() })
     .eq('id', existing.id);
   if (closeErr) return NextResponse.json({ error: closeErr.message }, { status: 500 });
 
-  const { error: responsesErr } = await access.supabaseAdmin.from('survey_responses').delete().eq('survey_id', existing.id);
-  if (responsesErr) return NextResponse.json({ error: responsesErr.message }, { status: 500 });
-
-  const { error: surveyErr } = await access.supabaseAdmin.from('surveys').delete().eq('id', existing.id);
-  if (surveyErr) return NextResponse.json({ error: surveyErr.message }, { status: 500 });
+  const { error: deleteErr } = await access.supabaseAdmin.from('survey_responses').delete().eq('survey_id', existing.id);
+  if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
