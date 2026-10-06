@@ -1,8 +1,8 @@
 'use client';
 
 // Admin view of a season's post-season survey: before one is opened, a builder for the question list
-// (custom questions and the fixed core ones, in any order); afterward, the open/close control and the
-// anonymised results.
+// (custom questions and the fixed core ones, in any order); afterward, the open/close control, the
+// anonymised results, and a reset that deletes the survey and its responses to return to the builder.
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -11,6 +11,7 @@ import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import SectionLabel from './SectionLabel';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
+import { FeedbackResetControl } from './FeedbackResetControl';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
 import {
@@ -152,6 +153,11 @@ function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyR
         closeLabel="Close survey"
         busy={busy}
         onToggle={() => setOpen(!survey.isOpen)}
+      />
+      <FeedbackResetControl
+        url={`/api/seasons/${seasonId}/survey`}
+        triggerLabel="Reset survey"
+        confirmLabel="Delete survey & all responses"
       />
       {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
 

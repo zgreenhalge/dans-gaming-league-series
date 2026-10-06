@@ -56,3 +56,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+/** Admin reset: deletes the season's survey and every response, returning the season to the
+ *  question builder. */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireSeasonFeedbackAdmin((await params).id);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
+  const existing = await getSurveyForSeason(access.seasonId);
+  if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
+
+  // Closing first stops new submissions while the delete runs; responses go before the survey row so
+  // a failure part-way leaves a closed survey rather than orphaned answers.
+  const { error: closeErr } = await access.supabaseAdmin
+    .from('surveys')
+    .update({ closed_at: new Date().toISOString() })
+    .eq('id', existing.id);
+  if (closeErr) return NextResponse.json({ error: closeErr.message }, { status: 500 });
+
+  const { error: responsesErr } = await access.supabaseAdmin.from('survey_responses').delete().eq('survey_id', existing.id);
+  if (responsesErr) return NextResponse.json({ error: responsesErr.message }, { status: 500 });
+
+  const { error: surveyErr } = await access.supabaseAdmin.from('surveys').delete().eq('id', existing.id);
+  if (surveyErr) return NextResponse.json({ error: surveyErr.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
