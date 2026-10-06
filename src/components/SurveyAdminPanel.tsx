@@ -1,10 +1,10 @@
 'use client';
 
-// Admin view of a season's post-season survey: before one is opened, a builder for the custom
-// questions (shown ahead of the fixed core questions); afterward, the open/close control and the
+// Admin view of a season's post-season survey: before one is opened, a builder for the question list
+// (custom questions and the fixed core ones, in any order); afterward, the open/close control and the
 // anonymised results.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
@@ -12,12 +12,15 @@ import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from
 import SectionLabel from './SectionLabel';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
 import { RemoveXButton } from './RemoveXButton';
+import { SortableList } from './SortableList';
 import {
   CORE_SURVEY_QUESTIONS,
+  isCoreDraft,
   MAX_CUSTOM_QUESTIONS,
   MAX_PROMPT_LENGTH,
   RATING_LABELS,
   RATING_MIN,
+  type SurveyQuestionDraft,
   type SurveyQuestionInput,
   type SurveyQuestionKind,
 } from '@/lib/survey';
@@ -38,18 +41,25 @@ export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; surve
   );
 }
 
+type KeyedDraft = SurveyQuestionDraft & { key: string };
+
 function SurveyBuilder({ seasonId }: { seasonId: number }) {
   const router = useRouter();
-  const [custom, setCustom] = useState<SurveyQuestionInput[]>([]);
+  // The whole question list in display order: custom questions are editable, core ones fixed text.
+  // `key` is a stable row identity (the server ignores it), so a row keeps its focus and drag state
+  // as others are added, removed, or moved.
+  const [drafts, setDrafts] = useState<KeyedDraft[]>(() => CORE_SURVEY_QUESTIONS.map((_, core) => ({ core, key: `core-${core}` })));
+  const nextKey = useRef(0);
   const { busy, error, run } = useAsyncAction();
+  const customCount = drafts.filter((d) => !isCoreDraft(d)).length;
 
   function update(i: number, patch: Partial<SurveyQuestionInput>) {
-    setCustom((prev) => prev.map((q, k) => (k === i ? { ...q, ...patch } : q)));
+    setDrafts((prev) => prev.map((q, k) => (k === i ? { ...q, ...patch } : q)));
   }
 
   async function open() {
     await run(async () => {
-      await sendFeedbackRequest('POST', `/api/seasons/${seasonId}/survey`, { questions: custom });
+      await sendFeedbackRequest('POST', `/api/seasons/${seasonId}/survey`, { questions: drafts });
       router.refresh();
     });
   }
@@ -57,53 +67,61 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <SectionLabel>Custom questions (asked first)</SectionLabel>
-        <div className="flex flex-col gap-2">
-          {custom.map((q, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={q.prompt}
-                onChange={(e) => update(i, { prompt: e.target.value })}
-                maxLength={MAX_PROMPT_LENGTH}
-                placeholder="Question"
-                className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
-              />
-              <select value={q.kind} onChange={(e) => update(i, { kind: e.target.value as SurveyQuestionKind })} className={FORM_INPUT_CLS}>
-                {(Object.keys(KIND_LABEL) as SurveyQuestionKind[]).map((k) => (
-                  <option key={k} value={k}>
-                    {KIND_LABEL[k]}
-                  </option>
-                ))}
-              </select>
-              <RemoveXButton label="Remove question" onClick={() => setCustom((prev) => prev.filter((_, k) => k !== i))} disabled={busy} />
+        <SectionLabel>Questions (asked in this order — add your own, drag to reorder)</SectionLabel>
+        <SortableList
+          className="flex flex-col gap-2"
+          items={drafts}
+          getKey={(q) => q.key}
+          onReorder={setDrafts}
+          disabled={busy}
+          renderRow={(q, i, handle) => (
+            <div className="flex flex-wrap items-center gap-2">
+              {handle}
+              {isCoreDraft(q) ? (
+                <>
+                  <span className="flex-1 min-w-[220px] font-mono text-[12px] text-[var(--color-text-secondary)]">
+                    {CORE_SURVEY_QUESTIONS[q.core].prompt}
+                  </span>
+                  <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Core</span>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={q.prompt}
+                    onChange={(e) => update(i, { prompt: e.target.value })}
+                    maxLength={MAX_PROMPT_LENGTH}
+                    placeholder="Question"
+                    className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
+                  />
+                  <select value={q.kind} onChange={(e) => update(i, { kind: e.target.value as SurveyQuestionKind })} className={FORM_INPUT_CLS}>
+                    {(Object.keys(KIND_LABEL) as SurveyQuestionKind[]).map((k) => (
+                      <option key={k} value={k}>
+                        {KIND_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                  <RemoveXButton label="Remove question" onClick={() => setDrafts((prev) => prev.filter((_, k) => k !== i))} disabled={busy} />
+                </>
+              )}
             </div>
-          ))}
-        </div>
+          )}
+        />
         <button
           type="button"
-          onClick={() => setCustom((prev) => [...prev, { kind: 'rating', prompt: '' }])}
-          disabled={custom.length >= MAX_CUSTOM_QUESTIONS}
+          onClick={() => setDrafts((prev) => [...prev, { kind: 'rating', prompt: '', key: `custom-${nextKey.current++}` }])}
+          disabled={customCount >= MAX_CUSTOM_QUESTIONS}
           className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40 mt-3`}
         >
           + Add question
         </button>
       </div>
 
-      <div>
-        <SectionLabel>Core questions (always asked after yours)</SectionLabel>
-        <ol className="list-decimal list-inside font-mono text-[12px] text-[var(--color-text-secondary)] flex flex-col gap-1">
-          {CORE_SURVEY_QUESTIONS.map((q) => (
-            <li key={q.prompt}>{q.prompt}</li>
-          ))}
-        </ol>
-      </div>
-
       <div className="flex items-center gap-4">
         <button
           type="button"
           onClick={open}
-          disabled={busy || custom.some((q) => !q.prompt.trim())}
+          disabled={busy || drafts.some((q) => !isCoreDraft(q) && !q.prompt.trim())}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           {busy ? 'Opening…' : 'Open survey'}

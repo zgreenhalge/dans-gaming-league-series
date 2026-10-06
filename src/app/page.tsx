@@ -10,12 +10,16 @@ import {
   getUpcomingGauntletGames,
   gauntletMatchToUpcomingGameRow,
   getPlayerRosterSeasonIds,
+  getOpenFeedbackSeasonIds,
+  getSeasonSurveyView,
+  getSeasonSuperlativesView,
 } from '@/lib/queries';
 import type { UpcomingGameRow } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
 import { seasonTitle } from '@/lib/util';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
+import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 
 export const dynamic = 'force-dynamic';
@@ -109,6 +113,24 @@ export default async function Home() {
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
   ]);
 
+  // Survey / superlatives banners for the signed-in player: only seasons with something open, and
+  // only those the player played (the views are null otherwise).
+  const openFeedbackIds = currentPlayerId != null ? new Set(await getOpenFeedbackSeasonIds()) : new Set<number>();
+  const feedbackBanners = (
+    await Promise.all(
+      seasons
+        .filter((s) => !s.is_gauntlet && openFeedbackIds.has(s.id))
+        .sort((a, b) => b.id - a.id)
+        .map(async (s) => {
+          const [survey, superlatives] = await Promise.all([
+            getSeasonSurveyView(s.id, currentPlayerId),
+            getSeasonSuperlativesView(s.id, currentPlayerId),
+          ]);
+          return { season: s, survey, superlatives };
+        }),
+    )
+  ).filter((b) => b.survey || b.superlatives?.mode === 'ballot');
+
   const upcoming = seasons
     .filter((s) => !s.is_gauntlet && s.status === 'UPCOMING')
     .sort((a, b) => a.id - b.id);
@@ -140,6 +162,15 @@ export default async function Home() {
     <div className="min-h-screen">
       <HomeTopbar />
       <main className="max-w-[1080px] mx-auto px-6 pt-6 pb-16">
+        {feedbackBanners.map((b) => (
+          <FeedbackBanner
+            key={b.season.id}
+            seasonId={b.season.id}
+            seasonName={seasonTitle(b.season.name)}
+            survey={b.survey}
+            superlatives={b.superlatives}
+          />
+        ))}
         {upcoming.length > 0 && (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
             {upcoming.map((s) => (
