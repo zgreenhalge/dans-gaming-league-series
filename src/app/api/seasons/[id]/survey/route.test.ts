@@ -89,6 +89,15 @@ test('POST — questions follow the admin order, with core questions placed amon
   resetFeedbackFixture();
 });
 
+test('POST — { open: false } saves the survey closed; a non-boolean open is rejected (400)', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { open: 'no' })).status, 400);
+  assert.equal(db.surveys.length, 0);
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { open: false })).status, 201);
+  assert.notEqual(db.surveys[0].closed_at, null);
+  resetFeedbackFixture();
+});
+
 test('DELETE — admin reset closes the survey and deletes its responses, keeping the questions; non-admin refused (403), none to reset (404)', async () => {
   installFeedbackFixture(ALICE_ID);
   assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, {})).status, 403);

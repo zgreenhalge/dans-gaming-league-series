@@ -4,17 +4,21 @@ import { getSurveyForSeason, isSurveyLocked } from '@/lib/queries';
 import type { Json } from '@/lib/database.types';
 import { buildSurveyQuestions, validateQuestionDrafts } from '@/lib/survey';
 
-/** Opens a season's post-season survey with the admin's question order: custom questions and
+/** Creates a season's post-season survey with the admin's question order: custom questions and
  *  `{ core: index }` references in display order, any core questions left out following them. One
- *  survey per season; it starts open, and its questions are fixed while it is open or has responses. */
+ *  survey per season; it starts open unless `{ open: false }` is sent, which saves it closed. Its
+ *  questions are fixed while it is open or has responses. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const { seasonId } = access;
 
-  const body = (await req.json().catch(() => null)) as { questions?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { questions?: unknown; open?: unknown } | null;
   const drafts = validateQuestionDrafts(body?.questions);
   if (!drafts.ok) return NextResponse.json({ error: drafts.error }, { status: 400 });
+  if (body?.open !== undefined && typeof body.open !== 'boolean') {
+    return NextResponse.json({ error: 'open must be a boolean' }, { status: 400 });
+  }
 
   if (await getSurveyForSeason(seasonId)) {
     return NextResponse.json({ error: 'This season already has a survey' }, { status: 409 });
@@ -22,7 +26,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: survey, error } = await access.supabaseAdmin
     .from('surveys')
-    .insert({ season_id: seasonId, questions: buildSurveyQuestions(drafts.value) as unknown as Json })
+    .insert({
+      season_id: seasonId,
+      questions: buildSurveyQuestions(drafts.value) as unknown as Json,
+      closed_at: body?.open === false ? new Date().toISOString() : null,
+    })
     .select('id')
     .single();
   if (error) {

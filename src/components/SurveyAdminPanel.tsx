@@ -53,8 +53,9 @@ export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; surve
 
 type KeyedDraft = SurveyQuestionDraft & { key: string };
 
-/** The question builder: with no `existing` list it creates and opens the survey; with one (a closed
- *  survey that has no responses) it saves edits to that list, optionally opening the survey too. */
+/** The question builder: with no `existing` list it creates the survey; with one (a closed survey that
+ *  has no responses) it saves edits to that list. Either way the admin can save the questions as a
+ *  closed survey or save and open it. */
 function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: SurveyQuestion[] }) {
   const router = useRouter();
   const url = `/api/seasons/${seasonId}/survey`;
@@ -76,7 +77,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
   async function submit(openAfter: boolean) {
     await run(async () => {
       if (!existing) {
-        await sendFeedbackRequest('POST', url, { questions: drafts });
+        await sendFeedbackRequest('POST', url, { questions: drafts, open: openAfter });
       } else {
         await sendFeedbackRequest('PUT', url, { questions: drafts });
         if (openAfter) await sendFeedbackRequest('PATCH', url, { open: true });
@@ -145,13 +146,11 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
           disabled={invalid || busy}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
-          {busy ? 'Saving…' : existing ? 'Save & open survey' : 'Open survey'}
+          {busy ? 'Saving…' : 'Save & open survey'}
         </button>
-        {existing && (
-          <button type="button" onClick={() => submit(false)} disabled={invalid || busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
-            Save questions
-          </button>
-        )}
+        <button type="button" onClick={() => submit(false)} disabled={invalid || busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+          Save questions
+        </button>
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
     </div>
