@@ -172,6 +172,18 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
   return { ...results, eligibleCount: eligible.length };
 }
 
+/** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
+ *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. */
+export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
+  const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
+    supabase.from('surveys').select('season_id').is('closed_at', null),
+    supabase.from('superlative_polls').select('season_id').eq('is_open', true),
+  ]);
+  if (surveyErr) throw surveyErr;
+  if (pollErr) throw pollErr;
+  return [...new Set([...(surveys ?? []), ...(polls ?? [])].map((r) => r.season_id))];
+}
+
 /** What the season page's Survey tab shows a viewer: their form, while the survey is open and they
  *  played the season. Null (no tab) otherwise — for a signed-out or ineligible viewer, a closed
  *  survey, or a season with none. Independent of the superlatives vote. */

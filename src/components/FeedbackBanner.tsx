@@ -1,4 +1,4 @@
-// Season-page banner asking a signed-in player who played the season to take its open survey and/or
+// Season-page and home-page banner asking a signed-in player who played the season to take its open survey and/or
 // cast their superlatives votes — each link opens the matching tab. The two asks are independent;
 // each renders only when its own view says the viewer has something open to answer.
 
@@ -18,20 +18,24 @@ function Ask({ href, label, cta, answered }: { href: string; label: string; cta:
 
 export function FeedbackBanner({
   seasonId,
+  seasonName,
   survey,
   superlatives,
 }: {
   seasonId: number;
+  /** Prefixes each ask with the season's name, for pages that can show several seasons' banners. */
+  seasonName?: string;
   survey: SurveyTabView | null;
   superlatives: SuperlativesTabView | null;
 }) {
   const ballot = superlatives?.mode === 'ballot' ? superlatives : null;
   if (!survey && !ballot) return null;
+  const prefix = seasonName ? `${seasonName} · ` : '';
   return (
     <div className="mb-8 flex flex-col gap-2">
-      {survey && <Ask href={`/seasons/${seasonId}?view=survey`} label="Post-season survey" cta="Take it now" answered={survey.responded} />}
+      {survey && <Ask href={`/seasons/${seasonId}?view=survey`} label={`${prefix}Post-season survey`} cta="Take it now" answered={survey.responded} />}
       {ballot && (
-        <Ask href={`/seasons/${seasonId}?view=superlatives`} label="Vote on the season's superlatives" cta="Vote now" answered={Object.keys(ballot.votes).length > 0} />
+        <Ask href={`/seasons/${seasonId}?view=superlatives`} label={`${prefix}Vote on the season's superlatives`} cta="Vote now" answered={Object.keys(ballot.votes).length > 0} />
       )}
     </div>
   );
