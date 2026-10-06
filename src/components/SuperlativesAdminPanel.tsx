@@ -1,13 +1,14 @@
 'use client';
 
 // Admin view of a season's superlatives vote: choose the superlatives, open/close voting, and see
-// the anonymised tallies (who got how many votes — never who voted for whom).
+// the anonymised tallies (who got how many votes — never who voted for whom), and reset the vote
+// (wipe every vote and close voting, keeping the superlatives).
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_SMALL_BUTTON_CLS, ArmedConfirmButton, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
@@ -19,6 +20,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
   const [title, setTitle] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [resetArmed, setResetArmed] = useState(false);
   const { busy, error, run } = useAsyncAction();
   const url = `/api/seasons/${seasonId}/superlatives`;
   // The list is frozen once voting opens (the server enforces it): open now, or votes already cast.
@@ -41,6 +43,25 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
           closeLabel="Close voting"
           busy={busy}
           onToggle={() => mutate(() => sendFeedbackRequest('PATCH', url, { open: !poll.isOpen }))}
+        />
+      )}
+
+      {poll && (poll.isOpen || poll.voterCount > 0) && (
+        <ArmedConfirmButton
+          armed={resetArmed}
+          onArm={() => setResetArmed(true)}
+          onCancel={() => setResetArmed(false)}
+          onConfirm={() =>
+            mutate(async () => {
+              await sendFeedbackRequest('DELETE', `${url}/votes`, {});
+              setResetArmed(false);
+            })
+          }
+          busy={busy}
+          triggerLabel="Reset vote"
+          confirmLabel="Delete all votes & close voting"
+          busyLabel="Resetting…"
+          variant="danger"
         />
       )}
 

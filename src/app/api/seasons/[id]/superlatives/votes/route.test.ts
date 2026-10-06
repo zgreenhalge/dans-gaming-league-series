@@ -13,7 +13,7 @@ import {
 import { __setTestSession } from '@/lib/session';
 import { getPlayerSuperlativeVotes, getSuperlativeResults, getSeasonSuperlativesView } from '@/lib/queries';
 import type { FakeDb } from '@/lib/test-support/fakeSupabase';
-import { PUT } from './route';
+import { DELETE, PUT } from './route';
 
 const put = (body: unknown) =>
   PUT(jsonRequest(`http://localhost/api/seasons/${REGULAR_SEASON_ID}/superlatives/votes`, 'PUT', body), {
@@ -103,6 +103,30 @@ test('superlatives view: ballot for an eligible viewer, nothing for others, resu
   for (const viewer of [null, CARA_ID, ALICE_ID]) {
     assert.equal((await getSeasonSuperlativesView(REGULAR_SEASON_ID, viewer))?.mode, 'results');
   }
+  resetFeedbackFixture();
+});
+
+const reset = () =>
+  DELETE(jsonRequest(`http://localhost/api/seasons/${REGULAR_SEASON_ID}/superlatives/votes`, 'DELETE', {}), {
+    params: Promise.resolve({ id: String(REGULAR_SEASON_ID) }),
+  });
+
+test('DELETE — admin reset wipes every vote, closes voting, keeps the superlatives; others refused', async () => {
+  const db = installFeedbackFixture(ALICE_ID);
+  assert.equal((await reset()).status, 403);
+  __setTestSession(sessionFor(ADMIN_ID));
+  assert.equal((await reset()).status, 404);
+
+  seedPoll(db);
+  db.superlative_votes.push(
+    { id: 1, superlative_id: 1, voter_player_id: ALICE_ID, nominee_player_id: BOB_ID },
+    { id: 2, superlative_id: 2, voter_player_id: BOB_ID, nominee_player_id: ALICE_ID },
+  );
+  assert.equal((await reset()).status, 200);
+  assert.equal(db.superlative_votes.length, 0);
+  assert.equal(db.superlative_polls[0].is_open, false);
+  assert.equal(db.superlatives.length, 2);
+  assert.equal(await getSeasonSuperlativesView(REGULAR_SEASON_ID, ALICE_ID), null);
   resetFeedbackFixture();
 });
 
