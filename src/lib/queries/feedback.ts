@@ -27,7 +27,7 @@ export function isSurveyOpen(survey: Survey): boolean {
   return survey.closed_at == null;
 }
 
-/** A season's survey with its questions in display order, or null if none has been opened. */
+/** A season's survey with its questions in display order, or null if none has been created. */
 export async function getSurveyForSeason(seasonId: number): Promise<Survey | null> {
   const { data, error } = await supabase
     .from('surveys')
@@ -38,13 +38,17 @@ export async function getSurveyForSeason(seasonId: number): Promise<Survey | nul
   return data ? { ...data, questions: data.questions as unknown as SurveyQuestion[] } : null;
 }
 
-/** True once players can or did respond: the survey is open, or any response exists. Its questions
- *  are frozen from then on, so no answer lands on a question list the player didn't see. */
+/** The survey lock rule: open, or any response exists. A survey's questions are frozen from then on,
+ *  so no answer lands on a question list the player didn't see. */
+function surveyLockedFor(survey: Survey, hasResponses: boolean): boolean {
+  return isSurveyOpen(survey) || hasResponses;
+}
+
 export async function isSurveyLocked(survey: Survey): Promise<boolean> {
   if (isSurveyOpen(survey)) return true;
   const { data, error } = await supabase.from('survey_responses').select('id').eq('survey_id', survey.id).limit(1);
   if (error) throw error;
-  return (data ?? []).length > 0;
+  return surveyLockedFor(survey, (data ?? []).length > 0);
 }
 
 /** One player's own saved answers — for prefilling their editor — plus whether they have responded. */
@@ -72,7 +76,7 @@ export interface SurveyResults {
   summaries: SurveyQuestionSummary[];
 }
 
-/** Anonymised results for a season's survey, or null if none has been opened. */
+/** Anonymised results for a season's survey, or null if none has been created. */
 export async function getSurveyResults(seasonId: number): Promise<SurveyResults | null> {
   const survey = await getSurveyForSeason(seasonId);
   if (!survey) return null;
@@ -88,7 +92,7 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   return {
     survey,
     isOpen: isSurveyOpen(survey),
-    isLocked: isSurveyOpen(survey) || answers.length > 0,
+    isLocked: surveyLockedFor(survey, answers.length > 0),
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
