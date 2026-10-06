@@ -169,6 +169,7 @@ export default async function Home() {
             seasonName={seasonTitle(b.season.name)}
             survey={b.survey}
             superlatives={b.superlatives}
+            alwaysPrompt
           />
         ))}
         {upcoming.length > 0 && (
