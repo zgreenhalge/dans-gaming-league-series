@@ -10,12 +10,15 @@ import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
 import { RemoveXButton } from './RemoveXButton';
+import { MoveButtons, moveItem } from './MoveButtons';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
 import type { SuperlativeAdminResults } from '@/lib/queries';
 
 export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; poll: SuperlativeAdminResults | null }) {
   const router = useRouter();
   const [title, setTitle] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
   const { busy, error, run } = useAsyncAction();
   const url = `/api/seasons/${seasonId}/superlatives`;
 
@@ -39,10 +42,61 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
         />
       )}
 
-      {poll?.superlatives.map((s) => (
+      {poll?.superlatives.map((s, i, all) => {
+        // A title is editable only before the vote has opened: closed and nobody has voted on it.
+        const editable = !poll.isOpen && s.totalVotes === 0;
+        return (
         <div key={s.id} className="flex flex-col gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
           <div className="flex items-center gap-3">
-            <div className="font-display text-[15px] font-semibold">{s.title}</div>
+            <MoveButtons
+              index={i}
+              count={all.length}
+              disabled={busy}
+              onMove={(to) => mutate(() => sendFeedbackRequest('PUT', url, { order: moveItem(all, i, to).map((x) => x.id) }))}
+            />
+            {editingId === s.id ? (
+              <form
+                className="flex flex-1 flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void mutate(async () => {
+                    await sendFeedbackRequest('PATCH', url, { superlative_id: s.id, title: editTitle });
+                    setEditingId(null);
+                  });
+                }}
+              >
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  maxLength={MAX_SUPERLATIVE_TITLE_LENGTH}
+                  className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
+                />
+                <button type="submit" disabled={busy || !editTitle.trim()} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+                  Save
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} disabled={busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <>
+                <div className="font-display text-[15px] font-semibold">{s.title}</div>
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(s.id);
+                      setEditTitle(s.title);
+                    }}
+                    disabled={busy}
+                    className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}
+                  >
+                    Edit
+                  </button>
+                )}
+              </>
+            )}
             <RemoveXButton
               label={`Remove ${s.title}`}
               onClick={() => mutate(() => sendFeedbackRequest('DELETE', url, { superlative_id: s.id }))}
@@ -61,7 +115,8 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
             </ol>
           )}
         </div>
-      ))}
+        );
+      })}
 
       <form
         className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-tertiary)] pt-4"

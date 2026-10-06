@@ -4,7 +4,8 @@ import {
   buildSurveyQuestions,
   summarizeSurvey,
   tallyVotes,
-  validateCustomQuestions,
+  validateQuestionDrafts,
+  validateSuperlativeOrder,
   validateSuperlativeTitle,
   validateSuperlativeVotes,
   validateSurveyAnswers,
@@ -26,16 +27,40 @@ test('buildSurveyQuestions puts custom questions first, then core, with ids numb
   assert.deepEqual(built.map((q) => q.id), built.map((_, i) => i + 1));
 });
 
-test('validateCustomQuestions trims prompts and rejects bad input', () => {
-  assert.deepEqual(validateCustomQuestions(undefined), { ok: true, value: [] });
-  assert.deepEqual(validateCustomQuestions([{ kind: 'rating', prompt: '  Hi  ' }]), {
+test('validateQuestionDrafts trims prompts and rejects bad input', () => {
+  assert.deepEqual(validateQuestionDrafts(undefined), { ok: true, value: [] });
+  assert.deepEqual(validateQuestionDrafts([{ kind: 'rating', prompt: '  Hi  ' }]), {
     ok: true,
     value: [{ kind: 'rating', prompt: 'Hi' }],
   });
-  assert.equal(validateCustomQuestions('nope').ok, false);
-  assert.equal(validateCustomQuestions([{ kind: 'rating', prompt: '  ' }]).ok, false);
-  assert.equal(validateCustomQuestions([{ kind: 'slider', prompt: 'x' }]).ok, false);
-  assert.equal(validateCustomQuestions(Array.from({ length: 21 }, () => ({ kind: 'text', prompt: 'x' }))).ok, false);
+  assert.equal(validateQuestionDrafts('nope').ok, false);
+  assert.equal(validateQuestionDrafts([{ kind: 'rating', prompt: '  ' }]).ok, false);
+  assert.equal(validateQuestionDrafts([{ kind: 'slider', prompt: 'x' }]).ok, false);
+  assert.equal(validateQuestionDrafts(Array.from({ length: 21 }, () => ({ kind: 'text', prompt: 'x' }))).ok, false);
+});
+
+test('buildSurveyQuestions honours the given order, core references included, and appends omitted core questions', () => {
+  const built = buildSurveyQuestions([{ core: 2 }, { kind: 'text', prompt: 'Custom?' }, { core: 0 }]);
+  assert.equal(built.length, CORE_SURVEY_QUESTIONS.length + 1);
+  assert.deepEqual(built.slice(0, 3).map((q) => q.prompt), [CORE_SURVEY_QUESTIONS[2].prompt, 'Custom?', CORE_SURVEY_QUESTIONS[0].prompt]);
+  assert.deepEqual(built.slice(0, 3).map((q) => q.is_core), [true, false, true]);
+  assert.equal(built[3].prompt, CORE_SURVEY_QUESTIONS[1].prompt);
+  assert.deepEqual(built.map((q) => q.id), built.map((_, i) => i + 1));
+});
+
+test('validateQuestionDrafts accepts core references and rejects bad or repeated ones', () => {
+  assert.deepEqual(validateQuestionDrafts([{ core: 1 }]), { ok: true, value: [{ core: 1 }] });
+  assert.equal(validateQuestionDrafts([{ core: 99 }]).ok, false);
+  assert.equal(validateQuestionDrafts([{ core: '1' }]).ok, false);
+  assert.equal(validateQuestionDrafts([{ core: 1 }, { core: 1 }]).ok, false);
+});
+
+test('validateSuperlativeOrder requires a permutation of the current ids', () => {
+  assert.deepEqual(validateSuperlativeOrder([1, 2, 3], [3, 1, 2]), { ok: true, value: [3, 1, 2] });
+  assert.equal(validateSuperlativeOrder([1, 2, 3], [1, 2]).ok, false);
+  assert.equal(validateSuperlativeOrder([1, 2, 3], [1, 1, 2]).ok, false);
+  assert.equal(validateSuperlativeOrder([1, 2, 3], [1, 2, 9]).ok, false);
+  assert.equal(validateSuperlativeOrder([1], 'x').ok, false);
 });
 
 test('validateSurveyAnswers keeps typed answers and drops blanks', () => {
