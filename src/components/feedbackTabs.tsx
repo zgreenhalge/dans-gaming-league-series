@@ -8,21 +8,18 @@ import type { FeedbackTab } from './TopTabBar';
 import { SurveyForm } from './SurveyForm';
 import { SuperlativesBallot } from './SuperlativesBallot';
 import { SuperlativeResultsPanel } from './SuperlativeResults';
+import { FeedbackFormFrame } from './FeedbackFormFrame';
+import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 
 /** Admin-only link from a tab to its admin page (`/admin/seasons/<kind>/<id>`). */
-function ManageLink({ kind, seasonId, isAdmin }: { kind: 'survey' | 'superlatives'; seasonId: number; isAdmin: boolean }) {
+function manageLink(kind: 'survey' | 'superlatives', seasonId: number, isAdmin: boolean) {
   if (!isAdmin) return null;
   return (
-    <Link
-      href={`/admin/seasons/${kind}/${seasonId}`}
-      className="tracked text-[10px] font-semibold inline-block mb-4 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-    >
+    <Link href={`/admin/seasons/${kind}/${seasonId}`} className={ADMIN_SMALL_BUTTON_CLS}>
       Manage →
     </Link>
   );
 }
-
-const NOTE_CLS = 'font-mono text-[12px] text-[var(--color-text-secondary)] mb-8';
 
 export function buildSurveyTab(seasonId: number, view: SurveyTabView | null, isAdmin: boolean): FeedbackTab[] {
   if (!view) return [];
@@ -31,11 +28,14 @@ export function buildSurveyTab(seasonId: number, view: SurveyTabView | null, isA
       key: 'survey',
       label: 'Survey',
       content: (
-        <div className="max-w-[720px]">
-          <ManageLink kind="survey" seasonId={seasonId} isAdmin={isAdmin} />
-          <div className={NOTE_CLS}>Your answers are anonymous. You can come back and change them until the survey closes.</div>
-          <SurveyForm seasonId={seasonId} questions={view.questions} initialAnswers={view.answers} responded={view.responded} />
-        </div>
+        <SurveyForm
+          seasonId={seasonId}
+          questions={view.questions}
+          initialAnswers={view.answers}
+          responded={view.responded}
+          manage={manageLink('survey', seasonId, isAdmin)}
+          note="Your answers are anonymous. You can come back and change them until the survey closes."
+        />
       ),
     },
   ];
@@ -49,18 +49,18 @@ export function buildSuperlativesTab(seasonId: number, view: SuperlativesTabView
       label: 'Superlatives',
       content:
         view.mode === 'ballot' ? (
-          <div className="max-w-[720px]">
-            <ManageLink kind="superlatives" seasonId={seasonId} isAdmin={isAdmin} />
-            <div className={NOTE_CLS}>
-              Pick anyone who played this season, yourself included. You can change your votes until voting closes.
-            </div>
-            <SuperlativesBallot seasonId={seasonId} superlatives={view.superlatives} nominees={view.nominees} initialVotes={view.votes} />
-          </div>
+          <SuperlativesBallot
+            seasonId={seasonId}
+            superlatives={view.superlatives}
+            nominees={view.nominees}
+            initialVotes={view.votes}
+            manage={manageLink('superlatives', seasonId, isAdmin)}
+            note="Pick anyone who played this season, yourself included. You can change your votes until voting closes."
+          />
         ) : (
-          <>
-            <ManageLink kind="superlatives" seasonId={seasonId} isAdmin={isAdmin} />
+          <FeedbackFormFrame manage={manageLink('superlatives', seasonId, isAdmin)}>
             <SuperlativeResultsPanel results={view.results} />
-          </>
+          </FeedbackFormFrame>
         ),
     },
   ];

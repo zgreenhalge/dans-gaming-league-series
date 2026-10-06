@@ -54,7 +54,8 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
       <SortableList
         items={poll.superlatives}
         getKey={(s) => s.id}
-        disabled={busy || locked}
+        disabled={busy}
+        readOnly={locked}
         onReorder={(next) => mutate(() => sendFeedbackRequest('PUT', url, { order: next.map((x) => x.id) }))}
         renderRow={(s, _i, handle) => {
         return (

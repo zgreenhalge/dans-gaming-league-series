@@ -186,9 +186,11 @@ conventions, distinct from the content-page patterns above:
   toggle already uses, driven by Tailwind's `group-open:` on the native `open` state, no JS) and a
   `preview` slot for a live status summary that stays visible while collapsed, so a problem inside
   still reads at a glance without expanding.
-- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS` (exported from
-  `src/components/ArmedConfirmButton.tsx` alongside its `CONFIRM_VARIANT` styles) rather than a
-  re-typed class string per form — append any call-site-specific modifier (`disabled:opacity-40`,
+- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
+  action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
+  `src/components/adminButtonStyles.ts` (a plain module, so server components can use them too) and
+  are re-exported from `src/components/ArmedConfirmButton.tsx` — use them rather than a re-typed
+  class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,
   `self-start`) on top rather than forking the base style.
 
 ## When extending this system
