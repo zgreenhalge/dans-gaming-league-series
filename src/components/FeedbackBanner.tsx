@@ -21,21 +21,24 @@ export function FeedbackBanner({
   seasonName,
   survey,
   superlatives,
+  alwaysPrompt,
 }: {
   seasonId: number;
   /** Prefixes each ask with the season's name, for pages that can show several seasons' banners. */
   seasonName?: string;
   survey: SurveyTabView | null;
   superlatives: SuperlativesTabView | null;
+  /** Always shows the "take it / vote now" call to action, even for a viewer who already responded. */
+  alwaysPrompt?: boolean;
 }) {
   const ballot = superlatives?.mode === 'ballot' ? superlatives : null;
   if (!survey && !ballot) return null;
   const prefix = seasonName ? `${seasonName} · ` : '';
   return (
     <div className="mb-8 flex flex-col gap-2">
-      {survey && <Ask href={`/seasons/${seasonId}?view=survey`} label={`${prefix}Post-season survey`} cta="Take it now" answered={survey.responded} />}
+      {survey && <Ask href={`/seasons/${seasonId}?view=survey`} label={`${prefix}Post-season survey`} cta="Take it now" answered={!alwaysPrompt && survey.responded} />}
       {ballot && (
-        <Ask href={`/seasons/${seasonId}?view=superlatives`} label={`${prefix}Vote on the season's superlatives`} cta="Vote now" answered={Object.keys(ballot.votes).length > 0} />
+        <Ask href={`/seasons/${seasonId}?view=superlatives`} label={`${prefix}Vote on the season's superlatives`} cta="Vote now" answered={!alwaysPrompt && Object.keys(ballot.votes).length > 0} />
       )}
     </div>
   );
