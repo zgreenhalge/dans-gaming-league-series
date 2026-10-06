@@ -288,7 +288,7 @@ export default async function SeasonPage({
     initialLightData = { kind: 'regular', data: await getRegularSeasonLightView(seasonId, seasonNumber, playersById) };
   }
 
-  const feedbackTabs = [...buildSurveyTab(season.id, surveyView), ...buildSuperlativesTab(season.id, superlativesView)];
+  const feedbackTabs = [...buildSurveyTab(season.id, surveyView, isAdmin), ...buildSuperlativesTab(season.id, superlativesView, isAdmin)];
 
   const matchCount = matchSummaries.matches.length;
   // `matchSummaries.matches` is already sorted ascending by week/match number, so the last entry's

@@ -23,7 +23,7 @@ export interface SurveyQuestionInput {
   prompt: string;
 }
 
-/** The questions every survey ends with, in order. Copied into `surveys.questions` when a survey is
+/** The questions every survey includes, in their default order. Copied into `surveys.questions` when a survey is
  *  created, so editing this list only affects surveys created afterward. */
 export const CORE_SURVEY_QUESTIONS: readonly SurveyQuestionInput[] = [
   { kind: 'rating', prompt: 'How did you feel about the length of games?' },
@@ -46,37 +46,60 @@ export interface SurveyQuestion extends SurveyQuestionInput {
   is_core: boolean;
 }
 
-/** The question list for a new survey: the admin's custom questions first, then the core ones,
- *  numbered from 1. */
-export function buildSurveyQuestions(custom: SurveyQuestionInput[]): SurveyQuestion[] {
-  return [
-    ...custom.map((q) => ({ ...q, is_core: false })),
-    ...CORE_SURVEY_QUESTIONS.map((q) => ({ ...q, is_core: true })),
-  ].map((q, i) => ({ ...q, id: i + 1 }));
+/** A question in the admin's builder: a custom question, or a reference to a core question by its
+ *  index in `CORE_SURVEY_QUESTIONS`. Core questions can be placed anywhere among the custom ones. */
+export type SurveyQuestionDraft = SurveyQuestionInput | { core: number };
+
+export function isCoreDraft(draft: SurveyQuestionDraft): draft is { core: number } {
+  return 'core' in draft;
+}
+
+/** The question list for a new survey, in the order given and numbered from 1. Core questions the
+ *  drafts leave out follow them in their usual order. */
+export function buildSurveyQuestions(drafts: SurveyQuestionDraft[]): SurveyQuestion[] {
+  const placed = new Set(drafts.filter(isCoreDraft).map((d) => d.core));
+  const leftover = CORE_SURVEY_QUESTIONS.map((_, i) => i)
+    .filter((i) => !placed.has(i))
+    .map((core) => ({ core }));
+  return [...drafts, ...leftover]
+    .map((d) => (isCoreDraft(d) ? { ...CORE_SURVEY_QUESTIONS[d.core], is_core: true } : { ...d, is_core: false }))
+    .map((q, i) => ({ ...q, id: i + 1 }));
 }
 
 type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
 
-/** Validates the admin-supplied custom question list from a request body. An empty or missing list
- *  is fine (a survey of just the core questions). */
-export function validateCustomQuestions(input: unknown): Validated<SurveyQuestionInput[]> {
+/** Validates the admin-supplied question list from a request body: custom questions and `{ core }`
+ *  references, in display order. An empty or missing list is fine (a survey of just the core
+ *  questions). */
+export function validateQuestionDrafts(input: unknown): Validated<SurveyQuestionDraft[]> {
   if (input == null) return { ok: true, value: [] };
   if (!Array.isArray(input)) return { ok: false, error: 'questions must be an array' };
-  if (input.length > MAX_CUSTOM_QUESTIONS) {
-    return { ok: false, error: `At most ${MAX_CUSTOM_QUESTIONS} custom questions` };
-  }
-  const questions: SurveyQuestionInput[] = [];
+  const drafts: SurveyQuestionDraft[] = [];
+  const seenCore = new Set<number>();
   for (const raw of input) {
-    const q = raw as { kind?: unknown; prompt?: unknown } | null;
+    const q = raw as { kind?: unknown; prompt?: unknown; core?: unknown } | null;
+    if (typeof q === 'object' && q != null && 'core' in q) {
+      const core = q.core;
+      if (typeof core !== 'number' || !Number.isInteger(core) || core < 0 || core >= CORE_SURVEY_QUESTIONS.length) {
+        return { ok: false, error: 'Unknown core question' };
+      }
+      if (seenCore.has(core)) return { ok: false, error: 'Each core question can appear once' };
+      seenCore.add(core);
+      drafts.push({ core });
+      continue;
+    }
     const prompt = typeof q?.prompt === 'string' ? q.prompt.trim() : '';
     if (!prompt) return { ok: false, error: 'Every question needs a prompt' };
     if (prompt.length > MAX_PROMPT_LENGTH) {
       return { ok: false, error: `Prompts are limited to ${MAX_PROMPT_LENGTH} characters` };
     }
     if (!KINDS.includes(q?.kind as SurveyQuestionKind)) return { ok: false, error: 'Invalid question kind' };
-    questions.push({ kind: q!.kind as SurveyQuestionKind, prompt });
+    drafts.push({ kind: q!.kind as SurveyQuestionKind, prompt });
   }
-  return { ok: true, value: questions };
+  if (drafts.filter((d) => !isCoreDraft(d)).length > MAX_CUSTOM_QUESTIONS) {
+    return { ok: false, error: `At most ${MAX_CUSTOM_QUESTIONS} custom questions` };
+  }
+  return { ok: true, value: drafts };
 }
 
 /** One player's answers as stored in `survey_responses.answers`, keyed by question id: a rating is
@@ -172,6 +195,20 @@ export function validateSuperlativeTitle(input: unknown): Validated<string> {
     return { ok: false, error: `Titles are limited to ${MAX_SUPERLATIVE_TITLE_LENGTH} characters` };
   }
   return { ok: true, value: title };
+}
+
+/** Validates a new superlative order (`{ order: [id, …] }`): it must list every one of the season's
+ *  superlative ids exactly once. */
+export function validateSuperlativeOrder(currentIds: number[], input: unknown): Validated<number[]> {
+  if (!Array.isArray(input) || input.some((id) => typeof id !== 'number')) {
+    return { ok: false, error: 'order must be an array of superlative ids' };
+  }
+  const ids = input as number[];
+  const current = new Set(currentIds);
+  if (ids.length !== current.size || new Set(ids).size !== ids.length || ids.some((id) => !current.has(id))) {
+    return { ok: false, error: 'order must list every superlative exactly once' };
+  }
+  return { ok: true, value: ids };
 }
 
 export interface SuperlativeVoteInput {

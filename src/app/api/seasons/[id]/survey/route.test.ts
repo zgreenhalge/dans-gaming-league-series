@@ -78,4 +78,15 @@ test('PATCH — closes then reopens the survey; 404 when none exists; 400 for a 
   resetFeedbackFixture();
 });
 
+test('POST — questions follow the admin order, with core questions placed among custom ones (201)', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  const res = await call(POST, 'POST', REGULAR_SEASON_ID, { questions: [{ core: 8 }, { kind: 'text', prompt: 'Mine?' }] });
+  assert.equal(res.status, 201);
+  const prompts = (db.surveys[0].questions as { prompt: string }[]).map((q) => q.prompt);
+  assert.equal(prompts[0], CORE_SURVEY_QUESTIONS[8].prompt);
+  assert.equal(prompts[1], 'Mine?');
+  assert.equal(prompts.length, CORE_SURVEY_QUESTIONS.length + 1);
+  resetFeedbackFixture();
+});
+
 report();

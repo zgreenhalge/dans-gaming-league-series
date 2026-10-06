@@ -110,6 +110,20 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
 }
 
+/** True once players can or did vote: voting is open, or any vote exists. The superlatives list is
+ *  frozen from then on, so no vote ever lands on a title or list the voter didn't see. */
+export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<boolean> {
+  if (poll.isOpen) return true;
+  if (poll.superlatives.length === 0) return false;
+  const { data, error } = await supabase
+    .from('superlative_votes')
+    .select('id')
+    .in('superlative_id', poll.superlatives.map((s) => s.id))
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** One player's own ballot over the given superlatives, keyed by superlative id → nominee player id —
  *  for prefilling their editor. */
 export async function getPlayerSuperlativeVotes(superlativeIds: number[], playerId: number): Promise<Record<number, number>> {
@@ -170,6 +184,18 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
   if (!poll) return null;
   const [results, eligible] = await Promise.all([tallyPoll(poll), getSeasonPlayedPlayers(seasonId)]);
   return { ...results, eligibleCount: eligible.length };
+}
+
+/** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
+ *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. */
+export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
+  const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
+    supabase.from('surveys').select('season_id').is('closed_at', null),
+    supabase.from('superlative_polls').select('season_id').eq('is_open', true),
+  ]);
+  if (surveyErr) throw surveyErr;
+  if (pollErr) throw pollErr;
+  return [...new Set([...(surveys ?? []), ...(polls ?? [])].map((r) => r.season_id))];
 }
 
 /** What the season page's Survey tab shows a viewer: their form, while the survey is open and they

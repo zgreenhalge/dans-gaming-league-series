@@ -42,8 +42,9 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
   const rosterIds = new Set(roster.map((r) => r.player_id));
   const addablePlayers = allPlayers.filter((p) => !rosterIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
+  // Admin-only: players joining/leaving don't need to see gauntlet-planning warnings.
   const gauntletSizeUnsupported =
-    roster.length > 0 && (roster.length < GAUNTLET_MIN_QUALIFIERS || roster.length > GAUNTLET_MAX_QUALIFIERS);
+    isAdmin && roster.length > 0 && (roster.length < GAUNTLET_MIN_QUALIFIERS || roster.length > GAUNTLET_MAX_QUALIFIERS);
 
   async function mutate(playerId: number, method: 'POST' | 'DELETE') {
     setError(null);

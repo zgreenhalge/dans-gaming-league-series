@@ -3,6 +3,7 @@
 // The player-facing superlatives ballot: one nominee picker per superlative, drawn from everyone
 // who played the season. Saving again replaces the player's existing ballot (see
 // `PUT /api/seasons/[id]/superlatives/votes`); a superlative left on "No vote" has its vote cleared.
+// Once a player has votes saved the ballot shows read-only until they press Edit.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -24,6 +25,7 @@ export function SuperlativesBallot({
   const router = useRouter();
   const [votes, setVotes] = useState<Record<number, number>>(initialVotes);
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(() => Object.keys(initialVotes).length === 0);
   const { busy, error, run } = useAsyncAction();
 
   function setVote(superlativeId: number, nomineeId: number | null) {
@@ -43,8 +45,38 @@ export function SuperlativesBallot({
         votes: superlatives.flatMap((s) => (votes[s.id] != null ? [{ superlative_id: s.id, nominee_player_id: votes[s.id] }] : [])),
       });
       setSaved(true);
+      setEditing(Object.keys(votes).length === 0);
       router.refresh();
     });
+  }
+
+  const hasSavedVotes = Object.keys(initialVotes).length > 0 || saved;
+  const nomineeName = (id: number | undefined) => nominees.find((p) => p.id === id)?.name;
+
+  if (!editing) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              setSaved(false);
+              setEditing(true);
+            }}
+            className="tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] hover:brightness-110"
+          >
+            Edit
+          </button>
+          {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
+        </div>
+        {superlatives.map((s) => (
+          <div key={s.id} className="flex flex-col gap-1">
+            <span className="font-display text-[16px] font-semibold">{s.title}</span>
+            <span className="font-mono text-[13px] text-[var(--color-text-secondary)]">{nomineeName(votes[s.id]) ?? 'No vote'}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -71,7 +103,19 @@ export function SuperlativesBallot({
         <button type="button" onClick={save} disabled={busy} className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}>
           {busy ? 'Saving…' : 'Save Votes'}
         </button>
-        {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
+        {hasSavedVotes && (
+          <button
+            type="button"
+            onClick={() => {
+              setVotes(initialVotes);
+              setEditing(false);
+            }}
+            disabled={busy}
+            className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        )}
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
     </div>
