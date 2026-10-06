@@ -130,6 +130,10 @@ test('PUT — replaces the questions only while the survey is closed with no res
   assert.equal(stored[0].prompt, 'Again?');
   assert.equal(stored.length, CORE_SURVEY_QUESTIONS.length + 1);
 
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, { ...edit, open: true })).status, 200);
+  assert.equal(db.surveys[0].closed_at, null); // saved and opened in one request
+
+  await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { open: false });
   db.survey_responses.push({ id: 1, survey_id: db.surveys[0].id, player_id: ALICE_ID, answers: {} });
   assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, edit)).status, 409); // has a response
   resetFeedbackFixture();

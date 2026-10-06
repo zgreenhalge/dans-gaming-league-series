@@ -65,15 +65,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-/** Replaces a survey's questions (`{ questions }`, same shape as the POST). Refused (409) while the
- *  survey is open or has any response. */
+/** Replaces a survey's questions (`{ questions, open? }`, same shape as the POST; `open: true` also
+ *  opens the survey). Refused (409) while the survey is open or has any response. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const body = (await req.json().catch(() => null)) as { questions?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { questions?: unknown; open?: unknown } | null;
   const drafts = validateQuestionDrafts(body?.questions);
   if (!drafts.ok) return NextResponse.json({ error: drafts.error }, { status: 400 });
+  if (body?.open !== undefined && typeof body.open !== 'boolean') {
+    return NextResponse.json({ error: 'open must be a boolean' }, { status: 400 });
+  }
 
   const existing = await getSurveyForSeason(access.seasonId);
   if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
@@ -83,7 +86,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { error } = await access.supabaseAdmin
     .from('surveys')
-    .update({ questions: buildSurveyQuestions(drafts.value) as unknown as Json })
+    .update({
+      questions: buildSurveyQuestions(drafts.value) as unknown as Json,
+      ...(body?.open === true && { closed_at: null }),
+    })
     .eq('id', existing.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

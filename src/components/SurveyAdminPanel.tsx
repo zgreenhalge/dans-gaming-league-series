@@ -40,12 +40,10 @@ const KIND_LABEL: Record<SurveyQuestionKind, string> = {
 export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; survey: SurveyResultsData | null }) {
   return (
     <section className="flex flex-col gap-4">
-      {!survey ? (
-        <SurveyBuilder seasonId={seasonId} />
-      ) : survey.isOpen || survey.responseCount > 0 ? (
+      {survey?.isLocked ? (
         <SurveyResults seasonId={seasonId} survey={survey} />
       ) : (
-        <SurveyBuilder seasonId={seasonId} existing={survey.survey.questions} />
+        <SurveyBuilder seasonId={seasonId} existing={survey?.survey.questions} />
       )}
     </section>
   );
@@ -76,12 +74,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
 
   async function submit(openAfter: boolean) {
     await run(async () => {
-      if (!existing) {
-        await sendFeedbackRequest('POST', url, { questions: drafts, open: openAfter });
-      } else {
-        await sendFeedbackRequest('PUT', url, { questions: drafts });
-        if (openAfter) await sendFeedbackRequest('PATCH', url, { open: true });
-      }
+      await sendFeedbackRequest(existing ? 'PUT' : 'POST', url, { questions: drafts, open: openAfter });
       router.refresh();
     });
   }

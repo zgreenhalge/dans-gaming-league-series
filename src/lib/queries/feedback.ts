@@ -65,6 +65,8 @@ export async function getPlayerSurveyAnswers(
 export interface SurveyResults {
   survey: Survey;
   isOpen: boolean;
+  /** Open, or has any response — the survey's questions can't be edited. */
+  isLocked: boolean;
   responseCount: number;
   eligibleCount: number;
   summaries: SurveyQuestionSummary[];
@@ -86,6 +88,7 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   return {
     survey,
     isOpen: isSurveyOpen(survey),
+    isLocked: isSurveyOpen(survey) || answers.length > 0,
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
