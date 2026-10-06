@@ -10,7 +10,7 @@ import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
 import { RemoveXButton } from './RemoveXButton';
-import { MoveButtons, moveItem } from './MoveButtons';
+import { SortableList } from './SortableList';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
 import type { SuperlativeAdminResults } from '@/lib/queries';
 
@@ -42,18 +42,19 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
         />
       )}
 
-      {poll?.superlatives.map((s, i, all) => {
+      {poll && (
+      <SortableList
+        items={poll.superlatives}
+        getKey={(s) => s.id}
+        disabled={busy}
+        onReorder={(next) => mutate(() => sendFeedbackRequest('PUT', url, { order: next.map((x) => x.id) }))}
+        renderRow={(s, _i, handle) => {
         // A title is editable only before the vote has opened: closed and nobody has voted on it.
         const editable = !poll.isOpen && s.totalVotes === 0;
         return (
         <div key={s.id} className="flex flex-col gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
           <div className="flex items-center gap-3">
-            <MoveButtons
-              index={i}
-              count={all.length}
-              disabled={busy}
-              onMove={(to) => mutate(() => sendFeedbackRequest('PUT', url, { order: moveItem(all, i, to).map((x) => x.id) }))}
-            />
+            {handle}
             {editingId === s.id ? (
               <form
                 className="flex flex-1 flex-wrap items-center gap-2"
@@ -116,7 +117,9 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
           )}
         </div>
         );
-      })}
+        }}
+      />
+      )}
 
       <form
         className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-tertiary)] pt-4"

@@ -2,7 +2,8 @@
 
 // The player-facing post-season survey. Answers are keyed by question id; every question is
 // optional, and clicking a selected rating/yes-no choice again clears it. Saving again edits the
-// player's existing response (see `PUT /api/seasons/[id]/survey/response`).
+// player's existing response (see `PUT /api/seasons/[id]/survey/response`). Once a player has
+// responded the survey shows read-only until they press Edit.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -34,6 +35,7 @@ export function SurveyForm({
   const router = useRouter();
   const [answers, setAnswers] = useState<SurveyAnswers>(initialAnswers);
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(!responded);
   const { busy, error, run } = useAsyncAction();
 
   function setAnswer(id: number, value: AnswerValue | undefined) {
@@ -51,8 +53,46 @@ export function SurveyForm({
     await run(async () => {
       await sendFeedbackRequest('PUT', `/api/seasons/${seasonId}/survey/response`, { answers });
       setSaved(true);
+      setEditing(false);
       router.refresh();
     });
+  }
+
+  function answerText(q: SurveyQuestion): string {
+    const value = answers[String(q.id)];
+    if (value === undefined) return 'No answer';
+    if (typeof value === 'number') return `${value} · ${RATING_LABELS[value]}`;
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return value;
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex flex-col gap-8">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              setSaved(false);
+              setEditing(true);
+            }}
+            className="tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] hover:brightness-110"
+          >
+            Edit
+          </button>
+          {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
+        </div>
+        {questions.map((q, i) => (
+          <div key={q.id} className="flex flex-col gap-1">
+            <div className="font-display text-[16px] font-semibold">
+              <span className="font-mono text-[11px] text-[var(--color-text-secondary)] mr-2">{i + 1}.</span>
+              {q.prompt}
+            </div>
+            <div className="font-mono text-[13px] text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">{answerText(q)}</div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -112,7 +152,19 @@ export function SurveyForm({
         <button type="button" onClick={save} disabled={busy} className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}>
           {busy ? 'Saving…' : responded || saved ? 'Update Answers' : 'Submit Survey'}
         </button>
-        {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
+        {(responded || saved) && (
+          <button
+            type="button"
+            onClick={() => {
+              setAnswers(initialAnswers);
+              setEditing(false);
+            }}
+            disabled={busy}
+            className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        )}
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
     </div>

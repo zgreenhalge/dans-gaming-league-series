@@ -12,7 +12,7 @@ import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from
 import SectionLabel from './SectionLabel';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
 import { RemoveXButton } from './RemoveXButton';
-import { MoveButtons, moveItem } from './MoveButtons';
+import { SortableList } from './SortableList';
 import {
   CORE_SURVEY_QUESTIONS,
   isCoreDraft,
@@ -62,16 +62,16 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <SectionLabel>Questions (asked in this order — add your own, reorder any)</SectionLabel>
-        <div className="flex flex-col gap-2">
-          {drafts.map((q, i) => (
-            <div key={isCoreDraft(q) ? `core-${q.core}` : i} className="flex flex-wrap items-center gap-2">
-              <MoveButtons
-                index={i}
-                count={drafts.length}
-                disabled={busy}
-                onMove={(to) => setDrafts((prev) => moveItem(prev, i, to))}
-              />
+        <SectionLabel>Questions (asked in this order — add your own, drag to reorder)</SectionLabel>
+        <SortableList
+          className="flex flex-col gap-2"
+          items={drafts}
+          getKey={(q, i) => (isCoreDraft(q) ? `core-${q.core}` : `custom-${i}`)}
+          onReorder={setDrafts}
+          disabled={busy}
+          renderRow={(q, i, handle) => (
+            <div className="flex flex-wrap items-center gap-2">
+              {handle}
               {isCoreDraft(q) ? (
                 <>
                   <span className="flex-1 min-w-[220px] font-mono text-[12px] text-[var(--color-text-secondary)]">
@@ -100,8 +100,8 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
                 </>
               )}
             </div>
-          ))}
-        </div>
+          )}
+        />
         <button
           type="button"
           onClick={() => setDrafts((prev) => [...prev, { kind: 'rating', prompt: '' }])}
