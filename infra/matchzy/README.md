@@ -46,6 +46,26 @@ credentials — the admin server console's **Apply config set** button (`applyCo
 `src/lib/dathost.ts`) pushes the same fields live; cfg files still need the CLI (`--reassert`) or a
 real launch (`pushCfgFiles` runs automatically then).
 
+## Changing an in-game cvar (chat, voice, rules)
+
+Nothing is edited by hand on the DatHost box — the config set is the only place a cvar lives, and
+every launch re-pushes it.
+
+1. Edit the set's cfg file (`cfg/server.cfg` for base server cvars such as `sv_spec_hear`;
+   `cfg/MatchZy/live_override.cfg` for cvars applied at go-live) in the `config_set_files` row, or
+   locally and re-seed with `scripts/seed-config-set.ts`. Both are Supabase writes.
+2. Push it: the admin console's **Apply config set**, `dathost-golden-apply.ts --reassert`, or simply
+   the next real launch (`pushCfgFiles`).
+3. Restart the server — `server.cfg` is `exec`'d at boot, so a running server keeps its old values
+   until it restarts (or the cvar is typed into an authenticated RCON session).
+
+Cfg-file cvars only take effect because the golden `cs2_settings` sets
+`disable_workshop_command_filtering: true`: this league always loads a workshop map, and CS2's
+workshop command filter otherwise drops every cvar set via a cfg `exec` or plugin
+`Server.ExecuteCommand` (`DISALLOWED WORKSHOP CONVAR` in the server console log). That flag is part of
+the `golden` set, so it is already satisfied — when a cvar doesn't seem to apply, check the console
+log and `dathost-golden-diff.ts` for drift rather than re-deriving this chain.
+
 ## What goes in a config set's cfg files (capture via `dathost-golden-diff.ts`/`dathost-golden-
 apply.ts`, or DatHost File Manager / FTP as a fallback)
 
