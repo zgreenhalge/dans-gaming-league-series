@@ -8,8 +8,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_SMALL_BUTTON_CLS, ArmedConfirmButton, FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
+import { FeedbackResetControl } from './FeedbackResetControl';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
@@ -20,7 +21,6 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
   const [title, setTitle] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
-  const [resetArmed, setResetArmed] = useState(false);
   const { busy, error, run } = useAsyncAction();
   const url = `/api/seasons/${seasonId}/superlatives`;
   // The list is frozen once voting opens (the server enforces it): open now, or votes already cast.
@@ -46,23 +46,8 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
         />
       )}
 
-      {poll && (poll.isOpen || poll.voterCount > 0) && (
-        <ArmedConfirmButton
-          armed={resetArmed}
-          onArm={() => setResetArmed(true)}
-          onCancel={() => setResetArmed(false)}
-          onConfirm={() =>
-            mutate(async () => {
-              await sendFeedbackRequest('DELETE', `${url}/votes`, {});
-              setResetArmed(false);
-            })
-          }
-          busy={busy}
-          triggerLabel="Reset vote"
-          confirmLabel="Delete all votes & close voting"
-          busyLabel="Resetting…"
-          variant="danger"
-        />
+      {locked && (
+        <FeedbackResetControl url={`${url}/votes`} triggerLabel="Reset vote" confirmLabel="Delete all votes & close voting" />
       )}
 
       {poll && (
