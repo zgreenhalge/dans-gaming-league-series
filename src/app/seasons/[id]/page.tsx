@@ -30,6 +30,7 @@ import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { SeasonMapPoolPanel } from '@/components/SeasonMapPoolPanel';
+import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
@@ -94,7 +95,7 @@ function Topbar({ season }: { season: Season }) {
   );
 }
 
-function SeasonStatusTag({ status }: { status: Season['status'] }) {
+function SeasonStatusTag({ status, needsSignup }: { status: Season['status']; needsSignup: boolean }) {
   if (status === 'ACTIVE') {
     return (
       <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)] shrink-0">
@@ -104,18 +105,7 @@ function SeasonStatusTag({ status }: { status: Season['status'] }) {
     );
   }
   if (status === 'UPCOMING') {
-    return (
-      <span
-        className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold border shrink-0"
-        style={{
-          color: 'var(--color-site-accent)',
-          background: 'color-mix(in srgb, var(--color-site-accent) 12%, transparent)',
-          borderColor: 'var(--color-site-accent)',
-        }}
-      >
-        Soon
-      </span>
-    );
+    return <UpcomingSeasonTag needsSignup={needsSignup} />;
   }
   return null;
 }
@@ -191,7 +181,7 @@ export default async function SeasonPage({
         <main className="max-w-[1080px] mx-auto px-6 pb-16">
           <div className="mt-8 mb-6">
             <div className="flex items-center gap-3">
-              <SeasonStatusTag status={season.status} />
+              <SeasonStatusTag status={season.status} needsSignup={false} />
               <div className="font-display text-[36px] font-semibold leading-tight">
                 {seasonTitle(season.name)}
               </div>
@@ -313,7 +303,7 @@ export default async function SeasonPage({
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="flex items-center gap-3">
-            <SeasonStatusTag status={season.status} />
+            <SeasonStatusTag status={season.status} needsSignup={!roster.some((r) => r.player_id === currentPlayerId)} />
             <div className="font-display text-[36px] font-semibold leading-tight">
               {seasonTitle(season.name)}
             </div>

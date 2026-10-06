@@ -9,6 +9,7 @@ import {
   getGauntletRounds,
   getUpcomingGauntletGames,
   gauntletMatchToUpcomingGameRow,
+  getPlayerRosterSeasonIds,
   getOpenFeedbackSeasonIds,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
@@ -17,6 +18,7 @@ import type { UpcomingGameRow } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
 import { seasonTitle } from '@/lib/util';
+import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 
@@ -72,9 +74,11 @@ function ActiveSeasonPanel({
 function UpcomingSeasonRow({
   season,
   leaderboard,
+  needsSignup,
 }: {
   season: Season;
   leaderboard: LeaderboardRowWithId[];
+  needsSignup: boolean;
 }) {
   return (
     <Link
@@ -95,27 +99,19 @@ function UpcomingSeasonRow({
           ].filter(Boolean).join(' · ')}
         </div>
       </div>
-      <span
-        className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold border shrink-0"
-        style={{
-          color: 'var(--color-site-accent)',
-          background: 'color-mix(in srgb, var(--color-site-accent) 12%, transparent)',
-          borderColor: 'var(--color-site-accent)',
-        }}
-      >
-        Soon
-      </span>
+      <UpcomingSeasonTag needsSignup={needsSignup} />
     </Link>
   );
 }
 
 export default async function Home() {
-  const [seasons, leaderboards, session] = await Promise.all([
+  const session = await getServerSession(authOptions);
+  const currentPlayerId = session?.user?.playerId ?? null;
+  const [seasons, leaderboards, rosterSeasonIds] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
-    getServerSession(authOptions),
+    currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
   ]);
-  const currentPlayerId = session?.user?.playerId ?? null;
 
   // Survey / superlatives banners for the signed-in player: only seasons with something open, and
   // only those the player played (the views are null otherwise).
@@ -183,6 +179,7 @@ export default async function Home() {
                 key={s.id}
                 season={s}
                 leaderboard={leaderboards.get(s.id) ?? []}
+                needsSignup={!rosterSeasonIds.has(s.id)}
               />
             ))}
           </div>
