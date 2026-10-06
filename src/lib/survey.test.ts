@@ -53,6 +53,7 @@ test('validateQuestionDrafts accepts core references and rejects bad or repeated
   assert.equal(validateQuestionDrafts([{ core: 99 }]).ok, false);
   assert.equal(validateQuestionDrafts([{ core: '1' }]).ok, false);
   assert.equal(validateQuestionDrafts([{ core: 1 }, { core: 1 }]).ok, false);
+  assert.equal(validateQuestionDrafts(['abc', 5]).ok, false);
 });
 
 test('validateSuperlativeOrder requires a permutation of the current ids', () => {

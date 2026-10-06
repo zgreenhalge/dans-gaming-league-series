@@ -110,6 +110,20 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
 }
 
+/** True once players can or did vote: voting is open, or any vote exists. The superlatives list is
+ *  frozen from then on, so no vote ever lands on a title or list the voter didn't see. */
+export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<boolean> {
+  if (poll.isOpen) return true;
+  if (poll.superlatives.length === 0) return false;
+  const { data, error } = await supabase
+    .from('superlative_votes')
+    .select('id')
+    .in('superlative_id', poll.superlatives.map((s) => s.id))
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** One player's own ballot over the given superlatives, keyed by superlative id → nominee player id —
  *  for prefilling their editor. */
 export async function getPlayerSuperlativeVotes(superlativeIds: number[], playerId: number): Promise<Record<number, number>> {

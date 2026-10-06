@@ -4,7 +4,7 @@
 // (custom questions and the fixed core ones, in any order); afterward, the open/close control and the
 // anonymised results.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
@@ -41,10 +41,15 @@ export function SurveyAdminPanel({ seasonId, survey }: { seasonId: number; surve
   );
 }
 
+type KeyedDraft = SurveyQuestionDraft & { key: string };
+
 function SurveyBuilder({ seasonId }: { seasonId: number }) {
   const router = useRouter();
   // The whole question list in display order: custom questions are editable, core ones fixed text.
-  const [drafts, setDrafts] = useState<SurveyQuestionDraft[]>(() => CORE_SURVEY_QUESTIONS.map((_, core) => ({ core })));
+  // `key` is a stable row identity (the server ignores it), so a row keeps its focus and drag state
+  // as others are added, removed, or moved.
+  const [drafts, setDrafts] = useState<KeyedDraft[]>(() => CORE_SURVEY_QUESTIONS.map((_, core) => ({ core, key: `core-${core}` })));
+  const nextKey = useRef(0);
   const { busy, error, run } = useAsyncAction();
   const customCount = drafts.filter((d) => !isCoreDraft(d)).length;
 
@@ -66,7 +71,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
         <SortableList
           className="flex flex-col gap-2"
           items={drafts}
-          getKey={(q, i) => (isCoreDraft(q) ? `core-${q.core}` : `custom-${i}`)}
+          getKey={(q) => q.key}
           onReorder={setDrafts}
           disabled={busy}
           renderRow={(q, i, handle) => (
@@ -104,7 +109,7 @@ function SurveyBuilder({ seasonId }: { seasonId: number }) {
         />
         <button
           type="button"
-          onClick={() => setDrafts((prev) => [...prev, { kind: 'rating', prompt: '' }])}
+          onClick={() => setDrafts((prev) => [...prev, { kind: 'rating', prompt: '', key: `custom-${nextKey.current++}` }])}
           disabled={customCount >= MAX_CUSTOM_QUESTIONS}
           className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40 mt-3`}
         >

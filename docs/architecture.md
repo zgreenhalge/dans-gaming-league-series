@@ -99,7 +99,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only. Best-effort grants/revokes the `@Participants` Discord role (#397) for that one player if they're linked |
 | `POST/PATCH` | `/api/seasons/[id]/survey` | Open a regular season's post-season survey (`{ questions }` — custom questions and `{ core: index }` references in display order, any core question left out following them; one per season, starts open), or close/reopen it (`{ open }`) (admin only) |
 | `PUT` | `/api/seasons/[id]/survey/response` | Save the caller's survey answers (`{ answers: { [questionId]: value } }`). Players who played the season only (`requireSeasonFeedbackAccess()`); one response per player, edited in place while the survey is open — answers left out are cleared |
-| `POST/DELETE/PATCH` | `/api/seasons/[id]/superlatives` | Add a superlative (`{ title }`, creating the season's vote, closed, on the first), remove one and its votes (`{ superlative_id }`), `PUT` a new order (`{ order: [superlative_id, …] }`, any time), `PATCH` a rename (`{ superlative_id, title }`; only while voting is closed and that superlative has no votes) or open/close voting (`{ open }`; needs at least one superlative) (admin only) |
+| `POST/DELETE/PATCH` | `/api/seasons/[id]/superlatives` | Add a superlative (`{ title }`, creating the season's vote, closed, on the first), remove one (`{ superlative_id }`), `PUT` a new order (`{ order: [superlative_id, …] }`), `PATCH` a rename (`{ superlative_id, title }`) or open/close voting (`{ open }`; needs at least one superlative) (admin only) |
 | `PUT` | `/api/seasons/[id]/superlatives/votes` | Save the caller's ballot (`{ votes: [{ superlative_id, nominee_player_id }] }`). Players who played the season only; nominees are any player who played, the voter included; replaced in place while voting is open — superlatives left out are cleared |
 | `POST/DELETE` | `/api/seasons/[id]/schedule` | Generate (fully regenerating) or clear a season's schedule draft from its current roster (admin only, `UPCOMING` only) |
 | `PATCH` | `/api/seasons/[id]/schedule` | Save a hand-edit to an existing schedule draft — reassigns players within the generated week/match structure (admin only, `UPCOMING` only) |
@@ -424,8 +424,9 @@ The two are independent flows: an admin sets each up and opens/closes it on its 
 and a player answers each on its own tab. Both admin panels share one open/close control
 (`FeedbackOpenControl`): opening is the primary button, closing the small bordered one.
 The survey builder orders custom and core questions freely, and the list is fixed once the survey is
-opened. Superlatives can be reordered at any time, renamed until voting opens and they have votes, and
-added or removed (removing one deletes its votes) until then. Neither can be answered unless open, and answers are
+opened. Superlatives can be added, removed, renamed, and reordered only until voting opens: the list is
+locked while voting is open and stays locked once any vote exists (`isSuperlativePollLocked()`), so no
+vote lands on a list the voter didn't see; the other mutations return 409 when locked. Neither can be answered unless open, and answers are
 editable until closed.
 
 **Season-page tabs.** `getSeasonSurveyView()` and `getSeasonSuperlativesView()` each resolve, per

@@ -86,19 +86,42 @@ test('PUT — reorders superlatives; rejects a non-permutation (400) and an empt
   resetFeedbackFixture();
 });
 
-test('PATCH — renames a superlative only while voting is closed and it has no votes', async () => {
+test('PATCH — renames a superlative while the poll is unlocked', async () => {
   const db = installFeedbackFixture(ADMIN_ID);
   await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'A' });
   await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'B' });
-  const [a, b] = db.superlatives.map((s) => s.id as number);
+  const [a] = db.superlatives.map((s) => s.id as number);
   assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: 999, title: 'X' })).status, 404);
   assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: a, title: '  ' })).status, 400);
   assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: a, title: 'b' })).status, 409);
   assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: a, title: ' Renamed ' })).status, 200);
   assert.equal(db.superlatives.find((s) => s.id === a)!.title, 'Renamed');
-  db.superlative_votes.push({ id: 1, superlative_id: b, voter_player_id: ALICE_ID, nominee_player_id: ADMIN_ID });
-  assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: b, title: 'C' })).status, 409);
+  resetFeedbackFixture();
+});
+
+test('once voting is open, add / remove / rename / reorder are all refused (409); closing without votes unlocks', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'A' });
+  await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'B' });
+  const [a, b] = db.superlatives.map((s) => s.id as number);
   await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { open: true });
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'C' })).status, 409);
+  assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, { superlative_id: a })).status, 409);
+  assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: a, title: 'D' })).status, 409);
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, { order: [b, a] })).status, 409);
+  assert.equal(db.superlatives.length, 2);
+  await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { open: false });
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'C' })).status, 201);
+  resetFeedbackFixture();
+});
+
+test('a poll that has votes stays locked after voting closes', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'A' });
+  const a = db.superlatives[0].id as number;
+  db.superlative_votes.push({ id: 1, superlative_id: a, voter_player_id: ALICE_ID, nominee_player_id: ADMIN_ID });
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'C' })).status, 409);
+  assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, { superlative_id: a })).status, 409);
   assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: a, title: 'D' })).status, 409);
   resetFeedbackFixture();
 });

@@ -78,7 +78,7 @@ export function validateQuestionDrafts(input: unknown): Validated<SurveyQuestion
   const seenCore = new Set<number>();
   for (const raw of input) {
     const q = raw as { kind?: unknown; prompt?: unknown; core?: unknown } | null;
-    if (q != null && 'core' in q) {
+    if (typeof q === 'object' && q != null && 'core' in q) {
       const core = q.core;
       if (typeof core !== 'number' || !Number.isInteger(core) || core < 0 || core >= CORE_SURVEY_QUESTIONS.length) {
         return { ok: false, error: 'Unknown core question' };

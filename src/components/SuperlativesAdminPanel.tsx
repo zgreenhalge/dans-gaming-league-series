@@ -21,6 +21,8 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
   const [editTitle, setEditTitle] = useState('');
   const { busy, error, run } = useAsyncAction();
   const url = `/api/seasons/${seasonId}/superlatives`;
+  // The list is frozen once voting opens (the server enforces it): open now, or votes already cast.
+  const locked = !!poll && (poll.isOpen || poll.voterCount > 0);
 
   function mutate(action: () => Promise<void>) {
     return run(async () => {
@@ -46,11 +48,9 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
       <SortableList
         items={poll.superlatives}
         getKey={(s) => s.id}
-        disabled={busy}
+        disabled={busy || locked}
         onReorder={(next) => mutate(() => sendFeedbackRequest('PUT', url, { order: next.map((x) => x.id) }))}
         renderRow={(s, _i, handle) => {
-        // A title is editable only before the vote has opened: closed and nobody has voted on it.
-        const editable = !poll.isOpen && s.totalVotes === 0;
         return (
         <div key={s.id} className="flex flex-col gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
           <div className="flex items-center gap-3">
@@ -83,7 +83,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
             ) : (
               <>
                 <div className="font-display text-[15px] font-semibold">{s.title}</div>
-                {editable && (
+                {!locked && (
                   <button
                     type="button"
                     onClick={() => {
@@ -98,11 +98,13 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
                 )}
               </>
             )}
-            <RemoveXButton
-              label={`Remove ${s.title}`}
-              onClick={() => mutate(() => sendFeedbackRequest('DELETE', url, { superlative_id: s.id }))}
-              disabled={busy}
-            />
+            {!locked && (
+              <RemoveXButton
+                label={`Remove ${s.title}`}
+                onClick={() => mutate(() => sendFeedbackRequest('DELETE', url, { superlative_id: s.id }))}
+                disabled={busy}
+              />
+            )}
           </div>
           {s.nominees.length === 0 ? (
             <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">No votes yet</div>
@@ -121,6 +123,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
       />
       )}
 
+      {!locked && (
       <form
         className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-tertiary)] pt-4"
         onSubmit={(e) => {
@@ -143,6 +146,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
           Add superlative
         </button>
       </form>
+      )}
       {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
     </section>
   );
