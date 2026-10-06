@@ -66,6 +66,16 @@ export function buildSurveyQuestions(drafts: SurveyQuestionDraft[]): SurveyQuest
     .map((q, i) => ({ ...q, id: i + 1 }));
 }
 
+/** A stored question list as builder drafts, in order — for editing a survey that has no responses.
+ *  A core question maps back to its `CORE_SURVEY_QUESTIONS` entry by prompt and kind; one that no
+ *  longer matches any (the core list has since changed) comes back as an ordinary custom question. */
+export function questionsToDrafts(questions: SurveyQuestion[]): SurveyQuestionDraft[] {
+  return questions.map((q) => {
+    const core = q.is_core ? CORE_SURVEY_QUESTIONS.findIndex((c) => c.prompt === q.prompt && c.kind === q.kind) : -1;
+    return core >= 0 ? { core } : { kind: q.kind, prompt: q.prompt };
+  });
+}
+
 type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Validates the admin-supplied question list from a request body: custom questions and `{ core }`

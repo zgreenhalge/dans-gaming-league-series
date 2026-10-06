@@ -1,7 +1,8 @@
 'use client';
 
 // Admin view of a season's superlatives vote: choose the superlatives, open/close voting, and see
-// the anonymised tallies (who got how many votes — never who voted for whom).
+// the anonymised tallies (who got how many votes — never who voted for whom), and reset the vote
+// (wipe every vote and close voting, keeping the superlatives).
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,6 +10,7 @@ import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
+import { FeedbackResetControl } from './FeedbackResetControl';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
@@ -42,6 +44,10 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
           busy={busy}
           onToggle={() => mutate(() => sendFeedbackRequest('PATCH', url, { open: !poll.isOpen }))}
         />
+      )}
+
+      {locked && (
+        <FeedbackResetControl url={`${url}/votes`} triggerLabel="Reset vote" confirmLabel="Delete all votes & close voting" />
       )}
 
       {poll && (

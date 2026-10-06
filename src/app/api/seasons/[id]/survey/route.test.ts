@@ -1,5 +1,5 @@
 /**
- * POST/PATCH /api/seasons/[id]/survey — admin sends, closes, and reopens a season's survey.
+ * POST/PUT/PATCH/DELETE /api/seasons/[id]/survey — admin sends, edits, closes, reopens, and resets a season's survey.
  * Run:  npx vitest run src/app/api/seasons/[id]/survey/route.test.ts
  */
 
@@ -11,11 +11,11 @@ import {
   ADMIN_ID, ALICE_ID, GAUNTLET_SEASON_ID, REGULAR_SEASON_ID, installFeedbackFixture, resetFeedbackFixture,
 } from '@/lib/test-support/feedbackFixture';
 import { CORE_SURVEY_QUESTIONS } from '@/lib/survey';
-import { POST, PATCH } from './route';
+import { POST, PATCH, PUT, DELETE } from './route';
 
 type Handler = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 
-const call = (handler: Handler, method: 'POST' | 'PATCH', seasonId: number | string, body: unknown) =>
+const call = (handler: Handler, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', seasonId: number | string, body: unknown) =>
   handler(jsonRequest(`http://localhost/api/seasons/${seasonId}/survey`, method, body), {
     params: Promise.resolve({ id: String(seasonId) }),
   });
@@ -86,6 +86,56 @@ test('POST — questions follow the admin order, with core questions placed amon
   assert.equal(prompts[0], CORE_SURVEY_QUESTIONS[8].prompt);
   assert.equal(prompts[1], 'Mine?');
   assert.equal(prompts.length, CORE_SURVEY_QUESTIONS.length + 1);
+  resetFeedbackFixture();
+});
+
+test('POST — { open: false } saves the survey closed; a non-boolean open is rejected (400)', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { open: 'no' })).status, 400);
+  assert.equal(db.surveys.length, 0);
+  assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { open: false })).status, 201);
+  assert.notEqual(db.surveys[0].closed_at, null);
+  resetFeedbackFixture();
+});
+
+test('DELETE — admin reset closes the survey and deletes its responses, keeping the questions; non-admin refused (403), none to reset (404)', async () => {
+  installFeedbackFixture(ALICE_ID);
+  assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, {})).status, 403);
+  const db = installFeedbackFixture(ADMIN_ID);
+  assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, {})).status, 404);
+
+  await call(POST, 'POST', REGULAR_SEASON_ID, { questions: [{ kind: 'text', prompt: 'Thoughts?' }] });
+  const questions = db.surveys[0].questions;
+  db.survey_responses.push({ id: 1, survey_id: db.surveys[0].id, player_id: ALICE_ID, answers: {} });
+  assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, {})).status, 200);
+  assert.equal(db.survey_responses.length, 0);
+  assert.equal(db.surveys.length, 1);
+  assert.notEqual(db.surveys[0].closed_at, null);
+  assert.deepEqual(db.surveys[0].questions, questions);
+  resetFeedbackFixture();
+});
+
+test('PUT — replaces the questions only while the survey is closed with no responses', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  const edit = { questions: [{ kind: 'yes_no', prompt: 'Again?' }] };
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, edit)).status, 404);
+
+  await call(POST, 'POST', REGULAR_SEASON_ID, {});
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, edit)).status, 409); // open
+
+  await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { open: false });
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, { questions: [{ kind: 'slider', prompt: 'x' }] })).status, 400);
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, edit)).status, 200);
+  const stored = db.surveys[0].questions as { prompt: string }[];
+  assert.equal(stored[0].prompt, 'Again?');
+  assert.equal(stored.length, CORE_SURVEY_QUESTIONS.length + 1);
+
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, { ...edit, open: true })).status, 200);
+  assert.equal(db.surveys[0].closed_at, null); // saved and opened in one request
+
+  await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { open: false });
+  db.survey_responses.push({ id: 1, survey_id: db.surveys[0].id, player_id: ALICE_ID, answers: {} });
+  assert.equal((await call(PUT, 'PUT', REGULAR_SEASON_ID, edit)).status, 409); // has a response
   resetFeedbackFixture();
 });
 

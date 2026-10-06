@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   CORE_SURVEY_QUESTIONS,
   buildSurveyQuestions,
+  questionsToDrafts,
   summarizeSurvey,
   tallyVotes,
   validateQuestionDrafts,
@@ -129,6 +130,15 @@ test('tallyVotes orders by votes, then player id', () => {
     { player_id: 7, votes: 1 },
   ]);
   assert.deepEqual(tallyVotes([]), []);
+});
+
+test('questionsToDrafts round-trips a built list and turns a core question the list no longer has into a custom one', () => {
+  const drafts = [{ kind: 'text' as const, prompt: 'Custom?' }, { core: 3 }];
+  const built = buildSurveyQuestions(drafts);
+  assert.deepEqual(buildSurveyQuestions(questionsToDrafts(built)), built);
+
+  const stale = [{ id: 1, kind: 'rating' as const, prompt: 'A retired core question', is_core: true }];
+  assert.deepEqual(questionsToDrafts(stale), [{ kind: 'rating', prompt: 'A retired core question' }]);
 });
 
 report();
