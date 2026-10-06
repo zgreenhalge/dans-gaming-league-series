@@ -303,7 +303,7 @@ export default async function SeasonPage({
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="flex items-center gap-3">
-            <SeasonStatusTag status={season.status} needsSignup={currentPlayerId == null || !roster.some((r) => r.player_id === currentPlayerId)} />
+            <SeasonStatusTag status={season.status} needsSignup={!roster.some((r) => r.player_id === currentPlayerId)} />
             <div className="font-display text-[36px] font-semibold leading-tight">
               {seasonTitle(season.name)}
             </div>

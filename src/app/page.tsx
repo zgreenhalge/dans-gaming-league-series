@@ -101,13 +101,13 @@ function UpcomingSeasonRow({
 }
 
 export default async function Home() {
-  const [seasons, leaderboards, session] = await Promise.all([
+  const session = await getServerSession(authOptions);
+  const currentPlayerId = session?.user?.playerId ?? null;
+  const [seasons, leaderboards, rosterSeasonIds] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
-    getServerSession(authOptions),
+    currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
   ]);
-  const currentPlayerId = session?.user?.playerId ?? null;
-  const rosterSeasonIds = currentPlayerId != null ? await getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>();
 
   const upcoming = seasons
     .filter((s) => !s.is_gauntlet && s.status === 'UPCOMING')
