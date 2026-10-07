@@ -13,7 +13,8 @@ export function FeedbackFormFrame({
   children,
 }: {
   manage?: ReactNode;
-  /** Set once the player has submitted and the form is read-only: shows their Edit button. */
+  /** Set once the player has submitted and the form is read-only: shows their Edit button. Holds a
+   *  handler, so only a client component can pass it. */
   edit?: { saved: boolean; onEdit: () => void };
   note?: string;
   wide?: boolean;

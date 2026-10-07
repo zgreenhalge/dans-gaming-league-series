@@ -443,7 +443,8 @@ viewer has something to do or see (the "gate a tab on data" rule in [`patterns.m
 
 Each tab's body is laid out by `FeedbackFormFrame`: a top row holding the admin's Manage button and,
 once the viewer has submitted, their Edit button, then the explanatory note across the full tab
-width, then the form (`SurveyForm`, `SuperlativesBallot`) or the results.
+width, then the body: the form (`SurveyForm`, `SuperlativesBallot`), capped to a readable 720px, or the
+results, which pass `wide` to use the full width.
 
 The tabs sit in the same top-level row as Regular Season / Gauntlet (`TopTabBar`), driven by the
 `view` URL param: `CombinedSeasonTabView` owns the row when the season has a gauntlet tab, and
