@@ -19,6 +19,7 @@ export function SortableList<T>({
   getKey,
   onReorder,
   disabled,
+  readOnly,
   renderRow,
   className,
 }: {
@@ -26,7 +27,10 @@ export function SortableList<T>({
   getKey: (item: T, index: number) => string | number;
   /** Called with the full list in its new order when a drag ends on a different row. */
   onReorder: (next: T[]) => void;
+  /** Greys the grip out and ignores drags (e.g. while a save is in flight). */
   disabled?: boolean;
+  /** Hides the grip entirely: the order can't be changed. */
+  readOnly?: boolean;
   /** Renders one row's content; place `handle` wherever the grip should sit. */
   renderRow: (item: T, index: number, handle: ReactNode) => ReactNode;
   className?: string;
@@ -50,7 +54,7 @@ export function SortableList<T>({
   return (
     <div ref={listRef} className={className}>
       {items.map((item, i) => {
-        const handle = (
+        const handle = readOnly ? null : (
           <span
             role="button"
             aria-label="Drag to reorder"

@@ -5,11 +5,13 @@
 // player's existing response (see `PUT /api/seasons/[id]/survey/response`). Once a player has
 // responded the survey shows read-only until they press Edit.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { FeedbackFormFrame } from './FeedbackFormFrame';
 import { RATING_LABELS, RATING_MAX, RATING_MIN, MAX_TEXT_ANSWER_LENGTH, type SurveyAnswers, type SurveyQuestion } from '@/lib/survey';
 
 type AnswerValue = SurveyAnswers[string];
@@ -26,11 +28,16 @@ export function SurveyForm({
   questions,
   initialAnswers,
   responded,
+  manage,
+  note,
 }: {
   seasonId: number;
   questions: SurveyQuestion[];
   initialAnswers: SurveyAnswers;
   responded: boolean;
+  /** The admin's Manage link, shown in the top row beside Edit. */
+  manage?: ReactNode;
+  note: string;
 }) {
   const router = useRouter();
   const [answers, setAnswers] = useState<SurveyAnswers>(initialAnswers);
@@ -66,36 +73,21 @@ export function SurveyForm({
     return value;
   }
 
-  if (!editing) {
-    return (
-      <div className="flex flex-col gap-8">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => {
-              setSaved(false);
-              setEditing(true);
-            }}
-            className="tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] hover:brightness-110"
-          >
-            Edit
-          </button>
-          {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
-        </div>
-        {questions.map((q, i) => (
-          <div key={q.id} className="flex flex-col gap-1">
-            <div className="font-display text-[16px] font-semibold">
-              <span className="font-mono text-[11px] text-[var(--color-text-secondary)] mr-2">{i + 1}.</span>
-              {q.prompt}
-            </div>
-            <div className="font-mono text-[13px] text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">{answerText(q)}</div>
+  const renderReadOnly = () => (
+    <div className="flex flex-col gap-8">
+      {questions.map((q, i) => (
+        <div key={q.id} className="flex flex-col gap-1">
+          <div className="font-display text-[16px] font-semibold">
+            <span className="font-mono text-[11px] text-[var(--color-text-secondary)] mr-2">{i + 1}.</span>
+            {q.prompt}
           </div>
-        ))}
-      </div>
-    );
-  }
+          <div className="font-mono text-[13px] text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">{answerText(q)}</div>
+        </div>
+      ))}
+    </div>
+  );
 
-  return (
+  const renderForm = () => (
     <div className="flex flex-col gap-8">
       {questions.map((q, i) => {
         const value = answers[String(q.id)];
@@ -168,5 +160,25 @@ export function SurveyForm({
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
     </div>
+  );
+
+  return (
+    <FeedbackFormFrame
+      manage={manage}
+      edit={
+        editing
+          ? undefined
+          : {
+              saved,
+              onEdit: () => {
+                setSaved(false);
+                setEditing(true);
+              },
+            }
+      }
+      note={note}
+    >
+      {editing ? renderForm() : renderReadOnly()}
+    </FeedbackFormFrame>
   );
 }

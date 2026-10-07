@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import EmptyState from './EmptyState';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import {
   type DraftPod,
   type DraftSlot,

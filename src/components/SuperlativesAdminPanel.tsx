@@ -8,7 +8,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_SMALL_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackOpenControl } from './FeedbackOpenControl';
 import { FeedbackResetControl } from './FeedbackResetControl';
 import { RemoveXButton } from './RemoveXButton';
@@ -54,7 +55,8 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
       <SortableList
         items={poll.superlatives}
         getKey={(s) => s.id}
-        disabled={busy || locked}
+        disabled={busy}
+        readOnly={locked}
         onReorder={(next) => mutate(() => sendFeedbackRequest('PUT', url, { order: next.map((x) => x.id) }))}
         renderRow={(s, _i, handle) => {
         return (

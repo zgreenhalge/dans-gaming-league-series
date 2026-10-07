@@ -5,22 +5,29 @@
 // `PUT /api/seasons/[id]/superlatives/votes`); a superlative left on "No vote" has its vote cleared.
 // Once a player has votes saved the ballot shows read-only until they press Edit.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { FeedbackFormFrame } from './FeedbackFormFrame';
 
 export function SuperlativesBallot({
   seasonId,
   superlatives,
   nominees,
   initialVotes,
+  manage,
+  note,
 }: {
   seasonId: number;
   superlatives: { id: number; title: string }[];
   nominees: { id: number; name: string }[];
   initialVotes: Record<number, number>;
+  /** The admin's Manage link, shown in the top row beside Edit. */
+  manage?: ReactNode;
+  note: string;
 }) {
   const router = useRouter();
   const [votes, setVotes] = useState<Record<number, number>>(initialVotes);
@@ -53,33 +60,18 @@ export function SuperlativesBallot({
   const hasSavedVotes = Object.keys(initialVotes).length > 0 || saved;
   const nomineeName = (id: number | undefined) => nominees.find((p) => p.id === id)?.name;
 
-  if (!editing) {
-    return (
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => {
-              setSaved(false);
-              setEditing(true);
-            }}
-            className="tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] hover:brightness-110"
-          >
-            Edit
-          </button>
-          {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}
+  const renderReadOnly = () => (
+    <div className="flex flex-col gap-6">
+      {superlatives.map((s) => (
+        <div key={s.id} className="flex flex-col gap-1">
+          <span className="font-display text-[16px] font-semibold">{s.title}</span>
+          <span className="font-mono text-[13px] text-[var(--color-text-secondary)]">{nomineeName(votes[s.id]) ?? 'No vote'}</span>
         </div>
-        {superlatives.map((s) => (
-          <div key={s.id} className="flex flex-col gap-1">
-            <span className="font-display text-[16px] font-semibold">{s.title}</span>
-            <span className="font-mono text-[13px] text-[var(--color-text-secondary)]">{nomineeName(votes[s.id]) ?? 'No vote'}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+      ))}
+    </div>
+  );
 
-  return (
+  const renderForm = () => (
     <div className="flex flex-col gap-6">
       {superlatives.map((s) => (
         <label key={s.id} className="flex flex-col gap-2">
@@ -119,5 +111,25 @@ export function SuperlativesBallot({
         {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
       </div>
     </div>
+  );
+
+  return (
+    <FeedbackFormFrame
+      manage={manage}
+      edit={
+        editing
+          ? undefined
+          : {
+              saved,
+              onEdit: () => {
+                setSaved(false);
+                setEditing(true);
+              },
+            }
+      }
+      note={note}
+    >
+      {editing ? renderForm() : renderReadOnly()}
+    </FeedbackFormFrame>
   );
 }

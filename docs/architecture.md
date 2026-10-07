@@ -435,11 +435,16 @@ viewer, whether their own tab exists, and `buildSurveyTab()` / `buildSuperlative
 viewer has something to do or see (the "gate a tab on data" rule in [`patterns.md`](./patterns.md)):
 
 - **Survey** — while the survey is open and the viewer played the season: the form (`SurveyForm`).
-  Survey results are admin-only. Admins also get a "Manage →" link on each tab to its admin page.
+  Survey results are admin-only. Admins also get a "Manage →" button on each tab to its admin page.
 - **Superlatives** — while voting is open and the viewer played the season: the ballot
   (`SuperlativesBallot`); once voting has closed with at least one vote cast: the public tallies
   (`SuperlativeResultsPanel`), visible to everyone including signed-out viewers. A vote that was set
   up but never opened, or closed with no votes, has no tab.
+
+Each tab's body is laid out by `FeedbackFormFrame`: a top row holding the admin's Manage button and,
+once the viewer has submitted, their Edit button, then the explanatory note across the full tab
+width, then the body: the form (`SurveyForm`, `SuperlativesBallot`), capped to a readable 720px, or the
+results, which pass `wide` to use the full width.
 
 The tabs sit in the same top-level row as Regular Season / Gauntlet (`TopTabBar`), driven by the
 `view` URL param: `CombinedSeasonTabView` owns the row when the season has a gauntlet tab, and
