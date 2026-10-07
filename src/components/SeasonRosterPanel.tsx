@@ -6,6 +6,7 @@ import Link from 'next/link';
 import EmptyState from './EmptyState';
 import PlayerAvatar from './PlayerAvatar';
 import { PlayerName } from './PlayerName';
+import { formatBuyIn } from '@/lib/season-buy-in';
 import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
 
 interface RosterEntry {
@@ -25,14 +26,16 @@ interface Props {
   allPlayers: AllPlayer[];
   isAdmin: boolean;
   currentPlayerId: number | null;
+  buyInAmount: number | null;
 }
 
 const GREEN_BTN_CLS = 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110';
 
 /** Roster editor for an UPCOMING season's `season_players` — admins manage the full roster,
  * everyone else can join or drop themselves. Only rendered while the season is UPCOMING (the API
- * enforces the same gate server-side). */
-export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, currentPlayerId }: Props) {
+ * enforces the same gate server-side). The season's buy-in, when set, shows in the header so
+ * players see the cost before joining. */
+export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, currentPlayerId, buyInAmount }: Props) {
   const router = useRouter();
   const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null);
   const [addPlayerId, setAddPlayerId] = useState('');
@@ -77,6 +80,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
       <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
         <div className="tracked text-[10px] text-[var(--color-text-secondary)]">
           Roster · {roster.length} {roster.length === 1 ? 'player' : 'players'}
+          {buyInAmount != null && <> · Buy-in {formatBuyIn(buyInAmount)}</>}
         </div>
         {!isAdmin && currentPlayerId != null && (
           <button
