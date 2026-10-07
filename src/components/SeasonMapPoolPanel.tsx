@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toSentenceCase } from '@/lib/maps';
 import { hasMapPool } from '@/lib/season-map-pool';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { useAsyncAction } from './useAsyncAction';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 

@@ -1,37 +1,40 @@
 // Shared layout for a season-page feedback tab (survey form, superlatives ballot or results): a top
 // row of controls (the admin's Manage link, the player's Edit button), then the explanatory note
-// across the full tab width, then the body.
+// across the full tab width, then the body (capped to a readable width unless `wide`).
 
 import type { ReactNode } from 'react';
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 
 export function FeedbackFormFrame({
   manage,
-  actions,
+  edit,
   note,
+  wide,
   children,
 }: {
   manage?: ReactNode;
-  actions?: ReactNode;
+  /** Set once the player has submitted and the form is read-only: shows their Edit button. */
+  edit?: { saved: boolean; onEdit: () => void };
   note?: string;
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-6">
-      {(manage || actions) && (
+      {(manage || edit) && (
         <div className="flex flex-wrap items-center gap-2">
           {manage}
-          {actions}
+          {edit && <EditAnswersControl {...edit} />}
         </div>
       )}
       {note && <p className="font-mono text-[12px] text-[var(--color-text-secondary)]">{note}</p>}
-      {children}
+      <div className={wide ? undefined : 'max-w-[720px]'}>{children}</div>
     </div>
   );
 }
 
 /** The player's "Edit" button for a read-only submitted form, plus a "Saved" confirmation after a save. */
-export function EditAnswersControl({ saved, onEdit }: { saved: boolean; onEdit: () => void }) {
+function EditAnswersControl({ saved, onEdit }: { saved: boolean; onEdit: () => void }) {
   return (
     <>
       <button type="button" onClick={onEdit} className={ADMIN_SMALL_BUTTON_CLS}>

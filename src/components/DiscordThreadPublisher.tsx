@@ -18,7 +18,7 @@
 // the score route (`closeMatchThread()`/`closeGauntletPodThreadIfDone()`), not from here.
 
 import { useState } from 'react';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 
 interface ThreadResult {
   matchId: number;

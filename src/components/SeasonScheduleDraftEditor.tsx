@@ -10,7 +10,7 @@ import {
 } from '@/lib/season-schedule-validation';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 import EmptyState from './EmptyState';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 
 interface Player {
   id: number;

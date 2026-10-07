@@ -9,8 +9,9 @@ import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { EditAnswersControl, FeedbackFormFrame } from './FeedbackFormFrame';
+import { FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { FeedbackFormFrame } from './FeedbackFormFrame';
 
 export function SuperlativesBallot({
   seasonId,
@@ -59,7 +60,7 @@ export function SuperlativesBallot({
   const hasSavedVotes = Object.keys(initialVotes).length > 0 || saved;
   const nomineeName = (id: number | undefined) => nominees.find((p) => p.id === id)?.name;
 
-  const readOnly = (
+  const renderReadOnly = () => (
     <div className="flex flex-col gap-6">
       {superlatives.map((s) => (
         <div key={s.id} className="flex flex-col gap-1">
@@ -70,7 +71,7 @@ export function SuperlativesBallot({
     </div>
   );
 
-  const form = (
+  const renderForm = () => (
     <div className="flex flex-col gap-6">
       {superlatives.map((s) => (
         <label key={s.id} className="flex flex-col gap-2">
@@ -115,20 +116,20 @@ export function SuperlativesBallot({
   return (
     <FeedbackFormFrame
       manage={manage}
-      actions={
-        !editing && (
-          <EditAnswersControl
-            saved={saved}
-            onEdit={() => {
-              setSaved(false);
-              setEditing(true);
-            }}
-          />
-        )
+      edit={
+        editing
+          ? undefined
+          : {
+              saved,
+              onEdit: () => {
+                setSaved(false);
+                setEditing(true);
+              },
+            }
       }
       note={note}
     >
-      <div className="max-w-[720px]">{editing ? form : readOnly}</div>
+      {editing ? renderForm() : renderReadOnly()}
     </FeedbackFormFrame>
   );
 }

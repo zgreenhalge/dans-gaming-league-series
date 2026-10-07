@@ -58,7 +58,7 @@ export function buildSuperlativesTab(seasonId: number, view: SuperlativesTabView
             note="Pick anyone who played this season, yourself included. You can change your votes until voting closes."
           />
         ) : (
-          <FeedbackFormFrame manage={manageLink('superlatives', seasonId, isAdmin)}>
+          <FeedbackFormFrame manage={manageLink('superlatives', seasonId, isAdmin)} wide>
             <SuperlativeResultsPanel results={view.results} />
           </FeedbackFormFrame>
         ),

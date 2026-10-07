@@ -188,9 +188,9 @@ conventions, distinct from the content-page patterns above:
   still reads at a glance without expanding.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
-  `src/components/adminButtonStyles.ts` (a plain module, so server components can use them too) and
-  are re-exported from `src/components/ArmedConfirmButton.tsx` — use them rather than a re-typed
-  class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,
+  `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
+  a constant exported from a `'use client'` file is a client reference there) — use them rather than a
+  re-typed class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,
   `self-start`) on top rather than forking the base style.
 
 ## When extending this system

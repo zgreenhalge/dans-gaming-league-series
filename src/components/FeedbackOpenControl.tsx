@@ -3,7 +3,7 @@
 // Status line plus one open/close button, shared by the survey and superlatives admin panels.
 // Opening is the primary button, closing the small bordered one.
 
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 
 export function FeedbackOpenControl({
   isOpen,

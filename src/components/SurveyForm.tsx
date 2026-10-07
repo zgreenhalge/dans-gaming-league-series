@@ -9,8 +9,9 @@ import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS, FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { EditAnswersControl, FeedbackFormFrame } from './FeedbackFormFrame';
+import { FORM_INPUT_CLS } from './ArmedConfirmButton';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { FeedbackFormFrame } from './FeedbackFormFrame';
 import { RATING_LABELS, RATING_MAX, RATING_MIN, MAX_TEXT_ANSWER_LENGTH, type SurveyAnswers, type SurveyQuestion } from '@/lib/survey';
 
 type AnswerValue = SurveyAnswers[string];
@@ -72,7 +73,7 @@ export function SurveyForm({
     return value;
   }
 
-  const readOnly = (
+  const renderReadOnly = () => (
     <div className="flex flex-col gap-8">
       {questions.map((q, i) => (
         <div key={q.id} className="flex flex-col gap-1">
@@ -86,7 +87,7 @@ export function SurveyForm({
     </div>
   );
 
-  const form = (
+  const renderForm = () => (
     <div className="flex flex-col gap-8">
       {questions.map((q, i) => {
         const value = answers[String(q.id)];
@@ -164,20 +165,20 @@ export function SurveyForm({
   return (
     <FeedbackFormFrame
       manage={manage}
-      actions={
-        !editing && (
-          <EditAnswersControl
-            saved={saved}
-            onEdit={() => {
-              setSaved(false);
-              setEditing(true);
-            }}
-          />
-        )
+      edit={
+        editing
+          ? undefined
+          : {
+              saved,
+              onEdit: () => {
+                setSaved(false);
+                setEditing(true);
+              },
+            }
       }
       note={note}
     >
-      <div className="max-w-[720px]">{editing ? form : readOnly}</div>
+      {editing ? renderForm() : renderReadOnly()}
     </FeedbackFormFrame>
   );
 }

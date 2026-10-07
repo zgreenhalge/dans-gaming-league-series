@@ -1,5 +1,6 @@
 // Shared admin button class strings. A plain module (no 'use client') so both server and client
-// components can import the strings.
+// components can import the strings; one exported from a client module is a client reference, not a
+// string, when a server component imports it.
 
 /** The primary admin submit button (form CTAs like "Create Season" or "Confirm & Build") — shares
  * `CONFIRM_VARIANT.primary`'s green scheme at the larger size those forms use. Append layout

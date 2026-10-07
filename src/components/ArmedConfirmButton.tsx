@@ -7,10 +7,7 @@
 // caller's request/response handling differs too much to generalize (warnings, redirects, retries) —
 // this only extracts the interaction shape and styling, not the mutation logic.
 
-// The shared admin button styles live in `adminButtonStyles.ts` so server components can use them too
-// (a constant exported from a client module is a client reference there, not a string).
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
-export { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 
 const CONFIRM_VARIANT: Record<'primary' | 'danger', string> = {
   primary: 'border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)]',
