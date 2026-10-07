@@ -343,6 +343,7 @@ export default async function SeasonPage({
               allPlayers={Array.from(playersById.values()).map((p) => ({ id: p.id, name: p.name }))}
               isAdmin={isAdmin}
               currentPlayerId={currentPlayerId}
+              buyInAmount={season.buy_in_amount}
             />
             {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
           </div>
