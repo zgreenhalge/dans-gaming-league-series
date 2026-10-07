@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { getSeason, hasSeasonScheduleDraft } from '@/lib/queries';
-import { hasMaterializedSchedule } from '@/lib/season-schedule-draft-engine';
+import { getSeason, isSeasonScheduleGenerated } from '@/lib/queries';
 import { parseBuyInInput } from '@/lib/season-buy-in';
 
 /**
@@ -37,11 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const supabaseAdmin = getAdminClient();
   try {
-    const [hasDraft, hasWeeks] = await Promise.all([
-      hasSeasonScheduleDraft(seasonId),
-      hasMaterializedSchedule(supabaseAdmin, seasonId),
-    ]);
-    if (hasDraft || hasWeeks) {
+    if (await isSeasonScheduleGenerated(seasonId)) {
       return NextResponse.json({ error: 'The buy-in can’t change once the schedule is generated' }, { status: 409 });
     }
   } catch (err) {

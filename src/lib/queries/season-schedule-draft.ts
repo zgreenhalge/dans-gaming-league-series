@@ -30,6 +30,17 @@ export async function hasSeasonScheduleDraft(seasonId: number): Promise<boolean>
   return (data ?? []).length > 0;
 }
 
+/** Whether a season's schedule has been generated at all: a matchup draft exists, or it has already
+ * been confirmed into real `weeks`. The gate for anything that freezes once the schedule exists. */
+export async function isSeasonScheduleGenerated(seasonId: number): Promise<boolean> {
+  const [hasDraft, { data, error }] = await Promise.all([
+    hasSeasonScheduleDraft(seasonId),
+    supabase.from('weeks').select('id').eq('season_id', seasonId).limit(1),
+  ]);
+  if (error) throw error;
+  return hasDraft || (data ?? []).length > 0;
+}
+
 /** A season's editable schedule draft (`season_schedule_draft_weeks`/`_matches`), fully joined to
  * player rows for display — empty until `generateSeasonScheduleDraft()` (or a hand-built draft)
  * exists for the season. */

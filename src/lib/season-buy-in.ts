@@ -1,6 +1,6 @@
 /** A season's buy-in is a dollar amount: 0–999.99, at most two decimals (the `buy_in_amount`
  * column is `numeric(5, 2)`). */
-export const MAX_BUY_IN = 999.99;
+const MAX_BUY_IN = 999.99;
 
 export type BuyInInput = { ok: true; amount: number } | { ok: false; error: string };
 
@@ -21,4 +21,10 @@ export function parseBuyInInput(body: unknown): BuyInInput {
 /** `$10` for whole amounts, `$7.50` otherwise. */
 export function formatBuyIn(amount: number): string {
   return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
+}
+
+/** Client-side check for a buy-in text input: plain decimal digits with at most two places, within
+ * the range `parseBuyInInput()` enforces. */
+export function isValidBuyInText(text: string): boolean {
+  return /^\d+(\.\d{1,2})?$/.test(text.trim()) && parseBuyInInput({ buy_in_amount: Number(text) }).ok;
 }

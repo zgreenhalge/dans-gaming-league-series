@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatBuyIn } from '@/lib/season-buy-in';
+import { formatBuyIn, isValidBuyInText } from '@/lib/season-buy-in';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { useAsyncAction } from './useAsyncAction';
 
@@ -16,31 +16,31 @@ interface Props {
  * (`canEdit` is false from then on, and the API refuses too). */
 export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(buyInAmount ?? 0));
+  // The in-progress text while editing; `null` when not editing.
+  const [draft, setDraft] = useState<string | null>(null);
   const { busy: saving, error, run } = useAsyncAction();
   const [isPending, startTransition] = useTransition();
 
   async function save() {
+    if (draft === null) return;
     await run(async () => {
       const res = await fetch(`/api/seasons/${seasonId}/buy-in`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buy_in_amount: Number(value) }),
+        body: JSON.stringify({ buy_in_amount: Number(draft) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? 'Failed to save buy-in.');
       }
-      setEditing(false);
+      setDraft(null);
       startTransition(() => router.refresh());
     });
   }
 
   const busy = saving || isPending;
-  const valid = value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0;
 
-  if (!editing) {
+  if (draft === null) {
     return (
       <div className="flex items-center gap-3 flex-wrap">
         <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
@@ -48,10 +48,7 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         </span>
         {canEdit && (
           <button
-            onClick={() => {
-              setValue(String(buyInAmount ?? 0));
-              setEditing(true);
-            }}
+            onClick={() => setDraft(String(buyInAmount ?? 0))}
             className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
           >
             Edit
@@ -68,8 +65,8 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         inputMode="decimal"
         min={0}
         step="0.01"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
         aria-label="Buy-in in dollars"
         className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
       />
@@ -78,14 +75,14 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         <button
           type="button"
           onClick={save}
-          disabled={busy || !valid}
+          disabled={busy || !isValidBuyInText(draft)}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           {busy ? 'Saving…' : 'Save buy-in'}
         </button>
         <button
           type="button"
-          onClick={() => setEditing(false)}
+          onClick={() => setDraft(null)}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel

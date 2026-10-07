@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { isValidBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 
 interface Props {
@@ -42,7 +43,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
   }
 
   const busy = submitting || isPending;
-  const buyInValid = buyIn.trim() !== '' && Number.isFinite(Number(buyIn)) && Number(buyIn) >= 0;
+  const buyInValid = isValidBuyInText(buyIn);
 
   return (
     <div className="flex flex-col gap-8">

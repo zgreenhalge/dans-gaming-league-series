@@ -11,6 +11,7 @@ import {
   getKnownMapNames,
   getPlayersById,
   hasSeasonScheduleDraft,
+  isSeasonScheduleGenerated,
   getGauntletBracketShape,
   getGauntletSeasonProgress,
   getLinkedGauntlet,
@@ -249,10 +250,11 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, scheduleGenerated, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
+    isUpcoming && isAdmin ? isSeasonScheduleGenerated(seasonId) : Promise.resolve(false),
     isUpcoming ? getSeasonRoster(seasonId, playersById) : Promise.resolve([]),
     isUpcoming && isAdmin ? getKnownMapNames() : Promise.resolve([]),
     initialView === 'gauntlet' && linkedGauntlet
@@ -336,7 +338,7 @@ export default async function SeasonPage({
               <SeasonBuyInPanel
                 seasonId={season.id}
                 buyInAmount={season.buy_in_amount}
-                canEdit={isAdmin && !hasSchedule}
+                canEdit={isAdmin && !scheduleGenerated}
               />
             </div>
           )}
