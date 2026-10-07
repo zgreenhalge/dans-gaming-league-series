@@ -86,6 +86,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/map-pool` | Set or clear (empty `map_pool`) an `UPCOMING` regular season's map pool — empty or exactly 5 maps; new maps are upserted into `maps`. A season without a pool can't confirm its schedule or go live (admin only) |
+| `PATCH` | `/api/seasons/[id]/buy-in` | Set an `UPCOMING` regular season's `buy_in_amount` (0–999.99). Refused with 409 once a schedule draft or confirmed schedule exists (admin only) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
 | `DELETE` | `/api/seasons/[id]` | Delete an `UPCOMING` regular season outright — refuses if it already has real `weeks`, otherwise clears its `season_players` roster and schedule draft first (admin only) |

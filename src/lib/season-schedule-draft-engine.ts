@@ -47,7 +47,7 @@ export class ScheduleAlreadyMaterializedError extends Error {
  * materialized" outcome ahead of its "no draft exists" one when both could apply (see its own
  * comment) — never relied on as the actual guard against a race, since every write path's own RPC
  * re-checks this atomically under its row lock regardless. */
-async function hasMaterializedSchedule(supabaseAdmin: SupabaseClient, seasonId: number): Promise<boolean> {
+export async function hasMaterializedSchedule(supabaseAdmin: SupabaseClient, seasonId: number): Promise<boolean> {
   const { data, error } = await supabaseAdmin.from('weeks').select('id').eq('season_id', seasonId).limit(1);
   if (error) throw error;
   return (data ?? []).length > 0;

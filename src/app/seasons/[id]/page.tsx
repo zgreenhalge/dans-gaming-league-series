@@ -31,6 +31,7 @@ import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { SeasonMapPoolPanel } from '@/components/SeasonMapPoolPanel';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
+import { SeasonBuyInPanel } from '@/components/SeasonBuyInPanel';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
@@ -331,6 +332,11 @@ export default async function SeasonPage({
                 mapPool={season.map_pool}
                 knownMaps={knownMaps}
                 canEdit={isAdmin}
+              />
+              <SeasonBuyInPanel
+                seasonId={season.id}
+                buyInAmount={season.buy_in_amount}
+                canEdit={isAdmin && !hasSchedule}
               />
             </div>
           )}

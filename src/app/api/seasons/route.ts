@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
+import { parseBuyInInput } from '@/lib/season-buy-in';
 
 export async function POST(req: NextRequest) {
   const session = await requireSession();
@@ -21,6 +22,11 @@ export async function POST(req: NextRequest) {
   const input = parseMapPoolInput(body);
   if (!input.ok) {
     return NextResponse.json({ error: input.error }, { status: 400 });
+  }
+
+  const buyIn = parseBuyInInput(body);
+  if (!buyIn.ok) {
+    return NextResponse.json({ error: buyIn.error }, { status: 400 });
   }
 
   const { data: seasons, error: fetchErr } = await supabaseAdmin
@@ -53,6 +59,7 @@ export async function POST(req: NextRequest) {
       is_gauntlet: false,
       map_pool: input.mapPool,
       target_win_rounds: 13,
+      buy_in_amount: buyIn.amount,
     })
     .select('*')
     .single();

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import EmptyState from './EmptyState';
 import PlayerAvatar from './PlayerAvatar';
 import { PlayerName } from './PlayerName';
+import { formatBuyIn } from '@/lib/season-buy-in';
 import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
 
 interface RosterEntry {
@@ -26,11 +27,6 @@ interface Props {
   isAdmin: boolean;
   currentPlayerId: number | null;
   buyInAmount: number | null;
-}
-
-/** `$10` for whole amounts, `$7.50` otherwise. */
-function formatBuyIn(amount: number): string {
-  return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
 }
 
 const GREEN_BTN_CLS = 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110';
