@@ -82,6 +82,14 @@ Read-only tools — `list_tables`, `get_logs`, `get_advisors`, `search_docs`, `l
 `get_edge_function`, `generate_typescript_types`, and `execute_sql` for a plain `SELECT` — can be
 used freely for investigation without asking first.
 
+# New tables must enable row level security
+
+Every table in the `public` schema has RLS on. A migration that runs `create table` also runs
+`alter table public.<table> enable row level security;` in the same file, and adds no policy or
+grant for `anon`/`authenticated` unless a browser Realtime subscription needs to read it (see
+[`docs/recipes.md`](./docs/recipes.md)'s "Add a new table"). Postgres does not enable RLS on its own,
+and the anon key ships in the browser bundle, so a table without it is open to anyone.
+
 # Merging a PR requires its own live approval
 
 Opening a PR, pushing fixes to a PR you opened, and merging a PR are three different levels of

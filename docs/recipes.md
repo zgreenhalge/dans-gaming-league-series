@@ -161,6 +161,23 @@ and its `UPCOMING`-only status gate.
    Call every `__setTest*` function with `undefined` at the end of the file to restore real behavior
    for any test file that happens to run in the same process afterward.
 
+## Recipe: Add a new table
+
+Every `public` table has row level security on, so a new table is created closed.
+
+1. **Write the migration** under `supabase/migrations/` (apply it to the live project per
+   [`AGENTS.md`](../AGENTS.md)'s live-approval rule). The same file that runs `create table` must
+   run `alter table public.<table> enable row level security;`. A table created without it is
+   readable and writable by anyone holding the public anon key.
+2. **Add no policy and no grant for `anon`/`authenticated`.** Server code reaches the table through
+   the service-role client (`supabase` / `getAdminClient()`), which bypasses RLS.
+3. **Only a browser Realtime subscription changes that.** Add the table to the `supabase_realtime`
+   publication and give it a `grant select ... to anon` plus a `for select to anon using (true)`
+   policy, as the existing Realtime tables have (see
+   `supabase/migrations/20261008150000_enable_rls_revoke_anon.sql`).
+4. Regenerate `src/lib/database.types.ts` and document the table in
+   [`architecture.md`](./architecture.md)'s Database section.
+
 ## Recipe: Add a new map
 
 Pure asset task, no query changes:
