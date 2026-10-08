@@ -1772,6 +1772,14 @@ export type Database = {
         }
         Returns: Json
       }
+      reorder_superlatives: {
+        Args: { p_order: number[]; p_season_id: number }
+        Returns: undefined
+      }
+      replace_superlative_votes: {
+        Args: { p_superlative_ids: number[]; p_votes: Json; p_voter_player_id: number }
+        Returns: undefined
+      }
       rollback_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json

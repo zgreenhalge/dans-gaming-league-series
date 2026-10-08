@@ -221,10 +221,11 @@ export function validateSuperlativeOrder(currentIds: number[], input: unknown): 
   return { ok: true, value: ids };
 }
 
-export interface SuperlativeVoteInput {
+// A `type` (not an interface) so it is assignable to `Json` as an RPC argument.
+export type SuperlativeVoteInput = {
   superlative_id: number;
   nominee_player_id: number;
-}
+};
 
 /** Validates a ballot (`{ votes: [{ superlative_id, nominee_player_id }] }`) against the season's
  *  superlatives and the players who may be nominated. A ballot may skip superlatives, but names at

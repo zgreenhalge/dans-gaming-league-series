@@ -76,15 +76,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!order.ok) return NextResponse.json({ error: order.error }, { status: 400 });
   if (await isSuperlativePollLocked(poll)) return NextResponse.json(LOCKED, { status: 409 });
 
-  // (season_id, position) is unique, so park every row on a position clear of the live ones first.
-  const parked = Math.max(0, ...poll.superlatives.map((s) => s.position)) + 1;
-  for (const phase of ['park', 'place'] as const) {
-    for (const [i, id] of order.value.entries()) {
-      const position = phase === 'park' ? parked + i : i + 1;
-      const { error } = await access.supabaseAdmin.from('superlatives').update({ position }).eq('id', id).eq('season_id', seasonId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-  }
+  const { error } = await access.supabaseAdmin.rpc('reorder_superlatives', { p_season_id: seasonId, p_order: order.value });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
 
