@@ -118,14 +118,17 @@ test('DELETE — admin reset wipes every vote, closes voting, keeps the superlat
   assert.equal((await reset()).status, 404);
 
   seedPoll(db);
+  // Another season's superlative and vote, which the reset leaves alone.
+  db.superlatives.push({ id: 3, season_id: 99, position: 1, title: 'Elsewhere' });
   db.superlative_votes.push(
     { id: 1, superlative_id: 1, voter_player_id: ALICE_ID, nominee_player_id: BOB_ID },
     { id: 2, superlative_id: 2, voter_player_id: BOB_ID, nominee_player_id: ALICE_ID },
+    { id: 3, superlative_id: 3, voter_player_id: BOB_ID, nominee_player_id: ALICE_ID },
   );
   assert.equal((await reset()).status, 200);
-  assert.equal(db.superlative_votes.length, 0);
+  assert.deepEqual(db.superlative_votes.map((v) => v.id), [3]);
   assert.equal(db.superlative_polls[0].is_open, false);
-  assert.equal(db.superlatives.length, 2);
+  assert.equal(db.superlatives.length, 3);
   assert.equal(await getSeasonSuperlativesView(REGULAR_SEASON_ID, ALICE_ID), null);
   resetFeedbackFixture();
 });
