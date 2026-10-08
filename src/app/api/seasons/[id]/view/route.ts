@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRegularSeasonLightView, getGauntletSeasonLightView, getPlayersById } from '@/lib/queries';
 import { parseSeasonKind } from '../season-kind';
+import { parseSeasonId } from '@/lib/util';
 
 /**
  * The season detail page's per-tab "light" data — the Leaderboard/H2H/Groups/Schedule sub-tabs'
@@ -14,8 +15,8 @@ import { parseSeasonKind } from '../season-kind';
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) {
+  const seasonId = parseSeasonId(id);
+  if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 

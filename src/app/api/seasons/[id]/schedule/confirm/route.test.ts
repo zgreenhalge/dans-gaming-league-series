@@ -13,7 +13,7 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { makeSeasonScheduleDraftRpcHandlers } from '@/lib/test-support/seasonScheduleDraftRpc';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { buildRosterSchedule } from '@/lib/season-schedule-engine';
 import { POST } from './route';
@@ -115,9 +115,11 @@ async function main() {
     assert.equal((await call(READY_DRAFT_SEASON_ID, PLAYER_ID)).status, 403);
   });
 
-  await test('POST — non-numeric season id is rejected (400)', async () => {
+  await test('POST — a malformed season id is rejected (400)', async () => {
     installFixture();
-    assert.equal((await call('abc', ADMIN_ID)).status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID)).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('POST — an unknown season id is rejected (404)', async () => {

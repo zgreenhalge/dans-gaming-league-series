@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { trySeedGauntlet } from '@/lib/gauntlet-engine';
+import { parseSeasonId } from '@/lib/util';
 
 /**
  * Seeds an already-built (but unseeded) gauntlet bracket from the regular season's *current*
@@ -20,8 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const regularSeasonId = Number(id);
-  if (!Number.isFinite(regularSeasonId)) {
+  const regularSeasonId = parseSeasonId(id);
+  if (regularSeasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 

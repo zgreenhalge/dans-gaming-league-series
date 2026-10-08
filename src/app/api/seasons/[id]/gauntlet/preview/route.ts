@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getSeason, getSeasonLeaderboard, getLinkedGauntlet } from '@/lib/queries';
 import { buildGauntletBracket, planToPreviewPods } from '@/lib/gauntlet-bracket';
+import { parseSeasonId } from '@/lib/util';
 
 /**
  * Computes what `POST /api/seasons/[id]/gauntlet` *would* build — qualifier count, games, rounds,
@@ -16,8 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const regularSeasonId = Number(id);
-  if (!Number.isFinite(regularSeasonId)) {
+  const regularSeasonId = parseSeasonId(id);
+  if (regularSeasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 

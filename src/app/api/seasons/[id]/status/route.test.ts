@@ -13,7 +13,7 @@ import { __setTestSession } from '@/lib/session';
 import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
 
@@ -79,10 +79,11 @@ async function main() {
     assert.equal(res.status, 403);
   });
 
-  await test('PATCH — non-numeric season id is rejected (400)', async () => {
+  await test('PATCH — a malformed season id is rejected (400)', async () => {
     installFixture();
-    const res = await call('abc', ADMIN_ID, { status: 'ACTIVE' });
-    assert.equal(res.status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID, { status: 'ACTIVE' })).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('PATCH — a status other than ACTIVE is rejected (400)', async () => {

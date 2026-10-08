@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSeasonRosterAccess, mapSeasonRosterWriteError } from '@/lib/season-roster-access';
 import { grantParticipantRole, revokeParticipantRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
+import { parseSeasonId } from '@/lib/util';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
+  const seasonId = parseSeasonId(id);
+  if (seasonId === null) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
 
   const access = await requireSeasonRosterAccess(req, seasonId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -37,8 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
+  const seasonId = parseSeasonId(id);
+  if (seasonId === null) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
 
   const access = await requireSeasonRosterAccess(req, seasonId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
