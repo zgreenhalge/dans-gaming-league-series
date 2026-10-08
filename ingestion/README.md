@@ -57,5 +57,5 @@ If you change the source CSV layout, those indices at `ingest_file.py:80-126` br
 
 - Source CSVs may have `:Zone.Identifier` siblings (Windows download metadata). `ingest_all_seasons.py` filters them out by substring — don't break that check.
 - `default_stat()` returns `-1` for `None`, not `0`. Aggregations and the leaderboard view tolerate `-1` sentinels.
-- RLS is **off** on all tables. Do not enable it without writing policies first — enabling RLS with no policies blocks all access.
+- RLS is **on** for all tables with no policies for `anon`, so only the service-role key can read or write them; see `docs/architecture.md`.
 - Do NOT commit `.env`. It is listed in `.gitignore`.

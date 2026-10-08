@@ -72,7 +72,7 @@ different operation. Every mutating call gets its own explicit approval, every t
 
 This holds even when a change looks obviously correct, reversible, or already agreed upon in
 principle (e.g. "add the seed_ehog column we discussed") — describe the literal command and wait for
-a yes before running it. RLS is off on every table in this project (see
+a yes before running it. The MCP connector acts with full database privileges, which bypass RLS (see
 [`docs/architecture.md`](./docs/architecture.md)), so there is no database-level backstop if a
 mutation goes wrong — the live approval step is the only guardrail, and it is not optional.
 
