@@ -3,11 +3,9 @@ import type { Database } from './database.types';
 import { getOrCreateSingleton, setSingleton } from './supabase-singleton';
 import { hasNoSupabaseConfig, getDevFallbackSupabaseClient } from './dev-fallback-supabase';
 
-// The one server-side Supabase client: service-role key, so it bypasses RLS. Every table has RLS on
-// with no policies for `anon`/`authenticated` outside the few the browser's Realtime subscriptions
-// read (see `supabase-browser.ts`), so all server reads and writes go through this client. The key is
-// not a `NEXT_PUBLIC_*` var, so it is never inlined into a client bundle; a client component that
-// reaches this module fails at call time with the missing-env error below rather than leaking it.
+// The one server-side Supabase client: service-role key, so it bypasses RLS (access model in
+// docs/architecture.md). The key is not a `NEXT_PUBLIC_*` var, so a client bundle that reaches this
+// module fails at call time with the missing-env error below instead of holding the key.
 function createAdminSupabaseClient(): SupabaseClient<Database> {
   if (hasNoSupabaseConfig()) return getDevFallbackSupabaseClient();
 

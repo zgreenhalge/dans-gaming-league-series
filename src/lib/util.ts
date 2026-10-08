@@ -566,8 +566,3 @@ export function factionColor(f: 'CT' | 'T' | null): string {
   if (f === 'CT') return 'var(--color-ct)';
   return 'var(--color-text-secondary)';
 }
-
-/** How often admin dashboards re-fetch their server-rendered data. They poll rather than subscribe
- *  to Realtime because the tables they watch (`background_jobs`, `match_server_state`) are not
- *  readable from the browser. */
-export const ADMIN_REFRESH_INTERVAL_MS = 5_000;

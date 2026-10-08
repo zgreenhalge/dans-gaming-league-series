@@ -22,10 +22,9 @@ export interface SeasonRosterEntry {
 
 /** `client` defaults to the app's server client but accepts another for callers that already hold
  *  one outside a Next.js request (a GitHub Actions script) — same opt-in pattern as
- *  `getMatchIdsForMap()` (`maps.ts`). */
-/** `cache()`-wrapped so the root layout's own read (feeds `SideNav`) and a page's separate read of
- *  the same table collapse into a single Supabase round trip per request — same reasoning as
- *  `getSeason()` below. */
+ *  `getMatchIdsForMap()` (`maps.ts`). `cache()`-wrapped so the root layout's own read (feeds
+ *  `SideNav`) and a page's separate read of the same table collapse into a single Supabase round
+ *  trip per request — same reasoning as `getSeason()` below. */
 export const getSeasons = cache(async (client: SupabaseClient = supabase): Promise<Season[]> => {
   const { data, error } = await client
     .from('seasons')

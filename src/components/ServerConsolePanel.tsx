@@ -24,7 +24,7 @@ import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/component
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { ADMIN_REFRESH_INTERVAL_MS, fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
+import { fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
@@ -233,14 +233,6 @@ export function ServerConsolePanel({
     const interval = setInterval(refreshStatus, 2_000);
     return () => clearInterval(interval);
   }, [refreshStatus]);
-
-  // Keep the console live — router.refresh() re-fetches this component's `active` prop (the
-  // match_server_state rows) on the same cadence the raw status poll above runs at; the occupancy
-  // section below prefers status.active (fresher, from the status fetch) once it's loaded.
-  useEffect(() => {
-    const interval = setInterval(() => router.refresh(), ADMIN_REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [router]);
 
   const [cleanup, setCleanup] = useState<DathostCleanupStatus | null>(null);
   const [cleanupError, setCleanupError] = useState<string | null>(null);

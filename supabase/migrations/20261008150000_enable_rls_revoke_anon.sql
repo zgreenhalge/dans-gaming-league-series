@@ -7,8 +7,9 @@
 -- subscriptions working.
 --
 -- Adding a Realtime subscription to another table means adding it to the `supabase_realtime`
--- publication and giving it the same grant + policy pair below. A new function needs no extra
--- statement: the default-privilege revokes keep `anon`/`authenticated`/`public` off it.
+-- publication and giving it the same grant + policy pair below. The default-privilege revokes keep
+-- `anon`/`authenticated`/`public` off tables, sequences and functions this role creates later; a new
+-- table still needs its own `enable row level security`.
 
 -- ─── RLS on, no policies by default ────────────────────────────────────────────
 

@@ -7,7 +7,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ADMIN_REFRESH_INTERVAL_MS } from '@/lib/util';
+
+const ADMIN_REFRESH_INTERVAL_MS = 5_000;
 
 /**
  * Re-dispatch a job by POSTing to its pipeline's dispatch endpoint (replay: the match's
@@ -63,13 +64,16 @@ export function JobRetryButton({
   );
 }
 
-/** Re-renders the dashboard every few seconds so `background_jobs` changes, across every job type, show up
- *  without a manual reload. Polls rather than subscribing because the table is not readable from the
- *  browser. Renders nothing. */
+/** Re-renders the admin dashboard every few seconds (while the tab is visible) so `background_jobs`
+ *  and `match_server_state` changes show up without a manual reload. Admin views poll rather than
+ *  subscribe to Realtime so they don't depend on the anon read access that exists for the match
+ *  pages. Renders nothing. */
 export function JobsLiveRefresh() {
   const router = useRouter();
   useEffect(() => {
-    const interval = setInterval(() => router.refresh(), ADMIN_REFRESH_INTERVAL_MS);
+    const interval = setInterval(() => {
+      if (!document.hidden) router.refresh();
+    }, ADMIN_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [router]);
   return null;
