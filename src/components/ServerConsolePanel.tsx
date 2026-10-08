@@ -19,7 +19,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
@@ -234,22 +233,6 @@ export function ServerConsolePanel({
     const interval = setInterval(refreshStatus, 2_000);
     return () => clearInterval(interval);
   }, [refreshStatus]);
-
-  // Keep the console live — any match_server_state change (provision/teardown/reconcile) re-reads raw
-  // server status; router.refresh() re-fetches this component's `active` prop for consistency, but the
-  // occupancy section below prefers status.active (fresher, from the same fetch) once it's loaded.
-  useEffect(() => {
-    const channel = getBrowserClient()
-      .channel('admin-servers')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_server_state' }, () => {
-        router.refresh();
-        refreshStatus();
-      })
-      .subscribe();
-    return () => {
-      getBrowserClient().removeChannel(channel);
-    };
-  }, [router, refreshStatus]);
 
   const [cleanup, setCleanup] = useState<DathostCleanupStatus | null>(null);
   const [cleanupError, setCleanupError] = useState<string | null>(null);

@@ -738,9 +738,8 @@ export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Pro
  * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
  *
  * Takes an optional client, defaulting to the app's own singleton so existing (page
- * component) callers are unaffected — the `replay-extract` Action, which has no anon
- * key and only a service-role admin client, passes that explicitly when rebuilding a
- * map's rollup.
+ * component) callers are unaffected — the `replay-extract` Action passes its own admin client
+ * explicitly when rebuilding a map's rollup.
  */
 export async function getMatchIdsForMap(mapName: string, client: SupabaseClient = supabase): Promise<number[]> {
   const nameLower = mapName.trim().toLowerCase();

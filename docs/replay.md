@@ -469,9 +469,9 @@ never blocking playback.
 
 ## Schema
 
-Schema lives directly in the Supabase dashboard, not migrations — the user maintains it there.
-RLS stays **off** (consistent with the rest of the site); Actions write via the service-role key,
-the app reads server-side. Outputs live at deterministic R2 keys, so there are **no URL columns on
+Schema changes are applied to the live project and ported into `supabase/migrations/` (see
+[`e2e.md`](./e2e.md)). RLS is on with no policies for these tables, so only the service-role key
+reaches them — Actions write with it and the app reads server-side. Outputs live at deterministic R2 keys, so there are **no URL columns on
 `matches`** — derive the key from the match/map id.
 
 **`matches`** — denormalized status cache for cheap match-page reads (mirrors the existing

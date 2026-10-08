@@ -47,8 +47,8 @@ hook auto-provisions a local Supabase stack instead when `.env.local` is absent;
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (browser-safe, read-only in practice) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key — used by server-side API routes only, never sent to the client |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key — used only by the browser's Realtime subscriptions (`src/lib/supabase-browser.ts`); it can read just the tables those subscriptions watch |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key — every server-side read and write (`supabase` / `getAdminClient()`), never sent to the client |
 | `NEXTAUTH_URL` | Full base URL, e.g. `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | Secret for signing session tokens (any random string locally) |
 | `STEAM_API_KEY` | Steam Web API key — fetches player avatars/nicknames |

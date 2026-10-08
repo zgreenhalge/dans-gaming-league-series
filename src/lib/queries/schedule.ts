@@ -56,9 +56,9 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
 
 /** Weeks + matches + per-match Shirts/Skins rosters (from player_match_stats) — one embedded
  *  query (weeks -> matches -> player_match_stats) instead of three sequential round trips, each
- *  depending on the previous one's ids. `client` defaults to the app's anon-key client but accepts
- *  an admin client for callers running outside a Next.js request (a GitHub Actions script, which has
- *  no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) — same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
+ *  depending on the previous one's ids. `client` defaults to the app's server client but accepts
+ *  another for callers that already hold one outside a Next.js request (a GitHub Actions script) —
+ *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
 export async function getSeasonSchedule(
   seasonId: number,
   client: SupabaseClient = supabase,

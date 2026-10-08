@@ -538,7 +538,7 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
  * scheduling (`PATCH /api/matches/[id]/schedule`) and cross-linking (the match page, via
  * `getGauntletPodSibling()`) — both of a pod's games share one `player_match_stats` roster
  * reshuffled across two factions, so they're always scheduled and played as a pair. Takes an optional
- * `client` for callers outside a Next.js request (a GitHub Actions script has no anon key). */
+ * `client` for callers outside a Next.js request that already hold one (a GitHub Actions script). */
 export async function getGauntletPodForMatch(
   matchId: number,
   client: SupabaseClient = supabase,
@@ -717,9 +717,9 @@ export async function getGauntletSeasonProgress(seasonId: number): Promise<{ see
 }
 
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. `client`
- *  defaults to the app's anon-key client but accepts an admin client for callers running outside a
- *  Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) — same
- *  opt-in pattern as `getSeasonSchedule()` (`schedule.ts`). */
+ *  defaults to the app's server client but accepts another for callers that already hold one outside
+ *  a Next.js request (a GitHub Actions script) — same opt-in pattern as `getSeasonSchedule()`
+ *  (`schedule.ts`). */
 export async function getGauntletRounds(seasonId: number, client: SupabaseClient = supabase): Promise<GauntletRound[]> {
   // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
   // run itself — sort explicitly here since round_number below is assigned in weekRows iteration

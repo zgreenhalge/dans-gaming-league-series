@@ -210,8 +210,8 @@ export async function getMatchBoxScore(matchId: number, client: SupabaseClient =
 /** Whichever match is currently live, with no `matchId` known ahead of time — the first step of
  *  `getLiveTickerMatch` below. The league runs one shared match server (#134), so this table holds at
  *  most one row in practice; `order`+`limit(1)` is just a defensive tie-break, not evidence more than
- *  one is expected. Reads through the anon `supabase` client (RLS is off, so it can see everything),
- *  matching every other query in this file. */
+ *  one is expected. Reads through the shared server `supabase` client, matching every other query in this
+ *  file. */
 async function getCurrentLiveMatch(): Promise<LiveScoreRow | null> {
   const { data } = await supabase
     .from('live_match_score')

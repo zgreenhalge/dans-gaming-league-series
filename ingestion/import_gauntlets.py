@@ -19,7 +19,7 @@ def patch_season(season_name: str) -> None:
         return
 
     url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+    key = os.environ.get("SUPABASE_KEY")
     if not url or not key:
         print("(stub) SUPABASE_URL/KEY not set — skipping season patch")
         return

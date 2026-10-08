@@ -142,11 +142,10 @@ and its `UPCOMING`-only status gate.
    session reads that go through `requireSession()` (route handlers) or `getSession()` (Server
    Components) — the three session-based access gates (`season-roster-access.ts`,
    `match-access.ts`, `admin-access.ts`) all do.
-3. **Fake both Supabase clients** with `__setTestClient()` (`src/lib/supabase.ts`, already used by
-   the query-helper harness) and `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) pointed at
-   the *same* `createFakeSupabaseClient(db)` instance, since a route typically reads through one
-   (`isPlayerAdmin()` uses the anon client) and writes through the other (`getAdminClient()`) — one
-   shared fake keeps a mutation made through either visible to both. Build a small local `FakeDb`
+3. **Fake the Supabase client** with `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) or its
+   alias `__setTestClient()` (`src/lib/supabase.ts`, used by the query-helper harness), pointed at a
+   `createFakeSupabaseClient(db)` instance. `supabase` and `getAdminClient()` are one client, so
+   either hook fakes both, and a mutation made through either spelling is visible to the other. Build a small local `FakeDb`
    fixture scoped to the route under test rather than reaching for the big shared
    `test-support/fixtures.ts` "league" (that fixture is tuned for the `queries/*.ts` regression
    suite's read-only cross-function graph, not a single route's mutation scenarios).
@@ -161,6 +160,23 @@ and its `UPCOMING`-only status gate.
    well) rather than sharing one across cases — otherwise a mutation in one test leaks into the next.
    Call every `__setTest*` function with `undefined` at the end of the file to restore real behavior
    for any test file that happens to run in the same process afterward.
+
+## Recipe: Add a new table
+
+Every `public` table has row level security on, so a new table is created closed.
+
+1. **Write the migration** under `supabase/migrations/` (apply it to the live project per
+   [`AGENTS.md`](../AGENTS.md)'s live-approval rule). The same file that runs `create table` must
+   run `alter table public.<table> enable row level security;`. A table created without it is
+   readable and writable by anyone holding the public anon key.
+2. **Add no policy and no grant for `anon`/`authenticated`.** Server code reaches the table through
+   the service-role client (`supabase` / `getAdminClient()`), which bypasses RLS.
+3. **Only a browser Realtime subscription changes that.** Add the table to the `supabase_realtime`
+   publication and give it a `grant select ... to anon` plus a `for select to anon using (true)`
+   policy, as the existing Realtime tables have (see
+   `supabase/migrations/20261008150000_enable_rls_revoke_anon.sql`).
+4. Regenerate `src/lib/database.types.ts` and document the table in
+   [`architecture.md`](./architecture.md)'s Database section.
 
 ## Recipe: Add a new map
 

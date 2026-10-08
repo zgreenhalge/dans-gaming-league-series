@@ -59,9 +59,9 @@ export async function getPlayerNameHistory(playerId: number): Promise<PlayerName
   return (data ?? []) as PlayerNameChange[];
 }
 
-/** `client` defaults to the app's anon-key client but accepts an admin client for callers running
- *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
- *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). Wrapped in React's `cache()` (#507) so
+/** `client` defaults to the app's server client but accepts another for callers that already hold
+ *  one outside a Next.js request (a GitHub Actions script) — same opt-in pattern as
+ *  `getMatchIdsForMap()` (`maps.ts`). Wrapped in React's `cache()` (#507) so
  *  every default-`client` caller within one render pass shares one `players` table read instead of
  *  each doing its own full-table fetch — outside a render pass (a script, a non-request context)
  *  `cache()` has no scope to dedup against and this just runs as a plain call. */

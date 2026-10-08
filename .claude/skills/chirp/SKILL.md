@@ -72,7 +72,7 @@ All data lives in Supabase; credentials are in `.env.local` at the repo root.
 Every block below assumes these two lines have been run once:
 
 ```bash
-K=$(grep NEXT_PUBLIC_SUPABASE_ANON_KEY .env.local | cut -d= -f2)
+K=$(grep SUPABASE_SERVICE_ROLE_KEY .env.local | cut -d= -f2)
 U=$(grep NEXT_PUBLIC_SUPABASE_URL .env.local | cut -d= -f2)
 ```
 

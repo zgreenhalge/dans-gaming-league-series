@@ -191,7 +191,7 @@ def upload(matches, byes, source_file: str, is_playoff: bool = False, season_nam
         create_client = None
 
     SUPABASE_URL = os.environ.get("SUPABASE_URL")
-    SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+    SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
     if create_client and SUPABASE_URL and SUPABASE_KEY:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)

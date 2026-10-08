@@ -72,7 +72,7 @@ different operation. Every mutating call gets its own explicit approval, every t
 
 This holds even when a change looks obviously correct, reversible, or already agreed upon in
 principle (e.g. "add the seed_ehog column we discussed") — describe the literal command and wait for
-a yes before running it. RLS is off on every table in this project (see
+a yes before running it. The MCP connector acts with full database privileges, which bypass RLS (see
 [`docs/architecture.md`](./docs/architecture.md)), so there is no database-level backstop if a
 mutation goes wrong — the live approval step is the only guardrail, and it is not optional.
 
@@ -81,6 +81,14 @@ Read-only tools — `list_tables`, `get_logs`, `get_advisors`, `search_docs`, `l
 `list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, `list_edge_functions`,
 `get_edge_function`, `generate_typescript_types`, and `execute_sql` for a plain `SELECT` — can be
 used freely for investigation without asking first.
+
+# New tables must enable row level security
+
+Every table in the `public` schema has RLS on. A migration that runs `create table` also runs
+`alter table public.<table> enable row level security;` in the same file, and adds no policy or
+grant for `anon`/`authenticated` unless a browser Realtime subscription needs to read it (see
+[`docs/recipes.md`](./docs/recipes.md)'s "Add a new table"). Postgres does not enable RLS on its own,
+and the anon key ships in the browser bundle, so a table without it is open to anyone.
 
 # Merging a PR requires its own live approval
 

@@ -45,7 +45,7 @@ function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseCl
   const db = structuredClone(buildFakeDb());
   const client = createFakeSupabaseClient(db);
   // syncParticipantRoleForPlayer() reads getActiveRegularSeason()/getSeasonRoster() through the
-  // query layer's own anon-client singleton, not the explicit `client` param the rest of this file
+  // query layer's own default-client singleton, not the explicit `client` param the rest of this file
   // passes around -- both need to point at the same fake db.
   __setTestClient(client);
   return { db, client };
