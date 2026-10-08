@@ -57,7 +57,10 @@ export function parseMapPoolInput(body: unknown): MapPoolInput {
   }
 
   const newMaps = rawNewMaps as (Partial<NewMap> | null)[];
-  if (newMaps.some((m) => !m?.name?.trim() || !WORKSHOP_URL_RE.test(m.workshopUrl ?? ''))) {
+  const validNewMap = (m: Partial<NewMap> | null) =>
+    typeof m?.name === 'string' && !!m.name.trim() &&
+    typeof m.workshopUrl === 'string' && WORKSHOP_URL_RE.test(m.workshopUrl);
+  if (!newMaps.every(validNewMap)) {
     return { ok: false, error: 'New maps must have a name and valid Steam Workshop URL' };
   }
   return { ok: true, mapPool: mapPool.length > 0 ? mapPool : null, newMaps: newMaps as NewMap[] };

@@ -9,6 +9,7 @@ import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
+import { getSeasons } from './seasons';
 import { fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
 
 
@@ -590,13 +591,9 @@ export const getMapLookup = cache(async (client: SupabaseClient = supabase): Pro
 /** Every map name a season's pool could pick from: the `maps` table plus any name already used in a
  *  season's pool, lowercased and sorted. Feeds the map-pool picker. */
 export async function getKnownMapNames(): Promise<string[]> {
-  const [mapLookup, seasonsRes] = await Promise.all([
-    getMapLookup(),
-    supabase.from('seasons').select('map_pool'),
-  ]);
-  if (seasonsRes.error) throw seasonsRes.error;
+  const [mapLookup, seasons] = await Promise.all([getMapLookup(), getSeasons()]);
   const names = new Set<string>(Object.keys(mapLookup));
-  for (const s of (seasonsRes.data ?? []) as { map_pool: string[] | null }[]) {
+  for (const s of seasons) {
     for (const m of s.map_pool ?? []) names.add(m.trim().toLowerCase());
   }
   return Array.from(names).sort();

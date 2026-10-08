@@ -40,6 +40,12 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
     });
   }
 
+  function cancel() {
+    selection.setSelected(new Set(mapPool ?? []));
+    selection.setAddedMaps([]);
+    setEditing(false);
+  }
+
   const busy = saving || isPending;
   const hasPool = hasMapPool(mapPool);
 
@@ -81,7 +87,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
         </button>
         <button
           type="button"
-          onClick={() => setEditing(false)}
+          onClick={cancel}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel
