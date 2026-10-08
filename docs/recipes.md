@@ -177,7 +177,11 @@ Every `public` table has row level security on, so a new table is created closed
 3. **Only a browser Realtime subscription changes that.** Add the table to the `supabase_realtime`
    publication and give it a `grant select ... to anon` plus a `for select to anon using (true)`
    policy, as the existing Realtime tables have (see
-   `supabase/migrations/20261008150000_enable_rls_revoke_anon.sql`).
+   `supabase/migrations/20261008150000_enable_rls_revoke_anon.sql`). When the table holds anything
+   not meant for the public, grant only the columns the subscriber reads plus the primary key and
+   any filter column (`grant select (id, status) on ...`), as
+   `supabase/migrations/20261009150000_narrow_realtime_anon_columns.sql` does — Realtime delivers just
+   the columns the role may select.
 4. Regenerate `src/lib/database.types.ts` and document the table in
    [`architecture.md`](./architecture.md)'s Database section.
 

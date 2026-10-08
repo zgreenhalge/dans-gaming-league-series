@@ -3,9 +3,10 @@
 // In-match server panel. Once the 5-stage veto completes, this drives the hosting UX:
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
-// Updates via Supabase Realtime on the match's `match_server_state` row (no polling) — the table is
-// already in the realtime publication. The moment the row flips to `live` we swap the spinner for the
-// Join button. Teardown itself isn't a control here — it happens automatically once the match is
+// Updates via Supabase Realtime on the match's `match_server_state` row (no polling). The Realtime
+// event carries only `server_state` (the anon role can read no other column), so each event re-reads
+// the access-checked status route, which is the only source of the connect string. The moment the
+// row flips to `live` we swap the spinner for the Join button. Teardown itself isn't a control here — it happens automatically once the match is
 // scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
 // safety valve on the admin server console for a server left live.
 
@@ -41,26 +42,36 @@ export default function MatchServerPanel({
     setConnect(conn);
   }, []);
 
-  // Initial read (Realtime only delivers subsequent changes).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // The status route is access-checked (admin or in-match), so it answers only for viewers allowed
+  // the connect string; anyone else keeps whatever `server_state` Realtime last delivered.
+  const loadStatus = useCallback(
+    async (isCancelled: () => boolean = () => false) => {
       try {
         const res = await fetch(`/api/matches/${matchId}/server/status`);
-        if (!res.ok || cancelled) return;
+        if (!res.ok || isCancelled()) return;
         const data = (await res.json()) as StatusResponse;
-        if (!cancelled) apply(data.serverState, data.connectString);
+        if (!isCancelled()) apply(data.serverState, data.connectString);
       } catch {
         /* transient — Realtime will still deliver updates */
       }
+    },
+    [matchId, apply],
+  );
+
+  // Initial read (Realtime only delivers subsequent changes). A plain effect calling loadStatus()
+  // directly trips the set-state-in-effect lint rule, hence the IIFE.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await loadStatus(() => cancelled);
     })();
     return () => {
       cancelled = true;
     };
-  }, [matchId, apply]);
+  }, [loadStatus]);
 
-  // Live updates straight off the match_server_state row — no polling. The row doesn't exist until
-  // the first provision (`idle`), so this listens for INSERT as well as UPDATE.
+  // Live updates off the match_server_state row — no polling. The row doesn't exist until the first
+  // provision (`idle`), so this listens for INSERT as well as UPDATE.
   useEffect(() => {
     const channel = getBrowserClient()
       .channel(`match-server-${matchId}`)
@@ -68,18 +79,16 @@ export default function MatchServerPanel({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
         (payload) => {
-          const row = payload.new as {
-            server_state?: ServerState;
-            connect_string?: string | null;
-          };
-          apply(row.server_state ?? 'idle', row.connect_string ?? null);
+          const row = payload.new as { server_state?: ServerState };
+          if (row.server_state) setState(row.server_state);
+          void loadStatus();
         },
       )
       .subscribe();
     return () => {
       getBrowserClient().removeChannel(channel);
     };
-  }, [matchId, apply]);
+  }, [matchId, loadStatus]);
 
   const provision = async () => {
     setBusy(true);
@@ -135,6 +144,10 @@ export default function MatchServerPanel({
       {state === 'provisioning' && (
         // Spinner until the row flips to `live`, then we swap in the real Join button.
         <ServerSpinner label="Starting server…" />
+      )}
+
+      {state === 'live' && !connect && (
+        <span className="text-sm text-[var(--color-text-secondary)]">Server is live.</span>
       )}
 
       {state === 'live' && connect && (

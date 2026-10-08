@@ -61,6 +61,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'background_jobs', filter: `match_id=eq.${matchId}` },
         (payload) => {
+          // The payload carries only the columns anon may select: id, job_type, match_id, status.
           const row = (payload.new ?? payload.old) as { job_type?: string; status?: string } | null;
           if (row?.job_type !== DEMO_INGEST_JOB_TYPE) return;
           refresh();

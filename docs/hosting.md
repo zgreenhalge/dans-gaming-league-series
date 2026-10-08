@@ -41,6 +41,11 @@ played, meaningless once scored), not match data — see issue #288.
 | `server_started_at` | when provisioning began (drives the panel's progress estimate) |
 | `teardown_at` | when a scheduled (non-immediate) teardown's grace period ends — set on entering `tearing_down`, cleared once the stop actually runs |
 
+The in-match `MatchServerPanel` follows the row over Realtime, but `anon` may select only `match_id`
+and `server_state`, so each event carries just the state; the panel then re-reads
+`GET /api/matches/[id]/server/status` (admin or in-match only) for the connect string. Anyone else
+sees the state without a join link.
+
 Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client in
 **`src/lib/dathost.ts`** (DatHost REST `/api/0.1`, HTTP Basic auth):
 
