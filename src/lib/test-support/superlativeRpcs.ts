@@ -14,8 +14,7 @@ export const superlativeRpcs: Record<string, RpcHandler> = {
     const voter = args.p_voter_player_id as number;
     const ids = args.p_superlative_ids as number[];
     const votes = args.p_votes as RpcVote[];
-    const rows = (db.superlative_votes ??= []);
-    db.superlative_votes = rows.filter((r) => !(r.voter_player_id === voter && ids.includes(r.superlative_id as number)));
+    db.superlative_votes = (db.superlative_votes ?? []).filter((r) => !(r.voter_player_id === voter && ids.includes(r.superlative_id as number)));
     for (const v of votes) {
       if (!ids.includes(v.superlative_id)) continue;
       db.superlative_votes.push({

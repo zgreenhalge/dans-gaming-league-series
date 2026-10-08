@@ -1,5 +1,5 @@
--- All-or-nothing counterparts to two multi-write superlatives sequences (#599). Each runs as one
--- Postgres transaction, so a failure part-way leaves the stored state exactly as it was.
+-- Superlatives writes that touch several rows. Each function runs as one Postgres transaction, so a
+-- failure part-way leaves the stored state unchanged.
 
 -- Replaces one voter's ballot for a set of superlatives: every vote the voter holds on
 -- `p_superlative_ids` is removed, then `p_votes` — an array of

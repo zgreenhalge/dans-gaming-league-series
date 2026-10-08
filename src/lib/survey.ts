@@ -221,6 +221,7 @@ export function validateSuperlativeOrder(currentIds: number[], input: unknown): 
   return { ok: true, value: ids };
 }
 
+// A `type` (not an interface) so it is assignable to `Json` as an RPC argument.
 export type SuperlativeVoteInput = {
   superlative_id: number;
   nominee_player_id: number;
