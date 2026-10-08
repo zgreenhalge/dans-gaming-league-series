@@ -1,0 +1,36 @@
+/**
+ * Test-local fakes for the `replace_superlative_votes` and `reorder_superlatives` Postgres RPCs
+ * (`supabase/migrations/20261008160000_add_superlative_atomic_rpcs.sql`) — see fakeSupabase.ts's own
+ * header comment on why `.rpc()` has no generic in-memory equivalent and needs a per-name fake.
+ * Shared by every test that drives a superlatives route far enough to reach one of these calls.
+ */
+
+import { nextId, type RpcHandler } from './fakeSupabase';
+
+type RpcVote = { superlative_id: number; nominee_player_id: number };
+
+export const superlativeRpcs: Record<string, RpcHandler> = {
+  replace_superlative_votes: (args, db) => {
+    const voter = args.p_voter_player_id as number;
+    const ids = args.p_superlative_ids as number[];
+    const votes = args.p_votes as RpcVote[];
+    const rows = (db.superlative_votes ??= []);
+    db.superlative_votes = rows.filter((r) => !(r.voter_player_id === voter && ids.includes(r.superlative_id as number)));
+    for (const v of votes) {
+      if (!ids.includes(v.superlative_id)) continue;
+      db.superlative_votes.push({
+        id: nextId(db.superlative_votes), superlative_id: v.superlative_id, voter_player_id: voter, nominee_player_id: v.nominee_player_id,
+      });
+    }
+    return null;
+  },
+  reorder_superlatives: (args, db) => {
+    const seasonId = args.p_season_id as number;
+    const order = args.p_order as number[];
+    for (const row of db.superlatives ?? []) {
+      const index = order.indexOf(row.id as number);
+      if (row.season_id === seasonId && index >= 0) row.position = index + 1;
+    }
+    return null;
+  },
+};

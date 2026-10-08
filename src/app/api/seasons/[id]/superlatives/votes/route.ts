@@ -24,24 +24,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   );
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  if (parsed.value.length > 0) {
-    const { error: upsertErr } = await access.supabaseAdmin.from('superlative_votes').upsert(
-      parsed.value.map((v) => ({ ...v, voter_player_id: access.playerId })),
-      { onConflict: 'superlative_id,voter_player_id' },
-    );
-    if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 });
-  }
-
-  const votedIds = new Set(parsed.value.map((v) => v.superlative_id));
-  const clearedIds = poll.superlatives.map((s) => s.id).filter((sid) => !votedIds.has(sid));
-  if (clearedIds.length > 0) {
-    const { error: clearErr } = await access.supabaseAdmin
-      .from('superlative_votes')
-      .delete()
-      .eq('voter_player_id', access.playerId)
-      .in('superlative_id', clearedIds);
-    if (clearErr) return NextResponse.json({ error: clearErr.message }, { status: 500 });
-  }
+  const { error } = await access.supabaseAdmin.rpc('replace_superlative_votes', {
+    p_voter_player_id: access.playerId,
+    p_superlative_ids: poll.superlatives.map((s) => s.id),
+    p_votes: parsed.value,
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

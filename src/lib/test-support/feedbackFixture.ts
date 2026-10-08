@@ -6,6 +6,7 @@ import { __setTestSession } from '../session';
 import { __setTestClient } from '../supabase';
 import { __setTestAdminClient } from '../supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './fakeSupabase';
+import { superlativeRpcs } from './superlativeRpcs';
 import { sessionFor } from './nextRequest';
 
 export const ADMIN_ID = 1;
@@ -51,7 +52,7 @@ export function makeFeedbackDb(): FakeDb {
 /** Installs a fresh fixture as both Supabase clients and signs in as `playerId` (or nobody). */
 export function installFeedbackFixture(playerId: number | null): FakeDb {
   const db = makeFeedbackDb();
-  const client = createFakeSupabaseClient(db);
+  const client = createFakeSupabaseClient(db, superlativeRpcs);
   __setTestClient(client);
   __setTestAdminClient(client);
   __setTestSession(playerId == null ? null : sessionFor(playerId));
