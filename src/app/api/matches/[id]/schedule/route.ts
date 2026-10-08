@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
 import { after } from '@/lib/after';
+import { parseMatchId } from '@/lib/util';
 
 export async function PATCH(
   req: NextRequest,
@@ -15,8 +16,8 @@ export async function PATCH(
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 

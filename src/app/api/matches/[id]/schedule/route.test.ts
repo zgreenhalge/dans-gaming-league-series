@@ -16,7 +16,7 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
 
@@ -72,10 +72,11 @@ function recordingRpc(): { calls: Record<string, unknown>[]; handler: RpcHandler
 }
 
 async function main() {
-  await test('PATCH — non-numeric match id is rejected (400)', async () => {
+  await test('PATCH — a malformed match id is rejected (400)', async () => {
     installFixture();
-    const res = await call('abc', ADMIN_ID, { scheduled_at: null });
-    assert.equal(res.status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID, { scheduled_at: null })).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('PATCH — unauthenticated request is rejected (401)', async () => {
