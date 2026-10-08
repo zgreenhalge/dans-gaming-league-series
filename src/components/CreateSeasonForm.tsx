@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { isValidBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 export function CreateSeasonForm({ knownMaps }: Props) {
   const router = useRouter();
   const selection = useMapPoolSelection();
+  const [buyIn, setBuyIn] = useState('10');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [submitting, setSubmitting] = useState(false);
@@ -25,7 +27,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
       const res = await fetch('/api/seasons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps }),
+        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps, buy_in_amount: Number(buyIn) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -41,9 +43,23 @@ export function CreateSeasonForm({ knownMaps }: Props) {
   }
 
   const busy = submitting || isPending;
+  const buyInValid = isValidBuyInText(buyIn);
 
   return (
     <div className="flex flex-col gap-8">
+      <label className="flex flex-col gap-1.5 max-w-[200px]">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Buy-in ($)</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          value={buyIn}
+          onChange={(e) => setBuyIn(e.target.value)}
+          className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+        />
+      </label>
+
       <MapPoolPicker knownMaps={knownMaps} selection={selection} />
 
       <div className="flex flex-col gap-3">
@@ -56,7 +72,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
         <button
           type="button"
           onClick={submit}
-          disabled={busy || !selection.isValid}
+          disabled={busy || !selection.isValid || !buyInValid}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`}
         >
           {busy ? 'Creating…' : 'Create Season'}
