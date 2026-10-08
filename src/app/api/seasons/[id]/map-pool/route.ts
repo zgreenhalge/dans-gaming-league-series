@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
+import { parseSeasonId } from '@/lib/util';
 import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
 
 /**
@@ -17,8 +18,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) {
+  const seasonId = parseSeasonId(id);
+  if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 
