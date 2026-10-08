@@ -1,6 +1,6 @@
 /**
  * Test-local fake for the `set_season_buy_in` Postgres RPC
- * (`supabase/migrations/20261008170000_add_set_season_buy_in_rpc.sql`) — see fakeSupabase.ts's own
+ * (`supabase/migrations/20261008180000_add_set_season_buy_in_rpc.sql`) — see fakeSupabase.ts's own
  * header comment on why `.rpc()` has no generic in-memory equivalent and needs a per-name fake.
  * Returns the same `{ status }` the real function does and writes only on `ok`.
  */
