@@ -4,16 +4,15 @@
  * its `UPCOMING`-only status gate directly through the exported handlers, using:
  *  - `jsonRequest()` (test-support/nextRequest.ts) to build a real `NextRequest`
  *  - `__setTestSession()` (lib/session.ts) to stand in for `getServerSession()`
- *  - `__setTestClient()` / `__setTestAdminClient()` with a fake Supabase client
- *    (test-support/fakeSupabase.ts) backing both the anon client (`isPlayerAdmin()` reads through
- *    it) and the admin client (everything else in the route reads/writes through it)
+ *  - `__setTestAdminClient()` with a fake Supabase client
+ *    (test-support/fakeSupabase.ts) backing the one server client (`isPlayerAdmin()` and the route
+ *    both read/write through it)
  *
  * Run:  npx vitest run src/app/api/seasons/[id]/players/route.test.ts
  */
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
@@ -42,13 +41,11 @@ function makeDb(): FakeDb {
   };
 }
 
-/** Fresh fixture per test, wired as both the anon client (`isPlayerAdmin()`) and admin client
- * (everything else `requireSeasonRosterAccess()`/the route touches) so a mutation in one is visible
- * to the other, matching how both point at the same database in production. */
+/** Fresh fixture per test, wired as the server client that `isPlayerAdmin()`,
+ * `requireSeasonRosterAccess()` and the route all read and write through. */
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -162,7 +159,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

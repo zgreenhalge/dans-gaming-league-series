@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { fetchAllPages, fetchPmsLookup, type PmsRow } from './_shared';
 
 /** One `match_round_economy` row, joined to player ids — the round-grain counterpart of
@@ -41,7 +41,7 @@ function joinRoundEconomyRows(rows: RawRoundEconomyRow[], pmsLookup: Map<number,
 export async function getMatchRoundEconomy(matchId: number): Promise<MatchRoundEconomyRow[]> {
   const [rows, pmsLookup] = await Promise.all([
     fetchAllPages<RawRoundEconomyRow>((from, to) =>
-      supabase.from('match_round_economy').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('match_round_economy').select('*').eq('match_id', matchId).range(from, to),
     ),
     fetchPmsLookup(matchId),
   ]);

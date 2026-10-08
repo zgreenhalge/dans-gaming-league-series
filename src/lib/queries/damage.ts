@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { fetchAllPages, fetchPmsLookup, type PmsRow } from './_shared';
 
 /** One `match_damage_events` row, joined to player ids — the match-page-scoped counterpart of
@@ -53,7 +53,7 @@ function joinDamageRows(rows: RawDamageRow[], pmsLookup: Map<number, PmsRow>): M
 export async function getMatchDamageEvents(matchId: number): Promise<MatchDamageEventRow[]> {
   const [rows, pmsLookup] = await Promise.all([
     fetchAllPages<RawDamageRow>((from, to) =>
-      supabase.from('match_damage_events').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('match_damage_events').select('*').eq('match_id', matchId).range(from, to),
     ),
     fetchPmsLookup(matchId),
   ]);

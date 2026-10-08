@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import {
   extractSeasonNumber,
   buildRegularToGauntletMap,
@@ -165,7 +165,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const seasonNumberById = new Map(allSeasons.map((s) => [s.id, extractSeasonNumber(s.name)]));
   const seasonIsGauntletById = new Map(allSeasons.map((s) => [s.id, s.is_gauntlet]));
 
-  const { data: matches, error: mErr } = await supabase
+  const { data: matches, error: mErr } = await getAdminClient()
     .from('matches')
     .select('id, week_id, match_number, final_score, shirts_pick, picked_map, skins_starting_side')
     .in('week_id', [...weekLookup.keys()]);
@@ -192,7 +192,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     ? playedMatches.filter((m) => mapSlug(mapFor(m) ?? '') === mapFilter)
     : playedMatches;
 
-  const { data: stats, error: sErr } = await supabase
+  const { data: stats, error: sErr } = await getAdminClient()
     .from('player_match_stats')
     .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played')
     .in('match_id', filteredMatches.map((m) => m.id));

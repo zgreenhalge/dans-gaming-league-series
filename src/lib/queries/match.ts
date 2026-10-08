@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { Match, Week, Season, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
 import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchWeekLabel } from '../util';
 import { mapSlug } from '../maps';
@@ -30,7 +30,7 @@ export interface MatchDetail {
 }
 
 export async function getMatch(matchId: number): Promise<MatchDetail | null> {
-  const { data: match, error } = await supabase
+  const { data: match, error } = await getAdminClient()
     .from('matches')
     .select('*')
     .eq('id', matchId)
@@ -43,8 +43,8 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   // sequential hand-rolled round trips (#332).
   const [{ data: week, error: wErr }, { data: stats, error: sErr }, players] =
     await Promise.all([
-      supabase.from('weeks').select('*, seasons(*)').eq('id', m.week_id).maybeSingle(),
-      supabase
+      getAdminClient().from('weeks').select('*, seasons(*)').eq('id', m.week_id).maybeSingle(),
+      getAdminClient()
         .from('player_match_stats')
         .select('*')
         .eq('match_id', matchId),
@@ -114,7 +114,7 @@ export interface MatchTeamNames {
  *  columns from `player_match_stats` by rostered player. Built from `getPlayersById()` (same
  *  "the whole table is cheap" reasoning `findPlayerByName()` already relies on) rather than a second,
  *  separately-scoped `players` query. */
-async function resolvePlayers(playerIds: number[], client: SupabaseClient = supabase): Promise<Map<number, MatchDiscordPlayer>> {
+async function resolvePlayers(playerIds: number[], client: SupabaseClient = getAdminClient()): Promise<Map<number, MatchDiscordPlayer>> {
   const players: Map<number, MatchDiscordPlayer> = new Map();
   if (playerIds.length === 0) return players;
   const allPlayers = await getPlayersById(client);
@@ -131,7 +131,7 @@ async function resolvePlayers(playerIds: number[], client: SupabaseClient = supa
  *  doesn't fetch box-score columns — only `getMatchBoxScore()`'s one caller (the post-match Discord
  *  notification) needs those, and this function's other callers include the live ticker, which
  *  re-reads every round; see `getMatchBoxScore()`. */
-export async function getMatchTeamNames(matchId: number, client: SupabaseClient = supabase): Promise<MatchTeamNames | null> {
+export async function getMatchTeamNames(matchId: number, client: SupabaseClient = getAdminClient()): Promise<MatchTeamNames | null> {
   // Match/week/season collapse into one embedded select (same pattern as `getOtherScheduledMatches`
   // below), run in parallel with the roster fetch rather than chained after it — the roster only
   // depends on `matchId`, which is already known.
@@ -185,7 +185,7 @@ export async function getMatchTeamNames(matchId: number, client: SupabaseClient 
  *  `getMatchTeamNames()`'s roster query, so the two independent reads list a match's players in the
  *  same order — the Discord notification tags them via `getMatchTeamNames()` in its message content
  *  and lists them via this function in its embed, and the two should read as the same lineup. */
-export async function getMatchBoxScore(matchId: number, client: SupabaseClient = supabase): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
+export async function getMatchBoxScore(matchId: number, client: SupabaseClient = getAdminClient()): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
   const { data: stats } = await client
     .from('player_match_stats')
     .select('player_id, faction, kills, assists, deaths, adr')
@@ -210,10 +210,10 @@ export async function getMatchBoxScore(matchId: number, client: SupabaseClient =
 /** Whichever match is currently live, with no `matchId` known ahead of time — the first step of
  *  `getLiveTickerMatch` below. The league runs one shared match server (#134), so this table holds at
  *  most one row in practice; `order`+`limit(1)` is just a defensive tie-break, not evidence more than
- *  one is expected. Reads through the shared server `supabase` client, matching every other query in this
+ *  one is expected. Reads through `getAdminClient()`, matching every other query in this
  *  file. */
 async function getCurrentLiveMatch(): Promise<LiveScoreRow | null> {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from('live_match_score')
     .select('match_id, shirts_score, skins_score, round, updated_at')
     .order('updated_at', { ascending: false })
@@ -257,7 +257,7 @@ export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
  * topbar until the client corrects it after hydration.
  */
 export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from('live_match_score')
     .select('match_id')
     .eq('match_id', matchId)
@@ -274,7 +274,7 @@ export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
  * rather than this general-purpose query re-resolving `gauntlet_pods` on every call, gauntlet or not.
  */
 export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from('matches')
     .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
     .not('scheduled_at', 'is', null)
@@ -318,7 +318,7 @@ export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSa
  *  duplicates of (or directly reconstructible from) `match_kills`/`player_match_weapon_stats`/
  *  `match_rounds`/`match_utility_throws` (#457/#488/#489). */
 export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
-  const { data: pmsRows } = await supabase
+  const { data: pmsRows } = await getAdminClient()
     .from('player_match_stats')
     .select('id, player_id, faction')
     .eq('match_id', matchId);
@@ -334,7 +334,7 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   // collapses to one `players` read without a local promise to thread through.
   const pmsForUtility = pms.map((r) => ({ id: r.id, player_id: r.player_id, match_id: matchId }));
   const [{ data: sabRows }, players, kills, accuracyTotals, roundSides, throws] = await Promise.all([
-    supabase.from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
+    getAdminClient().from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
     getPlayersById(),
     getMatchKills(matchId),
     deriveAccuracyTotals(matchId),
@@ -415,7 +415,7 @@ export interface MatchScoutingData {
  * before scores are entered.
  */
 export async function getMatchScoutingData(matchId: number): Promise<MatchScoutingData | null> {
-  const { data: match, error: mErr } = await supabase
+  const { data: match, error: mErr } = await getAdminClient()
     .from('matches')
     .select('*')
     .eq('id', matchId)
@@ -423,7 +423,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (mErr) throw mErr;
   if (!match) return null;
 
-  const { data: roster, error: rErr } = await supabase
+  const { data: roster, error: rErr } = await getAdminClient()
     .from('player_match_stats')
     .select('player_id, faction')
     .eq('match_id', matchId);
@@ -437,12 +437,12 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
 
   const [statRows, players, leagueStatRows, leagueMatchRows, weekLookup] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
-      asPage(supabase.from('player_match_stats').select('*').in('player_id', playerIds).range(from, to)),
+      asPage(getAdminClient().from('player_match_stats').select('*').in('player_id', playerIds).range(from, to)),
     ),
     getPlayersById(),
     fetchAllPages<LeagueStatRow>((from, to) =>
       asPage(
-        supabase
+        getAdminClient()
           .from('player_match_stats')
           .select('match_id, adr, kills, deaths, assists, is_win')
           .gt('rounds_played', 0)
@@ -454,7 +454,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     // redundant `matches` round trip for the same rows (every id in `matchIds` is already present
     // here, since this is every match in the league).
     fetchAllPages<LeagueMatchRow>((from, to) =>
-      supabase.from('matches').select('id, final_score, shirts_pick, picked_map, week_id, match_number').range(from, to),
+      getAdminClient().from('matches').select('id, final_score, shirts_pick, picked_map, week_id, match_number').range(from, to),
     ),
     getWeekLookup(),
   ]);
@@ -476,7 +476,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
         .filter((id): id is number => id != null),
     ),
   );
-  const { data: seasons, error: seErr } = await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds);
+  const { data: seasons, error: seErr } = await getAdminClient().from('seasons').select('id, name, is_gauntlet').in('id', seasonIds);
   if (seErr) throw seErr;
   const seasonNameById = new Map<number, string>();
   const seasonIsGauntletById = new Map<number, boolean>();

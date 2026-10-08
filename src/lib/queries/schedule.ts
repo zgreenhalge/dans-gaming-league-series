@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { Week, Match, Faction } from '../types';
 import { allMatchesPlayed, isPlayedScore, weekWindow, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import { getPlayersById } from './player';
@@ -56,12 +56,11 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
 
 /** Weeks + matches + per-match Shirts/Skins rosters (from player_match_stats) — one embedded
  *  query (weeks -> matches -> player_match_stats) instead of three sequential round trips, each
- *  depending on the previous one's ids. `client` defaults to the app's server client but accepts
- *  another for callers that already hold one outside a Next.js request (a GitHub Actions script) —
- *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
+ *  depending on the previous one's ids. Optional `client` per docs/recipes.md's
+ *  query-helper recipe. */
 export async function getSeasonSchedule(
   seasonId: number,
-  client: SupabaseClient = supabase,
+  client: SupabaseClient = getAdminClient(),
 ): Promise<WeekWithMatches[]> {
   const [{ data: weeks, error: wErr }, players] = await Promise.all([
     client
@@ -122,7 +121,7 @@ export interface SeasonMatchSummaries {
  *  trip followed by a second `matches` one. */
 export async function getSeasonMatchSummaries(
   seasonId: number,
-  client: SupabaseClient = supabase,
+  client: SupabaseClient = getAdminClient(),
 ): Promise<SeasonMatchSummaries> {
   const { data: weeks, error: wErr } = await client
     .from('weeks')
@@ -258,7 +257,7 @@ export async function isWeekComplete(
   seasonId: number,
   weekNumber: number,
 ): Promise<boolean> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('matches')
     .select('final_score, weeks!inner(season_id, week_number)')
     .eq('weeks.season_id', seasonId)

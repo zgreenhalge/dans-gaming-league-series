@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { Match, Player } from '../types';
 import { matchLabel, extractSeasonNumber, compareMatchRefDesc, weekWindow } from '../util';
 import { podGames } from '../gauntlet-pod';
@@ -38,8 +38,8 @@ export interface AdminMatchRow {
  */
 export async function getAdminMatches(): Promise<AdminMatchRow[]> {
   const [{ data, error }, { data: podRows }] = await Promise.all([
-    supabase.from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'),
-    supabase.from('gauntlet_pods').select('match1_id, match2_id'),
+    getAdminClient().from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'),
+    getAdminClient().from('gauntlet_pods').select('match1_id, match2_id'),
   ]);
   if (error || !data) return [];
 
@@ -79,7 +79,7 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
     // getLinkedRegularSeason() reads through the request-cached getSeasons(), so resolving this per
     // row costs no extra query beyond the first.
     const mapPool = season?.is_gauntlet
-      ? (await getLinkedRegularSeason(season.name ?? '', supabase))?.map_pool ?? null
+      ? (await getLinkedRegularSeason(season.name ?? ''))?.map_pool ?? null
       : (season?.map_pool ?? null);
     return {
       match: match as Match,
@@ -114,7 +114,7 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
  * row (name, `is_admin`, and the steam-link fields) so the console can edit them in place.
  */
 export async function getAdminPlayers(): Promise<Player[]> {
-  const { data, error } = await supabase.from('players').select('*').order('name');
+  const { data, error } = await getAdminClient().from('players').select('*').order('name');
   if (error || !data) return [];
   return data as Player[];
 }
@@ -124,7 +124,7 @@ export async function getAdminPlayers(): Promise<Player[]> {
 // ---------------------------------------------------------------------------
 
 export async function isPlayerAdmin(playerId: number): Promise<boolean> {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from('players')
     .select('is_admin')
     .eq('id', playerId)

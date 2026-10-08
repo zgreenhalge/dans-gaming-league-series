@@ -5,8 +5,8 @@
  * one's underlying RPC enforces, and mapScheduleDraftError()'s error-code mapping (#320, #380).
  *
  * Both this file's functions (via their `supabaseAdmin` parameter) and the `./queries` helpers they
- * call into (`getSeasonRoster`, `getSeasonScheduleDraft`, both built on the module-level `supabase`
- * singleton) must point at the same fake db — hence wiring both `__setTestClient()` and passing the
+ * call into (`getSeasonRoster`, `getSeasonScheduleDraft`, both built on the `getAdminClient()`
+ * singleton) must point at the same fake db — hence wiring both `__setTestAdminClient()` and passing the
  * fake as `supabaseAdmin` in every test below. The five `*_season_schedule_draft` RPCs this file's
  * functions call have no generic in-memory equivalent (arbitrary PL/pgSQL) — see
  * `test-support/seasonScheduleDraftRpc.ts`'s fakes, registered on every fixture below.
@@ -15,7 +15,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { makeSeasonScheduleDraftRpcHandlers } from './test-support/seasonScheduleDraftRpc';
 import { test, report } from './test-support/miniTest';
@@ -50,7 +50,7 @@ function makeDb(): FakeDb {
 
 function installFixture(db: FakeDb): ReturnType<typeof createFakeSupabaseClient> {
   const client = createFakeSupabaseClient(db, makeSeasonScheduleDraftRpcHandlers());
-  __setTestClient(client);
+  __setTestAdminClient(client);
   return client;
 }
 

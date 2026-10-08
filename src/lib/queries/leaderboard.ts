@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, deriveRwr } from '../util';
 import { getPlayersById } from './player';
@@ -69,7 +69,7 @@ const getSeasonBaseData = cache(async (): Promise<{
       is_win: boolean | null;
     }>((from, to) =>
       asPage(
-        supabase
+        getAdminClient()
           .from('player_match_stats')
           .select('player_id, assists, rounds_won, match_id, kills, deaths, is_win')
           .range(from, to),
@@ -125,7 +125,7 @@ const getSeasonBaseData = cache(async (): Promise<{
  *  `getCareerLeaderboard()`, `getAllLeaderboards()`, and any indirect caller of the latter (e.g.
  *  `getAllSeasonMedalists()`) share one read instead of each re-scanning the view. */
 const getRawSeasonLeaderboardRows = cache(async (): Promise<LeaderboardRow[]> => {
-  const { data, error } = await supabase.from('player_season_leaderboard').select('*');
+  const { data, error } = await getAdminClient().from('player_season_leaderboard').select('*');
   if (error) throw error;
   return (data ?? []) as LeaderboardRow[];
 });
@@ -163,7 +163,7 @@ export async function getSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
   const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('player_season_leaderboard')
       .select('*')
       .eq('season_id', seasonId),
@@ -230,7 +230,7 @@ export async function getSideBalance(
     const weekLookup = await getWeekLookup([opts.includeUnplayedInSeasonId]);
     const weekIds = [...weekLookup.keys()];
     if (weekIds.length > 0) {
-      const { data: seasonMatches, error } = await supabase.from('matches').select('id').in('week_id', weekIds);
+      const { data: seasonMatches, error } = await getAdminClient().from('matches').select('id').in('week_id', weekIds);
       if (error) throw error;
       for (const m of (seasonMatches ?? []) as { id: number }[]) eligibleMatchIds.add(m.id);
     }
@@ -263,7 +263,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     getRawSeasonLeaderboardRows(),
     getSeasonBaseData(),
     getPlayersById(),
-    supabase.from('seasons').select('id, status'),
+    getAdminClient().from('seasons').select('id, status'),
   ]);
   if (sErr) throw sErr;
 

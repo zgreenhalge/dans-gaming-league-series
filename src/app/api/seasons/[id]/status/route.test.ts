@@ -2,7 +2,7 @@
  * Route-handler harness for PATCH /api/seasons/[id]/status (#379) — exercises requireAdminAccess()'s
  * 401/403 branches and activateSeason()'s status transition + best-effort gauntlet-build side
  * effect, through the exported handler directly, using the same `jsonRequest()`/`__setTestSession()`/
- * `__setTestClient()`/`__setTestAdminClient()` harness `seasons/[id]/players/route.test.ts` (#319)
+ * `__setTestAdminClient()` harness `seasons/[id]/players/route.test.ts` (#319)
  * established.
  *
  * Run:  npx vitest run src/app/api/seasons/[id]/status/route.test.ts
@@ -10,7 +10,6 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
@@ -53,7 +52,6 @@ function makeDb(): FakeDb {
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -150,7 +148,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

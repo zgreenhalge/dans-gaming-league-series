@@ -12,14 +12,14 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from '@/lib/supabase';
+import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
 import { jsonRequest, MALFORMED_ROUTE_IDS } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { GET } from './route';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 const REGULAR_SEASON_ID = 1; // "Season 5"
 const GAUNTLET_SEASON_ID = 2; // "Season 5 Gauntlet"

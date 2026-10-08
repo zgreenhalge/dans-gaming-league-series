@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
 import { batchedIn, chunk, SUPABASE_IN_BATCH, matchIdsForSeason } from './_shared';
@@ -70,12 +70,12 @@ export interface EhogPlayerData {
 
 export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerData> {
   const [currentRes, historyRes] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('player_current_ratings')
       .select('ehog_v1')
       .eq('player_id', playerId)
       .maybeSingle(),
-    supabase
+    getAdminClient()
       .from('player_rating_history')
       .select('match_id, sequence_index, ehog_rating, rating_delta')
       .eq('player_id', playerId)
@@ -112,7 +112,7 @@ export interface EhogSnapshotRow {
 }
 
 export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('player_rating_history')
     .select('player_id, ehog_rating, sequence_index, match_id')
     .eq('formula_version', 'ehog_v1')
@@ -154,7 +154,7 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
   // Chunks are independent requests — run them together rather than waiting on one before the next.
   const pages = await Promise.all(
     chunk(matchIds, SUPABASE_IN_BATCH).map(async (idBatch) => {
-      const { data, error } = await supabase
+      const { data, error } = await getAdminClient()
         .from('player_rating_history')
         .select('player_id, ehog_rating, sequence_index')
         .eq('formula_version', 'ehog_v1')
@@ -182,7 +182,7 @@ export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map
   // Chunks are independent requests — run them together rather than waiting on one before the next.
   const pages = await Promise.all(
     chunk(matchIds, SUPABASE_IN_BATCH).map(async (idBatch) => {
-      const { data, error } = await supabase
+      const { data, error } = await getAdminClient()
         .from('player_rating_history')
         .select('match_id, player_id, rating_delta, ehog_rating, sequence_index')
         .in('match_id', idBatch)
@@ -202,7 +202,7 @@ export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map
 }
 
 export async function getMatchRatingDeltas(matchId: number): Promise<Map<number, number>> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('player_rating_history')
     .select('player_id, rating_delta, ehog_rating, sequence_index')
     .eq('match_id', matchId)

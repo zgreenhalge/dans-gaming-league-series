@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cache } from 'react';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
@@ -50,7 +50,7 @@ export interface PlayerNameChange {
 
 /** A player's past renames, most recent first. Empty for a player who has never renamed. */
 export async function getPlayerNameHistory(playerId: number): Promise<PlayerNameChange[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('player_name_history')
     .select('old_name, new_name, changed_at')
     .eq('player_id', playerId)
@@ -59,13 +59,11 @@ export async function getPlayerNameHistory(playerId: number): Promise<PlayerName
   return (data ?? []) as PlayerNameChange[];
 }
 
-/** `client` defaults to the app's server client but accepts another for callers that already hold
- *  one outside a Next.js request (a GitHub Actions script) — same opt-in pattern as
- *  `getMatchIdsForMap()` (`maps.ts`). Wrapped in React's `cache()` (#507) so
- *  every default-`client` caller within one render pass shares one `players` table read instead of
- *  each doing its own full-table fetch — outside a render pass (a script, a non-request context)
+/** Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in React's `cache()`
+ *  (#507) so every default-`client` caller within one render pass shares one `players` table read
+ *  instead of each doing its own full-table fetch — outside a render pass (a script, a non-request context)
  *  `cache()` has no scope to dedup against and this just runs as a plain call. */
-export const getPlayersById = cache(async (client: SupabaseClient = supabase): Promise<Map<number, Player>> => {
+export const getPlayersById = cache(async (client: SupabaseClient = getAdminClient()): Promise<Map<number, Player>> => {
   const { data, error } = await client.from('players').select('*');
   if (error) throw error;
   const map = new Map<number, Player>();
@@ -80,7 +78,7 @@ export const getPlayersById = cache(async (client: SupabaseClient = supabase): P
  *  once per page load / per finished match, but this one backs a live match's `round_end` handling,
  *  which repeats every round — scoping the read keeps that from scaling with the size of the players
  *  table. Empty for an empty `steamIds`, without a round trip. */
-export async function getPlayersBySteamId(steamIds: string[], client: SupabaseClient = supabase): Promise<Map<string, Player>> {
+export async function getPlayersBySteamId(steamIds: string[], client: SupabaseClient = getAdminClient()): Promise<Map<string, Player>> {
   const map = new Map<string, Player>();
   if (steamIds.length === 0) return map;
   const { data, error } = await client.from('players').select('*').in('steam_id', steamIds);
@@ -94,7 +92,7 @@ export async function getPlayersBySteamId(steamIds: string[], client: SupabaseCl
 /** Resolves a linked Discord user id (`players.discord_id`) to its player row — the "me" lookup
  *  behind Discord slash commands (#396). `null` for an unlinked/unknown id. */
 export async function getPlayerByDiscordId(discordId: string): Promise<Player | null> {
-  const { data, error } = await supabase.from('players').select('*').eq('discord_id', discordId).maybeSingle();
+  const { data, error } = await getAdminClient().from('players').select('*').eq('discord_id', discordId).maybeSingle();
   if (error) throw error;
   return (data ?? null) as Player | null;
 }
@@ -114,7 +112,7 @@ export async function findPlayerByName(name: string): Promise<Player | null> {
 }
 
 export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
-  const { data: player, error: pErr } = await supabase
+  const { data: player, error: pErr } = await getAdminClient()
     .from('players')
     .select('*')
     .eq('id', playerId)
@@ -124,7 +122,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 
   const [statRows, medalists] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
-      asPage(supabase.from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
+      asPage(getAdminClient().from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
     ),
     getAllSeasonMedalists(),
   ]);
@@ -135,7 +133,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 
   const matchIds = Array.from(new Set(statRows.map((s) => s.match_id)));
   const [{ data: matches, error: mErr }, weekLookup] = await Promise.all([
-    supabase.from('matches').select('*').in('id', matchIds),
+    getAdminClient().from('matches').select('*').in('id', matchIds),
     getWeekLookup(),
   ]);
   if (mErr) throw mErr;
@@ -149,7 +147,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         .filter((id): id is number => id != null),
     ),
   );
-  const { data: seasons, error: seErr } = await supabase
+  const { data: seasons, error: seErr } = await getAdminClient()
     .from('seasons')
     .select('*')
     .in('id', seasonIds);
@@ -159,7 +157,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 
   // Fetch all stat rows for the involved matches so we can show full rosters.
   const [{ data: allStats, error: aErr }, players] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('player_match_stats')
       .select('*')
       .in('match_id', matchIds),

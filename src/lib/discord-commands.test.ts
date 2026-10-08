@@ -5,12 +5,12 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
 const db = buildFakeDb();
-__setTestClient(createFakeSupabaseClient(db));
+__setTestAdminClient(createFakeSupabaseClient(db));
 
 import { handleLeaderboardCommand, handleScheduledCommand, handlePlayerCommand, handleNameColorCommand } from './discord-commands';
 import type { DiscordInteraction } from './discordInteractions';

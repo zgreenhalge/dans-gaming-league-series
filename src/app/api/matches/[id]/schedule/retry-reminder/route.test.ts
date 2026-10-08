@@ -9,7 +9,6 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
@@ -25,7 +24,6 @@ const UNSCHEDULED_MATCH_ID = 100; // scheduled_at: null in fixtures
 function installFixture(rpcHandlers: Record<string, RpcHandler> = {}) {
   const db = buildFakeDb();
   const client = createFakeSupabaseClient(db, rpcHandlers);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -107,7 +105,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

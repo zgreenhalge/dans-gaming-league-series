@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
@@ -15,7 +15,7 @@ import { test, report } from './test-support/miniTest';
 import { deriveRates } from './util';
 import type { LeaderboardRowWithId } from './types';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import {
   getGauntletStats,
@@ -97,13 +97,13 @@ async function main() {
     // Replace, don't mutate, the pod row — buildFakeDb() returns the same shared fixture row objects
     // every call, so mutating one in place would leak into every other test in this file.
     db.gauntlet_pods = db.gauntlet_pods.map((p) => (p.match1_id === 200 ? { ...p, match2_id: 201 } : p));
-    __setTestClient(createFakeSupabaseClient(db));
+    __setTestAdminClient(createFakeSupabaseClient(db));
 
     const pod = await getGauntletPodForMatch(200);
     assert.notEqual(pod, null);
     matchesSnapshot('getGauntletPodForMatch-200', pod);
 
-    __setTestClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
+    __setTestAdminClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
   });
 
   await test('getGauntletBracketShape(2) — one materialized, played, final pod, snapshot', async () => {
@@ -133,7 +133,7 @@ async function main() {
       { pod_id: 2000, slot_index: 2, source_kind: 'seed', source_seed: 12, source_pod_id: null, player_id: 10 },
       { pod_id: 2000, slot_index: 3, source_kind: 'seed', source_seed: 13, source_pod_id: null, player_id: 12 },
     ];
-    __setTestClient(createFakeSupabaseClient(db));
+    __setTestAdminClient(createFakeSupabaseClient(db));
 
     const shape = await getGauntletBracketShape(99);
     assert.equal(shape.length, 1);
@@ -143,7 +143,7 @@ async function main() {
     assert.deepEqual(shape[0].slots.map((s) => s.source_seed), [10, 11, 12, 13]);
     assert.deepEqual(shape[0].slots.map((s) => s.player_id), [11, 13, 10, 12]);
 
-    __setTestClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
+    __setTestAdminClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
   });
 
   await test('getGauntletRounds(2) — one round, one match, snapshot', async () => {
@@ -167,14 +167,14 @@ async function main() {
       ...db.player_match_stats,
       { id: 9000, match_id: 200, player_id: 999, faction: 'SKINS', kills: 5, assists: 0, deaths: 5, adr: 50, damage: 1200, rounds_played: 24, rounds_won: 11, is_win: false },
     ];
-    __setTestClient(createFakeSupabaseClient(db));
+    __setTestAdminClient(createFakeSupabaseClient(db));
 
     const [rounds, playersById] = await Promise.all([getGauntletRounds(2), getPlayersById()]);
     const derived = deriveGauntletSeasonLeaderboard(rounds, 2, playersById);
     assert.ok(!derived.some((r) => r.player_id === 999));
     assert.deepEqual(derived, await getGauntletSeasonLeaderboard(2));
 
-    __setTestClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
+    __setTestAdminClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
   });
 
   await test('getAllGauntletSummaries() — both gauntlets, snapshot', async () => {

@@ -7,12 +7,12 @@
  * Run:  npx vitest run src/lib/queries-trophies.test.ts
  */
 
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getAllSeasonMedalists } from './queries';
 import { test, report } from './test-support/miniTest';

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
 import { getPlayersById } from './player';
 import {
@@ -57,7 +57,7 @@ async function getAllJoinedStats<Raw extends { player_match_stats_id: number }>(
     // `asPage()` erases the union `table` string can't otherwise resolve `Raw` against (same
     // reasoning `replaceMatchRows()` in `demo/factTables.ts` gives for its own untyped view) —
     // callers stay fully typed since `Raw` is always a fixed type argument, not inferred here.
-    fetchAllPages<Raw>((from, to) => asPage(supabase.from(table).select('*').range(from, to))),
+    fetchAllPages<Raw>((from, to) => asPage(getAdminClient().from(table).select('*').range(from, to))),
     fetchPmsLookup(undefined, pmsRows),
     resolveMatchSeasons(),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -128,7 +128,7 @@ async function getEconomyRoundWins(
 ): Promise<Map<string, number>> {
   const [roundEconomyRows, roundSides, resolvedPmsFactionLookup] = await Promise.all([
     fetchAllPages<RawRoundEconomyRow>((from, to) => {
-      let q = supabase.from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type');
+      let q = getAdminClient().from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type');
       if (matchId != null) q = q.eq('match_id', matchId);
       return asPage(q.range(from, to));
     }),
@@ -185,7 +185,7 @@ export async function getMatchWeaponClassStats(
 ): Promise<WeaponClassMatchRow[]> {
   const [rows, pmsLookup, resolvedPlayersById] = await Promise.all([
     fetchAllPages<PlayerMatchWeaponStat>((from, to) =>
-      supabase.from('player_match_weapon_stats').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('player_match_weapon_stats').select('*').eq('match_id', matchId).range(from, to),
     ),
     fetchPmsLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -225,7 +225,7 @@ export async function getMatchEconomyStats(
   // one `player_match_stats` read without a local promise to thread between them.
   const [rows, pmsLookup, resolvedPlayersById, roundWins] = await Promise.all([
     fetchAllPages<PlayerMatchEconomyStat>((from, to) =>
-      supabase.from('player_match_economy_stats').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('player_match_economy_stats').select('*').eq('match_id', matchId).range(from, to),
     ),
     fetchPmsFactionLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -443,14 +443,14 @@ export async function deriveAccuracyTotals(
   const [rows, resolvedPmsRows] = await Promise.all([
     fetchAllPages<{ player_match_stats_id: number; shots_fired: number; shots_hit: number; headshot_hits: number }>(
       (from, to) => {
-        let q = supabase.from('player_match_weapon_stats')
+        let q = getAdminClient().from('player_match_weapon_stats')
           .select('player_match_stats_id, shots_fired, shots_hit, headshot_hits');
         if (matchId != null) q = q.eq('match_id', matchId);
         return asPage(q.range(from, to));
       },
     ),
     pmsRows ?? fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) => {
-      let q = supabase.from('player_match_stats').select('id, player_id, match_id');
+      let q = getAdminClient().from('player_match_stats').select('id, player_id, match_id');
       if (matchId != null) q = q.eq('match_id', matchId);
       return asPage(q.range(from, to));
     }),

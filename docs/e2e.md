@@ -111,8 +111,8 @@ lint`/`npm run typecheck`) works in any agent session with no setup at all.
 
 `npm run build`/`npm run dev` fetch from Supabase during prerendering too (`seasons/page.tsx`,
 `maps/page.tsx`, `statistics/page.tsx`, and others using `export const revalidate = 60`, plus a few
-API routes touched by `next build`'s page-data collection) — but `src/lib/supabase.ts` and
-`src/lib/supabase-admin.ts` fall back to `src/lib/dev-fallback-supabase.ts` whenever
+API routes touched by `next build`'s page-data collection) — but `getAdminClient()`
+(`src/lib/supabase-admin.ts`) falls back to `src/lib/dev-fallback-supabase.ts` whenever
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` are *all*
 unset, which is exactly the state a Claude Code web session starts in with no `.env.local` and no
 real Supabase project credentials ever placed in the sandbox. That fallback serves the same

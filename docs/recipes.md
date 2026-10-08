@@ -87,7 +87,11 @@ in.
    `index.ts`'s `export * from './<file>'` picks it up (it does automatically) and that the type is
    actually exported, not just declared.
 4. Batch independent Supabase reads with `Promise.all` and check `error` once, immediately —
-   match the destructuring style in `getSeasonBaseData()` (`leaderboard.ts`).
+   match the destructuring style in `getSeasonBaseData()` (`leaderboard.ts`). Read through
+   `getAdminClient()` (`src/lib/supabase-admin.ts`). When callers that already hold a client need
+   the helper — engine code handed a `supabaseAdmin` param, or a GitHub Actions script — take it as a
+   trailing `client: SupabaseClient = getAdminClient()` param, as `getSeasons()` (`seasons.ts`) and
+   `getSeasonSchedule()` (`schedule.ts`) do.
 5. **If the read doesn't depend on its arguments — zero-arg, or keyed only by a primitive the
    caller already has (a `matchId`, a `seasonId`) — wrap it in React's `cache()`
    (`import { cache } from 'react'`) rather than adding a manual `xyz?: T | Promise<T>` override
@@ -145,10 +149,10 @@ and its `UPCOMING`-only status gate.
    session reads that go through `requireSession()` (route handlers) or `getSession()` (Server
    Components) — the three session-based access gates (`season-roster-access.ts`,
    `match-access.ts`, `admin-access.ts`) all do.
-3. **Fake the Supabase client** with `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) or its
-   alias `__setTestClient()` (`src/lib/supabase.ts`, used by the query-helper harness), pointed at a
-   `createFakeSupabaseClient(db)` instance. `supabase` and `getAdminClient()` are one client, so
-   either hook fakes both, and a mutation made through either spelling is visible to the other. Build a small local `FakeDb`
+3. **Fake the Supabase client** with `__setTestAdminClient()` (`src/lib/supabase-admin.ts`), pointed
+   at a `createFakeSupabaseClient(db)` instance. Every server-side read and write — query helpers,
+   access gates, route handlers — resolves through `getAdminClient()`, so this one hook fakes them
+   all. Build a small local `FakeDb`
    fixture scoped to the route under test rather than reaching for the big shared
    `test-support/fixtures.ts` "league" (that fixture is tuned for the `queries/*.ts` regression
    suite's read-only cross-function graph, not a single route's mutation scenarios).
@@ -174,7 +178,7 @@ Every `public` table has row level security on, so a new table is created closed
    readable and writable by anyone holding the public anon key, and `src/lib/migrations-rls.test.ts`
    (part of `npm test`, so CI) fails on any migration that creates a `public` table without it.
 2. **Add no policy and no grant for `anon`/`authenticated`.** Server code reaches the table through
-   the service-role client (`supabase` / `getAdminClient()`), which bypasses RLS.
+   the service-role client (`getAdminClient()`), which bypasses RLS.
 3. **Only a browser Realtime subscription changes that.** Add the table to the `supabase_realtime`
    publication and give it a `grant select ... to anon` plus a `for select to anon using (true)`
    policy, as the existing Realtime tables have (see

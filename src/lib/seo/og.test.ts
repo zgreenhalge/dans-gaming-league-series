@@ -9,14 +9,14 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from '../supabase';
+import { __setTestAdminClient } from '../supabase-admin';
 import { createFakeSupabaseClient } from '../test-support/fakeSupabase';
 import { buildFakeDb } from '../test-support/fixtures';
 import { deriveRates } from '../util';
 import { test, report } from '../test-support/miniTest';
 
 const fakeClient = createFakeSupabaseClient(buildFakeDb());
-__setTestClient(fakeClient);
+__setTestAdminClient(fakeClient);
 
 import { getPlayerMeta, getSeasonMetaLeaderboard, getMatchMeta } from './og';
 
@@ -70,15 +70,15 @@ async function main() {
     // discord-notify.ts's notify functions pass their own supabaseAdmin here rather than relying on
     // the default — scripts/demo-ingest.ts (the GH Action that auto-commits a demo-derived score)
     // runs as a standalone script outside any Next.js request, where the default singleton may
-    // not be configured at all. __setTestClient(undefined) simulates exactly that: it stops swapping in
+    // not be configured at all. __setTestAdminClient(undefined) simulates exactly that: it stops swapping in
     // a fake client, so any code path that still falls through to the real singleton throws (this
     // process has no Supabase env vars set either). getMatchMeta() must not depend on it.
-    __setTestClient(undefined);
+    __setTestAdminClient(undefined);
     try {
       const meta = await getMatchMeta(100, fakeClient);
       assert.notEqual(meta, null);
     } finally {
-      __setTestClient(fakeClient);
+      __setTestAdminClient(fakeClient);
     }
   });
 

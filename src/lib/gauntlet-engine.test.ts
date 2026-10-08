@@ -6,9 +6,9 @@
  *
  * Both `gauntlet-engine.ts` itself (via its `supabaseAdmin` parameter) and the `./queries` helpers
  * it calls into (`getSeason`, `getLinkedGauntlet`, `getSeasonLeaderboard`, etc. — all built on the
- * module-level `supabase` singleton, not `supabaseAdmin`) must point at the *same* fake db, or the
+ * `getAdminClient()` singleton, not `supabaseAdmin`) must point at the *same* fake db, or the
  * two halves of one call would read/write different in-memory databases — hence wiring both
- * `__setTestClient()` and passing the fake as `supabaseAdmin` in every test below.
+ * `__setTestAdminClient()` and passing the fake as `supabaseAdmin` in every test below.
  *
  * The `reconcile_gauntlet_draft` RPC has no generic in-memory equivalent (see fakeSupabase.ts's own
  * header comment) — `makeReconcileGauntletDraftRpc()` (test-support/reconcileGauntletDraftRpc.ts,
@@ -21,7 +21,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row, type RpcHandler } from './test-support/fakeSupabase';
 import { makeReconcileGauntletDraftRpc } from './test-support/reconcileGauntletDraftRpc';
 import { test, report } from './test-support/miniTest';
@@ -34,13 +34,13 @@ function makePlayers(ids: number[]): Row[] {
   return ids.map((id) => ({ id, name: `Player ${id}`, is_admin: false }));
 }
 
-/** Wires `db` up as both the module-level `supabase` singleton (via `__setTestClient()`, for the
+/** Wires `db` up as both the `getAdminClient()` singleton (via `__setTestAdminClient()`, for the
  * `./queries`/`gauntlet-engine.ts` helpers built on it) and returns the same client for direct use as
  * a test's `supabaseAdmin` argument — one fake client per fixture, not two independent ones pointed
  * at the same `db`. */
 function installFixture(db: FakeDb): ReturnType<typeof createFakeSupabaseClient> {
   const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: makeReconcileGauntletDraftRpc() });
-  __setTestClient(client);
+  __setTestAdminClient(client);
   return client;
 }
 
@@ -436,7 +436,7 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
       return baseRpc(args, rpcDb);
     };
     const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: raceRpc });
-    __setTestClient(client);
+    __setTestAdminClient(client);
 
     // The submitted draft still carries this pod (persistedId 500) and tries to change its
     // advance_rule to 'wildcard' — since it materialized behind the scenes, the RPC should skip it.

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match, Player } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
@@ -70,7 +70,7 @@ export async function getGauntletStats(): Promise<{
   career: LeaderboardRowWithId[];
   bySeason: Record<number, LeaderboardRowWithId[]>;
 }> {
-  const { data: gauntletSeasons, error: gsErr } = await supabase
+  const { data: gauntletSeasons, error: gsErr } = await getAdminClient()
     .from('seasons')
     .select('id')
     .eq('is_gauntlet', true);
@@ -85,7 +85,7 @@ export async function getGauntletStats(): Promise<{
   const weekLookup = await getWeekLookup(gauntletSeasonIds);
   if (weekLookup.size === 0) return { career: [], bySeason: {} };
 
-  const { data: matches, error: mErr } = await supabase
+  const { data: matches, error: mErr } = await getAdminClient()
     .from('matches')
     .select('id, week_id, final_score')
     .in(
@@ -105,7 +105,7 @@ export async function getGauntletStats(): Promise<{
   }
 
   const [{ data: stats, error: sErr }, players] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('player_match_stats')
       .select('*')
       .in(
@@ -306,7 +306,7 @@ export async function getGauntletSeasonLeaderboard(
   const weekLookup = await getWeekLookup([seasonId]);
   if (weekLookup.size === 0) return [];
 
-  const { data: matches, error: mErr } = await supabase
+  const { data: matches, error: mErr } = await getAdminClient()
     .from('matches')
     .select('id, final_score')
     .in('week_id', [...weekLookup.keys()])
@@ -319,7 +319,7 @@ export async function getGauntletSeasonLeaderboard(
     .map((m) => m.id);
 
   const [{ data: stats, error: sErr }, players] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('player_match_stats')
       .select('player_id, kills, assists, deaths, damage, rounds_played, rounds_won, is_win')
       .in('match_id', matchIds),
@@ -541,7 +541,7 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
  * `client` for callers outside a Next.js request that already hold one (a GitHub Actions script). */
 export async function getGauntletPodForMatch(
   matchId: number,
-  client: SupabaseClient = supabase,
+  client: SupabaseClient = getAdminClient(),
 ): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
   const { data, error } = await client
     .from('gauntlet_pods')
@@ -570,7 +570,7 @@ export async function getGauntletPodSibling(
 ): Promise<GauntletPodSibling | null> {
   const { siblingId, siblingGameNumber: gameNumber } = getPodSibling(pod, matchId);
 
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('matches')
     .select('id')
     .eq('id', siblingId)
@@ -620,7 +620,7 @@ export interface BracketPod {
  * the diagram trace each pod's advancement source (`source_pod_id`) across rounds regardless of
  * play progress. Returns `[]` for a gauntlet with no pods at all yet. */
 export async function getGauntletBracketShape(gauntletSeasonId: number): Promise<BracketPod[]> {
-  const { data: podRows, error: podErr } = await supabase
+  const { data: podRows, error: podErr } = await getAdminClient()
     .from('gauntlet_pods')
     .select('id, round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
     .eq('season_id', gauntletSeasonId)
@@ -643,12 +643,12 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
   const matchIds = pods.flatMap((p) => [p.match1_id, p.match2_id]).filter((id): id is number => id != null);
 
   const [{ data: slotRows, error: slotErr }, { data: matchRows }, players] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('gauntlet_pod_slots')
       .select('pod_id, slot_index, source_kind, source_seed, source_pod_id, player_id')
       .in('pod_id', podIds),
     matchIds.length
-      ? supabase.from('matches').select('id, final_score').in('id', matchIds)
+      ? getAdminClient().from('matches').select('id, final_score').in('id', matchIds)
       : Promise.resolve({ data: [] as { id: number; final_score: string | null }[] }),
     getPlayersById(),
   ]);
@@ -716,22 +716,20 @@ export async function getGauntletSeasonProgress(seasonId: number): Promise<{ see
   };
 }
 
-/** Fetches all matches for a gauntlet season and groups them into rounds by week_number. `client`
- *  defaults to the app's server client but accepts another for callers that already hold one outside
- *  a Next.js request (a GitHub Actions script) — same opt-in pattern as `getSeasonSchedule()`
- *  (`schedule.ts`). */
-export async function getGauntletRounds(seasonId: number, client: SupabaseClient = supabase): Promise<GauntletRound[]> {
-  // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
-  // run itself — sort explicitly here since round_number below is assigned in weekRows iteration
-  // order.
+/** Fetches all matches for a gauntlet season and groups them into rounds by week_number.
+ *  Optional `explicitClient` per docs/recipes.md's query-helper recipe. */
+export async function getGauntletRounds(seasonId: number, explicitClient?: SupabaseClient): Promise<GauntletRound[]> {
+  const client = explicitClient ?? getAdminClient();
+  // getWeekLookup() carries no ordering guarantee, so sort explicitly here since round_number below
+  // is assigned in weekRows iteration order.
   //
-  // On the default-client path, call the bare (unscoped) getWeekLookup() rather than
+  // With no `explicitClient`, call the bare (unscoped) getWeekLookup() rather than
   // getWeekLookup([seasonId], client) — cache() keys on the exact argument list, so a fresh
   // `[seasonId]` array literal would miss the request-wide `weeks` read resolveAllMatches() (and
   // every other bare caller in the same render pass) already shares under that same no-arg call.
-  // Same reasoning as the getPlayersById() call below. Only takes the scoped path for a non-default
+  // Same reasoning as the getPlayersById() call below. Only takes the scoped path for an explicit
   // client, where there's no render-pass cache to share anyway.
-  const weekLookup = client === supabase ? await getWeekLookup() : await getWeekLookup([seasonId], client);
+  const weekLookup = explicitClient ? await getWeekLookup([seasonId], client) : await getWeekLookup();
   const weekRows = weekRowsFromLookup(weekLookup)
     .filter((w) => w.season_id === seasonId)
     .sort((a, b) => a.week_number - b.week_number);
@@ -762,9 +760,9 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
       .in('match_id', matchIds),
     // Omit the arg entirely on the (common) default-client path so this shares getPlayersById()'s
     // cache() node with the many other bare callers in the same render, instead of forcing its own
-    // — cache() keys on argument count/identity, so an explicit `client` arg (even === supabase)
+    // — cache() keys on argument count/identity, so an explicit `client` arg (even one equal to the default)
     // would otherwise miss that shared cache and re-read `players`.
-    client === supabase ? getPlayersById() : getPlayersById(client),
+    explicitClient ? getPlayersById(client) : getPlayersById(),
     client
       .from('gauntlet_pods')
       .select('round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
@@ -913,7 +911,7 @@ export type GauntletSummary = {
  * Champion = the player who won both matches in the final round.
  */
 export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSummary>> {
-  const { data: gauntletSeasons } = await supabase
+  const { data: gauntletSeasons } = await getAdminClient()
     .from('seasons')
     .select('id')
     .eq('is_gauntlet', true);
@@ -928,7 +926,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
   if (weekRows.length === 0) return new Map();
 
   const weekIds = weekRows.map((w) => w.id);
-  const { data: matchData } = await supabase
+  const { data: matchData } = await getAdminClient()
     .from('matches')
     .select('id, week_id, final_score')
     .in('week_id', weekIds);
@@ -936,7 +934,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
   if (matchRows.length === 0) return new Map();
 
   const matchIds = matchRows.map((m) => m.id);
-  const { data: statData } = await supabase
+  const { data: statData } = await getAdminClient()
     .from('player_match_stats')
     .select('match_id, player_id, is_win')
     .in('match_id', matchIds);

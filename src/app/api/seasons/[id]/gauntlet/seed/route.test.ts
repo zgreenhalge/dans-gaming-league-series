@@ -8,7 +8,6 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
@@ -94,7 +93,6 @@ function makeDb(): FakeDb {
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -160,7 +158,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

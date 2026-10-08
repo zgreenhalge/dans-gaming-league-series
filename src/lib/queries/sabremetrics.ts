@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics, Faction } from '../types';
 import { addNumericFields } from '../util';
 import { getPlayersById } from './player';
@@ -50,7 +50,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     { id: number; player_id: number; match_id: number; rounds_played: number; faction: Faction }
   >(
     (from, to) => asPage(
-      supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played, faction').range(from, to),
+      getAdminClient().from('player_match_stats').select('id, player_id, match_id, rounds_played, faction').range(from, to),
     ),
   );
 
@@ -66,10 +66,10 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     throws,
   ] = await Promise.all([
     fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
-      supabase.from('player_match_sabremetrics').select('*').range(from, to),
+      getAdminClient().from('player_match_sabremetrics').select('*').range(from, to),
     ),
     pmsRowsPromise,
-    supabase.from('seasons').select('id, is_gauntlet'),
+    getAdminClient().from('seasons').select('id, is_gauntlet'),
     resolveMatchSeasons(),
     getPlayersById(),
     getAllKillCreditFlags(pmsRowsPromise),
@@ -141,7 +141,7 @@ export async function hasSeasonSabremetrics(seasonId: number): Promise<boolean> 
   const pmsRows = await batchedIn<{ id: number }>('player_match_stats', 'match_id', matchIds, 'id');
   if (pmsRows.length === 0) return false;
 
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('player_match_sabremetrics')
     .select('player_match_stats_id')
     .in('player_match_stats_id', pmsRows.map((r) => r.id))

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { Player } from '../types';
 import { getPlayersById } from './player';
 import type { DraftScheduleWeek } from '../season-schedule-validation';
@@ -21,7 +21,7 @@ export interface DraftWeekWithMatches {
  * page's generate-vs-edit entry point) that only need a yes/no, not the full player-joined draft
  * `getSeasonScheduleDraft()` returns. */
 export async function hasSeasonScheduleDraft(seasonId: number): Promise<boolean> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('season_schedule_draft_weeks')
     .select('id')
     .eq('season_id', seasonId)
@@ -35,7 +35,7 @@ export async function hasSeasonScheduleDraft(seasonId: number): Promise<boolean>
 export async function isSeasonScheduleGenerated(seasonId: number): Promise<boolean> {
   const [hasDraft, { data, error }] = await Promise.all([
     hasSeasonScheduleDraft(seasonId),
-    supabase.from('weeks').select('id').eq('season_id', seasonId).limit(1),
+    getAdminClient().from('weeks').select('id').eq('season_id', seasonId).limit(1),
   ]);
   if (error) throw error;
   return hasDraft || (data ?? []).length > 0;
@@ -46,7 +46,7 @@ export async function isSeasonScheduleGenerated(seasonId: number): Promise<boole
  * exists for the season. */
 export async function getSeasonScheduleDraft(seasonId: number): Promise<DraftWeekWithMatches[]> {
   const [{ data: weekRows, error: weekErr }, playersById] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('season_schedule_draft_weeks')
       .select('id, week_number, bye_player_id')
       .eq('season_id', seasonId)
@@ -60,7 +60,7 @@ export async function getSeasonScheduleDraft(seasonId: number): Promise<DraftWee
   if (weeks.length === 0) return [];
 
   const weekIds = weeks.map((w) => w.id);
-  const { data: matchRows, error: matchErr } = await supabase
+  const { data: matchRows, error: matchErr } = await getAdminClient()
     .from('season_schedule_draft_matches')
     .select('id, draft_week_id, match_number, shirts_player1_id, shirts_player2_id, skins_player1_id, skins_player2_id')
     .in('draft_week_id', weekIds)

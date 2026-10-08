@@ -8,7 +8,6 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
@@ -92,7 +91,6 @@ function makeDb(): FakeDb {
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db, makeSeasonScheduleDraftRpcHandlers());
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -183,7 +181,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }
