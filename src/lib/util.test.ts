@@ -20,6 +20,7 @@ import {
   deriveRwr,
   deriveAdr,
   parseMatchId,
+  parseRouteId,
   parseSeasonId,
   weekWindow,
   matchLabel,
@@ -157,6 +158,18 @@ test('deriveRwr / deriveAdr: zero-guard when no rounds played', () => {
   assert.equal(deriveAdr({ total_rounds_played: 0, total_damage: 0 }), 0);
 });
 
+// --- parseRouteId: route `[id]` segment -> positive int4, or null ---
+test('parseRouteId: accepts plain positive integers up to the int4 ceiling', () => {
+  assert.equal(parseRouteId('1'), 1);
+  assert.equal(parseRouteId('42'), 42);
+  assert.equal(parseRouteId('2147483647'), 2147483647);
+});
+test('parseRouteId: rejects empty, zero, negative, fractional, exponent, hex, padded, and >int4 input', () => {
+  for (const bad of ['', ' ', '0', '-1', '+1', '1.5', '1.0', '1e3', '0x10', ' 5', '5 ', 'abc', '2147483648', '99999999999999999999']) {
+    assert.equal(parseRouteId(bad), null, `expected null for ${JSON.stringify(bad)}`);
+  }
+});
+
 // --- parseMatchId: route param -> positive integer, or null ---
 test('parseMatchId: accepts a positive integer string', () => {
   assert.equal(parseMatchId('42'), 42);
@@ -166,6 +179,7 @@ test('parseMatchId: rejects zero, negatives, and non-numeric strings', () => {
   assert.equal(parseMatchId('-5'), null);
   assert.equal(parseMatchId('abc'), null);
   assert.equal(parseMatchId('4.5'), null);
+  assert.equal(parseMatchId('1e3'), null);
 });
 
 // --- fmtUtcShort: deterministic, timezone-fixed short timestamp ---
@@ -359,5 +373,5 @@ report();
 // --- parseSeasonId: same contract as parseMatchId ---
 test('parseSeasonId: accepts a positive integer string; rejects the rest', () => {
   assert.equal(parseSeasonId('12'), 12);
-  for (const bad of ['0', '-1', '1.5', 'abc', '', ' ', '2147483648']) assert.equal(parseSeasonId(bad), null);
+  for (const bad of ['0', '-1', '1.5', '1e3', 'abc', '', ' ', '2147483648']) assert.equal(parseSeasonId(bad), null);
 });
