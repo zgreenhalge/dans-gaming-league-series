@@ -19,13 +19,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
+import { ADMIN_REFRESH_INTERVAL_MS, fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
@@ -235,21 +234,13 @@ export function ServerConsolePanel({
     return () => clearInterval(interval);
   }, [refreshStatus]);
 
-  // Keep the console live — any match_server_state change (provision/teardown/reconcile) re-reads raw
-  // server status; router.refresh() re-fetches this component's `active` prop for consistency, but the
-  // occupancy section below prefers status.active (fresher, from the same fetch) once it's loaded.
+  // Keep the console live — router.refresh() re-fetches this component's `active` prop (the
+  // match_server_state rows) on the same cadence the raw status poll above runs at; the occupancy
+  // section below prefers status.active (fresher, from the status fetch) once it's loaded.
   useEffect(() => {
-    const channel = getBrowserClient()
-      .channel('admin-servers')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_server_state' }, () => {
-        router.refresh();
-        refreshStatus();
-      })
-      .subscribe();
-    return () => {
-      getBrowserClient().removeChannel(channel);
-    };
-  }, [router, refreshStatus]);
+    const interval = setInterval(() => router.refresh(), ADMIN_REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [router]);
 
   const [cleanup, setCleanup] = useState<DathostCleanupStatus | null>(null);
   const [cleanupError, setCleanupError] = useState<string | null>(null);

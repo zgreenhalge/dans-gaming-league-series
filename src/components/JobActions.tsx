@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { ADMIN_REFRESH_INTERVAL_MS } from '@/lib/util';
 
 /**
  * Re-dispatch a job by POSTing to its pipeline's dispatch endpoint (replay: the match's
@@ -63,21 +63,14 @@ export function JobRetryButton({
   );
 }
 
-/** Refreshes the dashboard when any `background_jobs` row changes, across every job type. Renders nothing. */
+/** Re-renders the dashboard every few seconds so `background_jobs` changes, across every job type, show up
+ *  without a manual reload. Polls rather than subscribing because the table is not readable from the
+ *  browser. Renders nothing. */
 export function JobsLiveRefresh() {
   const router = useRouter();
   useEffect(() => {
-    const channel = getBrowserClient()
-      .channel('admin-jobs')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'background_jobs' },
-        () => router.refresh(),
-      )
-      .subscribe();
-    return () => {
-      getBrowserClient().removeChannel(channel);
-    };
+    const interval = setInterval(() => router.refresh(), ADMIN_REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, [router]);
   return null;
 }
