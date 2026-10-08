@@ -18,7 +18,7 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
   const router = useRouter();
   // The in-progress text while editing; `null` when not editing.
   const [draft, setDraft] = useState<string | null>(null);
-  const { busy: saving, error, run } = useAsyncAction();
+  const { busy: saving, error, run, clearError } = useAsyncAction();
   const [isPending, startTransition] = useTransition();
 
   async function save() {
@@ -82,7 +82,10 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => setDraft(null)}
+          onClick={() => {
+            setDraft(null);
+            clearError();
+          }}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel
