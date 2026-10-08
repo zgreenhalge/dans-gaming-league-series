@@ -15,6 +15,11 @@ export function useMapPoolSelection(initial: string[] = []) {
     addedMaps,
     setSelected,
     setAddedMaps,
+    /** Discards edits: re-selects `pool` and drops any maps added in the picker. */
+    reset: (pool: string[]) => {
+      setSelected(new Set(pool));
+      setAddedMaps([]);
+    },
     mapPool: Array.from(selected),
     newMaps: addedMaps.filter((m) => selected.has(m.name)),
     /** An empty pool ("decide later") or a full one. */

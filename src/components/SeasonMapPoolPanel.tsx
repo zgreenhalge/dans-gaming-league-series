@@ -41,8 +41,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
   }
 
   function cancel() {
-    selection.setSelected(new Set(mapPool ?? []));
-    selection.setAddedMaps([]);
+    selection.reset(mapPool ?? []);
     setEditing(false);
   }
 
