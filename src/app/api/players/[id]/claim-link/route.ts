@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { signPlayerClaim } from '@/lib/playerClaim';
+import { parseRouteId } from '@/lib/util';
 
 // Mints a signed claim link (#322) for an unlinked player, so an admin can hand it to the actual
 // person out of band (Discord, text) instead of self-service registration trusting a caller's
@@ -16,8 +17,8 @@ export async function GET(
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const targetId = Number(id);
-  if (!Number.isInteger(targetId) || targetId <= 0) {
+  const targetId = parseRouteId(id);
+  if (targetId === null) {
     return NextResponse.json({ error: 'Invalid player ID' }, { status: 400 });
   }
 

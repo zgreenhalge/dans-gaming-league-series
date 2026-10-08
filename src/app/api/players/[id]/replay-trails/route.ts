@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlayerRoundTraces } from '@/lib/queries';
+import { parseRouteId } from '@/lib/util';
 
 // Aggregates a player's per-round position trace across the matches the caller
 // specifies — the career-wide "replay all of a player's rounds" overlay (#128), a
@@ -20,8 +21,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const playerId = Number(id);
-  if (!Number.isFinite(playerId)) {
+  const playerId = parseRouteId(id);
+  if (playerId === null) {
     return NextResponse.json({ error: 'Invalid player ID' }, { status: 400 });
   }
 

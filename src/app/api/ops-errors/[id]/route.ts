@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { parseRouteId } from '@/lib/util';
 
 /** Dismisses a single `ops_errors` row by its id — the admin has seen it and either fixed the
  * underlying issue or is choosing to ignore it. Applies to any entity type (season, match, system)
@@ -14,8 +15,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const opsErrorId = Number(id);
-  if (!Number.isFinite(opsErrorId)) {
+  const opsErrorId = parseRouteId(id);
+  if (opsErrorId === null) {
     return NextResponse.json({ error: 'Invalid ops_errors ID' }, { status: 400 });
   }
 
