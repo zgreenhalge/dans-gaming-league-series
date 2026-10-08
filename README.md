@@ -47,7 +47,7 @@ hook auto-provisions a local Supabase stack instead when `.env.local` is absent;
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key — used only by the browser's Realtime subscriptions (`src/lib/supabase-browser.ts`); it can read just the tables those subscriptions watch |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key — used only by the browser's Realtime subscriptions (`src/lib/supabase-browser.ts`); it can read just the tables those subscriptions watch. Unset, pages render without live updates |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key — every server-side read and write (`getAdminClient()`), never sent to the client |
 | `NEXTAUTH_URL` | Full base URL, e.g. `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | Secret for signing session tokens (any random string locally) |

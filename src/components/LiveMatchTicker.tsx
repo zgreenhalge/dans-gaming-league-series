@@ -59,7 +59,9 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
   }, [refresh]);
 
   useEffect(() => {
-    const channel = getBrowserClient()
+    const client = getBrowserClient();
+    if (!client) return;
+    const channel = client
       .channel('live-match-ticker')
       .on(
         'postgres_changes',
@@ -87,7 +89,7 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
       )
       .subscribe();
     return () => {
-      getBrowserClient().removeChannel(channel);
+      client.removeChannel(channel);
     };
   }, [refresh]);
 

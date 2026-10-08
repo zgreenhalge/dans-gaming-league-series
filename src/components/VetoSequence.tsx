@@ -84,7 +84,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   }, [match]);
 
   useEffect(() => {
-    const channel = getBrowserClient()
+    const client = getBrowserClient();
+    if (!client) return;
+    const channel = client
       .channel(`match-veto-${match.id}`)
       .on(
         'postgres_changes',
@@ -92,7 +94,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         () => { router.refresh(); },
       )
       .subscribe();
-    return () => { getBrowserClient().removeChannel(channel); };
+    return () => { client.removeChannel(channel); };
   }, [match.id, router]);
 
   // Falls back to the match's own is_playoff_game if the season's is_gauntlet was never set (e.g. a

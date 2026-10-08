@@ -55,7 +55,9 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   // `matches`. Requires `background_jobs` in the Supabase realtime publication. Each status change
   // (received → queued → running → parsed/quarantined/failed) re-reads the staged result.
   useEffect(() => {
-    const channel = getBrowserClient()
+    const client = getBrowserClient();
+    if (!client) return;
+    const channel = client
       .channel(`demo-ingest-${matchId}`)
       .on(
         'postgres_changes',
@@ -76,7 +78,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
       )
       .subscribe();
     return () => {
-      getBrowserClient().removeChannel(channel);
+      client.removeChannel(channel);
     };
   }, [matchId, refresh, router]);
 

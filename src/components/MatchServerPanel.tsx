@@ -73,7 +73,9 @@ export default function MatchServerPanel({
   // Live updates off the match_server_state row — no polling. The row doesn't exist until the first
   // provision (`idle`), so this listens for INSERT as well as UPDATE.
   useEffect(() => {
-    const channel = getBrowserClient()
+    const client = getBrowserClient();
+    if (!client) return;
+    const channel = client
       .channel(`match-server-${matchId}`)
       .on(
         'postgres_changes',
@@ -86,7 +88,7 @@ export default function MatchServerPanel({
       )
       .subscribe();
     return () => {
-      getBrowserClient().removeChannel(channel);
+      client.removeChannel(channel);
     };
   }, [matchId, loadStatus]);
 

@@ -85,7 +85,9 @@ export default function MatchScoreHero({
 
   useEffect(() => {
     if (!liveEligible) return;
-    const channel = getBrowserClient()
+    const client = getBrowserClient();
+    if (!client) return;
+    const channel = client
       .channel(`live-score-${matchId}`)
       .on(
         'postgres_changes',
@@ -103,7 +105,7 @@ export default function MatchScoreHero({
       )
       .subscribe();
     return () => {
-      getBrowserClient().removeChannel(channel);
+      client.removeChannel(channel);
     };
   }, [liveEligible, matchId]);
 
