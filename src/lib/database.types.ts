@@ -1804,6 +1804,10 @@ export type Database = {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
+      set_season_buy_in: {
+        Args: { p_amount: number; p_season_id: number }
+        Returns: Json
+      }
     }
     Enums: {
       faction_side_type: "SHIRTS" | "SKINS"
