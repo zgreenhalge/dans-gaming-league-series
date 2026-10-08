@@ -78,8 +78,8 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
   row to `tearing_down` with `teardown_at` set — a grace period so players see the post-match
   scoreboard instead of an instant disconnect. The actual `stop` call runs here, the next time the
   state is read, once `teardown_at` has passed — a plain timestamp check with no DatHost round-trip
-  until then, since this fires on every read (including the admin console's 2s poll for the whole
-  grace period). Both the match page and the admin server console read this, so a due teardown fires
+  until then, since this fires on every read (including the admin console's status poll for the
+  whole grace period). Both the match page and the admin server console read this, so a due teardown fires
   on the next view of either — no separate cron needed, but also no guarantee either gets viewed; see
   Known limitations below.
 - **Downgrades a stale `live`.** After a match ends the shared server auto-stops (`autostop`, 3-min
@@ -357,7 +357,8 @@ Manage:
   stays available rather than reading "working…" forever — every dispatch route's duplicate-guard
   (`isJobInFlight()`, `src/lib/background-jobs.ts`) treats the same stale row as not actually in flight,
   so pressing it starts a fresh run instead of silently no-op'ing. Data comes from
-  `getBackgroundJobs()`/`getOpsErrors()`; the list stays live via Realtime on `background_jobs`.
+  `getBackgroundJobs()`/`getOpsErrors()`; `JobsLiveRefresh` keeps the list live by refreshing the
+  page every 15s while the tab is visible (and on returning to it).
 - **Server panel** (`ServerConsolePanel.tsx`) — two collapsible sections (`CollapsiblePanel`, both open
   by default). **Server** holds the single shared server's current occupant (reconciled via
   `getActiveServerMatch`), and — on the occupying match — two controls: **Apply match settings**
@@ -379,8 +380,9 @@ Manage:
   disagree on which fields get re-asserted. It does *not* load a match config, so run **Apply match
   settings** after it if a match is mid-setup. The **Compare to live config** block runs
   `diffConfigSet` read-only for the selected config set (settings + every cfg file, cvar-by-cvar), the
-  same comparison the `dathost-golden-diff` CLI renders. Live via Realtime on `match_server_state`. Also
-  hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`, its own collapsed-by-
+  same comparison the `dathost-golden-diff` CLI renders. Kept live by polling
+  `GET /api/admin/server/status` while the tab is visible — every 2s while a Start/Stop is settling,
+  every 15s otherwise. Also hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`, its own collapsed-by-
   default panel) — enable/disable the `dathost-cleanup` workflow, set its interval, and a **Run now**
   button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than `background_jobs`
   (there's no per-match/per-map target for this job).
@@ -525,7 +527,7 @@ through) · `src/components/MatchScoreHero.tsx` (per-match live score) +
 
 - **The teardown delay has no timer of its own — it's opportunistic, not scheduled.** A due teardown
   only actually stops the server the next time `getReconciledServerState` is read (a match page or
-  admin server console view, or the latter's 2s poll); there's no cron forcing it. For a match nobody
+  admin server console view, or the latter's status poll); there's no cron forcing it. For a match nobody
   actively watches after it ends — plausibly the common case, not an edge case — nothing ever reads a
   due `teardown_at`, so in practice the server keeps running (still occupying the shared server, still
   `tearing_down`) until DatHost's own `autostop` (3-min idle) stops it independently; the *next*

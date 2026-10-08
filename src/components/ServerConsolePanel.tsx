@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ServerSpinner } from '@/components/ServerSpinner';
+import { useVisibleInterval } from '@/components/useVisibleInterval';
 import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
@@ -42,6 +43,11 @@ const ACTION_CAP_MS = 90_000;
 // have caught an intermediate `booting: true` tick) can't be raced by a boot that completes faster
 // than the 2s poll interval.
 const MIN_BOOT_MS = 5_000;
+
+// Status poll cadence: fast while a Start/Stop is settling, slow otherwise. Each poll is a DatHost
+// round-trip plus the occupancy read.
+const ACTION_POLL_MS = 2_000;
+const IDLE_POLL_MS = 15_000;
 
 type PendingAction = { kind: 'start' | 'stop' | 'apply'; message: string };
 
@@ -227,12 +233,9 @@ export function ServerConsolePanel({
   }, [refreshStatus]);
 
   // Raw DatHost state can change with no `match_server_state` row write at all (autostop after idle,
-  // a start/stop from the DatHost panel directly, boot completing) — poll every 2s so the Start/Stop
-  // button and boot spinner stay in sync with the real server state.
-  useEffect(() => {
-    const interval = setInterval(refreshStatus, 2_000);
-    return () => clearInterval(interval);
-  }, [refreshStatus]);
+  // a start/stop from the DatHost panel directly, boot completing) — poll so the Start/Stop button and
+  // boot spinner stay in sync with the real server state. A hidden tab doesn't poll.
+  useVisibleInterval(refreshStatus, starting || stopping ? ACTION_POLL_MS : IDLE_POLL_MS);
 
   const [cleanup, setCleanup] = useState<DathostCleanupStatus | null>(null);
   const [cleanupError, setCleanupError] = useState<string | null>(null);
