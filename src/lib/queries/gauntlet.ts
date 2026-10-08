@@ -538,7 +538,7 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
  * scheduling (`PATCH /api/matches/[id]/schedule`) and cross-linking (the match page, via
  * `getGauntletPodSibling()`) — both of a pod's games share one `player_match_stats` roster
  * reshuffled across two factions, so they're always scheduled and played as a pair. Takes an optional
- * `client` for callers outside a Next.js request (a GitHub Actions script has no anon key). */
+ * `client` for callers outside a Next.js request that already hold one (a GitHub Actions script). */
 export async function getGauntletPodForMatch(
   matchId: number,
   client: SupabaseClient = supabase,

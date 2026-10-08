@@ -38,6 +38,22 @@ alter default privileges for role postgres revoke execute on functions from publ
 
 -- ─── Realtime subscriptions: anon may read the subscribed tables ───────────────
 
+-- Realtime only streams tables that belong to the `supabase_realtime` publication.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['live_match_score', 'matches', 'match_server_state', 'background_jobs'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end
+$$;
+
 grant select on public.live_match_score to anon;
 create policy "anon reads live_match_score for Realtime" on public.live_match_score
   for select to anon using (true);

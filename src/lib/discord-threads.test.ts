@@ -744,7 +744,7 @@ async function main() {
     const threadId = (data as { thread_id: string }).thread_id;
 
     const { calls } = stubDiscordClose();
-    // The Action that scores a match has no anon key — the close must work off the admin client alone.
+    // The Action that scores a match runs outside a Next.js request — the close must work off the admin client alone.
     __setTestClient(undefined);
     await closeGauntletPodThreadIfDone(client, 201);
     assert.equal(calls.length, 1);
