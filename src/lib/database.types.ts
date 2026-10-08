@@ -1747,9 +1747,10 @@ export type Database = {
         Args: { p_season_id: number }
         Returns: undefined
       }
-      confirm_season_schedule_draft:
-        | { Args: { p_season_id: number }; Returns: Json }
-        | { Args: { p_season_id: number; p_weeks: Json }; Returns: Json }
+      confirm_season_schedule_draft: {
+        Args: { p_season_id: number; p_weeks: Json }
+        Returns: Json
+      }
       delete_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json

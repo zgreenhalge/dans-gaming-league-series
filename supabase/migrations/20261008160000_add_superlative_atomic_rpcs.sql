@@ -12,6 +12,7 @@ create or replace function public.replace_superlative_votes(
 )
 returns void
 language plpgsql
+set search_path = public
 as $function$
 begin
   delete from superlative_votes
@@ -34,6 +35,7 @@ create or replace function public.reorder_superlatives(
 )
 returns void
 language plpgsql
+set search_path = public
 as $function$
 begin
   update superlatives s
