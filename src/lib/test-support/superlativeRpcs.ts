@@ -1,6 +1,7 @@
 /**
  * Test-local fakes for the `replace_superlative_votes` and `reorder_superlatives` Postgres RPCs
- * (`supabase/migrations/20261008160000_add_superlative_atomic_rpcs.sql`) — see fakeSupabase.ts's own
+ * (`supabase/migrations/20261008160000_add_superlative_atomic_rpcs.sql`) and `reset_superlative_votes`
+ * (`supabase/migrations/20261008170000_add_feedback_atomic_rpcs.sql`) — see fakeSupabase.ts's own
  * header comment on why `.rpc()` has no generic in-memory equivalent and needs a per-name fake.
  * Shared by every test that drives a superlatives route far enough to reach one of these calls.
  */
@@ -30,6 +31,13 @@ export const superlativeRpcs: Record<string, RpcHandler> = {
       const index = order.indexOf(row.id as number);
       if (row.season_id === seasonId && index >= 0) row.position = index + 1;
     }
+    return null;
+  },
+  reset_superlative_votes: (args, db) => {
+    const seasonId = args.p_season_id as number;
+    for (const poll of db.superlative_polls ?? []) if (poll.season_id === seasonId) poll.is_open = false;
+    const ids = new Set((db.superlatives ?? []).filter((s) => s.season_id === seasonId).map((s) => s.id));
+    db.superlative_votes = (db.superlative_votes ?? []).filter((v) => !ids.has(v.superlative_id));
     return null;
   },
 };

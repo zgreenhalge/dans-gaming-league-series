@@ -1780,6 +1780,18 @@ export type Database = {
         Args: { p_superlative_ids: number[]; p_votes: Json; p_voter_player_id: number }
         Returns: undefined
       }
+      replace_survey_questions: {
+        Args: { p_open: boolean; p_questions: Json; p_survey_id: number }
+        Returns: boolean
+      }
+      reset_superlative_votes: {
+        Args: { p_season_id: number }
+        Returns: undefined
+      }
+      reset_survey: {
+        Args: { p_survey_id: number }
+        Returns: undefined
+      }
       rollback_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json
