@@ -20,7 +20,7 @@ except Exception:
 
 # Read credentials from environment for safety
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 
 def _resp_data(resp):
@@ -45,7 +45,7 @@ def run_handshake():
 
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("❌ SUPABASE_URL and SUPABASE_KEY must be set in the environment.")
-        print("Example (bash): export SUPABASE_URL=\"https://your-id.supabase.co\" && export SUPABASE_KEY=\"your-anon-or-service-key\"")
+        print("Example (bash): export SUPABASE_URL=\"https://your-id.supabase.co\" && export SUPABASE_KEY=\"your-service-role-key\"")
         sys.exit(2)
 
     try:

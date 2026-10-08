@@ -17,7 +17,7 @@ python3 -m venv dgls-env && source dgls-env/bin/activate
 pip install supabase python-dotenv
 ```
 
-Copy `.env.example` to `.env` and fill in `SUPABASE_URL` and `SUPABASE_KEY`. Use the **service_role key** for writes — the anon key reads fine but writes silently return empty data due to API key permission gates (not RLS).
+Copy `.env.example` to `.env` and fill in `SUPABASE_URL` and `SUPABASE_KEY`. `SUPABASE_KEY` must be the **service_role key**: every table has RLS on, and the anon key has no access to the ingestion tables.
 
 ## Commands
 
