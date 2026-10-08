@@ -134,7 +134,10 @@ and its `UPCOMING`-only status gate.
 1. **Build the request** with `jsonRequest(url, method, body)` (`src/lib/test-support/nextRequest.ts`)
    — it constructs a real `NextRequest` with a JSON body, exactly what the handler's `req.json()`
    expects. Call the exported `POST`/`DELETE`/etc. directly, passing `{ params: Promise.resolve({ id: '...' }) }`
-   for a dynamic route segment.
+   for a dynamic route segment. Every `[id]` API route parses that segment with `parseRouteId()`
+   (`src/lib/util.ts`, or its `parseMatchId()` / `parseSeasonId()` wrappers on match- and
+   season-scoped routes) and answers 400 when it returns `null`; loop over `MALFORMED_ROUTE_IDS`
+   (`src/lib/test-support/nextRequest.ts`) to cover that branch.
 2. **Fake the session** with `__setTestSession(session | null)` (`src/lib/session.ts`) instead of a
    real `getServerSession()` call — set it to `null` for the unauthenticated case, or
    `{ user: { playerId }, expires: '<iso date>' }` for a signed-in one, via the shared
