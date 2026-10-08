@@ -66,11 +66,11 @@ async function main() {
     approx(alice!.overall_adr, rates.overall_adr);
   });
 
-  await test('getMatchMeta(): works with an explicit client even when the anon singleton is unconfigured', async () => {
+  await test('getMatchMeta(): works with an explicit client even when the default singleton is unconfigured', async () => {
     // discord-notify.ts's notify functions pass their own supabaseAdmin here rather than relying on
     // the default — scripts/demo-ingest.ts (the GH Action that auto-commits a demo-derived score)
-    // runs as a standalone script with no NEXT_PUBLIC_SUPABASE_ANON_KEY, where the anon singleton
-    // can't construct at all. __setTestClient(undefined) simulates exactly that: it stops swapping in
+    // runs as a standalone script outside any Next.js request, where the default singleton may
+    // not be configured at all. __setTestClient(undefined) simulates exactly that: it stops swapping in
     // a fake client, so any code path that still falls through to the real singleton throws (this
     // process has no Supabase env vars set either). getMatchMeta() must not depend on it.
     __setTestClient(undefined);

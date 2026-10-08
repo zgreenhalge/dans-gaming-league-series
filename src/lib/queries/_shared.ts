@@ -106,9 +106,9 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
- * `client` defaults to the app's anon-key client but accepts an admin client for callers running
- * outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
- * — same opt-in pattern as `getSeasonSchedule()` (`schedule.ts`). Wrapped in React's `cache()` so
+ * `client` defaults to the app's server client but accepts another for callers that already hold
+ * one outside a Next.js request (a GitHub Actions script) — same opt-in pattern as
+ * `getSeasonSchedule()` (`schedule.ts`). Wrapped in React's `cache()` so
  * every no-arg caller within one render pass (the common case) shares one `weeks` read rather than
  * each resolving it independently.
  */

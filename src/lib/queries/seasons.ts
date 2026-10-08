@@ -20,9 +20,9 @@ export interface SeasonRosterEntry {
   discord_id: string | null;
 }
 
-/** `client` defaults to the app's anon-key client but accepts an admin client for callers running
- *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
- *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
+/** `client` defaults to the app's server client but accepts another for callers that already hold
+ *  one outside a Next.js request (a GitHub Actions script) — same opt-in pattern as
+ *  `getMatchIdsForMap()` (`maps.ts`). */
 /** `cache()`-wrapped so the root layout's own read (feeds `SideNav`) and a page's separate read of
  *  the same table collapse into a single Supabase round trip per request — same reasoning as
  *  `getSeason()` below. */

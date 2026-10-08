@@ -142,11 +142,11 @@ and its `UPCOMING`-only status gate.
    session reads that go through `requireSession()` (route handlers) or `getSession()` (Server
    Components) — the three session-based access gates (`season-roster-access.ts`,
    `match-access.ts`, `admin-access.ts`) all do.
-3. **Fake both Supabase clients** with `__setTestClient()` (`src/lib/supabase.ts`, already used by
-   the query-helper harness) and `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) pointed at
-   the *same* `createFakeSupabaseClient(db)` instance, since a route typically reads through one
-   (`isPlayerAdmin()` uses the anon client) and writes through the other (`getAdminClient()`) — one
-   shared fake keeps a mutation made through either visible to both. Build a small local `FakeDb`
+3. **Fake the Supabase client** with `__setTestClient()` (`src/lib/supabase.ts`, already used by
+   the query-helper harness) and/or `__setTestAdminClient()` (`src/lib/supabase-admin.ts`), pointed
+   at the *same* `createFakeSupabaseClient(db)` instance. `supabase` and `getAdminClient()` resolve
+   to one client, and a route typically reads through one spelling and writes through the other —
+   one shared fake keeps a mutation made through either visible to both. Build a small local `FakeDb`
    fixture scoped to the route under test rather than reaching for the big shared
    `test-support/fixtures.ts` "league" (that fixture is tuned for the `queries/*.ts` regression
    suite's read-only cross-function graph, not a single route's mutation scenarios).

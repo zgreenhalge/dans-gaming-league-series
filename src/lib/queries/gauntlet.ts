@@ -717,9 +717,9 @@ export async function getGauntletSeasonProgress(seasonId: number): Promise<{ see
 }
 
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. `client`
- *  defaults to the app's anon-key client but accepts an admin client for callers running outside a
- *  Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) — same
- *  opt-in pattern as `getSeasonSchedule()` (`schedule.ts`). */
+ *  defaults to the app's server client but accepts another for callers that already hold one outside
+ *  a Next.js request (a GitHub Actions script) — same opt-in pattern as `getSeasonSchedule()`
+ *  (`schedule.ts`). */
 export async function getGauntletRounds(seasonId: number, client: SupabaseClient = supabase): Promise<GauntletRound[]> {
   // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
   // run itself — sort explicitly here since round_number below is assigned in weekRows iteration
