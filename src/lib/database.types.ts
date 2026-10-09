@@ -1514,13 +1514,13 @@ export type Database = {
           voter_player_id: number
         }
         Insert: {
-          id?: never
+          id?: number
           nominee_player_id: number
           superlative_id: number
           voter_player_id: number
         }
         Update: {
-          id?: never
+          id?: number
           nominee_player_id?: number
           superlative_id?: number
           voter_player_id?: number
@@ -1571,13 +1571,13 @@ export type Database = {
           title: string
         }
         Insert: {
-          id?: never
+          id?: number
           position: number
           season_id: number
           title: string
         }
         Update: {
-          id?: never
+          id?: number
           position?: number
           season_id?: number
           title?: string
@@ -1603,7 +1603,7 @@ export type Database = {
         }
         Insert: {
           answers?: Json
-          id?: never
+          id?: number
           player_id: number
           submitted_at?: string
           survey_id: number
@@ -1611,7 +1611,7 @@ export type Database = {
         }
         Update: {
           answers?: Json
-          id?: never
+          id?: number
           player_id?: number
           submitted_at?: string
           survey_id?: number
@@ -1650,13 +1650,13 @@ export type Database = {
         }
         Insert: {
           closed_at?: string | null
-          id?: never
+          id?: number
           questions: Json
           season_id: number
         }
         Update: {
           closed_at?: string | null
-          id?: never
+          id?: number
           questions?: Json
           season_id?: number
         }
