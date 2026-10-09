@@ -245,6 +245,28 @@ async function testGetReconciledServerState() {
     assert.equal(result.serverState, 'live');
     assert.equal(result.connectString, '1.2.3.4:27015');
   });
+
+  const liveRow = (): FakeDb => ({ match_server_state: [{ match_id: 100, server_state: 'live', connect_string: '1.2.3.4:27015', server_started_at: null, dathost_server_id: 'srv-1', teardown_at: null }] });
+
+  await test('getReconciledServerState: a pre-fetched stopped server downgrades live to done without a DatHost read', async () => {
+    const client = createFakeSupabaseClient(liveRow());
+    const stopped = { on: false, booting: false } as never;
+    const result = await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1', DATHOST_EMAIL: undefined, DATHOST_PASSWORD: undefined }, () =>
+      getReconciledServerState(client as never, 100, undefined, stopped),
+    );
+    assert.equal(result.serverState, 'done');
+    assert.equal(result.connectString, null);
+  });
+
+  await test('getReconciledServerState: a pre-fetched running server, or a failed pre-fetch (null), keeps live', async () => {
+    for (const server of [{ on: true, booting: false } as never, null]) {
+      const client = createFakeSupabaseClient(liveRow());
+      const result = await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1', DATHOST_EMAIL: undefined, DATHOST_PASSWORD: undefined }, () =>
+        getReconciledServerState(client as never, 100, undefined, server),
+      );
+      assert.equal(result.serverState, 'live');
+    }
+  });
 }
 
 async function testGetActiveServerMatch() {

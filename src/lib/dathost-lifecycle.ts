@@ -507,12 +507,15 @@ async function runDueTeardown(
  *
  * Pass `preFetchedRow` when the caller already has the match's `match_server_state` row (e.g.
  * `getActiveServerMatch`, which selects it to find the occupant in the first place) so this doesn't
- * re-query the same row it was just handed.
+ * re-query the same row it was just handed. Likewise `preFetchedServer` when the caller already read
+ * the DatHost server this poll: a `DathostServer` is used as-is, `null` means that read failed (the
+ * `live` check is skipped, same as an unreachable DatHost), and omitting it fetches the server here.
  */
 export async function getReconciledServerState(
   supabaseAdmin: SupabaseClient,
   matchId: number,
   preFetchedRow?: MatchServerStateRow | null,
+  preFetchedServer?: DathostServer | null,
 ): Promise<ServerStatusView> {
   const row = preFetchedRow !== undefined ? preFetchedRow : await fetchServerStateRow(supabaseAdmin, matchId);
   let serverState = row?.server_state ?? 'idle';
@@ -528,7 +531,8 @@ export async function getReconciledServerState(
     }
   } else if (serverState === 'live' && serverId && ownsServer) {
     try {
-      const server = await getServer(serverId);
+      const server = preFetchedServer === undefined ? await getServer(serverId) : preFetchedServer;
+      if (!server) throw new Error('DatHost server unavailable');
       // Confirmed stopped only — `isServerOff`, NOT `!isServerLive(server)` (`!on || booting`), which
       // would also fire mid-boot (`on: true, booting: true`, e.g. another process restarting the
       // shared server) and wrongly downgrade a match that's still actually up.
@@ -556,10 +560,12 @@ export interface ActiveServerMatch {
 /**
  * The match currently holding the shared server (reconciled against real DatHost state), or `null` if
  * it's idle. For the admin server console (#134/#135) — the single-server model means at most
- * one occupant. Returns `null` when hosting isn't configured.
+ * one occupant. Returns `null` when hosting isn't configured. `preFetchedServer` is passed through to
+ * `getReconciledServerState()`.
  */
 export async function getActiveServerMatch(
   supabaseAdmin: SupabaseClient,
+  preFetchedServer?: DathostServer | null,
 ): Promise<ActiveServerMatch | null> {
   const serverId = process.env.DATHOST_SERVER_ID;
   if (!serverId) return null;
@@ -581,7 +587,7 @@ export async function getActiveServerMatch(
   if (!row) return null;
 
   // Already fetched above — reconcile against it directly instead of re-querying the same row.
-  const reconciled = await getReconciledServerState(supabaseAdmin, row.match_id, row);
+  const reconciled = await getReconciledServerState(supabaseAdmin, row.match_id, row, preFetchedServer);
   if (!OCCUPYING_STATES.includes(reconciled.serverState)) return null;
 
   return {
