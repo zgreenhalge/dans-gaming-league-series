@@ -221,7 +221,7 @@ export function ServerConsolePanel({
   }, []);
 
   // Initial read — a plain effect calling refreshStatus() directly trips the
-  // set-state-in-effect lint rule, so mirror MatchServerPanel's cancelled-IIFE pattern.
+  // set-state-in-effect lint rule, hence the IIFE.
   useEffect(() => {
     let cancelled = false;
     (async () => {

@@ -11,7 +11,7 @@
 // scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
 // safety valve on the admin server console for a server left live.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import { ServerSpinner } from '@/components/ServerSpinner';
@@ -38,12 +38,18 @@ export default function MatchServerPanel({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Bumped by every status read and Realtime event, so a slow read that resolves after a newer one
+  // (or after a Realtime update) is dropped instead of rolling the panel back.
+  const versionRef = useRef(0);
+
   // Reads the server state and connect string from the access-checked status route.
   const loadStatus = useCallback(async () => {
+    const version = ++versionRef.current;
     try {
       const res = await fetch(`/api/matches/${matchId}/server/status`);
-      if (!res.ok) return;
+      if (!res.ok || version !== versionRef.current) return;
       const data = (await res.json()) as StatusResponse;
+      if (version !== versionRef.current) return;
       setState(data.serverState);
       setConnect(data.connectString);
     } catch {
@@ -65,6 +71,7 @@ export default function MatchServerPanel({
     (payload) => {
       const next = (payload.new as { server_state?: ServerState }).server_state;
       if (!next) return;
+      versionRef.current++;
       setState(next);
       if (next === 'live' && canManage) void loadStatus();
     },
