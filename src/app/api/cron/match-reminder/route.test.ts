@@ -9,7 +9,6 @@
 
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
@@ -25,11 +24,10 @@ function request(body: unknown, auth?: string): NextRequest {
 }
 
 /** notifyMatchReminder() reads through both the admin client the route passes it explicitly and the
- * module-level anon `supabase` singleton getMatchMeta() uses internally — both need to point at the
+ * `getAdminClient()` singleton getMatchMeta() defaults to — both need to point at the
  * same fake DB. */
 function installFixture(db: FakeDb): void {
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
 }
 
@@ -67,6 +65,15 @@ async function main() {
     installFixture(buildFakeDb());
     const res = await POST(request({ matchId: 'abc' }, 'Bearer test-cron-secret'));
     assert.equal(res.status, 400);
+  });
+
+  await test('POST — a non-integer, non-positive or out-of-range matchId is rejected (400)', async () => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+    installFixture(buildFakeDb());
+    for (const matchId of [1.5, 0, -1, 2_147_483_648, true, '1e3', [42]]) {
+      const res = await POST(request({ matchId }, 'Bearer test-cron-secret'));
+      assert.equal(res.status, 400);
+    }
   });
 
   await test('POST — missing matchId is rejected (400)', async () => {
@@ -107,7 +114,6 @@ async function main() {
   });
 
   delete process.env.CRON_SECRET;
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

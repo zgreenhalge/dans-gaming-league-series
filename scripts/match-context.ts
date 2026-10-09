@@ -6,7 +6,7 @@
 //
 // Usage: npx tsx scripts/match-context.ts <matchId> [<matchId> ...]
 
-import { supabase } from '../src/lib/supabase';
+import { getAdminClient } from '../src/lib/supabase-admin';
 import {
   getAllSabremetrics, getPlayerRatings, getH2HData, getAllSeasonMedalists,
   aggregateRows, computeLeagueAverages, computePlusStats,
@@ -115,7 +115,7 @@ function emptyReportStats(): ReportStats {
 }
 
 async function buildContext(matchId: number, trophiesByPlayer: Map<number, TrophyEntry[]>) {
-  const { data: match, error: matchErr } = await supabase
+  const { data: match, error: matchErr } = await getAdminClient()
     .from('matches')
     .select('id, week_id, final_score, is_feature_match, is_playoff_game, scheduled_at')
     .eq('id', matchId)
@@ -124,17 +124,17 @@ async function buildContext(matchId: number, trophiesByPlayer: Map<number, Troph
   if (!match) return { matchId, error: 'not found' };
   const m = match as MatchRow;
 
-  const { data: week } = await supabase.from('weeks').select('season_id, week_number').eq('id', m.week_id).maybeSingle();
+  const { data: week } = await getAdminClient().from('weeks').select('season_id, week_number').eq('id', m.week_id).maybeSingle();
   const seasonId = (week as { season_id: number } | null)?.season_id;
   if (seasonId == null) return { matchId, error: 'no season resolved' };
-  const { data: season } = await supabase.from('seasons').select('name, is_gauntlet, target_win_rounds').eq('id', seasonId).maybeSingle();
+  const { data: season } = await getAdminClient().from('seasons').select('name, is_gauntlet, target_win_rounds').eq('id', seasonId).maybeSingle();
   const seasonRow = season as { name: string; is_gauntlet: boolean; target_win_rounds: number } | null;
   if (seasonRow?.is_gauntlet) {
     return { matchId, error: 'gauntlet match — sabremetrics/EHOG projection/H2H career stats are season-scoped and not wired up for gauntlet play yet' };
   }
   const targetWinRounds = seasonRow?.target_win_rounds ?? 13;
 
-  const { data: pms } = await supabase
+  const { data: pms } = await getAdminClient()
     .from('player_match_stats')
     .select('player_id, faction, kills, deaths, adr, is_win')
     .eq('match_id', matchId);

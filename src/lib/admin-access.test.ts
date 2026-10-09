@@ -1,7 +1,7 @@
 /**
  * Covers `requireAdminAccess()`'s three outcomes: admin session, non-admin session, no session.
  * Uses the shared `test-support/fixtures.ts` `PLAYERS` list (Alice, id 1, `is_admin: true`;
- * everyone else `is_admin: false`) as the admin-vs-non-admin fixture, wired as the anon client
+ * everyone else `is_admin: false`) as the admin-vs-non-admin fixture, wired as the server client
  * `isPlayerAdmin()` reads through.
  *
  * Run:  npx vitest run src/lib/admin-access.test.ts
@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from './session';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { PLAYERS } from './test-support/fixtures';
 import { sessionFor } from './test-support/nextRequest';
@@ -20,7 +20,7 @@ const ADMIN_ID = 1; // Alice — is_admin: true
 const NON_ADMIN_ID = 2; // Bob — is_admin: false
 
 function installFixture(): void {
-  __setTestClient(createFakeSupabaseClient({ players: PLAYERS }));
+  __setTestAdminClient(createFakeSupabaseClient({ players: PLAYERS }));
 }
 
 async function main() {
@@ -46,7 +46,7 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
+  __setTestAdminClient(undefined);
   report();
 }
 

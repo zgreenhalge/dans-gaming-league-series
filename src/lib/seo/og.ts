@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup, getMatchTeamNames, getGauntletSeasonLeaderboard } from '../queries';
@@ -21,21 +21,21 @@ type LeaderboardAgg = {
  */
 export const getPlayerMeta = cache(async (playerId: number) => {
   const [{ data: player }, { data: rows }, { data: gauntletRows }, { data: ratingRow }] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('players')
       .select('id, name, steam_avatar_url')
       .eq('id', playerId)
       .maybeSingle(),
-    supabase
+    getAdminClient()
       .from('player_season_leaderboard')
       .select('matches_played, matches_won, total_kills, total_deaths, total_damage, total_rounds_played')
       .eq('player_id', playerId),
-    supabase
+    getAdminClient()
       .from('player_match_stats')
       .select('kills, deaths, damage, rounds_played, is_win, match_id, matches!inner(is_playoff_game)')
       .eq('player_id', playerId)
       .eq('matches.is_playoff_game', true),
-    supabase
+    getAdminClient()
       .from('player_current_ratings')
       .select('ehog_v1')
       .eq('player_id', playerId)
@@ -88,7 +88,7 @@ export const getPlayerMeta = cache(async (playerId: number) => {
   };
 });
 
-export async function getMatchMeta(matchId: number, client: SupabaseClient = supabase) {
+export async function getMatchMeta(matchId: number, client: SupabaseClient = getAdminClient()) {
   const [teams, { data: match }, mapLookup] = await Promise.all([
     getMatchTeamNames(matchId, client),
     client
@@ -150,7 +150,7 @@ type SeasonLeaderboardMeta = {
 };
 
 export async function getSeasonMetaLeaderboard(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
-  const { data: seasonRow } = await supabase
+  const { data: seasonRow } = await getAdminClient()
     .from('seasons')
     .select('is_gauntlet')
     .eq('id', seasonId)
@@ -174,21 +174,21 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
     total_rounds_played: number;
   };
 
-  const { data: weekRows } = await supabase.from('weeks').select('id').eq('season_id', seasonId);
+  const { data: weekRows } = await getAdminClient().from('weeks').select('id').eq('season_id', seasonId);
   const weekIds = ((weekRows ?? []) as { id: number }[]).map(w => w.id);
   if (weekIds.length === 0) return [];
 
-  const { data: matchRows } = await supabase.from('matches').select('id').in('week_id', weekIds);
+  const { data: matchRows } = await getAdminClient().from('matches').select('id').in('week_id', weekIds);
   const matchIds = ((matchRows ?? []) as { id: number }[]).map(m => m.id);
 
   const [{ data: lbRows }, { data: matchStats }] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('player_season_leaderboard')
       .select('player_id, player_name, win_rate_percentage, matches_won, kd_ratio, total_damage, total_rounds_played')
       .eq('season_id', seasonId)
       .gt('total_rounds_played', 0),
     matchIds.length > 0
-      ? supabase.from('player_match_stats').select('player_id, rounds_won, rounds_played').in('match_id', matchIds)
+      ? getAdminClient().from('player_match_stats').select('player_id, rounds_won, rounds_played').in('match_id', matchIds)
       : Promise.resolve({ data: [] }),
   ]);
 

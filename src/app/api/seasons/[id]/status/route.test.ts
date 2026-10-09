@@ -2,7 +2,7 @@
  * Route-handler harness for PATCH /api/seasons/[id]/status (#379) — exercises requireAdminAccess()'s
  * 401/403 branches and activateSeason()'s status transition + best-effort gauntlet-build side
  * effect, through the exported handler directly, using the same `jsonRequest()`/`__setTestSession()`/
- * `__setTestClient()`/`__setTestAdminClient()` harness `seasons/[id]/players/route.test.ts` (#319)
+ * `__setTestAdminClient()` harness `seasons/[id]/players/route.test.ts` (#319)
  * established.
  *
  * Run:  npx vitest run src/app/api/seasons/[id]/status/route.test.ts
@@ -10,10 +10,9 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
 
@@ -53,7 +52,6 @@ function makeDb(): FakeDb {
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -79,10 +77,11 @@ async function main() {
     assert.equal(res.status, 403);
   });
 
-  await test('PATCH — non-numeric season id is rejected (400)', async () => {
+  await test('PATCH — a malformed season id is rejected (400)', async () => {
     installFixture();
-    const res = await call('abc', ADMIN_ID, { status: 'ACTIVE' });
-    assert.equal(res.status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID, { status: 'ACTIVE' })).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('PATCH — a status other than ACTIVE is rejected (400)', async () => {
@@ -149,7 +148,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

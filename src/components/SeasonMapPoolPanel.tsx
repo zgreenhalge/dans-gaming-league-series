@@ -21,7 +21,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
   const router = useRouter();
   const selection = useMapPoolSelection(mapPool ?? []);
   const [editing, setEditing] = useState(false);
-  const { busy: saving, error, run } = useAsyncAction();
+  const { busy: saving, error, run, clearError } = useAsyncAction();
   const [isPending, startTransition] = useTransition();
 
   async function save() {
@@ -35,6 +35,8 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? 'Failed to save map pool.');
       }
+      // The added maps are in `maps` now; keeping them would re-send them on the next save.
+      selection.reset(selection.mapPool);
       setEditing(false);
       startTransition(() => router.refresh());
     });
@@ -42,6 +44,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
 
   function cancel() {
     selection.reset(mapPool ?? []);
+    clearError();
     setEditing(false);
   }
 

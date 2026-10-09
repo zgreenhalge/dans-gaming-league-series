@@ -4,20 +4,19 @@
  * its `UPCOMING`-only status gate directly through the exported handlers, using:
  *  - `jsonRequest()` (test-support/nextRequest.ts) to build a real `NextRequest`
  *  - `__setTestSession()` (lib/session.ts) to stand in for `getServerSession()`
- *  - `__setTestClient()` / `__setTestAdminClient()` with a fake Supabase client
- *    (test-support/fakeSupabase.ts) backing both the anon client (`isPlayerAdmin()` reads through
- *    it) and the admin client (everything else in the route reads/writes through it)
+ *  - `__setTestAdminClient()` with a fake Supabase client
+ *    (test-support/fakeSupabase.ts) backing the one server client (`isPlayerAdmin()` and the route
+ *    both read/write through it)
  *
  * Run:  npx vitest run src/app/api/seasons/[id]/players/route.test.ts
  */
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { POST, DELETE } from './route';
 
@@ -42,13 +41,11 @@ function makeDb(): FakeDb {
   };
 }
 
-/** Fresh fixture per test, wired as both the anon client (`isPlayerAdmin()`) and admin client
- * (everything else `requireSeasonRosterAccess()`/the route touches) so a mutation in one is visible
- * to the other, matching how both point at the same database in production. */
+/** Fresh fixture per test, wired as the server client that `isPlayerAdmin()`,
+ * `requireSeasonRosterAccess()` and the route all read and write through. */
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -81,7 +78,10 @@ async function main() {
     status: number;
   }[] = [
     { name: 'POST — unauthenticated request is rejected (401)', handler: POST, method: 'POST', sessionPlayerId: null, seasonId: UPCOMING_SEASON_ID, playerId: PLAYER_ID, status: 401 },
-    { name: 'POST — non-numeric season id is rejected (400)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: 'abc', playerId: PLAYER_ID, status: 400 },
+    ...MALFORMED_ROUTE_IDS.flatMap((bad) => [
+      { name: `POST — malformed season id ${JSON.stringify(bad)} is rejected (400)`, handler: POST, method: 'POST' as const, sessionPlayerId: ADMIN_ID, seasonId: bad, playerId: PLAYER_ID, status: 400 },
+      { name: `DELETE — malformed season id ${JSON.stringify(bad)} is rejected (400)`, handler: DELETE, method: 'DELETE' as const, sessionPlayerId: ADMIN_ID, seasonId: bad, playerId: PLAYER_ID, status: 400 },
+    ]),
     { name: 'POST — unknown season id is rejected (404)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: 999, playerId: PLAYER_ID, status: 404 },
     { name: 'POST — non-admin adding a different player is rejected (403)', handler: POST, method: 'POST', sessionPlayerId: PLAYER_ID, seasonId: UPCOMING_SEASON_ID, playerId: OTHER_PLAYER_ID, status: 403 },
     { name: 'POST — a player not in the players table is rejected (404)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: UPCOMING_SEASON_ID, playerId: 9999, status: 404 },
@@ -159,7 +159,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

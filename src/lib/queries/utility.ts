@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow } from './_shared';
 import type { Faction } from '../types';
 import type { KillCreditFlags } from './kills';
@@ -31,7 +31,7 @@ export async function getAllUtilityThrows(
 ): Promise<UtilityThrowRow[]> {
   const [rows, pmsLookup] = await Promise.all([
     fetchAllPages<RawThrowRow>((from, to) => {
-      let q = supabase.from('match_utility_throws').select('*');
+      let q = getAdminClient().from('match_utility_throws').select('*');
       if (matchId != null) q = q.eq('match_id', matchId);
       return q.range(from, to);
     }),

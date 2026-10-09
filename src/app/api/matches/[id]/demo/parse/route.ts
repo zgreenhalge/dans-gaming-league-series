@@ -8,6 +8,7 @@ import { getDemoManifest } from '@/lib/demo/segmentManifest';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { gunzipMaybe } from '@/lib/gzip';
 import { clearLiveScoreBestEffort } from '@/lib/demo/liveScore';
+import { parseMatchId } from '@/lib/util';
 
 export const maxDuration = 300;
 
@@ -23,8 +24,8 @@ export async function POST(
   }
 
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 

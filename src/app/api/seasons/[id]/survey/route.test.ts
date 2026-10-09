@@ -139,4 +139,15 @@ test('PUT — replaces the questions only while the survey is closed with no res
   resetFeedbackFixture();
 });
 
+test('PUT — a refused save leaves the stored questions and open state untouched', async () => {
+  const db = installFeedbackFixture(ADMIN_ID);
+  await call(POST, 'POST', REGULAR_SEASON_ID, { open: false });
+  db.survey_responses.push({ id: 1, survey_id: db.surveys[0].id, player_id: ALICE_ID, answers: {} });
+  const before = structuredClone(db.surveys[0]);
+  const res = await call(PUT, 'PUT', REGULAR_SEASON_ID, { questions: [{ kind: 'yes_no', prompt: 'Again?' }], open: true });
+  assert.equal(res.status, 409);
+  assert.deepEqual(db.surveys[0], before);
+  resetFeedbackFixture();
+});
+
 report();

@@ -16,13 +16,13 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type Row, type RpcHandler } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
 const fakeDb = buildFakeDb();
 const adminClient = createFakeSupabaseClient(fakeDb);
-__setTestClient(adminClient);
+__setTestAdminClient(adminClient);
 
 import { syncSeasonScheduledEvents } from './discord-event-sync';
 import { test, report } from './test-support/miniTest';
@@ -184,7 +184,7 @@ async function main() {
     // 101/102 accumulate state across later tests in this file.
     db.match_discord_state = [{ match_id: 101, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null }];
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord({
       threads: [{ id: 'thread-renamed', name: 'Some Other Name', parent_id: 'channel-season-5' }],
       events: [{ id: '9999999999999999999', scheduled_start_time: '2026-02-01T18:00:00.000Z', status: 1 }],
@@ -197,7 +197,7 @@ async function main() {
     const m101 = ok.matches.find((m) => m.matchId === 101)!;
     assert.equal(m101.status, 'synced', 'found the thread via its recorded id despite the name mismatch');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('syncSeasonScheduledEvents: a stale recorded thread_id falls back to the title match instead of being trusted blindly', async () => {
@@ -209,7 +209,7 @@ async function main() {
     // "no_thread".
     db.match_discord_state = [{ match_id: 101, thread_id: 'thread-deleted', event_id: null, message_checkpoint: null }];
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord({
       threads: [{ id: 'thread-current', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
       events: [{ id: '8888888888888888888', scheduled_start_time: '2026-02-02T18:00:00.000Z', status: 1 }],
@@ -222,7 +222,7 @@ async function main() {
     const m101 = ok.matches.find((m) => m.matchId === 101)!;
     assert.equal(m101.status, 'synced', 'falls through to the title-matched thread rather than trusting the dead id');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   // ─── Match 101: a first-time scan that finds its event immediately ─────────────────────────────

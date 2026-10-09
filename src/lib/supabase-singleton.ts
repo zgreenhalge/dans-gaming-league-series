@@ -1,5 +1,5 @@
-// Shared globalThis-caching mechanics for the Supabase client singletons (`supabase-admin.ts` — which
-// `supabase.ts` also resolves through — and `supabase-browser.ts`). Caching on `globalThis` (rather than a module-level
+// Shared globalThis-caching mechanics for the Supabase client singletons (`supabase-admin.ts` and
+// `supabase-browser.ts`). Caching on `globalThis` (rather than a module-level
 // variable) survives Next.js dev-server hot reloads, which re-evaluate modules but not globalThis
 // — a fixed string key (not a `Symbol`, which would be re-minted, and unmatchable, on every reload)
 // is what lets the cache be found again after a reload re-runs the module that first created it.
@@ -20,7 +20,7 @@ function store(): Map<SingletonKey, unknown> {
  *
  * Refuses to run `create()` under Vitest (`process.env.VITEST`, set automatically by the test
  * runner) — reaching here under test means the test forgot to call this singleton's
- * `__setTestClient()`/`__setTestAdminClient()` override before exercising a code path that needs
+ * `__setTestAdminClient()` override before exercising a code path that needs
  * it, and `create()` would otherwise silently build a real Supabase client against the real
  * database. Real credentials are wired into CI (`.github/workflows/ci.yml`, needed for `next
  * build`'s prerendering) and the server client holds the service-role key, so an unmocked test isn't
@@ -33,7 +33,7 @@ export function getOrCreateSingleton<T>(key: SingletonKey, create: () => T): T {
   if (s.has(key)) return s.get(key) as T;
   if (process.env.VITEST) {
     throw new Error(
-      `getOrCreateSingleton('${key}'): a test exercised this without overriding it via __setTestClient()/__setTestAdminClient() first -- refusing to construct a real Supabase client under Vitest.`,
+      `getOrCreateSingleton('${key}'): a test exercised this without overriding it via __setTestAdminClient() first -- refusing to construct a real Supabase client under Vitest.`,
     );
   }
   const created = create();

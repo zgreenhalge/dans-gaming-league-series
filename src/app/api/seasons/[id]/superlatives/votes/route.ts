@@ -34,9 +34,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ ok: true });
 }
 
-/** Admin reset: deletes every vote cast for the season's superlatives and closes voting. The
- *  superlatives themselves are kept, and — with no votes and voting closed — the list is editable
- *  again. */
+/** Admin reset: closes voting and deletes every vote cast for the season's superlatives, as one
+ *  `reset_superlative_votes()` RPC call (all-or-nothing). The superlatives themselves are kept, and
+ *  — with no votes and voting closed — the list is editable again. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -45,16 +45,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const poll = await getSuperlativePoll(seasonId);
   if (!poll) return NextResponse.json({ error: 'No superlatives vote for this season' }, { status: 404 });
 
-  // Close first: if the vote delete then fails, no new votes can land while the admin retries.
-  const { error: closeErr } = await access.supabaseAdmin.from('superlative_polls').update({ is_open: false }).eq('season_id', seasonId);
-  if (closeErr) return NextResponse.json({ error: closeErr.message }, { status: 500 });
-
-  if (poll.superlatives.length > 0) {
-    const { error: deleteErr } = await access.supabaseAdmin
-      .from('superlative_votes')
-      .delete()
-      .in('superlative_id', poll.superlatives.map((s) => s.id));
-    if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 });
-  }
+  const { error } = await access.supabaseAdmin.rpc('reset_superlative_votes', { p_season_id: seasonId });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -4,7 +4,7 @@
 // (`getPlayerSurveyAnswers()`, `getPlayerSuperlativeVotes()`); the survey results never select them,
 // and the vote tally selects the voter id only to count distinct voters, never returning it.
 
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import {
   summarizeSurvey,
   tallyVotes,
@@ -29,7 +29,7 @@ export function isSurveyOpen(survey: Survey): boolean {
 
 /** A season's survey with its questions in display order, or null if none has been created. */
 export async function getSurveyForSeason(seasonId: number): Promise<Survey | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('surveys')
     .select('id, season_id, closed_at, questions')
     .eq('season_id', seasonId)
@@ -38,25 +38,12 @@ export async function getSurveyForSeason(seasonId: number): Promise<Survey | nul
   return data ? { ...data, questions: data.questions as unknown as SurveyQuestion[] } : null;
 }
 
-/** The survey lock rule: open, or any response exists. A survey's questions are frozen from then on,
- *  so no answer lands on a question list the player didn't see. */
-function surveyLockedFor(survey: Survey, hasResponses: boolean): boolean {
-  return isSurveyOpen(survey) || hasResponses;
-}
-
-export async function isSurveyLocked(survey: Survey): Promise<boolean> {
-  if (isSurveyOpen(survey)) return true;
-  const { data, error } = await supabase.from('survey_responses').select('id').eq('survey_id', survey.id).limit(1);
-  if (error) throw error;
-  return surveyLockedFor(survey, (data ?? []).length > 0);
-}
-
 /** One player's own saved answers — for prefilling their editor — plus whether they have responded. */
 export async function getPlayerSurveyAnswers(
   surveyId: number,
   playerId: number,
 ): Promise<{ responded: boolean; answers: SurveyAnswers }> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('survey_responses')
     .select('answers')
     .eq('survey_id', surveyId)
@@ -69,7 +56,9 @@ export async function getPlayerSurveyAnswers(
 export interface SurveyResults {
   survey: Survey;
   isOpen: boolean;
-  /** Open, or has any response — the survey's questions can't be edited. */
+  /** The survey lock rule: open, or has any response — its questions are frozen, so no answer lands
+   *  on a question list the player didn't see. `replace_survey_questions()` enforces the same rule
+   *  on save. */
   isLocked: boolean;
   responseCount: number;
   eligibleCount: number;
@@ -83,7 +72,7 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
 
   // Selects the `answers` column only — never `player_id`.
   const [{ data: responses, error }, eligible] = await Promise.all([
-    supabase.from('survey_responses').select('answers').eq('survey_id', survey.id),
+    getAdminClient().from('survey_responses').select('answers').eq('survey_id', survey.id),
     getSeasonPlayedPlayers(seasonId),
   ]);
   if (error) throw error;
@@ -92,7 +81,7 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   return {
     survey,
     isOpen: isSurveyOpen(survey),
-    isLocked: surveyLockedFor(survey, answers.length > 0),
+    isLocked: isSurveyOpen(survey) || answers.length > 0,
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
@@ -113,8 +102,8 @@ export interface SuperlativePoll {
 /** A season's superlatives and whether voting is open, or null if none have been set up. */
 export async function getSuperlativePoll(seasonId: number): Promise<SuperlativePoll | null> {
   const [{ data: poll, error }, { data: superlatives, error: superlativesErr }] = await Promise.all([
-    supabase.from('superlative_polls').select('is_open').eq('season_id', seasonId).maybeSingle(),
-    supabase
+    getAdminClient().from('superlative_polls').select('is_open').eq('season_id', seasonId).maybeSingle(),
+    getAdminClient()
       .from('superlatives')
       .select('id, position, title')
       .eq('season_id', seasonId)
@@ -131,7 +120,7 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
 export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<boolean> {
   if (poll.isOpen) return true;
   if (poll.superlatives.length === 0) return false;
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('superlative_votes')
     .select('id')
     .in('superlative_id', poll.superlatives.map((s) => s.id))
@@ -144,7 +133,7 @@ export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<bo
  *  for prefilling their editor. */
 export async function getPlayerSuperlativeVotes(superlativeIds: number[], playerId: number): Promise<Record<number, number>> {
   if (superlativeIds.length === 0) return {};
-  const { data: votes, error } = await supabase
+  const { data: votes, error } = await getAdminClient()
     .from('superlative_votes')
     .select('superlative_id, nominee_player_id')
     .eq('voter_player_id', playerId)
@@ -206,8 +195,8 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
  *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. */
 export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
   const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
-    supabase.from('surveys').select('season_id').is('closed_at', null),
-    supabase.from('superlative_polls').select('season_id').eq('is_open', true),
+    getAdminClient().from('surveys').select('season_id').is('closed_at', null),
+    getAdminClient().from('superlative_polls').select('season_id').eq('is_open', true),
   ]);
   if (surveyErr) throw surveyErr;
   if (pollErr) throw pollErr;

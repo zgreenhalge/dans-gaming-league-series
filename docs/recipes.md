@@ -87,7 +87,11 @@ in.
    `index.ts`'s `export * from './<file>'` picks it up (it does automatically) and that the type is
    actually exported, not just declared.
 4. Batch independent Supabase reads with `Promise.all` and check `error` once, immediately —
-   match the destructuring style in `getSeasonBaseData()` (`leaderboard.ts`).
+   match the destructuring style in `getSeasonBaseData()` (`leaderboard.ts`). Read through
+   `getAdminClient()` (`src/lib/supabase-admin.ts`). When callers that already hold a client need
+   the helper — engine code handed a `supabaseAdmin` param, or a GitHub Actions script — take it as a
+   trailing `client: SupabaseClient = getAdminClient()` param, as `getSeasons()` (`seasons.ts`) and
+   `getSeasonSchedule()` (`schedule.ts`) do.
 5. **If the read doesn't depend on its arguments — zero-arg, or keyed only by a primitive the
    caller already has (a `matchId`, a `seasonId`) — wrap it in React's `cache()`
    (`import { cache } from 'react'`) rather than adding a manual `xyz?: T | Promise<T>` override
@@ -134,7 +138,10 @@ and its `UPCOMING`-only status gate.
 1. **Build the request** with `jsonRequest(url, method, body)` (`src/lib/test-support/nextRequest.ts`)
    — it constructs a real `NextRequest` with a JSON body, exactly what the handler's `req.json()`
    expects. Call the exported `POST`/`DELETE`/etc. directly, passing `{ params: Promise.resolve({ id: '...' }) }`
-   for a dynamic route segment.
+   for a dynamic route segment. Every `[id]` API route parses that segment with `parseRouteId()`
+   (`src/lib/util.ts`, or its `parseMatchId()` / `parseSeasonId()` wrappers on match- and
+   season-scoped routes) and answers 400 when it returns `null`; loop over `MALFORMED_ROUTE_IDS`
+   (`src/lib/test-support/nextRequest.ts`) to cover that branch.
 2. **Fake the session** with `__setTestSession(session | null)` (`src/lib/session.ts`) instead of a
    real `getServerSession()` call — set it to `null` for the unauthenticated case, or
    `{ user: { playerId }, expires: '<iso date>' }` for a signed-in one, via the shared
@@ -142,10 +149,10 @@ and its `UPCOMING`-only status gate.
    session reads that go through `requireSession()` (route handlers) or `getSession()` (Server
    Components) — the three session-based access gates (`season-roster-access.ts`,
    `match-access.ts`, `admin-access.ts`) all do.
-3. **Fake the Supabase client** with `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) or its
-   alias `__setTestClient()` (`src/lib/supabase.ts`, used by the query-helper harness), pointed at a
-   `createFakeSupabaseClient(db)` instance. `supabase` and `getAdminClient()` are one client, so
-   either hook fakes both, and a mutation made through either spelling is visible to the other. Build a small local `FakeDb`
+3. **Fake the Supabase client** with `__setTestAdminClient()` (`src/lib/supabase-admin.ts`), pointed
+   at a `createFakeSupabaseClient(db)` instance. Every server-side read and write — query helpers,
+   access gates, route handlers — resolves through `getAdminClient()`, so this one hook fakes them
+   all. Build a small local `FakeDb`
    fixture scoped to the route under test rather than reaching for the big shared
    `test-support/fixtures.ts` "league" (that fixture is tuned for the `queries/*.ts` regression
    suite's read-only cross-function graph, not a single route's mutation scenarios).
@@ -168,13 +175,20 @@ Every `public` table has row level security on, so a new table is created closed
 1. **Write the migration** under `supabase/migrations/` (apply it to the live project per
    [`AGENTS.md`](../AGENTS.md)'s live-approval rule). The same file that runs `create table` must
    run `alter table public.<table> enable row level security;`. A table created without it is
-   readable and writable by anyone holding the public anon key.
+   readable and writable by anyone holding the public anon key, and `src/lib/migrations-rls.test.ts`
+   (part of `npm test`, so CI) fails on any migration that creates a `public` table without it.
 2. **Add no policy and no grant for `anon`/`authenticated`.** Server code reaches the table through
-   the service-role client (`supabase` / `getAdminClient()`), which bypasses RLS.
+   the service-role client (`getAdminClient()`), which bypasses RLS.
 3. **Only a browser Realtime subscription changes that.** Add the table to the `supabase_realtime`
    publication and give it a `grant select ... to anon` plus a `for select to anon using (true)`
    policy, as the existing Realtime tables have (see
-   `supabase/migrations/20261008150000_enable_rls_revoke_anon.sql`).
+   `supabase/migrations/20261008150000_enable_rls_revoke_anon.sql`). When the table holds anything
+   not meant for the public, grant only the columns the subscriber reads plus the primary key and
+   any filter column (`grant select (id, status) on ...`), as
+   `supabase/migrations/20261009150000_narrow_realtime_anon_columns.sql` does — Realtime delivers just
+   the columns the role may select. The subscribing component calls `useRealtimeChanges()`
+   (`src/components/useRealtimeChanges.ts`), which owns the channel's setup and cleanup and skips
+   subscribing when `getBrowserClient()` returns `null` (public env unset).
 4. Regenerate `src/lib/database.types.ts` and document the table in
    [`architecture.md`](./architecture.md)'s Database section.
 

@@ -67,12 +67,14 @@ export function buildSurveyQuestions(drafts: SurveyQuestionDraft[]): SurveyQuest
 }
 
 /** A stored question list as builder drafts, in order — for editing a survey that has no responses.
- *  A core question maps back to its `CORE_SURVEY_QUESTIONS` entry by prompt and kind; one that no
- *  longer matches any (the core list has since changed) comes back as an ordinary custom question. */
+ *  A core question maps back to its `CORE_SURVEY_QUESTIONS` entry by prompt and kind. A stored core
+ *  question that matches no current entry is left out: `buildSurveyQuestions()` appends every core
+ *  question the drafts don't place, so the current core list is what a rebuilt survey carries. */
 export function questionsToDrafts(questions: SurveyQuestion[]): SurveyQuestionDraft[] {
-  return questions.map((q) => {
-    const core = q.is_core ? CORE_SURVEY_QUESTIONS.findIndex((c) => c.prompt === q.prompt && c.kind === q.kind) : -1;
-    return core >= 0 ? { core } : { kind: q.kind, prompt: q.prompt };
+  return questions.flatMap((q): SurveyQuestionDraft[] => {
+    if (!q.is_core) return [{ kind: q.kind, prompt: q.prompt }];
+    const core = CORE_SURVEY_QUESTIONS.findIndex((c) => c.prompt === q.prompt && c.kind === q.kind);
+    return core >= 0 ? [{ core }] : [];
   });
 }
 

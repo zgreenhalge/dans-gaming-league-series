@@ -1,5 +1,5 @@
 import { gunzipMaybe } from '../gzip';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { getR2Object, demoResultKey } from '../r2';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from '../demo/ingestResult';
 import {
@@ -38,7 +38,7 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
   if (!matchIds.length) return out;
 
   const [{ data: matchRows }, weekLookup] = await Promise.all([
-    supabase
+    getAdminClient()
       .from('matches')
       .select('id, match_number, picked_map, final_score, week_id')
       .in('id', matchIds),
@@ -57,7 +57,7 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
     ),
   );
   const { data: seasonRows } = seasonIds.length
-    ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
+    ? await getAdminClient().from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
     : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
   const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
   const seasonById = new Map(seasons.map((s) => [s.id, s]));
@@ -124,7 +124,7 @@ function buildJobSubject(
  */
 export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
   try {
-    const { data: jobs, error } = await supabase
+    const { data: jobs, error } = await getAdminClient()
       .from('background_jobs')
       .select(
         'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
@@ -159,7 +159,7 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
     const matchCtx = await loadMatchJobContext(matchIds);
 
     const { data: mapRows } = mapIds.length
-      ? await supabase.from('maps').select('id, name, slug').in('id', mapIds)
+      ? await getAdminClient().from('maps').select('id, name, slug').in('id', mapIds)
       : { data: [] as { id: number; name: string; slug: string }[] };
     const mapById = new Map(
       ((mapRows ?? []) as { id: number; name: string; slug: string }[]).map((m) => [m.id, m]),
@@ -238,7 +238,7 @@ export interface OpsErrorRow {
  * present.
  */
 export async function getOpsErrors(): Promise<OpsErrorRow[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('ops_errors')
     .select('id, entity_type, entity_id, operation, message, occurred_at')
     .is('dismissed_at', null)
@@ -261,13 +261,13 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
 
   const [seasonRes, matchRes, playerRes] = await Promise.all([
     seasonIds.length
-      ? supabase.from('seasons').select('id, name').in('id', seasonIds)
+      ? getAdminClient().from('seasons').select('id, name').in('id', seasonIds)
       : Promise.resolve({ data: [] }),
     matchIds.length
-      ? supabase.from('matches').select('id, match_number, weeks(week_number, seasons(name))').in('id', matchIds)
+      ? getAdminClient().from('matches').select('id, match_number, weeks(week_number, seasons(name))').in('id', matchIds)
       : Promise.resolve({ data: [] }),
     playerIds.length
-      ? supabase.from('players').select('id, name').in('id', playerIds)
+      ? getAdminClient().from('players').select('id, name').in('id', playerIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -340,7 +340,7 @@ function weekStartOf(iso: string): string {
  */
 export async function getOpsErrorHistory(): Promise<OpsErrorHistoryRow[]> {
   const since = new Date(Date.now() - OPS_ERROR_HISTORY_WEEKS * 7 * 86_400_000).toISOString();
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('ops_errors')
     .select('operation, occurred_at')
     .gte('occurred_at', since);

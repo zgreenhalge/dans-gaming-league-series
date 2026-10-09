@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { parseSeasonId } from '@/lib/util';
 
 export async function PATCH(
   req: NextRequest,
@@ -11,8 +12,8 @@ export async function PATCH(
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) {
+  const seasonId = parseSeasonId(id);
+  if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 

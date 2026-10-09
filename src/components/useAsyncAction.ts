@@ -22,5 +22,9 @@ export function useAsyncAction() {
     }
   }, []);
 
-  return { busy, error, run };
+  /** Drops a previous run's error — for a form that's cancelled or reopened, so a stale failure
+   * doesn't greet the next edit. */
+  const clearError = useCallback(() => setError(null), []);
+
+  return { busy, error, run, clearError };
 }

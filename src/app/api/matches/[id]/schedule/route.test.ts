@@ -11,12 +11,11 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
 
@@ -29,7 +28,6 @@ const GAUNTLET_MATCH_ID_2 = 201; // Game 2, added by installPodFixture() below
 function installFixture(rpcHandlers: Record<string, RpcHandler> = {}) {
   const db = buildFakeDb();
   const client = createFakeSupabaseClient(db, rpcHandlers);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -72,10 +70,11 @@ function recordingRpc(): { calls: Record<string, unknown>[]; handler: RpcHandler
 }
 
 async function main() {
-  await test('PATCH — non-numeric match id is rejected (400)', async () => {
+  await test('PATCH — a malformed match id is rejected (400)', async () => {
     installFixture();
-    const res = await call('abc', ADMIN_ID, { scheduled_at: null });
-    assert.equal(res.status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID, { scheduled_at: null })).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('PATCH — unauthenticated request is rejected (401)', async () => {
@@ -262,7 +261,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

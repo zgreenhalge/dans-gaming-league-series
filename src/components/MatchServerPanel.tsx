@@ -3,14 +3,16 @@
 // In-match server panel. Once the 5-stage veto completes, this drives the hosting UX:
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
-// Updates via Supabase Realtime on the match's `match_server_state` row (no polling) — the table is
-// already in the realtime publication. The moment the row flips to `live` we swap the spinner for the
-// Join button. Teardown itself isn't a control here — it happens automatically once the match is
+// Updates via Supabase Realtime on the match's `match_server_state` row (no polling). The Realtime
+// event carries only `server_state` (the anon role can read no other column), so the connect string
+// comes from the access-checked status route, read on mount and whenever the row flips to `live` —
+// and only for viewers who can manage the server, the same admin-or-in-match rule the route
+// enforces. Teardown itself isn't a control here — it happens automatically once the match is
 // scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
 // safety valve on the admin server console for a server left live.
 
-import { useCallback, useEffect, useState } from 'react';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRealtimeChanges } from './useRealtimeChanges';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import { ServerSpinner } from '@/components/ServerSpinner';
 
@@ -36,50 +38,44 @@ export default function MatchServerPanel({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apply = useCallback((s: ServerState, conn: string | null) => {
-    setState(s);
-    setConnect(conn);
-  }, []);
+  // Bumped by every status read and Realtime event, so a slow read that resolves after a newer one
+  // (or after a Realtime update) is dropped instead of rolling the panel back.
+  const versionRef = useRef(0);
+
+  // Reads the server state and connect string from the access-checked status route.
+  const loadStatus = useCallback(async () => {
+    const version = ++versionRef.current;
+    try {
+      const res = await fetch(`/api/matches/${matchId}/server/status`);
+      if (!res.ok || version !== versionRef.current) return;
+      const data = (await res.json()) as StatusResponse;
+      if (version !== versionRef.current) return;
+      setState(data.serverState);
+      setConnect(data.connectString);
+    } catch {
+      /* transient — Realtime will still deliver updates */
+    }
+  }, [matchId]);
 
   // Initial read (Realtime only delivers subsequent changes).
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/matches/${matchId}/server/status`);
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as StatusResponse;
-        if (!cancelled) apply(data.serverState, data.connectString);
-      } catch {
-        /* transient — Realtime will still deliver updates */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [matchId, apply]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (canManage) void loadStatus();
+  }, [canManage, loadStatus]);
 
-  // Live updates straight off the match_server_state row — no polling. The row doesn't exist until
-  // the first provision (`idle`), so this listens for INSERT as well as UPDATE.
-  useEffect(() => {
-    const channel = getBrowserClient()
-      .channel(`match-server-${matchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          const row = payload.new as {
-            server_state?: ServerState;
-            connect_string?: string | null;
-          };
-          apply(row.server_state ?? 'idle', row.connect_string ?? null);
-        },
-      )
-      .subscribe();
-    return () => {
-      getBrowserClient().removeChannel(channel);
-    };
-  }, [matchId, apply]);
+  // Live updates off the match_server_state row — no polling. The row doesn't exist until the first
+  // provision (`idle`), so this listens for INSERT as well as UPDATE.
+  useRealtimeChanges(
+    `match-server-${matchId}`,
+    { event: '*', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
+    (payload) => {
+      const next = (payload.new as { server_state?: ServerState }).server_state;
+      if (!next) return;
+      versionRef.current++;
+      setState(next);
+      if (next === 'live' && canManage) void loadStatus();
+    },
+  );
 
   const provision = async () => {
     setBusy(true);
@@ -135,6 +131,10 @@ export default function MatchServerPanel({
       {state === 'provisioning' && (
         // Spinner until the row flips to `live`, then we swap in the real Join button.
         <ServerSpinner label="Starting server…" />
+      )}
+
+      {state === 'live' && !connect && (
+        <span className="text-sm text-[var(--color-text-secondary)]">Server is live.</span>
       )}
 
       {state === 'live' && connect && (

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import type { LeaderboardRowWithId } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRwr, deriveAdr } from '../util';
 import { getSeasons } from './seasons';
@@ -91,7 +91,7 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
 
     if (weekRows.length > 0) {
       const weekIds = weekRows.map((w) => w.id);
-      const { data: matchData } = await supabase
+      const { data: matchData } = await getAdminClient()
         .from('matches')
         .select('id, week_id, final_score')
         .in('week_id', weekIds);
@@ -99,7 +99,7 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
 
       const matchIds = matchRows.map((m) => m.id);
       const { data: statData } = matchIds.length
-        ? await supabase.from('player_match_stats').select('match_id, player_id, is_win, rounds_won, rounds_played, adr').in('match_id', matchIds)
+        ? await getAdminClient().from('player_match_stats').select('match_id, player_id, is_win, rounds_won, rounds_played, adr').in('match_id', matchIds)
         : { data: [] as { match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }[] };
       const statRows = (statData ?? []) as { match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }[];
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cache } from 'react';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { heatmapKey, mapHeatmapKey } from '../r2';
 import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc, deriveRates } from '../util';
@@ -167,10 +167,10 @@ const fetchMapRawData = cache(async (): Promise<{
   const [matches, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
-        asPage(supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
+        asPage(getAdminClient().from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
       ),
       getWeekLookup(),
-      supabase.from('seasons').select('id, name, is_gauntlet, map_pool'),
+      getAdminClient().from('seasons').select('id, name, is_gauntlet, map_pool'),
     ]);
   if (sErr) throw sErr;
   return {
@@ -274,7 +274,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
   }
 
   if (playedMatchIds.length > 0) {
-    const { data: statsData } = await supabase
+    const { data: statsData } = await getAdminClient()
       .from('player_match_stats')
       .select('match_id, kills, assists, faction, is_win')
       .in('match_id', playedMatchIds);
@@ -433,7 +433,7 @@ export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null
 
   const matchIds = playedMatches.map((m) => m.id);
   const [{ data: statsData, error: sErr }, players] = await Promise.all([
-    supabase.from('player_match_stats').select('*').in('match_id', matchIds),
+    getAdminClient().from('player_match_stats').select('*').in('match_id', matchIds),
     getPlayersById(),
   ]);
   if (sErr) throw sErr;
@@ -578,7 +578,7 @@ export type MapRow = {
 /** `cache()`-wrapped so the root layout's own read (feeds `MapProvider`) and a page's separate read
  *  of the same table collapse into a single Supabase round trip per request — same reasoning as
  *  `getMapDetail()` below. */
-export const getMapLookup = cache(async (client: SupabaseClient = supabase): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
+export const getMapLookup = cache(async (client: SupabaseClient = getAdminClient()): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
   const { data, error } = await client.from('maps').select('*');
   if (error) throw error;
   const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
@@ -606,7 +606,7 @@ export interface WorkshopMapOption {
 
 /** Maps with a resolvable workshop id, for a workshop-map picker (e.g. the admin server console). */
 export async function getMapsForWorkshopPicker(): Promise<WorkshopMapOption[]> {
-  const { data, error } = await supabase.from('maps').select('name, workshop_url').order('name');
+  const { data, error } = await getAdminClient().from('maps').select('name, workshop_url').order('name');
   if (error) throw error;
   const rows = (data ?? []) as { name: string; workshop_url: string | null }[];
   const options: WorkshopMapOption[] = [];
@@ -632,7 +632,7 @@ export interface MapCalibration {
  * auto-fit when uncalibrated, so a partially-filled row is treated as uncalibrated.
  */
 export async function getMapCalibration(slug: string): Promise<MapCalibration | null> {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from('maps')
     .select('id, radar_pos_x, radar_pos_y, radar_scale, radar_image_url, radar_source')
     .eq('slug', slug)
@@ -734,11 +734,9 @@ export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Pro
  * to `picked_map` — the same rule `getMapDetail` uses. Only played matches qualify;
  * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
  *
- * Takes an optional client, defaulting to the app's own singleton so existing (page
- * component) callers are unaffected — the `replay-extract` Action passes its own admin client
- * explicitly when rebuilding a map's rollup.
+ * Optional `client` per docs/recipes.md's query-helper recipe.
  */
-export async function getMatchIdsForMap(mapName: string, client: SupabaseClient = supabase): Promise<number[]> {
+export async function getMatchIdsForMap(mapName: string, client: SupabaseClient = getAdminClient()): Promise<number[]> {
   const nameLower = mapName.trim().toLowerCase();
   if (!nameLower) return [];
   type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
@@ -758,7 +756,7 @@ export async function getMatchIdsForMap(mapName: string, client: SupabaseClient 
 export async function getAllPlayedMatchIds(): Promise<number[]> {
   type Row = { id: number; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    supabase.from('matches').select('id, final_score').range(from, to),
+    getAdminClient().from('matches').select('id, final_score').range(from, to),
   );
   return rows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
 }

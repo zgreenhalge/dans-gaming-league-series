@@ -12,28 +12,29 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from '@/lib/supabase';
+import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
-import { jsonRequest } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { GET } from './route';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 const REGULAR_SEASON_ID = 1; // "Season 5"
 const GAUNTLET_SEASON_ID = 2; // "Season 5 Gauntlet"
 
-function call(seasonId: number, query: string) {
+function call(seasonId: number | string, query: string) {
   return GET(jsonRequest(`http://localhost/api/seasons/${seasonId}/view${query}`, 'GET'), {
     params: Promise.resolve({ id: String(seasonId) }),
   });
 }
 
 async function main() {
-  await test('rejects a non-numeric season id', async () => {
-    const res = await call(NaN, '?kind=regular');
-    assert.equal(res.status, 400);
+  await test('rejects a malformed season id', async () => {
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, '?kind=regular')).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('rejects a missing/invalid kind', async () => {

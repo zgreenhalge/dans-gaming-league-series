@@ -8,13 +8,13 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 import { test, report } from './test-support/miniTest';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import {
   getPlayerEhogRating,

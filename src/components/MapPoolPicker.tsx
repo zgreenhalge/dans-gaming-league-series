@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toSentenceCase } from '@/lib/maps';
-import { MAP_POOL_SIZE, type NewMap } from '@/lib/season-map-pool';
+import { MAP_POOL_SIZE, isValidNewMap, type NewMap } from '@/lib/season-map-pool';
 import EmptyState from './EmptyState';
 
 /** Selection state for `MapPoolPicker`, owned by the parent so it can submit it. `newMaps` only
@@ -39,7 +39,7 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
   const [newMapName, setNewMapName] = useState('');
   const [newMapWorkshopUrl, setNewMapWorkshopUrl] = useState('');
 
-  const canAdd = !!newMapName.trim() && !!newMapWorkshopUrl.trim();
+  const canAdd = isValidNewMap(newMapName, newMapWorkshopUrl.trim());
   const allMaps = [...new Set([...knownMaps, ...addedMaps.map((m) => m.name)])].sort();
 
   function toggle(map: string) {
@@ -53,7 +53,7 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
   function addNewMap() {
     const name = newMapName.trim().toLowerCase();
     const url = newMapWorkshopUrl.trim();
-    if (!name || !url) return;
+    if (!canAdd) return;
     if (!allMaps.includes(name)) {
       setAddedMaps((prev) => [...prev, { name, workshopUrl: url }]);
     }

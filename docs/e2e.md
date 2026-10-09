@@ -111,16 +111,19 @@ lint`/`npm run typecheck`) works in any agent session with no setup at all.
 
 `npm run build`/`npm run dev` fetch from Supabase during prerendering too (`seasons/page.tsx`,
 `maps/page.tsx`, `statistics/page.tsx`, and others using `export const revalidate = 60`, plus a few
-API routes touched by `next build`'s page-data collection) — but `src/lib/supabase.ts` and
-`src/lib/supabase-admin.ts` fall back to `src/lib/dev-fallback-supabase.ts` whenever
-`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` are *all*
-unset, which is exactly the state a Claude Code web session starts in with no `.env.local` and no
-real Supabase project credentials ever placed in the sandbox. That fallback serves the same
+API routes touched by `next build`'s page-data collection) — but `getAdminClient()`
+(`src/lib/supabase-admin.ts`) falls back to `src/lib/dev-fallback-supabase.ts` whenever
+`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are *both* unset
+(`hasNoSupabaseConfig()`), which is exactly the state a Claude Code web session starts in with no
+`.env.local` and no real Supabase project credentials ever placed in the sandbox. That fallback serves the same
 in-memory fixture league the `src/lib/queries-*.test.ts` regression harness runs against
 (`src/lib/test-support/fixtures.ts`) — a real, internally consistent site, just not real match data
 — so `build`/`dev` succeed with no setup at all, the same as `test`/`lint`/`typecheck`. A partial
-env (one or two of the three vars set, not zero) still hits the original "Missing Supabase env vars"
-throw, since that's a real misconfiguration rather than an unconfigured sandbox.
+server env (one of the two set) still hits the "Missing Supabase env vars" throw, since that's a
+real misconfiguration rather than an unconfigured sandbox. The browser's Realtime client is separate:
+`getBrowserClient()` (`src/lib/supabase-browser.ts`) returns `null` whenever
+`NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is unset, and the live components skip
+subscribing, so pages render their server-fetched data without live updates.
 
 `.claude/hooks/session-start.sh` (registered as a `SessionStart` hook in `.claude/settings.json`)
 tries to upgrade that fixture-backed fallback to the real local stack this doc already describes: it

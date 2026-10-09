@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import {
   resolveMatchSeasons, fetchAllPages, asPage, fetchPmsFactionLookup,
   buildPlayerFactionsAndRoster, getRoundSides, type RoundSideInfo,
@@ -43,10 +43,10 @@ type RawKillVictimRow = { match_id: number; round_number: number; victim_player_
  *  `seasonId` re-running its own `match_rounds`/`match_kills` scan. */
 const fetchAllMatchRoundRows = cache(async (): Promise<MatchRoundRow[]> => {
   const [roundRows, matchSeason, killRows, pmsFactionLookup] = await Promise.all([
-    fetchAllPages<RawRoundRow>((from, to) => supabase.from('match_rounds').select('*').range(from, to)),
+    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').range(from, to)),
     resolveMatchSeasons(),
     fetchAllPages<RawKillVictimRow>((from, to) =>
-      asPage(supabase.from('match_kills').select('match_id, round_number, victim_player_match_stats_id').range(from, to)),
+      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').range(from, to)),
     ),
     fetchPmsFactionLookup(),
   ]);

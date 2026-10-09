@@ -6,11 +6,11 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { hasSeasonScheduleDraft, getSeasonScheduleDraft, toDraftScheduleWeeks } from './queries';
 import { test, report } from './test-support/miniTest';
@@ -48,9 +48,9 @@ async function main() {
         { id: 1, draft_week_id: 1, match_number: 1, shirts_player1_id: 1, shirts_player2_id: 404, skins_player1_id: 1, skins_player2_id: 1 },
       ],
     };
-    __setTestClient(createFakeSupabaseClient(db));
+    __setTestAdminClient(createFakeSupabaseClient(db));
     await assert.rejects(() => getSeasonScheduleDraft(50), /player_id 404 not found/);
-    __setTestClient(createFakeSupabaseClient(buildFakeDb()));
+    __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
   });
 
   await test('toDraftScheduleWeeks: down-projects the player-joined shape to plain ids', async () => {

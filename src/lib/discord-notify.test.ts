@@ -11,13 +11,13 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, clientThrowingOn, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
 const fakeDb = buildFakeDb();
 const adminClient = createFakeSupabaseClient(fakeDb);
-__setTestClient(adminClient);
+__setTestAdminClient(adminClient);
 
 import { notifyMatchServerLive, notifyMatchScoreReported, notifyMatchLiveScore, notifyMatchReminder } from './discord-notify';
 import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';

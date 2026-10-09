@@ -3,16 +3,15 @@
  * `src/app/api/seasons/[id]/players/route.test.ts`, which exercises it indirectly through the
  * route) plus `mapSeasonRosterWriteError()`'s error-code-to-status mapping. Uses the shared
  * `test-support/fixtures.ts` `PLAYERS` list (Alice, id 1, `is_admin: true`; everyone else
- * `is_admin: false`) for the admin-vs-self distinction, wired as both the anon client
- * (`isPlayerAdmin()`) and the admin client (the `seasons` read) — the same one-fake-client-for-both
- * pattern the route test uses.
+ * `is_admin: false`) for the admin-vs-self distinction, wired as the server client
+ * both `isPlayerAdmin()` and the `seasons` read go through — the same fixture pattern the route
+ * test uses.
  *
  * Run:  npx vitest run src/lib/season-roster-access.test.ts
  */
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from './session';
-import { __setTestClient } from './supabase';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { PLAYERS } from './test-support/fixtures';
@@ -31,7 +30,6 @@ function installFixture(): void {
     seasons: [{ id: UPCOMING_SEASON_ID, status: 'UPCOMING' }],
   };
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
 }
 
@@ -79,7 +77,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

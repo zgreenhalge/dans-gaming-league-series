@@ -6,14 +6,14 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 import { canonicalSort, deriveRates } from './util';
 import type { LeaderboardRowWithId } from './types';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getSeasonLeaderboard, getCareerLeaderboard, getAllLeaderboards, getSideBalance } from './queries';
 import { test, report } from './test-support/miniTest';

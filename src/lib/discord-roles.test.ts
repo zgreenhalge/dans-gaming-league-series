@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { setDiscordEnv as setEnv, clearDiscordEnv as clearEnv, stubFetch, stubFetchSequence } from './test-support/discordFetchStub';
@@ -47,7 +47,7 @@ function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseCl
   // syncParticipantRoleForPlayer() reads getActiveRegularSeason()/getSeasonRoster() through the
   // query layer's own default-client singleton, not the explicit `client` param the rest of this file
   // passes around -- both need to point at the same fake db.
-  __setTestClient(client);
+  __setTestAdminClient(client);
   return { db, client };
 }
 

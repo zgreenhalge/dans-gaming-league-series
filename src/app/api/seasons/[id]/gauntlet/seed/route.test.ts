@@ -8,10 +8,9 @@
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
-import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { POST } from './route';
 
@@ -94,7 +93,6 @@ function makeDb(): FakeDb {
 function installFixture(): FakeDb {
   const db = makeDb();
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
   __setTestAdminClient(client);
   return db;
 }
@@ -117,9 +115,11 @@ async function main() {
     assert.equal((await call(READY_SEASON_ID, PLAYER_ID)).status, 403);
   });
 
-  await test('POST — non-numeric season id is rejected (400)', async () => {
+  await test('POST — a malformed season id is rejected (400)', async () => {
     installFixture();
-    assert.equal((await call('abc', ADMIN_ID)).status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID)).status, 400, `id ${JSON.stringify(bad)}`);
+    }
   });
 
   await test('POST — a season with no gauntlet shape is rejected (404)', async () => {
@@ -158,7 +158,6 @@ async function main() {
   });
 
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

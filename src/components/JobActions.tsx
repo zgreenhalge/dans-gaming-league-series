@@ -5,10 +5,11 @@
 // re-parse actions via `IngestJobActions` (over `useDemoIngestActions`); replay and radar rows only
 // need a re-dispatch, handled here by the generic `JobRetryButton`.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useVisibleInterval } from '@/components/useVisibleInterval';
 
-const ADMIN_REFRESH_INTERVAL_MS = 5_000;
+const ADMIN_REFRESH_INTERVAL_MS = 15_000;
 
 /**
  * Re-dispatch a job by POSTing to its pipeline's dispatch endpoint (replay: the match's
@@ -64,17 +65,14 @@ export function JobRetryButton({
   );
 }
 
-/** Re-renders the admin dashboard every few seconds (while the tab is visible) so `background_jobs`
- *  and `match_server_state` changes show up without a manual reload. Admin views poll rather than
- *  subscribe to Realtime so they don't depend on the anon read access that exists for the match
- *  pages. Renders nothing. */
+/** Re-renders the admin dashboard every 15s while the tab is visible, and as soon as a hidden tab
+ *  comes back, so `background_jobs` and `match_server_state` changes show up without a manual
+ *  reload. Each refresh re-runs every query behind the page, so a hidden tab never refreshes. Admin
+ *  views poll rather than subscribe to Realtime so they don't depend on the anon read access that
+ *  exists for the match pages. Renders nothing. */
 export function JobsLiveRefresh() {
   const router = useRouter();
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!document.hidden) router.refresh();
-    }, ADMIN_REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [router]);
+  const refresh = useCallback(() => router.refresh(), [router]);
+  useVisibleInterval(refresh, ADMIN_REFRESH_INTERVAL_MS);
   return null;
 }

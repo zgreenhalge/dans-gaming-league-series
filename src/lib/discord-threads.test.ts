@@ -13,7 +13,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, clientFailingOn, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
@@ -27,7 +27,7 @@ fakeDb.players = fakeDb.players.map((p) =>
     : p.id === 2 ? { ...p, discord_id: 'discord-bob', discord_name_role_id: 'role-bob' } : p,
 );
 const adminClient = createFakeSupabaseClient(fakeDb);
-__setTestClient(adminClient);
+__setTestAdminClient(adminClient);
 
 import { publishWeekThreads, publishPodThreads, closeMatchThread, closeGauntletPodThreadIfDone } from './discord-threads';
 import { test, report } from './test-support/miniTest';
@@ -316,7 +316,7 @@ async function main() {
     // the shared adminClient/fakeDb, since match 100/101/102 accumulate state across other tests.
     db.match_discord_state = [{ match_id: 100, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null }];
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     const { calls } = stubDiscord({
       existingThreads: [{ id: 'thread-renamed', name: 'Some Other Name', parent_id: 'channel-season-5' }],
     });
@@ -334,7 +334,7 @@ async function main() {
     const createCalls = calls.filter((c) => c.init?.method === 'POST');
     assert.equal(createCalls.length, 1, 'only match 101 creates a new thread; match 100 is adopted, not recreated');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('publishWeekThreads: "next" resolves to the first week with no played matches', async () => {
@@ -512,7 +512,7 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const db = podFakeDb();
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     const { calls } = stubDiscord();
 
     const result = await publishPodThreads(client, 2, 1);
@@ -554,7 +554,7 @@ async function main() {
       ],
     );
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('publishPodThreads: adopts a pod\'s already-known thread by its recorded thread_id even though the thread was renamed since', async () => {
@@ -569,7 +569,7 @@ async function main() {
       { match_id: 201, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null },
     ];
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     const { calls } = stubDiscord({
       existingThreads: [{ id: 'thread-renamed', name: 'Some Other Name', parent_id: 'channel-season-5' }],
     });
@@ -584,7 +584,7 @@ async function main() {
     // Never touched — no thread-create POST was made despite the title not matching by name.
     assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 0);
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('publishPodThreads: a stale recorded thread_id (deleted or no longer live) falls back to the title match instead of being trusted blindly', async () => {
@@ -599,7 +599,7 @@ async function main() {
       { match_id: 201, thread_id: 'thread-deleted', event_id: null, message_checkpoint: null },
     ];
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     const { calls } = stubDiscord(); // no existing threads at all
 
     const result = await publishPodThreads(client, 2, 1);
@@ -609,7 +609,7 @@ async function main() {
 
     assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 1);
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test("publishPodThreads: 'next' sweeps every round, publishing finalized pods and skipping an unmaterialized sibling", async () => {
@@ -617,7 +617,7 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const db = splitRoundFakeDb();
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord();
 
     // Round 1 Pod 1 and Round 2 Pod 1 are both fully materialized and unpublished; Round 2 Pod 2 has
@@ -632,7 +632,7 @@ async function main() {
       [['GAUNTLET: Round 1 Group 1', 'created'], ['GAUNTLET: Round 2 Group 1', 'created']],
     );
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test("publishPodThreads: 'next' only reports newly-created threads, not pods already published", async () => {
@@ -640,7 +640,7 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const db = splitRoundFakeDb();
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     // Round 1 Pod 1's thread already exists in the channel (an earlier publish, or an admin's manual
     // create) — 'next' should adopt it silently rather than re-reporting it, since only Round 2 Pod 1
     // is actually new.
@@ -652,7 +652,7 @@ async function main() {
     assert.deepEqual(ok.pods.map((p) => p.title), ['GAUNTLET: Round 2 Group 1']);
     assert.equal(ok.pods[0].status, 'created');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test("publishPodThreads: 'next' errors when nothing is newly finalized", async () => {
@@ -660,13 +660,13 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const db = podFakeDb();
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'GAUNTLET: Round 1 Group 1', parent_id: 'channel-season-5' }] });
 
     const result = await publishPodThreads(client, 2, 'next');
     assert.deepEqual(result, { error: 'No newly finalized pods to publish' });
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('publishPodThreads: an explicit round number still targets only that round, silently omitting a pod with zero materialized games', async () => {
@@ -674,7 +674,7 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const db = splitRoundFakeDb();
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord();
 
     const result = await publishPodThreads(client, 2, 2);
@@ -687,7 +687,7 @@ async function main() {
     assert.equal(ok.pods[0].title, 'GAUNTLET: Round 2 Group 1');
     assert.equal(ok.pods[0].status, 'created');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('publishPodThreads: an explicit round number reports a pod stuck with only one materialized game as failed', async () => {
@@ -699,7 +699,7 @@ async function main() {
     db.matches = [...db.matches, { ...db.matches.find((m) => m.id === 210)!, id: 212, week_id: 15, match_number: 3 }];
     db.gauntlet_pods = db.gauntlet_pods.map((p) => (p.id === 1003 ? { ...p, match1_id: 212 } : p));
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord();
 
     const result = await publishPodThreads(client, 2, 2);
@@ -711,7 +711,7 @@ async function main() {
     );
     assert.equal(ok.pods[1].detail, 'Pod is not fully materialized (expected 2 games)');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('closeGauntletPodThreadIfDone: does not close after only Game 1 is scored', async () => {
@@ -719,7 +719,7 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const db = podFakeDb();
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord();
     await publishPodThreads(client, 2, 1);
 
@@ -728,7 +728,7 @@ async function main() {
     await closeGauntletPodThreadIfDone(client, 200);
     assert.equal(calls.length, 0, 'the pod thread must stay open until both games are played');
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('closeGauntletPodThreadIfDone: closes the shared thread once both games are played', async () => {
@@ -737,7 +737,7 @@ async function main() {
     const db = podFakeDb();
     db.matches = db.matches.map((m) => (m.id === 201 ? { ...m, final_score: '13-8' } : m));
     const client = createFakeSupabaseClient(db);
-    __setTestClient(client);
+    __setTestAdminClient(client);
     stubDiscord();
     await publishPodThreads(client, 2, 1);
     const { data } = await client.from('match_discord_state').select('thread_id').eq('match_id', 200).maybeSingle();
@@ -745,13 +745,13 @@ async function main() {
 
     const { calls } = stubDiscordClose();
     // The Action that scores a match runs outside a Next.js request — the close must work off the admin client alone.
-    __setTestClient(undefined);
+    __setTestAdminClient(undefined);
     await closeGauntletPodThreadIfDone(client, 201);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, `https://discord.com/api/v10/channels/${threadId}`);
     assert.deepEqual(JSON.parse(calls[0].init?.body as string), { archived: true, locked: true });
 
-    __setTestClient(adminClient);
+    __setTestAdminClient(adminClient);
   });
 
   await test('closeGauntletPodThreadIfDone: no-ops for a match with no resolvable pod', async () => {

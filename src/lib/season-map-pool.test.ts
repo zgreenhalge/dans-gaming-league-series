@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { parseMapPoolInput } from './season-map-pool';
+import { isValidNewMap, parseMapPoolInput } from './season-map-pool';
 
 const URL = 'https://steamcommunity.com/sharedfiles/filedetails/?id=123';
 
@@ -13,4 +13,12 @@ test('parseMapPoolInput: rejects non-string new-map names and URLs instead of th
 test('parseMapPoolInput: accepts a well-formed new map', () => {
   const res = parseMapPoolInput({ new_maps: [{ name: 'Foo', workshopUrl: URL }] });
   expect(res).toEqual({ ok: true, mapPool: null, newMaps: [{ name: 'Foo', workshopUrl: URL }] });
+});
+
+test('isValidNewMap: needs a non-blank name and a Steam Workshop item link', () => {
+  expect(isValidNewMap('Foo', URL)).toBe(true);
+  expect(isValidNewMap(' ', URL)).toBe(false);
+  for (const bad of ['', 'steamcommunity.com/sharedfiles/filedetails/?id=1', 'http://steamcommunity.com/sharedfiles/filedetails/?id=1', 'https://example.com/?id=1']) {
+    expect(isValidNewMap('Foo', bad)).toBe(false);
+  }
 });

@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { gunzipMaybe } from '../gzip';
 import { getR2Object } from '../r2';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { isPlayedScore } from '../util';
 import type { Faction } from '../types';
 
@@ -81,7 +81,7 @@ export async function batchedIn<T>(
       // can't be narrowed to the generated client's per-table literal union — `asPage<T>` below
       // covers the rest of the result shape.
       fetchAllPages<T>((from, to) =>
-        asPage<T>(supabase.from(table as never).select(select).in(column, idBatch).range(from, to)),
+        asPage<T>(getAdminClient().from(table as never).select(select).in(column, idBatch).range(from, to)),
       ),
     ),
   );
@@ -106,15 +106,13 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
- * `client` defaults to the app's server client but accepts another for callers that already hold
- * one outside a Next.js request (a GitHub Actions script) — same opt-in pattern as
- * `getSeasonSchedule()` (`schedule.ts`). Wrapped in React's `cache()` so
+ * Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in React's `cache()` so
  * every no-arg caller within one render pass (the common case) shares one `weeks` read rather than
  * each resolving it independently.
  */
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
-export const getWeekLookup = cache(async (seasonIds?: number[], client: SupabaseClient = supabase): Promise<WeekLookup> => {
+export const getWeekLookup = cache(async (seasonIds?: number[], client: SupabaseClient = getAdminClient()): Promise<WeekLookup> => {
   let query = client.from('weeks').select('id, season_id, week_number');
   if (seasonIds) query = query.in('season_id', seasonIds);
   const { data, error } = await query;
@@ -170,7 +168,7 @@ export type PmsRow = { id: number; player_id: number; match_id: number };
  *  one query the way passing `rows` explicitly can. */
 const fetchAllPmsRows = cache((): Promise<PmsRow[]> =>
   fetchAllPages<PmsRow>((from, to) =>
-    asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
+    asPage(getAdminClient().from('player_match_stats').select('id, player_id, match_id').range(from, to)),
   ),
 );
 
@@ -190,7 +188,7 @@ export const fetchPmsLookup = cache((
     ? Promise.resolve(rows)
     : matchId != null
       ? fetchAllPages<PmsRow>((from, to) =>
-          asPage(supabase.from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).range(from, to)),
+          asPage(getAdminClient().from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).range(from, to)),
         )
       : fetchAllPmsRows();
   return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
@@ -205,7 +203,7 @@ export type PmsFactionRow = PmsRow & { faction: Faction };
  *  match. */
 export const fetchPmsFactionLookup = cache((matchId?: number): Promise<Map<number, PmsFactionRow>> =>
   fetchAllPages<PmsFactionRow>((from, to) => {
-    let q = supabase.from('player_match_stats').select('id, player_id, match_id, faction');
+    let q = getAdminClient().from('player_match_stats').select('id, player_id, match_id, faction');
     if (matchId != null) q = q.eq('match_id', matchId);
     return asPage(q.range(from, to));
   }).then((rows) => new Map(rows.map((r) => [r.id, r]))),
@@ -258,7 +256,7 @@ export interface RoundSideInfo {
 export const getRoundSides = cache(async (matchId?: number): Promise<Map<string, RoundSideInfo>> => {
   const rows = await fetchAllPages<{ match_id: number; round_number: number; shirts_side: string; winner_side: string }>(
     (from, to) => {
-      let q = supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
+      let q = getAdminClient().from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
       if (matchId != null) q = q.eq('match_id', matchId);
       return q.range(from, to);
     },
@@ -288,7 +286,7 @@ export interface AllMatchesRow {
  */
 export const resolveAllMatches = cache(async (): Promise<AllMatchesRow[]> => {
   const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
-    supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
+    getAdminClient().from('matches').select('id, week_id, is_playoff_game, final_score'),
     getWeekLookup(),
   ]);
   if (matchErr) throw matchErr;

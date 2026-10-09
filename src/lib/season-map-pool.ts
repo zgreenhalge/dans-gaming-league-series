@@ -15,6 +15,12 @@ export function hasMapPool(pool: string[] | null | undefined): boolean {
 
 const WORKSHOP_URL_RE = /^https:\/\/steamcommunity\.com\/sharedfiles\/filedetails\/\?id=\d+/;
 
+/** Whether a new map can be added: a non-blank name and a Steam Workshop item link. The one rule
+ * behind both `parseMapPoolInput()` and `MapPoolPicker`'s Add button. */
+export function isValidNewMap(name: string, workshopUrl: string): boolean {
+  return !!name.trim() && WORKSHOP_URL_RE.test(workshopUrl);
+}
+
 async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | null> {
   const fileId = workshopIdFromUrl(workshopUrl);
   if (!fileId) return null;
@@ -58,8 +64,7 @@ export function parseMapPoolInput(body: unknown): MapPoolInput {
 
   const newMaps = rawNewMaps as (Partial<NewMap> | null)[];
   const validNewMap = (m: Partial<NewMap> | null) =>
-    typeof m?.name === 'string' && !!m.name.trim() &&
-    typeof m.workshopUrl === 'string' && WORKSHOP_URL_RE.test(m.workshopUrl);
+    typeof m?.name === 'string' && typeof m.workshopUrl === 'string' && isValidNewMap(m.name, m.workshopUrl);
   if (!newMaps.every(validNewMap)) {
     return { ok: false, error: 'New maps must have a name and valid Steam Workshop URL' };
   }

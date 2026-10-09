@@ -20,3 +20,7 @@ export function jsonRequest(url: string, method: string, body?: unknown): NextRe
 export function sessionFor(playerId: number): Session {
   return { user: { playerId }, expires: '2099-01-01T00:00:00.000Z' };
 }
+
+/** `[id]` segments that aren't a positive int4 id — `parseRouteId()` (`src/lib/util.ts`) rejects
+ * every one, so an `[id]` route answers 400 for each before touching the DB. */
+export const MALFORMED_ROUTE_IDS = ['abc', '', '0', '-1', '1.5', '1e3', '2147483648'] as const;

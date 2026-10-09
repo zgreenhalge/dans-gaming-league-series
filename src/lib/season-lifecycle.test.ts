@@ -6,15 +6,15 @@
  * both the gauntlet and its paired regular season).
  *
  * Both this file's functions (via their `supabaseAdmin` parameter) and the `./queries`/
- * `gauntlet-engine.ts` helpers they call into (many built on the module-level `supabase` singleton,
- * not `supabaseAdmin`) must point at the same fake db — hence wiring both `__setTestClient()` and
+ * `gauntlet-engine.ts` helpers they call into (many built on the `getAdminClient()` singleton,
+ * not `supabaseAdmin`) must point at the same fake db — hence wiring both `__setTestAdminClient()` and
  * passing the fake as `supabaseAdmin` in every test below.
  *
  * Run:  npx vitest run src/lib/season-lifecycle.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { setDiscordEnv, clearDiscordEnv, stubFetch } from './test-support/discordFetchStub';
 import { test, report } from './test-support/miniTest';
@@ -30,7 +30,7 @@ function leaderboardFor(seasonId: number, playerIds: number[]): FakeDb['player_s
 
 function installFixture(db: FakeDb): ReturnType<typeof createFakeSupabaseClient> {
   const client = createFakeSupabaseClient(db);
-  __setTestClient(client);
+  __setTestAdminClient(client);
   return client;
 }
 

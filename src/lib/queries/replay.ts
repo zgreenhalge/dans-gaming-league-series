@@ -1,5 +1,5 @@
 import { gunzipMaybe } from '../gzip';
-import { supabase } from '../supabase';
+import { getAdminClient } from '../supabase-admin';
 import { getR2Object, replayKey, traceKey, mapTraceKey } from '../r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from '../replay/types';
 import {
@@ -35,8 +35,8 @@ export async function getReplayJobState(matchId: number): Promise<ReplayJobState
     // Independent reads — run them together to avoid a serial round-trip on the
     // (hot) match page render.
     const [{ data: matchRow, error: matchErr }, { data: jobRow }] = await Promise.all([
-      supabase.from('matches').select('replay_status').eq('id', matchId).maybeSingle(),
-      supabase
+      getAdminClient().from('matches').select('replay_status').eq('id', matchId).maybeSingle(),
+      getAdminClient()
         .from('background_jobs')
         .select('stage, gh_run_url, error_message')
         .eq('job_type', 'replay_extract')

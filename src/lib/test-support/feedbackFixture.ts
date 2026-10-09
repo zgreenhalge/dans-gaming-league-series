@@ -3,10 +3,10 @@
 // unplayed (`"0-0"`) placeholder — so exactly 1-3 are eligible.
 
 import { __setTestSession } from '../session';
-import { __setTestClient } from '../supabase';
 import { __setTestAdminClient } from '../supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './fakeSupabase';
 import { superlativeRpcs } from './superlativeRpcs';
+import { surveyRpcs } from './surveyRpcs';
 import { sessionFor } from './nextRequest';
 
 export const ADMIN_ID = 1;
@@ -52,8 +52,7 @@ export function makeFeedbackDb(): FakeDb {
 /** Installs a fresh fixture as both Supabase clients and signs in as `playerId` (or nobody). */
 export function installFeedbackFixture(playerId: number | null): FakeDb {
   const db = makeFeedbackDb();
-  const client = createFakeSupabaseClient(db, superlativeRpcs);
-  __setTestClient(client);
+  const client = createFakeSupabaseClient(db, { ...superlativeRpcs, ...surveyRpcs });
   __setTestAdminClient(client);
   __setTestSession(playerId == null ? null : sessionFor(playerId));
   return db;
@@ -61,6 +60,5 @@ export function installFeedbackFixture(playerId: number | null): FakeDb {
 
 export function resetFeedbackFixture(): void {
   __setTestSession(undefined);
-  __setTestClient(undefined);
   __setTestAdminClient(undefined);
 }

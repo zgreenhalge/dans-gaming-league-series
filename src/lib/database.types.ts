@@ -1747,9 +1747,10 @@ export type Database = {
         Args: { p_season_id: number }
         Returns: undefined
       }
-      confirm_season_schedule_draft:
-        | { Args: { p_season_id: number }; Returns: Json }
-        | { Args: { p_season_id: number; p_weeks: Json }; Returns: Json }
+      confirm_season_schedule_draft: {
+        Args: { p_season_id: number; p_weeks: Json }
+        Returns: Json
+      }
       delete_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json
@@ -1780,6 +1781,18 @@ export type Database = {
         Args: { p_superlative_ids: number[]; p_votes: Json; p_voter_player_id: number }
         Returns: undefined
       }
+      replace_survey_questions: {
+        Args: { p_open: boolean; p_questions: Json; p_survey_id: number }
+        Returns: boolean
+      }
+      reset_superlative_votes: {
+        Args: { p_season_id: number }
+        Returns: undefined
+      }
+      reset_survey: {
+        Args: { p_survey_id: number }
+        Returns: undefined
+      }
       rollback_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json
@@ -1791,6 +1804,10 @@ export type Database = {
       schedule_match_reminder: {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
+      }
+      set_season_buy_in: {
+        Args: { p_amount: number | null; p_season_id: number }
+        Returns: Json
       }
     }
     Enums: {

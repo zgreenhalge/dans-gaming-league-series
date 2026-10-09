@@ -20,7 +20,7 @@
 // `getMatchTeamNames()`/`getMapLookup()` underneath it): every caller here already has an admin
 // client on hand, and some — `scripts/demo-ingest.ts`'s auto-commit path chief among them — run as a
 // standalone script outside any Next.js request, so they hand over the client they already built
-// rather than have these functions resolve the default `supabase` singleton.
+// rather than have these functions resolve the default `getAdminClient()` singleton.
 //
 // One message is the source of truth per match, in `match_discord_state.notification_message_id` —
 // the same per-match Discord state table `discord-threads.ts` already keys its `thread_id` off of.

@@ -132,13 +132,24 @@ test('tallyVotes orders by votes, then player id', () => {
   assert.deepEqual(tallyVotes([]), []);
 });
 
-test('questionsToDrafts round-trips a built list and turns a core question the list no longer has into a custom one', () => {
+test('questionsToDrafts round-trips a built list', () => {
   const drafts = [{ kind: 'text' as const, prompt: 'Custom?' }, { core: 3 }];
   const built = buildSurveyQuestions(drafts);
   assert.deepEqual(buildSurveyQuestions(questionsToDrafts(built)), built);
+});
 
-  const stale = [{ id: 1, kind: 'rating' as const, prompt: 'A retired core question', is_core: true }];
-  assert.deepEqual(questionsToDrafts(stale), [{ kind: 'rating', prompt: 'A retired core question' }]);
+test('questionsToDrafts drops a stored core question that matches no current core entry, so a rebuild has no duplicate', () => {
+  // A stored list whose first core question carries a wording CORE_SURVEY_QUESTIONS no longer has.
+  const stored = buildSurveyQuestions([{ kind: 'text', prompt: 'Custom?' }]).map((q) =>
+    q.is_core && q.prompt === CORE_SURVEY_QUESTIONS[0].prompt ? { ...q, prompt: 'How were the games?' } : q,
+  );
+  const rebuilt = buildSurveyQuestions(questionsToDrafts(stored));
+  assert.equal(rebuilt.length, CORE_SURVEY_QUESTIONS.length + 1);
+  assert.deepEqual(rebuilt.filter((q) => !q.is_core).map((q) => q.prompt), ['Custom?']);
+  assert.deepEqual(rebuilt.filter((q) => q.is_core).map((q) => q.prompt).sort(), CORE_SURVEY_QUESTIONS.map((q) => q.prompt).sort());
+
+  const retired = [{ id: 1, kind: 'rating' as const, prompt: 'A retired core question', is_core: true }];
+  assert.deepEqual(questionsToDrafts(retired), []);
 });
 
 report();

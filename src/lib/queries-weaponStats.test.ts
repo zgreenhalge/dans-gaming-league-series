@@ -9,11 +9,11 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
+import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, getMatchEconomyStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, getPlayersById, type EconomyMatchRow } from './queries';
 import { economyMatchRow as economyRow } from './test-support/sabFields';

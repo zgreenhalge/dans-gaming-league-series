@@ -6,6 +6,7 @@ import { isDiscordIdTaken } from '@/lib/discord-link';
 import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNameRole, getStoredNameRoleId } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
+import { parseRouteId } from '@/lib/util';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 
@@ -33,8 +34,8 @@ export async function PATCH(
   const callerId = access.playerId;
 
   const { id } = await params;
-  const targetId = Number(id);
-  if (!Number.isInteger(targetId) || targetId <= 0) {
+  const targetId = parseRouteId(id);
+  if (targetId === null) {
     return NextResponse.json({ error: 'Invalid player ID' }, { status: 400 });
   }
 
