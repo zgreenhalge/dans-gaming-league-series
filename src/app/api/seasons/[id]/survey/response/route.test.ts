@@ -56,6 +56,17 @@ test('rejects a closed survey (409)', async () => {
   resetFeedbackFixture();
 });
 
+test('a close that lands after the open check still refuses the write (409)', async () => {
+  const db = installFeedbackFixture(ALICE_ID);
+  seedSurvey(db);
+  // Open for the route's read, closed by the time the save RPC runs.
+  let reads = 0;
+  Object.defineProperty(db.surveys[0], 'closed_at', { get: () => (reads++ < 1 ? null : '2026-02-01'), configurable: true });
+  assert.equal((await put(REGULAR_SEASON_ID, { answers: { 1: 3 } })).status, 409);
+  assert.equal(db.survey_responses.length, 0);
+  resetFeedbackFixture();
+});
+
 test('rejects invalid answers (400) without creating a response', async () => {
   const db = installFeedbackFixture(ALICE_ID);
   seedSurvey(db);
