@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { isValidBuyInText, parseBuyInAmount, parseBuyInInput } from './season-buy-in';
+import { parseBuyInText, parseBuyInAmount, parseBuyInInput } from './season-buy-in';
 
 test('parseBuyInAmount: accepts 0–999.99 with at most two decimals', () => {
   expect(parseBuyInAmount(0)).toEqual({ ok: true, amount: 0 });
@@ -22,14 +22,20 @@ test('parseBuyInInput: an absent or null buy_in_amount is TBD', () => {
   expect(parseBuyInInput({ buy_in_amount: -1 }).ok).toBe(false);
 });
 
-test('isValidBuyInText: agrees with parseBuyInAmount on every plain decimal', () => {
+test('parseBuyInText: blank is TBD and 0 is a free season', () => {
+  expect(parseBuyInText('')).toEqual({ ok: true, amount: null });
+  expect(parseBuyInText(' ')).toEqual({ ok: true, amount: null });
+  expect(parseBuyInText('0')).toEqual({ ok: true, amount: 0 });
+});
+
+test('parseBuyInText: agrees with parseBuyInAmount on every plain decimal', () => {
   for (const text of ['0', '10', '7.5', '7.50', '999.99', '1.234', '999.994', '1000']) {
-    expect(isValidBuyInText(text)).toBe(parseBuyInAmount(Number(text)).ok);
+    expect(parseBuyInText(text)).toEqual(parseBuyInAmount(Number(text)));
   }
 });
 
-test('isValidBuyInText: rejects text Number() would accept but is not a plain amount', () => {
-  for (const text of ['', ' ', '1e2', '-1', '0x10', '.5', '5.']) {
-    expect(isValidBuyInText(text)).toBe(false);
+test('parseBuyInText: rejects text Number() would accept but is not a plain amount', () => {
+  for (const text of ['1e2', '-1', '0x10', '.5', '5.']) {
+    expect(parseBuyInText(text).ok).toBe(false);
   }
 });

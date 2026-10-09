@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
-import { isValidBuyInText } from '@/lib/season-buy-in';
+import { parseBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 
 interface Props {
@@ -20,6 +20,8 @@ export function CreateSeasonForm({ knownMaps }: Props) {
   const [isPending, startTransition] = useTransition();
   const [submitting, setSubmitting] = useState(false);
 
+  const buyInInput = parseBuyInText(buyIn);
+
   async function submit() {
     setError(null);
     setSubmitting(true);
@@ -27,7 +29,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
       const res = await fetch('/api/seasons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps, buy_in_amount: Number(buyIn) }),
+        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps, buy_in_amount: buyInInput.ok ? buyInInput.amount : null }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -43,7 +45,6 @@ export function CreateSeasonForm({ knownMaps }: Props) {
   }
 
   const busy = submitting || isPending;
-  const buyInValid = isValidBuyInText(buyIn);
 
   return (
     <div className="flex flex-col gap-8">
@@ -64,7 +65,8 @@ export function CreateSeasonForm({ knownMaps }: Props) {
 
       <div className="flex flex-col gap-3">
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-          Leave the map pool empty to open signups now and pick maps later.
+          Leave the map pool empty to open signups now and pick maps later. Leave the buy-in blank for
+          TBD, or enter 0 for a free season.
         </div>
         {error && (
           <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>
@@ -72,7 +74,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
         <button
           type="button"
           onClick={submit}
-          disabled={busy || !selection.isValid || !buyInValid}
+          disabled={busy || !selection.isValid || !buyInInput.ok}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`}
         >
           {busy ? 'Creating…' : 'Create Season'}

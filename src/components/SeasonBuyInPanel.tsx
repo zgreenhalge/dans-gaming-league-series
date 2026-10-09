@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatBuyIn, isValidBuyInText } from '@/lib/season-buy-in';
+import { formatBuyIn, parseBuyInText } from '@/lib/season-buy-in';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { useAsyncAction } from './useAsyncAction';
 
@@ -23,11 +23,13 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
 
   async function save() {
     if (draft === null) return;
+    const input = parseBuyInText(draft);
+    if (!input.ok) return;
     await run(async () => {
       const res = await fetch(`/api/seasons/${seasonId}/buy-in`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buy_in_amount: Number(draft) }),
+        body: JSON.stringify({ buy_in_amount: input.amount }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -48,7 +50,7 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         </span>
         {canEdit && (
           <button
-            onClick={() => setDraft(String(buyInAmount ?? 0))}
+            onClick={() => setDraft(buyInAmount != null ? String(buyInAmount) : '')}
             className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
           >
             Edit
@@ -67,7 +69,8 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         step="0.01"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        aria-label="Buy-in in dollars"
+        placeholder="TBD"
+        aria-label="Buy-in in dollars (blank for TBD)"
         className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
       />
       {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
@@ -75,7 +78,7 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         <button
           type="button"
           onClick={save}
-          disabled={busy || !isValidBuyInText(draft)}
+          disabled={busy || !parseBuyInText(draft).ok}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           {busy ? 'Saving…' : 'Save buy-in'}

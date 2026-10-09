@@ -1806,7 +1806,7 @@ export type Database = {
         Returns: boolean
       }
       set_season_buy_in: {
-        Args: { p_amount: number; p_season_id: number }
+        Args: { p_amount: number | null; p_season_id: number }
         Returns: Json
       }
     }

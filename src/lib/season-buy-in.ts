@@ -35,8 +35,12 @@ export function formatBuyIn(amount: number): string {
   return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
 }
 
-/** Client-side check for a buy-in text input: plain decimal digits (no sign, exponent or blank —
- * forms `Number()` would otherwise accept) whose value passes `parseBuyInAmount()`. */
-export function isValidBuyInText(text: string): boolean {
-  return /^\d+(\.\d+)?$/.test(text.trim()) && parseBuyInAmount(Number(text)).ok;
+/** Reads a buy-in text input: blank is TBD (`amount: null`); otherwise plain decimal digits (no
+ * sign or exponent — forms `Number()` would otherwise accept) whose value passes
+ * `parseBuyInAmount()`, so `0` is a free season. */
+export function parseBuyInText(text: string): BuyInInput {
+  const trimmed = text.trim();
+  if (!trimmed) return { ok: true, amount: null };
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return { ok: false, error: 'buy_in_amount must be a number' };
+  return parseBuyInAmount(Number(trimmed));
 }

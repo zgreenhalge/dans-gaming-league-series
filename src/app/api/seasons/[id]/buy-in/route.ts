@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseSeasonId } from '@/lib/util';
-import { parseBuyInAmount } from '@/lib/season-buy-in';
+import { parseBuyInInput } from '@/lib/season-buy-in';
 
 type SetBuyInResult = { status: 'ok' | 'not-found' | 'not-upcoming' | 'schedule-generated' };
 
@@ -14,7 +14,7 @@ const REFUSALS: Record<Exclude<SetBuyInResult['status'], 'ok'>, { error: string;
 };
 
 /**
- * Sets an UPCOMING regular season's buy-in. Editable only until its schedule is generated — once a
+ * Sets an UPCOMING regular season's buy-in: an amount (`0` for a free season) or `null` for TBD. Editable only until its schedule is generated — once a
  * matchup draft (or a confirmed schedule) exists the roster is settled and so is what each player
  * owes. The `set_season_buy_in()` DB function checks the season's status and schedule and writes
  * the amount under the season row's lock, so a schedule generated concurrently can't slip between
@@ -33,7 +33,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const body = (await req.json().catch(() => null)) as { buy_in_amount?: unknown } | null;
-  const input = parseBuyInAmount(body?.buy_in_amount);
+  if (body?.buy_in_amount === undefined) {
+    return NextResponse.json({ error: 'buy_in_amount is required (null for TBD)' }, { status: 400 });
+  }
+  const input = parseBuyInInput(body);
   if (!input.ok) {
     return NextResponse.json({ error: input.error }, { status: 400 });
   }

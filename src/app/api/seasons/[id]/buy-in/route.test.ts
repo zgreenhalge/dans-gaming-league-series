@@ -65,6 +65,14 @@ async function main() {
     assert.equal(buyInOf(db, UPCOMING_ID), 7.5);
   });
 
+  await test('PATCH — 0 sets a free season and null sets it back to TBD (200)', async () => {
+    const db = installFixture();
+    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { buy_in_amount: 0 })).status, 200);
+    assert.equal(buyInOf(db, UPCOMING_ID), 0);
+    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { buy_in_amount: null })).status, 200);
+    assert.equal(buyInOf(db, UPCOMING_ID), null);
+  });
+
   await test('PATCH — a malformed season id is a 400', async () => {
     installFixture();
     assert.equal((await call('abc', ADMIN_ID, { buy_in_amount: 5 })).status, 400);
