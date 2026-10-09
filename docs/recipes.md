@@ -110,7 +110,9 @@ in.
    A helper that also takes the optional `client?` param is wrapped in `cacheQuery()`
    (`_shared.ts`) instead, which ignores trailing `undefined` arguments so `getSeasons(client)`
    with no client and a bare `getSeasons()` share one entry (`getSeasons()`, `getSeason()`,
-   `getWeekLookup()`, `getPlayersById()`, `getMapLookup()`).
+   `getPlayersById()`, `getMapLookup()`). A `cache()` key is an array argument's identity, not its
+   contents, so `getWeekLookup()` caches one read of every week and filters it for a `seasonIds`
+   scope instead of caching per array.
 6. If the new helper needs season pairing (regular ↔ gauntlet), use `extractSeasonNumber()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
    `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs (see
