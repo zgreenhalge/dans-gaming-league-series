@@ -114,7 +114,7 @@ export interface MatchTeamNames {
  *  columns from `player_match_stats` by rostered player. Built from `getPlayersById()` (same
  *  "the whole table is cheap" reasoning `findPlayerByName()` already relies on) rather than a second,
  *  separately-scoped `players` query. */
-async function resolvePlayers(playerIds: number[], client: SupabaseClient = getAdminClient()): Promise<Map<number, MatchDiscordPlayer>> {
+async function resolvePlayers(playerIds: number[], client?: SupabaseClient): Promise<Map<number, MatchDiscordPlayer>> {
   const players: Map<number, MatchDiscordPlayer> = new Map();
   if (playerIds.length === 0) return players;
   const allPlayers = await getPlayersById(client);
@@ -131,17 +131,18 @@ async function resolvePlayers(playerIds: number[], client: SupabaseClient = getA
  *  doesn't fetch box-score columns — only `getMatchBoxScore()`'s one caller (the post-match Discord
  *  notification) needs those, and this function's other callers include the live ticker, which
  *  re-reads every round; see `getMatchBoxScore()`. */
-export async function getMatchTeamNames(matchId: number, client: SupabaseClient = getAdminClient()): Promise<MatchTeamNames | null> {
+export async function getMatchTeamNames(matchId: number, client?: SupabaseClient): Promise<MatchTeamNames | null> {
+  const db = client ?? getAdminClient();
   // Match/week/season collapse into one embedded select (same pattern as `getOtherScheduledMatches`
   // below), run in parallel with the roster fetch rather than chained after it — the roster only
   // depends on `matchId`, which is already known.
   const [{ data: match }, { data: stats }] = await Promise.all([
-    client
+    db
       .from('matches')
       .select('match_number, weeks(week_number, seasons(name, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
-    client.from('player_match_stats').select('player_id, faction').eq('match_id', matchId).order('player_id'),
+    db.from('player_match_stats').select('player_id, faction').eq('match_id', matchId).order('player_id'),
   ]);
   if (!match) return null;
   // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
@@ -185,8 +186,9 @@ export async function getMatchTeamNames(matchId: number, client: SupabaseClient 
  *  `getMatchTeamNames()`'s roster query, so the two independent reads list a match's players in the
  *  same order — the Discord notification tags them via `getMatchTeamNames()` in its message content
  *  and lists them via this function in its embed, and the two should read as the same lineup. */
-export async function getMatchBoxScore(matchId: number, client: SupabaseClient = getAdminClient()): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
-  const { data: stats } = await client
+export async function getMatchBoxScore(matchId: number, client?: SupabaseClient): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
+  const db = client ?? getAdminClient();
+  const { data: stats } = await db
     .from('player_match_stats')
     .select('player_id, faction, kills, assists, deaths, adr')
     .eq('match_id', matchId)

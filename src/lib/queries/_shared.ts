@@ -9,6 +9,21 @@ import type { Faction } from '../types';
 const SUPABASE_PAGE_SIZE = 1000;
 
 /**
+ * `cache()` for a query helper whose trailing `client?` param is usually left out. React's `cache()`
+ * keys on the exact argument list, so a caller forwarding an absent client (`getSeasons(client)`
+ * with `client` undefined) would miss the entry a bare `getSeasons()` already filled this request.
+ * This drops trailing `undefined` arguments before the lookup so both spellings share one entry.
+ */
+export function cacheQuery<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const cached = cache(fn);
+  return (...args: A): R => {
+    let end = args.length;
+    while (end > 0 && args[end - 1] === undefined) end--;
+    return cached(...(args.slice(0, end) as A));
+  };
+}
+
+/**
  * Casts a Supabase query result to the `{ data: T[] | null; error }` shape `fetchAllPages`/
  * `batchedIn` expect. The generated `Database` type checks a query's columns are real, but its
  * per-column nullability is the schema's, which is sometimes looser than a caller's own narrower
@@ -106,14 +121,15 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
- * Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in React's `cache()` so
+ * Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in `cacheQuery()` so
  * every no-arg caller within one render pass (the common case) shares one `weeks` read rather than
  * each resolving it independently.
  */
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
-export const getWeekLookup = cache(async (seasonIds?: number[], client: SupabaseClient = getAdminClient()): Promise<WeekLookup> => {
-  let query = client.from('weeks').select('id, season_id, week_number');
+export const getWeekLookup = cacheQuery(async (seasonIds?: number[], client?: SupabaseClient): Promise<WeekLookup> => {
+  const db = client ?? getAdminClient();
+  let query = db.from('weeks').select('id, season_id, week_number');
   if (seasonIds) query = query.in('season_id', seasonIds);
   const { data, error } = await query;
   if (error) throw error;

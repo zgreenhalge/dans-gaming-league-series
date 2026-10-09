@@ -88,10 +88,11 @@ export const getPlayerMeta = cache(async (playerId: number) => {
   };
 });
 
-export async function getMatchMeta(matchId: number, client: SupabaseClient = getAdminClient()) {
+export async function getMatchMeta(matchId: number, client?: SupabaseClient) {
+  const db = client ?? getAdminClient();
   const [teams, { data: match }, mapLookup] = await Promise.all([
     getMatchTeamNames(matchId, client),
-    client
+    db
       .from('matches')
       .select('final_score, picked_map, shirts_pick, scheduled_at')
       .eq('id', matchId)

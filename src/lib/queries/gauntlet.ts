@@ -541,9 +541,10 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
  * `client` for callers outside a Next.js request that already hold one (a GitHub Actions script). */
 export async function getGauntletPodForMatch(
   matchId: number,
-  client: SupabaseClient = getAdminClient(),
+  client?: SupabaseClient,
 ): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
-  const { data, error } = await client
+  const db = client ?? getAdminClient();
+  const { data, error } = await db
     .from('gauntlet_pods')
     .select('advance_rule, is_final, match1_id, match2_id')
     .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
@@ -717,19 +718,16 @@ export async function getGauntletSeasonProgress(seasonId: number): Promise<{ see
 }
 
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number.
- *  Optional `explicitClient` per docs/recipes.md's query-helper recipe. */
-export async function getGauntletRounds(seasonId: number, explicitClient?: SupabaseClient): Promise<GauntletRound[]> {
-  const client = explicitClient ?? getAdminClient();
+ *  Optional `client` per docs/recipes.md's query-helper recipe. */
+export async function getGauntletRounds(seasonId: number, client?: SupabaseClient): Promise<GauntletRound[]> {
+  const db = client ?? getAdminClient();
   // getWeekLookup() carries no ordering guarantee, so sort explicitly here since round_number below
   // is assigned in weekRows iteration order.
   //
-  // With no `explicitClient`, call the bare (unscoped) getWeekLookup() rather than
-  // getWeekLookup([seasonId], client) — cache() keys on the exact argument list, so a fresh
-  // `[seasonId]` array literal would miss the request-wide `weeks` read resolveAllMatches() (and
-  // every other bare caller in the same render pass) already shares under that same no-arg call.
-  // Same reasoning as the getPlayersById() call below. Only takes the scoped path for an explicit
-  // client, where there's no render-pass cache to share anyway.
-  const weekLookup = explicitClient ? await getWeekLookup([seasonId], client) : await getWeekLookup();
+  // Reads the unscoped lookup (filtered to `seasonId` below) rather than getWeekLookup([seasonId]):
+  // a fresh `[seasonId]` array literal would miss the request-wide `weeks` read every other bare
+  // caller in the same render pass shares.
+  const weekLookup = await getWeekLookup(undefined, client);
   const weekRows = weekRowsFromLookup(weekLookup)
     .filter((w) => w.season_id === seasonId)
     .sort((a, b) => a.week_number - b.week_number);
@@ -743,7 +741,7 @@ export async function getGauntletRounds(seasonId: number, explicitClient?: Supab
     Match,
     'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
   >;
-  const { data: matchData, error: mErr } = await client
+  const { data: matchData, error: mErr } = await db
     .from('matches')
     .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, is_feature_match, week_id')
     .in('week_id', weekIds)
@@ -754,16 +752,12 @@ export async function getGauntletRounds(seasonId: number, explicitClient?: Supab
 
   const matchIds = matchRows.map((m) => m.id);
   const [{ data: stats, error: sErr }, players, { data: pods, error: pErr }] = await Promise.all([
-    client
+    db
       .from('player_match_stats')
       .select('match_id, player_id, faction, kills, assists, deaths, adr, damage, is_win, rounds_won, rounds_played')
       .in('match_id', matchIds),
-    // Omit the arg entirely on the (common) default-client path so this shares getPlayersById()'s
-    // cache() node with the many other bare callers in the same render, instead of forcing its own
-    // — cache() keys on argument count/identity, so an explicit `client` arg (even one equal to the default)
-    // would otherwise miss that shared cache and re-read `players`.
-    explicitClient ? getPlayersById(client) : getPlayersById(),
-    client
+    getPlayersById(client),
+    db
       .from('gauntlet_pods')
       .select('round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
       .eq('season_id', seasonId),

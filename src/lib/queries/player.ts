@@ -1,11 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { asPage, fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, cacheQuery, fetchAllPages, getWeekLookup } from './_shared';
 
 
 export interface PlayerHistoryRow extends PlayerMatchStat {
@@ -63,8 +62,9 @@ export async function getPlayerNameHistory(playerId: number): Promise<PlayerName
  *  (#507) so every default-`client` caller within one render pass shares one `players` table read
  *  instead of each doing its own full-table fetch — outside a render pass (a script, a non-request context)
  *  `cache()` has no scope to dedup against and this just runs as a plain call. */
-export const getPlayersById = cache(async (client: SupabaseClient = getAdminClient()): Promise<Map<number, Player>> => {
-  const { data, error } = await client.from('players').select('*');
+export const getPlayersById = cacheQuery(async (client?: SupabaseClient): Promise<Map<number, Player>> => {
+  const db = client ?? getAdminClient();
+  const { data, error } = await db.from('players').select('*');
   if (error) throw error;
   const map = new Map<number, Player>();
   for (const p of (data ?? []) as Player[]) map.set(p.id, p);
@@ -78,10 +78,11 @@ export const getPlayersById = cache(async (client: SupabaseClient = getAdminClie
  *  once per page load / per finished match, but this one backs a live match's `round_end` handling,
  *  which repeats every round — scoping the read keeps that from scaling with the size of the players
  *  table. Empty for an empty `steamIds`, without a round trip. */
-export async function getPlayersBySteamId(steamIds: string[], client: SupabaseClient = getAdminClient()): Promise<Map<string, Player>> {
+export async function getPlayersBySteamId(steamIds: string[], client?: SupabaseClient): Promise<Map<string, Player>> {
+  const db = client ?? getAdminClient();
   const map = new Map<string, Player>();
   if (steamIds.length === 0) return map;
-  const { data, error } = await client.from('players').select('*').in('steam_id', steamIds);
+  const { data, error } = await db.from('players').select('*').in('steam_id', steamIds);
   if (error) throw error;
   for (const p of (data ?? []) as Player[]) {
     if (p.steam_id) map.set(p.steam_id, p);

@@ -10,7 +10,7 @@ import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
 import { getSeasons } from './seasons';
-import { fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
+import { cacheQuery, fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
 
 
 export interface MapPlayerStat {
@@ -578,8 +578,9 @@ export type MapRow = {
 /** `cache()`-wrapped so the root layout's own read (feeds `MapProvider`) and a page's separate read
  *  of the same table collapse into a single Supabase round trip per request — same reasoning as
  *  `getMapDetail()` below. */
-export const getMapLookup = cache(async (client: SupabaseClient = getAdminClient()): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
-  const { data, error } = await client.from('maps').select('*');
+export const getMapLookup = cacheQuery(async (client?: SupabaseClient): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
+  const db = client ?? getAdminClient();
+  const { data, error } = await db.from('maps').select('*');
   if (error) throw error;
   const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
   for (const row of (data ?? []) as MapRow[]) {
@@ -736,12 +737,13 @@ export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Pro
  *
  * Optional `client` per docs/recipes.md's query-helper recipe.
  */
-export async function getMatchIdsForMap(mapName: string, client: SupabaseClient = getAdminClient()): Promise<number[]> {
+export async function getMatchIdsForMap(mapName: string, client?: SupabaseClient): Promise<number[]> {
+  const db = client ?? getAdminClient();
   const nameLower = mapName.trim().toLowerCase();
   if (!nameLower) return [];
   type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    client.from('matches').select('id, shirts_pick, picked_map, final_score').range(from, to),
+    db.from('matches').select('id, shirts_pick, picked_map, final_score').range(from, to),
   );
   return rows
     .filter(
