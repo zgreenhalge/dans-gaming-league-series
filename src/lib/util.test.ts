@@ -19,9 +19,7 @@ import {
   deriveRates,
   deriveRwr,
   deriveAdr,
-  parseMatchId,
   parseRouteId,
-  parseSeasonId,
   weekWindow,
   matchLabel,
   seasonTitle,
@@ -168,18 +166,6 @@ test('parseRouteId: rejects empty, zero, negative, fractional, exponent, hex, pa
   for (const bad of ['', ' ', '0', '-1', '+1', '1.5', '1.0', '1e3', '0x10', ' 5', '5 ', 'abc', '2147483648', '99999999999999999999']) {
     assert.equal(parseRouteId(bad), null, `expected null for ${JSON.stringify(bad)}`);
   }
-});
-
-// --- parseMatchId: route param -> positive integer, or null ---
-test('parseMatchId: accepts a positive integer string', () => {
-  assert.equal(parseMatchId('42'), 42);
-});
-test('parseMatchId: rejects zero, negatives, and non-numeric strings', () => {
-  assert.equal(parseMatchId('0'), null);
-  assert.equal(parseMatchId('-5'), null);
-  assert.equal(parseMatchId('abc'), null);
-  assert.equal(parseMatchId('4.5'), null);
-  assert.equal(parseMatchId('1e3'), null);
 });
 
 // --- fmtUtcShort: deterministic, timezone-fixed short timestamp ---
@@ -370,8 +356,3 @@ test('finalRoundNumberOf: returns the final pod\'s round_number, or null when no
 
 report();
 
-// --- parseSeasonId: same contract as parseMatchId ---
-test('parseSeasonId: accepts a positive integer string; rejects the rest', () => {
-  assert.equal(parseSeasonId('12'), 12);
-  for (const bad of ['0', '-1', '1.5', '1e3', 'abc', '', ' ', '2147483648']) assert.equal(parseSeasonId(bad), null);
-});

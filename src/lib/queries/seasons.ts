@@ -5,7 +5,7 @@ import type { Player, Season } from '../types';
 import { allMatchesPlayed, extractSeasonNumber, isPlayedScore } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { batchedIn } from './_shared';
+import { batchedIn, cacheQuery } from './_shared';
 import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics, type SabremetricMatchRow } from './sabremetrics';
@@ -23,8 +23,9 @@ export interface SeasonRosterEntry {
 /** Optional `client` per docs/recipes.md's query-helper recipe. `cache()`-wrapped so the root
  *  layout's own read (feeds `SideNav`) and a page's separate read of the same table collapse into a
  *  single Supabase round trip per request — same reasoning as `getSeason()` below. */
-export const getSeasons = cache(async (client: SupabaseClient = getAdminClient()): Promise<Season[]> => {
-  const { data, error } = await client
+export const getSeasons = cacheQuery(async (client?: SupabaseClient): Promise<Season[]> => {
+  const db = client ?? getAdminClient();
+  const { data, error } = await db
     .from('seasons')
     .select('*')
     .order('id');
@@ -37,7 +38,7 @@ export const getSeasons = cache(async (client: SupabaseClient = getAdminClient()
  *  architecture.md's season status lifecycle), so this always excludes gauntlets rather than
  *  picking whichever `ACTIVE` row sorts first. Ties (more than one `ACTIVE` regular season) resolve
  *  to the lowest id, same as the home page's own `active[0]` — not expected in practice. */
-export async function getActiveRegularSeason(client: SupabaseClient = getAdminClient()): Promise<Season | null> {
+export async function getActiveRegularSeason(client?: SupabaseClient): Promise<Season | null> {
   const seasons = await getSeasons(client);
   return seasons.find((s) => !s.is_gauntlet && s.status === 'ACTIVE') ?? null;
 }
@@ -47,17 +48,19 @@ export async function getActiveRegularSeason(client: SupabaseClient = getAdminCl
  * "is this season actually done" — deliberately independent of `seasons.status`, which tracks the
  * admin-visible lifecycle stage and can move (e.g. a reset gauntlet reverting its paired regular
  * season back to `ACTIVE`) without the season's own match history changing. */
-export async function isSeasonFullyPlayed(seasonId: number, client: SupabaseClient = getAdminClient()): Promise<boolean> {
-  const { data: weeks, error: weekErr } = await client.from('weeks').select('id').eq('season_id', seasonId);
+export async function isSeasonFullyPlayed(seasonId: number, client?: SupabaseClient): Promise<boolean> {
+  const db = client ?? getAdminClient();
+  const { data: weeks, error: weekErr } = await db.from('weeks').select('id').eq('season_id', seasonId);
   if (weekErr) throw weekErr;
   const weekIds = ((weeks ?? []) as { id: number }[]).map((w) => w.id);
-  return allMatchesPlayed(await getMatchScoresForWeeks(client, weekIds));
+  return allMatchesPlayed(await getMatchScoresForWeeks(db, weekIds));
 }
 
 /** `cache()`-wrapped so a route that reads it from both `generateMetadata` and the page component
  *  (e.g. `seasons/[id]/page.tsx`) collapses into a single Supabase round trip per request. */
-export const getSeason = cache(async (id: number, client: SupabaseClient = getAdminClient()): Promise<Season | null> => {
-  const { data, error } = await client
+export const getSeason = cacheQuery(async (id: number, client?: SupabaseClient): Promise<Season | null> => {
+  const db = client ?? getAdminClient();
+  const { data, error } = await db
     .from('seasons')
     .select('*')
     .eq('id', id)
@@ -70,7 +73,7 @@ export const getSeason = cache(async (id: number, client: SupabaseClient = getAd
  *  `cache()`-wrapped `getSeasons()` rather than its own query, so repeat lookups in the same request
  *  (e.g. one per row in `getAdminMatches()`) collapse into the single round trip already made
  *  elsewhere in that request instead of adding their own. */
-export async function getLinkedGauntlet(regularSeasonName: string, client: SupabaseClient = getAdminClient()): Promise<Season | null> {
+export async function getLinkedGauntlet(regularSeasonName: string, client?: SupabaseClient): Promise<Season | null> {
   const num = extractSeasonNumber(regularSeasonName);
   if (num == null) return null;
   const seasons = await getSeasons(client);
@@ -79,7 +82,7 @@ export async function getLinkedGauntlet(regularSeasonName: string, client: Supab
 
 /** Find the regular season paired to a gauntlet season by season number in name. Same
  *  `getSeasons()`-backed reasoning as `getLinkedGauntlet()` above. */
-export async function getLinkedRegularSeason(gauntletName: string, client: SupabaseClient = getAdminClient()): Promise<Season | null> {
+export async function getLinkedRegularSeason(gauntletName: string, client?: SupabaseClient): Promise<Season | null> {
   const num = extractSeasonNumber(gauntletName);
   if (num == null) return null;
   const seasons = await getSeasons(client);

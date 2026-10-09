@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getR2Object, replayKey } from '@/lib/r2';
 import { isGzip } from '@/lib/gzip';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 // Serves the full `replay.json` payload (frames + grenades + events) for the client
 // `<ReplayPlayer>`. The synced events panel next to it uses a stripped server-side
@@ -18,7 +18,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

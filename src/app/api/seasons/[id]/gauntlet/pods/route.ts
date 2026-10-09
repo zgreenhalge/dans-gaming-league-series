@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { saveManualDraft } from '@/lib/gauntlet-engine';
 import type { DraftPod, DraftSlot } from '@/lib/gauntlet-draft';
 import { recordOpsError } from '@/lib/ops-errors';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 function parseSlot(value: unknown): DraftSlot | null {
   if (!value || typeof value !== 'object') return null;
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const regularSeasonId = parseSeasonId(id);
+  const regularSeasonId = parseRouteId(id);
   if (regularSeasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

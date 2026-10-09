@@ -10,10 +10,7 @@ import { getAdminClient } from './supabase-admin';
 import { isPlayerAdmin } from './queries';
 import type { AccessResult } from './access-control';
 
-export type SeasonRosterAccess = AccessResult<{
-  supabaseAdmin: ReturnType<typeof getAdminClient>;
-  targetPlayerId: number;
-}>;
+export type SeasonRosterAccess = AccessResult<{ targetPlayerId: number }>;
 
 // The roster is only editable while the season hasn't started — once it's ACTIVE, participation is
 // tracked through player_match_stats instead. This pre-check is a fast, friendly rejection for the
@@ -48,7 +45,7 @@ export async function requireSeasonRosterAccess(req: NextRequest, seasonId: numb
     return { ok: false, status: 400, error: 'Roster can only be edited while the season is UPCOMING' };
   }
 
-  return { ok: true, supabaseAdmin, targetPlayerId };
+  return { ok: true, targetPlayerId };
 }
 
 /** Maps the `season_players_upcoming_only` trigger's raised exception (Postgres default SQLSTATE

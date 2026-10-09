@@ -9,7 +9,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { buildMatchzyConfig } from '@/lib/matchzy';
 import { resolveMapWorkshopId } from '@/lib/dathost-lifecycle';
 import { machineSecretGuard } from '@/lib/machine-auth';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 export async function GET(
   req: NextRequest,
@@ -23,7 +23,7 @@ export async function GET(
   if (denied) return denied;
 
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

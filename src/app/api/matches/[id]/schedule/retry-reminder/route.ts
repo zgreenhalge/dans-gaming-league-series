@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /** Admin "Retry" action (`retryEndpointFor()`, `OpsErrorList.tsx`) on a live
  *  `discord_schedule_reminder`/`discord_notify_reminder` ops-errors row — re-runs
@@ -20,7 +20,7 @@ export async function POST(
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

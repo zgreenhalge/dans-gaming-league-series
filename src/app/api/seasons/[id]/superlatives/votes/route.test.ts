@@ -40,6 +40,17 @@ test('rejects unauthenticated (401), ineligible (403), no poll (404), and closed
   resetFeedbackFixture();
 });
 
+test('a close that lands after the open check still refuses the write (409)', async () => {
+  const db = installFeedbackFixture(ALICE_ID);
+  seedPoll(db);
+  // Open for the route's read, closed by the time the save RPC runs.
+  let reads = 0;
+  Object.defineProperty(db.superlative_polls[0], 'is_open', { get: () => reads++ < 1, configurable: true });
+  assert.equal((await put({ votes: [{ superlative_id: 1, nominee_player_id: BOB_ID }] })).status, 409);
+  assert.equal(db.superlative_votes.length, 0);
+  resetFeedbackFixture();
+});
+
 test('rejects a nominee who did not play (400) and a double vote on one superlative (400)', async () => {
   const db = installFeedbackFixture(ALICE_ID);
   seedPoll(db);

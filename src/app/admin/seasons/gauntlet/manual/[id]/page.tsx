@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { GauntletPodEditor } from '@/components/GauntletPodEditor';
 import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletBracketShape } from '@/lib/queries';
+import { parseRouteId } from '@/lib/util';
 import { buildGauntletBracket } from '@/lib/gauntlet-bracket';
 import { fromPersistedShape, fromGeneratedPlan, emptyDraftPod, type DraftPod } from '@/lib/gauntlet-draft';
 
@@ -14,8 +15,8 @@ export const metadata = {
 // itself.
 export default async function ManualGauntletPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const regularSeasonId = Number(id);
-  if (!Number.isFinite(regularSeasonId)) notFound();
+  const regularSeasonId = parseRouteId(id);
+  if (regularSeasonId === null) notFound();
 
   // getSeasonLeaderboard() depends only on regularSeasonId, not on getSeason()'s result, so it
   // runs alongside it instead of waiting for it. getLinkedGauntlet() genuinely needs

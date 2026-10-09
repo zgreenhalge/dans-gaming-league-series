@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
-import { isPlayedScore, parseMatchId } from '@/lib/util';
+import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
@@ -41,7 +41,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

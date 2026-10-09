@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getLinkedGauntlet, getGauntletRounds, getGauntletBracketShape } from '@/lib/queries';
-import { isPlayedScore, parseSeasonId } from '@/lib/util';
+import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 
 /**
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const regularSeasonId = parseSeasonId(id);
+  const regularSeasonId = parseRouteId(id);
   if (regularSeasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
@@ -85,7 +85,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const regularSeasonId = parseSeasonId(id);
+  const regularSeasonId = parseRouteId(id);
   if (regularSeasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

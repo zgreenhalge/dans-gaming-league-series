@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { getSurveyForSeason } from '@/lib/queries';
 import type { Json } from '@/lib/database.types';
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'This season already has a survey' }, { status: 409 });
   }
 
-  const { data: survey, error } = await access.supabaseAdmin
+  const { data: survey, error } = await getAdminClient()
     .from('surveys')
     .insert({
       season_id: seasonId,
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const existing = await getSurveyForSeason(seasonId);
   if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
 
-  const { error } = await access.supabaseAdmin
+  const { error } = await getAdminClient()
     .from('surveys')
     .update({ closed_at: body.open ? null : new Date().toISOString() })
     .eq('id', existing.id);
@@ -86,7 +87,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // One conditional write: `replace_survey_questions()` saves only while the survey is closed with
   // no response, and returns false — nothing written — otherwise.
-  const { data: saved, error } = await access.supabaseAdmin.rpc('replace_survey_questions', {
+  const { data: saved, error } = await getAdminClient().rpc('replace_survey_questions', {
     p_survey_id: existing.id,
     p_questions: buildSurveyQuestions(body.drafts) as unknown as Json,
     p_open: body.open === true,
@@ -108,7 +109,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const existing = await getSurveyForSeason(access.seasonId);
   if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
 
-  const { error } = await access.supabaseAdmin.rpc('reset_survey', { p_survey_id: existing.id });
+  const { error } = await getAdminClient().rpc('reset_survey', { p_survey_id: existing.id });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

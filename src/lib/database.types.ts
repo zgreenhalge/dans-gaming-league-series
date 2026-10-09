@@ -1778,8 +1778,8 @@ export type Database = {
         Returns: undefined
       }
       replace_superlative_votes: {
-        Args: { p_superlative_ids: number[]; p_votes: Json; p_voter_player_id: number }
-        Returns: undefined
+        Args: { p_season_id: number; p_superlative_ids: number[]; p_votes: Json; p_voter_player_id: number }
+        Returns: boolean
       }
       replace_survey_questions: {
         Args: { p_open: boolean; p_questions: Json; p_survey_id: number }
@@ -1800,6 +1800,10 @@ export type Database = {
       save_season_schedule_draft: {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
+      }
+      save_survey_response: {
+        Args: { p_answers: Json; p_player_id: number; p_survey_id: number }
+        Returns: boolean
       }
       schedule_match_reminder: {
         Args: { p_match_id: number; p_scheduled_at: string }

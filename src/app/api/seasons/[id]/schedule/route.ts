@@ -10,7 +10,7 @@ import {
 } from '@/lib/season-schedule-draft-engine';
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /**
  * Generates (or fully regenerates) a regular season's matchup draft from its current roster
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
@@ -120,7 +120,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
@@ -165,7 +165,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

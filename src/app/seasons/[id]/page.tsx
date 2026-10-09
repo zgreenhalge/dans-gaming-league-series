@@ -39,7 +39,7 @@ import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { SeasonFeedbackTabs } from '@/components/SeasonFeedbackTabs';
 import { buildSurveyTab, buildSuperlativesTab } from '@/components/feedbackTabs';
 import { authOptions } from '@/lib/authOptions';
-import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber } from '@/lib/util';
+import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber, parseRouteId } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 
@@ -51,8 +51,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const seasonId = Number(id);
-  const season = await getSeason(seasonId);
+  const seasonId = parseRouteId(id);
+  const season = seasonId === null ? null : await getSeason(seasonId);
   if (!season) return { title: 'Season' };
 
   const title = seasonTitle(season.name);
@@ -122,8 +122,8 @@ export default async function SeasonPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) notFound();
+  const seasonId = parseRouteId(id);
+  if (seasonId === null) notFound();
 
   // Which of the Regular Season / Gauntlet tabs to eagerly render server-side — the other tab's own
   // light data is fetched lazily, client-side, the first time it's actually opened (see

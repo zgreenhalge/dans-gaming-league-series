@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
@@ -26,7 +26,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const meta = await getPlayerMeta(Number(id));
+  const playerId = parseRouteId(id);
+  const meta = playerId === null ? null : await getPlayerMeta(playerId);
   if (!meta) return { title: 'Player' };
   return {
     title: meta.name,
@@ -53,8 +54,8 @@ export default async function PlayerPage({
 }) {
   const { id } = await params;
   const { discord: discordFeedback } = await searchParams;
-  const playerId = Number(id);
-  if (!Number.isFinite(playerId)) notFound();
+  const playerId = parseRouteId(id);
+  if (playerId === null) notFound();
   // getPlayer()/getPlayersById()/getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats()
   // (and, via resolveMatchSeasons(), getAllMatchRounds()/getSabremetricSeasonTotals()) all read
   // `players`/`player_match_stats`/`matches`/`weeks` independently, but are each wrapped in React's

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAccess, requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { getSuperlativePoll } from '@/lib/queries';
+import { getSuperlativePoll, hasSuperlativePoll } from '@/lib/queries';
 import { validateSuperlativeVotes } from '@/lib/survey';
 
 /** Saves the signed-in player's ballot (`{ votes: [{ superlative_id, nominee_player_id }] }`). One
@@ -24,12 +25,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   );
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  const { error } = await access.supabaseAdmin.rpc('replace_superlative_votes', {
+  // The open check above gives a friendly early 409; the RPC is the authority, re-checking under a
+  // lock so a close or reset landing in between still refuses the write.
+  const { data: saved, error } = await getAdminClient().rpc('replace_superlative_votes', {
+    p_season_id: seasonId,
     p_voter_player_id: access.playerId,
     p_superlative_ids: poll.superlatives.map((s) => s.id),
     p_votes: parsed.value,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!saved) return NextResponse.json({ error: 'Voting is closed' }, { status: 409 });
 
   return NextResponse.json({ ok: true });
 }
@@ -42,10 +47,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const { seasonId } = access;
 
-  const poll = await getSuperlativePoll(seasonId);
-  if (!poll) return NextResponse.json({ error: 'No superlatives vote for this season' }, { status: 404 });
+  if (!(await hasSuperlativePoll(seasonId))) return NextResponse.json({ error: 'No superlatives vote for this season' }, { status: 404 });
 
-  const { error } = await access.supabaseAdmin.rpc('reset_superlative_votes', { p_season_id: seasonId });
+  const { error } = await getAdminClient().rpc('reset_superlative_votes', { p_season_id: seasonId });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

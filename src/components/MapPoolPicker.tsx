@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toSentenceCase } from '@/lib/maps';
-import { MAP_POOL_SIZE, isValidNewMap, type NewMap } from '@/lib/season-map-pool';
+import { MAP_POOL_SIZE, WORKSHOP_URL_HINT, isValidNewMap, isValidWorkshopUrl, type NewMap } from '@/lib/season-map-pool';
 import EmptyState from './EmptyState';
 
 /** Selection state for `MapPoolPicker`, owned by the parent so it can submit it. `newMaps` only
@@ -39,7 +39,8 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
   const [newMapName, setNewMapName] = useState('');
   const [newMapWorkshopUrl, setNewMapWorkshopUrl] = useState('');
 
-  const canAdd = isValidNewMap(newMapName, newMapWorkshopUrl.trim());
+  const canAdd = isValidNewMap(newMapName, newMapWorkshopUrl);
+  const showUrlHint = newMapWorkshopUrl.trim() !== '' && !isValidWorkshopUrl(newMapWorkshopUrl);
   const allMaps = [...new Set([...knownMaps, ...addedMaps.map((m) => m.name)])].sort();
 
   function toggle(map: string) {
@@ -128,6 +129,9 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
             placeholder="Steam Workshop URL"
             className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] placeholder:opacity-50 focus:outline-none focus:border-[var(--color-text-secondary)]"
           />
+          {showUrlHint && (
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">{WORKSHOP_URL_HINT}</div>
+          )}
         </div>
       </div>
       <div className={`font-mono text-[12px] ${countCls}`}>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
 import { getAdminClient } from "@/lib/supabase-admin";
-import { parseMatchId } from "@/lib/util";
+import { parseRouteId } from "@/lib/util";
 
 // Set or clear a match's recording_url. Editable by admins and in-match players — the same
 // gate the score route uses, since a recording is part of a match's result.
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: "Invalid match ID" }, { status: 400 });
   }

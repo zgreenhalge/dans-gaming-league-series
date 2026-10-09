@@ -7,7 +7,7 @@ import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
-import { isPlayedScore, parseScore } from '@/lib/util';
+import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -39,7 +39,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const meta = await getMatchMeta(Number(id));
+  const matchId = parseRouteId(id);
+  const meta = matchId === null ? null : await getMatchMeta(matchId);
   if (!meta) return { title: 'Match' };
   return {
     title: meta.title,
@@ -108,8 +109,8 @@ export default async function MatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) notFound();
+  const matchId = parseRouteId(id);
+  if (matchId === null) notFound();
   // getServerSession() depends on none of the match/map data — starts alongside them instead of
   // waiting for this batch to resolve first.
   const [detail, mapLookup, session] = await Promise.all([

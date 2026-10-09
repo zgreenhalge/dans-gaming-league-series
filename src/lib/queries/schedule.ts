@@ -60,10 +60,11 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
  *  query-helper recipe. */
 export async function getSeasonSchedule(
   seasonId: number,
-  client: SupabaseClient = getAdminClient(),
+  client?: SupabaseClient,
 ): Promise<WeekWithMatches[]> {
+  const db = client ?? getAdminClient();
   const [{ data: weeks, error: wErr }, players] = await Promise.all([
-    client
+    db
       .from('weeks')
       .select('*, matches(*, player_match_stats(*))')
       .eq('season_id', seasonId)
@@ -121,9 +122,10 @@ export interface SeasonMatchSummaries {
  *  trip followed by a second `matches` one. */
 export async function getSeasonMatchSummaries(
   seasonId: number,
-  client: SupabaseClient = getAdminClient(),
+  client?: SupabaseClient,
 ): Promise<SeasonMatchSummaries> {
-  const { data: weeks, error: wErr } = await client
+  const db = client ?? getAdminClient();
+  const { data: weeks, error: wErr } = await db
     .from('weeks')
     .select('week_number, matches(id, match_number, scheduled_at)')
     .eq('season_id', seasonId);

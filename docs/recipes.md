@@ -53,8 +53,8 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
 1. **Server Component by default.** Fetch everything in `Promise.all` at the top of the async page
    function — see `getPlayer` + `getCareerLeaderboard` + `getH2HData` fetched together in
    `players/[id]/page.tsx`.
-2. **Validate route params and `notFound()` early** — `Number(id)` → `Number.isFinite()` check →
-   `notFound()` before the data fetch, then `if (!detail) notFound()` after.
+2. **Validate route params and `notFound()` early** — `parseRouteId(id)` (`src/lib/util.ts`) →
+   `notFound()` on `null` before the data fetch, then `if (!detail) notFound()` after.
 3. **Set `export const revalidate = N`** (ISR) — most detail pages use `60`.
 4. **Add `generateMetadata()`** for the page `<title>`.
 5. **Wrap content in `<TopbarShell>`** and delegate the actual rendering to a `components/*View.tsx`
@@ -90,8 +90,10 @@ in.
    match the destructuring style in `getSeasonBaseData()` (`leaderboard.ts`). Read through
    `getAdminClient()` (`src/lib/supabase-admin.ts`). When callers that already hold a client need
    the helper — engine code handed a `supabaseAdmin` param, or a GitHub Actions script — take it as a
-   trailing `client: SupabaseClient = getAdminClient()` param, as `getSeasons()` (`seasons.ts`) and
-   `getSeasonSchedule()` (`schedule.ts`) do.
+   trailing optional `client?: SupabaseClient` param and resolve it at the query with
+   `const db = client ?? getAdminClient()`, as `getSeasons()` (`seasons.ts`) and
+   `getSeasonSchedule()` (`schedule.ts`) do. Forward `client` as-is (possibly `undefined`) to other
+   helpers rather than defaulting it early, so a nested call shares the bare call's `cache()` entry.
 5. **If the read doesn't depend on its arguments — zero-arg, or keyed only by a primitive the
    caller already has (a `matchId`, a `seasonId`) — wrap it in React's `cache()`
    (`import { cache } from 'react'`) rather than adding a manual `xyz?: T | Promise<T>` override
@@ -105,6 +107,10 @@ in.
    doesn't) — `cache()`'s argument-keying can't recognize those as the same query. Never hand-build
    a `const xPromise = someQuery(); …` local variable and pass it into two sibling calls just to
    skip a second identical fetch — that's exactly what `cache()` replaces.
+   A helper that also takes the optional `client?` param is wrapped in `cacheQuery()`
+   (`_shared.ts`) instead, which ignores trailing `undefined` arguments so `getSeasons(client)`
+   with no client and a bare `getSeasons()` share one entry (`getSeasons()`, `getSeason()`,
+   `getWeekLookup()`, `getPlayersById()`, `getMapLookup()`).
 6. If the new helper needs season pairing (regular ↔ gauntlet), use `extractSeasonNumber()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
    `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs (see
@@ -139,8 +145,7 @@ and its `UPCOMING`-only status gate.
    — it constructs a real `NextRequest` with a JSON body, exactly what the handler's `req.json()`
    expects. Call the exported `POST`/`DELETE`/etc. directly, passing `{ params: Promise.resolve({ id: '...' }) }`
    for a dynamic route segment. Every `[id]` API route parses that segment with `parseRouteId()`
-   (`src/lib/util.ts`, or its `parseMatchId()` / `parseSeasonId()` wrappers on match- and
-   season-scoped routes) and answers 400 when it returns `null`; loop over `MALFORMED_ROUTE_IDS`
+   (`src/lib/util.ts`) and answers 400 when it returns `null`; loop over `MALFORMED_ROUTE_IDS`
    (`src/lib/test-support/nextRequest.ts`) to cover that branch.
 2. **Fake the session** with `__setTestSession(session | null)` (`src/lib/session.ts`) instead of a
    real `getServerSession()` call — set it to `null` for the unauthenticated case, or

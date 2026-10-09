@@ -3,7 +3,7 @@ import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordJobStatus, dispatchAndRecordFailure, isJobInFlight, matchJobKey, mirrorSubjectStatus } from '@/lib/background-jobs';
 import { REPLAY_EXTRACT_JOB_TYPE as JOB_TYPE } from '@/lib/jobs';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 // Dispatches Action A (`replay-extract`) for a match. The app only *triggers* the
 // GitHub job — all heavy parsing runs there (see docs/replay.md). This endpoint is
@@ -19,7 +19,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

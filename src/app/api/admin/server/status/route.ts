@@ -31,8 +31,8 @@ export async function GET() {
     );
   }
 
-  // Independent calls (DatHost REST vs. Supabase) — run concurrently rather than paying the sum of
-  // both latencies on a route hit every 15s per open tab plus after every action.
+  // One DatHost read per poll: the in-flight read is handed to the occupant reconcile and the
+  // connected-players read instead of each fetching it again, and the Supabase read runs alongside it.
   const serverPromise = getServer(serverId)
     .then((s) => ({ server: s, error: null as string | null }))
     .catch((err) => ({ server: null, error: err instanceof Error ? err.message : 'Could not reach DatHost' }));
@@ -42,7 +42,7 @@ export async function GET() {
 
   const [serverResult, active, connectedPlayers] = await Promise.all([
     serverPromise,
-    getActiveServerMatch(getAdminClient()),
+    getActiveServerMatch(getAdminClient(), serverPromise.then(({ server }) => server)),
     connectedPlayersPromise,
   ]);
 

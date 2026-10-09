@@ -3,7 +3,7 @@ import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { r2, R2_BUCKET, demoSegmentKey, MAX_DEMO_SEGMENTS } from '@/lib/r2';
 import { putDemoManifest } from '@/lib/demo/segmentManifest';
 import { requireMatchAccess } from '@/lib/match-access';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 async function objectExists(key: string): Promise<boolean> {
   try {
@@ -26,7 +26,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
