@@ -283,10 +283,7 @@ export function ServerConsolePanel({
   }, [refreshCleanup]);
 
   // Lower-frequency than the server-state poll — this only changes once a day at most.
-  useEffect(() => {
-    const interval = setInterval(refreshCleanup, 60_000);
-    return () => clearInterval(interval);
-  }, [refreshCleanup]);
+  useVisibleInterval(refreshCleanup, 60_000);
 
   const toggleCleanupEnabled = async () => {
     if (!cleanup) return;
