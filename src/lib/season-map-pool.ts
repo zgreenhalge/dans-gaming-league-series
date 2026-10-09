@@ -13,12 +13,24 @@ export function hasMapPool(pool: string[] | null | undefined): boolean {
   return (pool?.length ?? 0) > 0;
 }
 
-const WORKSHOP_URL_RE = /^https:\/\/steamcommunity\.com\/sharedfiles\/filedetails\/\?id=\d+/;
+const WORKSHOP_URL_RE =
+  /^https:\/\/(www\.)?steamcommunity\.com\/(sharedfiles|workshop)\/filedetails\/\?id=\d+(&|$)/;
+
+/** Shown beside `MapPoolPicker`'s Add button when the entered link fails `isValidWorkshopUrl()`. */
+export const WORKSHOP_URL_HINT =
+  'Use a Steam Workshop item link: https://steamcommunity.com/sharedfiles/filedetails/?id=<number>';
+
+/** Whether `workshopUrl` is a Steam Workshop item link: `https://steamcommunity.com/` (with or
+ * without `www.`) `sharedfiles/` or `workshop/` `filedetails/?id=<digits>`, the id ending at `&` or
+ * the end of the string. A format check only — it doesn't confirm the item exists. */
+export function isValidWorkshopUrl(workshopUrl: string): boolean {
+  return WORKSHOP_URL_RE.test(workshopUrl.trim());
+}
 
 /** Whether a new map can be added: a non-blank name and a Steam Workshop item link. The one rule
- * behind both `parseMapPoolInput()` and `MapPoolPicker`'s Add button. */
+ * behind both `parseMapPoolInput()` and `MapPoolPicker`'s Add button. Both arguments are trimmed. */
 export function isValidNewMap(name: string, workshopUrl: string): boolean {
-  return !!name.trim() && WORKSHOP_URL_RE.test(workshopUrl);
+  return !!name.trim() && isValidWorkshopUrl(workshopUrl);
 }
 
 async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | null> {
@@ -76,12 +88,15 @@ export function parseMapPoolInput(body: unknown): MapPoolInput {
 export async function upsertNewMaps(supabaseAdmin: SupabaseClient, newMaps: NewMap[]): Promise<string | null> {
   if (newMaps.length === 0) return null;
   const rows = await Promise.all(
-    newMaps.map(async (m) => ({
-      name: m.name.trim().toLowerCase(),
-      slug: mapSlug(m.name),
-      workshop_url: m.workshopUrl,
-      image_url: await fetchWorkshopPreviewImage(m.workshopUrl),
-    })),
+    newMaps.map(async (m) => {
+      const workshopUrl = m.workshopUrl.trim();
+      return {
+        name: m.name.trim().toLowerCase(),
+        slug: mapSlug(m.name),
+        workshop_url: workshopUrl,
+        image_url: await fetchWorkshopPreviewImage(workshopUrl),
+      };
+    }),
   );
   const { error } = await supabaseAdmin.from('maps').upsert(rows, { onConflict: 'slug' });
   return error ? error.message : null;
