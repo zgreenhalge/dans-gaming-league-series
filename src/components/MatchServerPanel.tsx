@@ -4,14 +4,15 @@
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
 // Updates via Supabase Realtime on the match's `match_server_state` row (no polling). The Realtime
-// event carries only `server_state` (the anon role can read no other column), so each event re-reads
-// the access-checked status route, which is the only source of the connect string. The moment the
-// row flips to `live` we swap the spinner for the Join button. Teardown itself isn't a control here — it happens automatically once the match is
+// event carries only `server_state` (the anon role can read no other column), so the connect string
+// comes from the access-checked status route, read on mount and whenever the row flips to `live` —
+// and only for viewers who can manage the server, the same admin-or-in-match rule the route
+// enforces. Teardown itself isn't a control here — it happens automatically once the match is
 // scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
 // safety valve on the admin server console for a server left live.
 
 import { useCallback, useEffect, useState } from 'react';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { useRealtimeChanges } from './useRealtimeChanges';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import { ServerSpinner } from '@/components/ServerSpinner';
 
@@ -37,60 +38,37 @@ export default function MatchServerPanel({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apply = useCallback((s: ServerState, conn: string | null) => {
-    setState(s);
-    setConnect(conn);
-  }, []);
+  // Reads the server state and connect string from the access-checked status route.
+  const loadStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/matches/${matchId}/server/status`);
+      if (!res.ok) return;
+      const data = (await res.json()) as StatusResponse;
+      setState(data.serverState);
+      setConnect(data.connectString);
+    } catch {
+      /* transient — Realtime will still deliver updates */
+    }
+  }, [matchId]);
 
-  // The status route is access-checked (admin or in-match), so it answers only for viewers allowed
-  // the connect string; anyone else keeps whatever `server_state` Realtime last delivered.
-  const loadStatus = useCallback(
-    async (isCancelled: () => boolean = () => false) => {
-      try {
-        const res = await fetch(`/api/matches/${matchId}/server/status`);
-        if (!res.ok || isCancelled()) return;
-        const data = (await res.json()) as StatusResponse;
-        if (!isCancelled()) apply(data.serverState, data.connectString);
-      } catch {
-        /* transient — Realtime will still deliver updates */
-      }
-    },
-    [matchId, apply],
-  );
-
-  // Initial read (Realtime only delivers subsequent changes). A plain effect calling loadStatus()
-  // directly trips the set-state-in-effect lint rule, hence the IIFE.
+  // Initial read (Realtime only delivers subsequent changes).
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      await loadStatus(() => cancelled);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadStatus]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (canManage) void loadStatus();
+  }, [canManage, loadStatus]);
 
   // Live updates off the match_server_state row — no polling. The row doesn't exist until the first
   // provision (`idle`), so this listens for INSERT as well as UPDATE.
-  useEffect(() => {
-    const client = getBrowserClient();
-    if (!client) return;
-    const channel = client
-      .channel(`match-server-${matchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          const row = payload.new as { server_state?: ServerState };
-          if (row.server_state) setState(row.server_state);
-          void loadStatus();
-        },
-      )
-      .subscribe();
-    return () => {
-      client.removeChannel(channel);
-    };
-  }, [matchId, loadStatus]);
+  useRealtimeChanges(
+    `match-server-${matchId}`,
+    { event: '*', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
+    (payload) => {
+      const next = (payload.new as { server_state?: ServerState }).server_state;
+      if (!next) return;
+      setState(next);
+      if (next === 'live' && canManage) void loadStatus();
+    },
+  );
 
   const provision = async () => {
     setBusy(true);

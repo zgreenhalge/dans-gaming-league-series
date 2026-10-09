@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { useRealtimeChanges } from './useRealtimeChanges';
 import { LiveDot } from '@/components/ServerStatusBits';
 import { createLiveScoreGuard, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import type { LiveTickerMatch } from '@/lib/queries';
@@ -58,40 +58,26 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    const client = getBrowserClient();
-    if (!client) return;
-    const channel = client
-      .channel('live-match-ticker')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'live_match_score' },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const old = payload.old as { match_id?: number };
-            if (old.match_id != null) guardRef.current(old.match_id, 'deleted');
-            if (tickerRef.current && old.match_id === tickerRef.current.matchId) setTicker(null);
-            return;
-          }
-          const row = payload.new as LiveScoreDbRow & { match_id: number };
-          if (tickerRef.current && tickerRef.current.matchId === row.match_id) {
-            if (!guardRef.current(row.match_id, row.updated_at)) return;
-            setTicker({ ...tickerRef.current, shirts: row.shirts_score, skins: row.skins_score });
-          } else {
-            // A different match than what's currently shown (or nothing shown yet) — always fresh, not
-            // a race, so don't pre-consume the guard here: `refresh()` fetches the joined title/roster
-            // and applies its own guard check against what it gets back. Consuming the guard for
-            // `row.match_id` first would make that check see its own just-recorded version and reject
-            // the refetch as "not newer," leaving the ticker stuck on the old match.
-            refresh();
-          }
-        },
-      )
-      .subscribe();
-    return () => {
-      client.removeChannel(channel);
-    };
-  }, [refresh]);
+  useRealtimeChanges('live-match-ticker', { event: '*', table: 'live_match_score' }, (payload) => {
+    if (payload.eventType === 'DELETE') {
+      const old = payload.old as { match_id?: number };
+      if (old.match_id != null) guardRef.current(old.match_id, 'deleted');
+      if (tickerRef.current && old.match_id === tickerRef.current.matchId) setTicker(null);
+      return;
+    }
+    const row = payload.new as unknown as LiveScoreDbRow & { match_id: number };
+    if (tickerRef.current && tickerRef.current.matchId === row.match_id) {
+      if (!guardRef.current(row.match_id, row.updated_at)) return;
+      setTicker({ ...tickerRef.current, shirts: row.shirts_score, skins: row.skins_score });
+    } else {
+      // A different match than what's currently shown (or nothing shown yet) — always fresh, not
+      // a race, so don't pre-consume the guard here: `refresh()` fetches the joined title/roster
+      // and applies its own guard check against what it gets back. Consuming the guard for
+      // `row.match_id` first would make that check see its own just-recorded version and reject
+      // the refetch as "not newer," leaving the ticker stuck on the old match.
+      refresh();
+    }
+  });
 
   const visible = ticker != null && pathname !== `/matches/${ticker.matchId}`;
 

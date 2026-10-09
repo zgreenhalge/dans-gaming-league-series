@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { useRealtimeChanges } from './useRealtimeChanges';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { isPlayedScore } from '@/lib/util';
 import { useMapLookup } from './MapContext';
@@ -83,19 +83,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     setOptimisticFields(new Map());
   }, [match]);
 
-  useEffect(() => {
-    const client = getBrowserClient();
-    if (!client) return;
-    const channel = client
-      .channel(`match-veto-${match.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` },
-        () => { router.refresh(); },
-      )
-      .subscribe();
-    return () => { client.removeChannel(channel); };
-  }, [match.id, router]);
+  useRealtimeChanges(`match-veto-${match.id}`, { event: 'UPDATE', table: 'matches', filter: `id=eq.${match.id}` }, () =>
+    router.refresh(),
+  );
 
   // Falls back to the match's own is_playoff_game if the season's is_gauntlet was never set (e.g. a
   // gauntlet CSV import whose season-patch step failed) — the pairing is a convention, not a DB

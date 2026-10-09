@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { useRealtimeChanges } from './useRealtimeChanges';
 import {
   DEMO_INGEST_JOB_TYPE,
   DEMO_INGEST_IN_PROGRESS,
@@ -54,33 +54,23 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   // Live updates off the `background_jobs` row — no polling. Mirrors MatchServerPanel's pattern on
   // `matches`. Requires `background_jobs` in the Supabase realtime publication. Each status change
   // (received → queued → running → parsed/quarantined/failed) re-reads the staged result.
-  useEffect(() => {
-    const client = getBrowserClient();
-    if (!client) return;
-    const channel = client
-      .channel(`demo-ingest-${matchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'background_jobs', filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          // The payload carries only the columns anon may select: id, job_type, match_id, status.
-          const row = (payload.new ?? payload.old) as { job_type?: string; status?: string } | null;
-          if (row?.job_type !== DEMO_INGEST_JOB_TYPE) return;
-          refresh();
-          // A settled status (parsed/quarantined/confirmed/failed/dismissed) can land the match's own
-          // score (auto-commit, or a write that succeeded but whose trailing cleanup then failed the
-          // job) with nobody around to click Confirm — keep the page's own server-rendered data in
-          // sync too. The received/queued/running hops in between are the only ones skipped, since
-          // those only ever change this block's own staged-result view, which refresh() above already
-          // covers.
-          if (row.status && !DEMO_INGEST_IN_PROGRESS.has(row.status)) router.refresh();
-        },
-      )
-      .subscribe();
-    return () => {
-      client.removeChannel(channel);
-    };
-  }, [matchId, refresh, router]);
+  useRealtimeChanges(
+    `demo-ingest-${matchId}`,
+    { event: '*', table: 'background_jobs', filter: `match_id=eq.${matchId}` },
+    (payload) => {
+      // The payload carries only the columns anon may select: id, job_type, match_id, status.
+      const row = (payload.new ?? payload.old) as { job_type?: string; status?: string } | null;
+      if (row?.job_type !== DEMO_INGEST_JOB_TYPE) return;
+      refresh();
+      // A settled status (parsed/quarantined/confirmed/failed/dismissed) can land the match's own
+      // score (auto-commit, or a write that succeeded but whose trailing cleanup then failed the
+      // job) with nobody around to click Confirm — keep the page's own server-rendered data in
+      // sync too. The received/queued/running hops in between are the only ones skipped, since
+      // those only ever change this block's own staged-result view, which refresh() above already
+      // covers.
+      if (row.status && !DEMO_INGEST_IN_PROGRESS.has(row.status)) router.refresh();
+    },
+  );
 
   if (!data) return null;
   const { status, result, hasDemo, stale } = data;

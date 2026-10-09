@@ -186,9 +186,9 @@ Every `public` table has row level security on, so a new table is created closed
    not meant for the public, grant only the columns the subscriber reads plus the primary key and
    any filter column (`grant select (id, status) on ...`), as
    `supabase/migrations/20261009150000_narrow_realtime_anon_columns.sql` does — Realtime delivers just
-   the columns the role may select. The subscribing component gets its client from
-   `getBrowserClient()` (`src/lib/supabase-browser.ts`) and returns early when that is `null` (public
-   env unset), as `MatchServerPanel` does.
+   the columns the role may select. The subscribing component calls `useRealtimeChanges()`
+   (`src/components/useRealtimeChanges.ts`), which owns the channel's setup and cleanup and skips
+   subscribing when `getBrowserClient()` returns `null` (public env unset).
 4. Regenerate `src/lib/database.types.ts` and document the table in
    [`architecture.md`](./architecture.md)'s Database section.
 

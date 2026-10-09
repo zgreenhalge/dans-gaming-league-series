@@ -9,7 +9,7 @@
 // true, it renders the final score from the `matches` row instead and the live wiring never mounts.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getBrowserClient } from '@/lib/supabase-browser';
+import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
 
@@ -83,31 +83,21 @@ export default function MatchScoreHero({
     refresh();
   }, [liveEligible, refresh]);
 
-  useEffect(() => {
-    if (!liveEligible) return;
-    const client = getBrowserClient();
-    if (!client) return;
-    const channel = client
-      .channel(`live-score-${matchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'live_match_score', filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            guardRef.current(matchId, 'deleted');
-            setLiveScore(null);
-            return;
-          }
-          const row = payload.new as LiveScoreDbRow;
-          if (!guardRef.current(matchId, row.updated_at)) return;
-          setLiveScore(rowToLiveScore(matchId, row));
-        },
-      )
-      .subscribe();
-    return () => {
-      client.removeChannel(channel);
-    };
-  }, [liveEligible, matchId]);
+  useRealtimeChanges(
+    `live-score-${matchId}`,
+    { event: '*', table: 'live_match_score', filter: `match_id=eq.${matchId}` },
+    (payload) => {
+      if (payload.eventType === 'DELETE') {
+        guardRef.current(matchId, 'deleted');
+        setLiveScore(null);
+        return;
+      }
+      const row = payload.new as unknown as LiveScoreDbRow;
+      if (!guardRef.current(matchId, row.updated_at)) return;
+      setLiveScore(rowToLiveScore(matchId, row));
+    },
+    liveEligible,
+  );
 
   if (played) {
     if (!finalScore) return null;
