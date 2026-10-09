@@ -113,14 +113,6 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
   return requested.filter((id) => !coveredSet.has(id));
 }
 
-/**
- * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
- * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
- * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
- * Optional `client` per docs/recipes.md's query-helper recipe. Scoped and unscoped callers all read
- * through one `cacheQuery()`-wrapped read of every week (a small table) and filter it in memory, so
- * a render pass issues a single `weeks` query however its callers scope.
- */
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
 const getAllWeeks = cacheQuery(async (client?: SupabaseClient): Promise<WeekLookup> => {
@@ -134,6 +126,14 @@ const getAllWeeks = cacheQuery(async (client?: SupabaseClient): Promise<WeekLook
   return lookup;
 });
 
+/**
+ * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
+ * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
+ * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
+ * Optional `client` per docs/recipes.md's query-helper recipe. Scoped and unscoped callers all read
+ * through one `cacheQuery()`-wrapped read of every week (a small table) and filter it in memory, so
+ * a render pass issues a single `weeks` query however its callers scope.
+ */
 export async function getWeekLookup(seasonIds?: number[], client?: SupabaseClient): Promise<WeekLookup> {
   const all = await getAllWeeks(client);
   if (!seasonIds) return all;
