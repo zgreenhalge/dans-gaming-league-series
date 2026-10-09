@@ -32,7 +32,7 @@ export async function GET() {
   }
 
   // One DatHost read per poll: the in-flight read is handed to the occupant reconcile and the
-  // connected-players read instead of each fetching it again, and the Supabase read still overlaps it.
+  // connected-players read instead of each fetching it again, and the Supabase read runs alongside it.
   const serverPromise = getServer(serverId)
     .then((s) => ({ server: s, error: null as string | null }))
     .catch((err) => ({ server: null, error: err instanceof Error ? err.message : 'Could not reach DatHost' }));

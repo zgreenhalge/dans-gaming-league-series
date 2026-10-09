@@ -508,8 +508,8 @@ async function runDueTeardown(
  * Pass `preFetchedRow` when the caller already has the match's `match_server_state` row (e.g.
  * `getActiveServerMatch`, which selects it to find the occupant in the first place) so this doesn't
  * re-query the same row it was just handed. `preFetchedServer` is the caller's in-flight DatHost
- * server read, awaited only for the `live` check (resolving `null` when that read failed, which skips
- * the check); omitted, the server is fetched here.
+ * server read, awaited only for the `live` check. It must not reject: it resolves `null` when that
+ * read failed, which skips the check. Omitted, the server is fetched here.
  */
 export async function getReconciledServerState(
   supabaseAdmin: SupabaseClient,
@@ -621,7 +621,7 @@ export async function getServerOccupancy(
   supabaseAdmin: SupabaseClient,
   server: DathostServer | null,
 ): Promise<ServerOccupancy> {
-  const active = await getActiveServerMatch(supabaseAdmin);
+  const active = await getActiveServerMatch(supabaseAdmin, Promise.resolve(server));
   const playersOnline = server?.players_online ?? null;
   const occupied = active !== null || (playersOnline ?? 0) > 0;
   return { active, playersOnline, occupied };
