@@ -8,7 +8,7 @@ import { requireSession } from './session';
 import { requireAdminAccess } from './admin-access';
 import { getAdminClient } from './supabase-admin';
 import { getSeason, getSeasonPlayedPlayers, hasPlayedSeason } from './queries';
-import { parseSeasonId } from './util';
+import { parseRouteId } from './util';
 import type { SeasonRosterEntry } from './queries';
 import type { AccessResult } from './access-control';
 
@@ -24,7 +24,7 @@ export type SeasonFeedbackAccess = AccessResult<{
 
 /** Player gate: the caller must be signed in and have played in the season. */
 export async function requireSeasonFeedbackAccess(rawSeasonId: string): Promise<SeasonFeedbackAccess> {
-  const seasonId = parseSeasonId(rawSeasonId);
+  const seasonId = parseRouteId(rawSeasonId);
   if (seasonId == null) return { ok: false, status: 400, error: 'Invalid season id' };
 
   const session = await requireSession();
@@ -46,7 +46,7 @@ export type SeasonFeedbackAdminAccess = AccessResult<{ seasonId: number; supabas
 /** Admin gate for setting up and controlling a season's survey or superlatives. No eligibility
  *  check — admins manage these for seasons they may not have played in. */
 export async function requireSeasonFeedbackAdmin(rawSeasonId: string): Promise<SeasonFeedbackAdminAccess> {
-  const seasonId = parseSeasonId(rawSeasonId);
+  const seasonId = parseRouteId(rawSeasonId);
   if (seasonId == null) return { ok: false, status: 400, error: 'Invalid season id' };
 
   const access = await requireAdminAccess();

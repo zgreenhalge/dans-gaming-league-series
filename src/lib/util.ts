@@ -136,23 +136,13 @@ const MAX_INT4 = 2_147_483_647;
  * Parse a route's `[id]` segment into a positive Postgres `integer` id, or `null` if it isn't one.
  * Only plain decimal digits pass — `''`, `0`, negatives, `1.5`, `1e3`, `0x10`, padded whitespace and
  * anything above the int4 ceiling all return `null`, so the route answers 400 instead of letting the
- * value reach Postgres. Every `[id]` API route parses through this (directly, or via the
- * `parseMatchId()` / `parseSeasonId()` names) so the param contract is identical everywhere.
+ * value reach Postgres. Every `[id]` API route and page parses through this so the param contract
+ * is identical everywhere.
  */
 export function parseRouteId(id: string): number | null {
   if (!/^\d+$/.test(id)) return null;
   const n = Number(id);
   return n > 0 && n <= MAX_INT4 ? n : null;
-}
-
-/** `parseRouteId()` for a match-scoped `[id]` segment. */
-export function parseMatchId(id: string): number | null {
-  return parseRouteId(id);
-}
-
-/** `parseRouteId()` for a season-scoped `[id]` segment. */
-export function parseSeasonId(id: string): number | null {
-  return parseRouteId(id);
 }
 
 export function fmtWindowDate(d: Date): string {

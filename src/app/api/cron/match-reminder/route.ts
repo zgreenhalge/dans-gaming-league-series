@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { notifyMatchReminder } from '@/lib/discord-notify';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /** Fired once per match by a one-shot Postgres pg_cron job (`schedule_match_reminder()`), not by
  *  Vercel's own cron (which only issues `GET` and is registered in `vercel.json` — this route
@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const raw = (body as { matchId?: unknown } | null)?.matchId;
-  // `parseMatchId()` takes the id as text, so a JSON number or numeric string both parse.
-  const matchId = typeof raw === 'number' || typeof raw === 'string' ? parseMatchId(String(raw)) : null;
+  // `parseRouteId()` takes the id as text, so a JSON number or numeric string both parse.
+  const matchId = typeof raw === 'number' || typeof raw === 'string' ? parseRouteId(String(raw)) : null;
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid matchId' }, { status: 400 });
   }

@@ -53,8 +53,8 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
 1. **Server Component by default.** Fetch everything in `Promise.all` at the top of the async page
    function — see `getPlayer` + `getCareerLeaderboard` + `getH2HData` fetched together in
    `players/[id]/page.tsx`.
-2. **Validate route params and `notFound()` early** — `Number(id)` → `Number.isFinite()` check →
-   `notFound()` before the data fetch, then `if (!detail) notFound()` after.
+2. **Validate route params and `notFound()` early** — `parseRouteId(id)` (`src/lib/util.ts`) →
+   `notFound()` on `null` before the data fetch, then `if (!detail) notFound()` after.
 3. **Set `export const revalidate = N`** (ISR) — most detail pages use `60`.
 4. **Add `generateMetadata()`** for the page `<title>`.
 5. **Wrap content in `<TopbarShell>`** and delegate the actual rendering to a `components/*View.tsx`
@@ -139,8 +139,7 @@ and its `UPCOMING`-only status gate.
    — it constructs a real `NextRequest` with a JSON body, exactly what the handler's `req.json()`
    expects. Call the exported `POST`/`DELETE`/etc. directly, passing `{ params: Promise.resolve({ id: '...' }) }`
    for a dynamic route segment. Every `[id]` API route parses that segment with `parseRouteId()`
-   (`src/lib/util.ts`, or its `parseMatchId()` / `parseSeasonId()` wrappers on match- and
-   season-scoped routes) and answers 400 when it returns `null`; loop over `MALFORMED_ROUTE_IDS`
+   (`src/lib/util.ts`) and answers 400 when it returns `null`; loop over `MALFORMED_ROUTE_IDS`
    (`src/lib/test-support/nextRequest.ts`) to cover that branch.
 2. **Fake the session** with `__setTestSession(session | null)` (`src/lib/session.ts`) instead of a
    real `getServerSession()` call — set it to `null` for the unauthenticated case, or

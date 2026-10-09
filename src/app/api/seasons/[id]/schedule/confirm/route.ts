@@ -6,7 +6,7 @@ import { confirmSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-
 import { activateSeasonBestEffort } from '@/lib/season-lifecycle';
 import { after } from '@/lib/after';
 import { hasMapPool } from '@/lib/season-map-pool';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /**
  * Confirms a regular season's matchup draft — materializes it into real `weeks`/`matches`/
@@ -31,7 +31,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

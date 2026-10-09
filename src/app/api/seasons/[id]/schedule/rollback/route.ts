@@ -3,7 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { rollbackSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-schedule-draft-engine';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /**
  * Un-confirms (rolls back) a regular season's real schedule — the inverse of
@@ -24,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

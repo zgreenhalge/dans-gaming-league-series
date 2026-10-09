@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { activateSeason } from '@/lib/season-lifecycle';
 import { hasMapPool } from '@/lib/season-map-pool';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /**
  * Regular-season status transitions. Only UPCOMING -> ACTIVE ("go live") is supported today —
@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

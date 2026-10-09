@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 // Set a match's `is_feature_match` flag. Admin-only — feature status is an editorial call (which match
 // the league spotlights), not something an in-match player should flip, so this doesn't use the
@@ -16,7 +16,7 @@ export async function PATCH(
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

@@ -3,11 +3,11 @@
 
 import { notFound, redirect } from 'next/navigation';
 import { getLinkedRegularSeason, getSeason } from './queries';
-import { parseSeasonId } from './util';
+import { parseRouteId } from './util';
 import type { Season } from './types';
 
 export async function resolveFeedbackAdminSeason(rawId: string, basePath: string): Promise<Season> {
-  const seasonId = parseSeasonId(rawId);
+  const seasonId = parseRouteId(rawId);
   if (seasonId == null) notFound();
 
   const season = await getSeason(seasonId);

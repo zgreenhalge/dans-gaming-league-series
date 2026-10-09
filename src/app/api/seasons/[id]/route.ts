@@ -3,7 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { deleteSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /**
  * Deletes an UPCOMING regular season outright. UPCOMING is the one stage a season has no schedule or
@@ -21,7 +21,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

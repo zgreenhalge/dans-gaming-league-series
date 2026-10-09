@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRegularSeasonStatsView, getGauntletSeasonStatsView } from '@/lib/queries';
 import { parseSeasonKind } from '../season-kind';
-import { parseSeasonId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 /**
  * The season detail page's Stats/Advanced Stats sub-tab data (sabremetrics, per-match rounds,
@@ -14,7 +14,7 @@ import { parseSeasonId } from '@/lib/util';
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const seasonId = parseSeasonId(id);
+  const seasonId = parseRouteId(id);
   if (seasonId === null) {
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }

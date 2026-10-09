@@ -9,7 +9,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { recordJobStatus, isJobInFlight, matchJobKey } from '@/lib/background-jobs';
-import { parseMatchId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE } from '@/lib/demo/ingestResult';
 
 export async function POST(
@@ -17,7 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const matchId = parseMatchId(id);
+  const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }

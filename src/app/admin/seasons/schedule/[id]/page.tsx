@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { SeasonScheduleDraftEditor } from '@/components/SeasonScheduleDraftEditor';
 import { getSeason, getSeasonRoster, getSeasonScheduleDraft, toDraftScheduleWeeks } from '@/lib/queries';
-import { seasonTitle } from '@/lib/util';
+import { parseRouteId, seasonTitle } from '@/lib/util';
 
 export const metadata = {
   title: 'Schedule Editor',
@@ -13,8 +13,8 @@ export const metadata = {
 // itself.
 export default async function SeasonScheduleEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const seasonId = Number(id);
-  if (!Number.isFinite(seasonId)) notFound();
+  const seasonId = parseRouteId(id);
+  if (seasonId === null) notFound();
 
   // getSeasonRoster()/getSeasonScheduleDraft() depend only on seasonId, not on getSeason()'s
   // result — the `notFound()` check below is all that needs `season` — so all three run together.
