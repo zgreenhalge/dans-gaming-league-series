@@ -507,15 +507,15 @@ async function runDueTeardown(
  *
  * Pass `preFetchedRow` when the caller already has the match's `match_server_state` row (e.g.
  * `getActiveServerMatch`, which selects it to find the occupant in the first place) so this doesn't
- * re-query the same row it was just handed. Likewise `preFetchedServer` when the caller already read
- * the DatHost server this poll: a `DathostServer` is used as-is, `null` means that read failed (the
- * `live` check is skipped, same as an unreachable DatHost), and omitting it fetches the server here.
+ * re-query the same row it was just handed. `preFetchedServer` is the caller's in-flight DatHost
+ * server read, awaited only for the `live` check (resolving `null` when that read failed, which skips
+ * the check); omitted, the server is fetched here.
  */
 export async function getReconciledServerState(
   supabaseAdmin: SupabaseClient,
   matchId: number,
   preFetchedRow?: MatchServerStateRow | null,
-  preFetchedServer?: DathostServer | null,
+  preFetchedServer?: Promise<DathostServer | null>,
 ): Promise<ServerStatusView> {
   const row = preFetchedRow !== undefined ? preFetchedRow : await fetchServerStateRow(supabaseAdmin, matchId);
   let serverState = row?.server_state ?? 'idle';
@@ -531,12 +531,12 @@ export async function getReconciledServerState(
     }
   } else if (serverState === 'live' && serverId && ownsServer) {
     try {
-      const server = preFetchedServer === undefined ? await getServer(serverId) : preFetchedServer;
-      if (!server) throw new Error('DatHost server unavailable');
+      // A `null` pre-fetch is the caller's failed read: same as an unreachable DatHost below.
+      const server = await (preFetchedServer ?? getServer(serverId));
       // Confirmed stopped only — `isServerOff`, NOT `!isServerLive(server)` (`!on || booting`), which
       // would also fire mid-boot (`on: true, booting: true`, e.g. another process restarting the
       // shared server) and wrongly downgrade a match that's still actually up.
-      if (isServerOff(server)) {
+      if (server && isServerOff(server)) {
         await downgradeToDone(supabaseAdmin, matchId);
         serverState = 'done';
         connectString = null;
@@ -565,7 +565,7 @@ export interface ActiveServerMatch {
  */
 export async function getActiveServerMatch(
   supabaseAdmin: SupabaseClient,
-  preFetchedServer?: DathostServer | null,
+  preFetchedServer?: Promise<DathostServer | null>,
 ): Promise<ActiveServerMatch | null> {
   const serverId = process.env.DATHOST_SERVER_ID;
   if (!serverId) return null;

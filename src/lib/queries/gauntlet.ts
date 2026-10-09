@@ -724,10 +724,9 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
   // getWeekLookup() carries no ordering guarantee, so sort explicitly here since round_number below
   // is assigned in weekRows iteration order.
   //
-  // Reads the unscoped lookup (filtered to `seasonId` below) rather than getWeekLookup([seasonId]):
-  // a fresh `[seasonId]` array literal would miss the request-wide `weeks` read every other bare
-  // caller in the same render pass shares.
-  const weekLookup = await getWeekLookup(undefined, client);
+  // With no `client` read the unscoped lookup (filtered to `seasonId` below): a fresh `[seasonId]`
+  // array literal would miss the request-wide `weeks` read every other bare caller shares.
+  const weekLookup = await getWeekLookup(client ? [seasonId] : undefined, client);
   const weekRows = weekRowsFromLookup(weekLookup)
     .filter((w) => w.season_id === seasonId)
     .sort((a, b) => a.week_number - b.week_number);

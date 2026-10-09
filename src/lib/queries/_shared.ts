@@ -8,18 +8,14 @@ import type { Faction } from '../types';
 
 const SUPABASE_PAGE_SIZE = 1000;
 
-/**
- * `cache()` for a query helper whose trailing `client?` param is usually left out. React's `cache()`
- * keys on the exact argument list, so a caller forwarding an absent client (`getSeasons(client)`
- * with `client` undefined) would miss the entry a bare `getSeasons()` already filled this request.
- * This drops trailing `undefined` arguments before the lookup so both spellings share one entry.
- */
+/** `cache()` that ignores trailing `undefined` arguments, so `getSeasons(client)` with no client
+ *  shares the entry of a bare `getSeasons()`. */
 export function cacheQuery<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
   const cached = cache(fn);
   return (...args: A): R => {
     let end = args.length;
     while (end > 0 && args[end - 1] === undefined) end--;
-    return cached(...(args.slice(0, end) as A));
+    return cached(...((end === args.length ? args : args.slice(0, end)) as A));
   };
 }
 

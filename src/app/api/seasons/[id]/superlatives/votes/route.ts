@@ -25,8 +25,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   );
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  // The open check above is a friendly early rejection; the RPC re-checks under a lock, so a close or
-  // reset that lands between the two still refuses the write.
+  // The RPC re-checks that voting is open under a lock.
   const { data: saved, error } = await getAdminClient().rpc('replace_superlative_votes', {
     p_season_id: seasonId,
     p_voter_player_id: access.playerId,

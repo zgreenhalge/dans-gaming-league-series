@@ -22,8 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = validateSurveyAnswers(survey.questions, body?.answers);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  // The open check above is a friendly early rejection; the RPC re-checks under a lock, so a close or
-  // reset that lands between the two still refuses the write.
+  // The RPC re-checks that the survey is open under a lock.
   const { data: saved, error } = await getAdminClient().rpc('save_survey_response', {
     p_survey_id: survey.id,
     p_player_id: access.playerId,

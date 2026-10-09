@@ -1,6 +1,6 @@
 /**
- * Test-local fakes for the `replace_survey_questions`, `save_survey_response` and `reset_survey` Postgres RPCs
- * (`supabase/migrations/20261008170000_add_feedback_atomic_rpcs.sql`, `20261009160000_add_feedback_player_save_rpcs.sql`) — see fakeSupabase.ts's own
+ * Test-local fakes for the survey Postgres RPCs (`replace_survey_questions`, `save_survey_response`,
+ * `reset_survey`; see `supabase/migrations/`) — see fakeSupabase.ts's own
  * header comment on why `.rpc()` has no generic in-memory equivalent and needs a per-name fake.
  * Shared by every test that drives a survey route far enough to reach one of these calls.
  */

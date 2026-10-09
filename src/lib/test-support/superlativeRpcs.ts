@@ -1,7 +1,6 @@
 /**
- * Test-local fakes for the `replace_superlative_votes` (`20261009160000_add_feedback_player_save_rpcs.sql`) and
- * `reorder_superlatives` Postgres RPCs (`supabase/migrations/20261008160000_add_superlative_atomic_rpcs.sql`) and `reset_superlative_votes`
- * (`supabase/migrations/20261008170000_add_feedback_atomic_rpcs.sql`) — see fakeSupabase.ts's own
+ * Test-local fakes for the superlatives Postgres RPCs (`replace_superlative_votes`, `reorder_superlatives`,
+ * `reset_superlative_votes`; see `supabase/migrations/`) — see fakeSupabase.ts's own
  * header comment on why `.rpc()` has no generic in-memory equivalent and needs a per-name fake.
  * Shared by every test that drives a superlatives route far enough to reach one of these calls.
  */

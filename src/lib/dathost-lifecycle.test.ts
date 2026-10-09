@@ -252,7 +252,7 @@ async function testGetReconciledServerState() {
     const client = createFakeSupabaseClient(liveRow());
     const stopped = { on: false, booting: false } as never;
     const result = await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1', DATHOST_EMAIL: undefined, DATHOST_PASSWORD: undefined }, () =>
-      getReconciledServerState(client as never, 100, undefined, stopped),
+      getReconciledServerState(client as never, 100, undefined, Promise.resolve(stopped)),
     );
     assert.equal(result.serverState, 'done');
     assert.equal(result.connectString, null);
@@ -262,7 +262,7 @@ async function testGetReconciledServerState() {
     for (const server of [{ on: true, booting: false } as never, null]) {
       const client = createFakeSupabaseClient(liveRow());
       const result = await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1', DATHOST_EMAIL: undefined, DATHOST_PASSWORD: undefined }, () =>
-        getReconciledServerState(client as never, 100, undefined, server),
+        getReconciledServerState(client as never, 100, undefined, Promise.resolve(server)),
       );
       assert.equal(result.serverState, 'live');
     }
