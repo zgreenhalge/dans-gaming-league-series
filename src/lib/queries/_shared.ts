@@ -132,7 +132,8 @@ const getAllWeeks = cacheQuery(async (client?: SupabaseClient): Promise<WeekLook
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
  * Optional `client` per docs/recipes.md's query-helper recipe. Scoped and unscoped callers all read
  * through one `cacheQuery()`-wrapped read of every week (a small table) and filter it in memory, so
- * a render pass issues a single `weeks` query however its callers scope.
+ * a render pass issues a single `weeks` query however its client-less callers scope. A call that
+ * passes a `client` reads through that client's own cache entry.
  */
 export async function getWeekLookup(seasonIds?: number[], client?: SupabaseClient): Promise<WeekLookup> {
   const all = await getAllWeeks(client);
