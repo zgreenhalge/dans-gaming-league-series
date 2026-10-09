@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { getPlayerMeta } from '@/lib/seo/og';
+import { parseRouteId } from '@/lib/util';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, ehogColor } from '@/lib/seo/og-card';
 
 export const alt = 'DGLS Player';
@@ -13,8 +14,9 @@ export default async function Image({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const playerId = parseRouteId(id);
   const [meta, fonts] = await Promise.all([
-    getPlayerMeta(Number(id)),
+    playerId === null ? null : getPlayerMeta(playerId),
     loadFonts(),
   ]);
 

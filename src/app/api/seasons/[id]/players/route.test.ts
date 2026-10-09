@@ -60,7 +60,7 @@ type Handler = typeof POST;
 
 /** Builds and calls the request the same way for every case: a JSON body carrying `player_id`, and
  * the dynamic route's `id` param matching the season id in the URL. */
-function call(handler: Handler, method: 'POST' | 'DELETE', seasonId: number | string, playerId: number) {
+function call(handler: Handler, method: 'POST' | 'DELETE', seasonId: number | string, playerId: number | string) {
   return handler(jsonRequest(url(seasonId), method, { player_id: playerId }), {
     params: Promise.resolve({ id: String(seasonId) }),
   });
@@ -74,13 +74,17 @@ async function main() {
     method: 'POST' | 'DELETE';
     sessionPlayerId: number | null;
     seasonId: number | string;
-    playerId: number;
+    playerId: number | string;
     status: number;
   }[] = [
     { name: 'POST — unauthenticated request is rejected (401)', handler: POST, method: 'POST', sessionPlayerId: null, seasonId: UPCOMING_SEASON_ID, playerId: PLAYER_ID, status: 401 },
     ...MALFORMED_ROUTE_IDS.flatMap((bad) => [
       { name: `POST — malformed season id ${JSON.stringify(bad)} is rejected (400)`, handler: POST, method: 'POST' as const, sessionPlayerId: ADMIN_ID, seasonId: bad, playerId: PLAYER_ID, status: 400 },
       { name: `DELETE — malformed season id ${JSON.stringify(bad)} is rejected (400)`, handler: DELETE, method: 'DELETE' as const, sessionPlayerId: ADMIN_ID, seasonId: bad, playerId: PLAYER_ID, status: 400 },
+    ]),
+    ...[...MALFORMED_ROUTE_IDS, 1.5, 1e21].flatMap((bad) => [
+      { name: `POST — malformed player_id ${JSON.stringify(bad)} is rejected (400)`, handler: POST, method: 'POST' as const, sessionPlayerId: ADMIN_ID, seasonId: UPCOMING_SEASON_ID, playerId: bad, status: 400 },
+      { name: `DELETE — malformed player_id ${JSON.stringify(bad)} is rejected (400)`, handler: DELETE, method: 'DELETE' as const, sessionPlayerId: ADMIN_ID, seasonId: UPCOMING_SEASON_ID, playerId: bad, status: 400 },
     ]),
     { name: 'POST — unknown season id is rejected (404)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: 999, playerId: PLAYER_ID, status: 404 },
     { name: 'POST — non-admin adding a different player is rejected (403)', handler: POST, method: 'POST', sessionPlayerId: PLAYER_ID, seasonId: UPCOMING_SEASON_ID, playerId: OTHER_PLAYER_ID, status: 403 },

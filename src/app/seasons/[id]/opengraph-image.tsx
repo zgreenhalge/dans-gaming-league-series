@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { getSeason } from '@/lib/queries';
 import { getSeasonMetaLeaderboard } from '@/lib/seo/og';
-import { seasonTitle } from '@/lib/util';
+import { parseRouteId, seasonTitle } from '@/lib/util';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell } from '@/lib/seo/og-card';
 
 export const alt = 'DGLS Season';
@@ -15,10 +15,10 @@ export default async function Image({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const seasonId = Number(id);
+  const seasonId = parseRouteId(id);
   const [season, top4, fonts] = await Promise.all([
-    getSeason(seasonId),
-    getSeasonMetaLeaderboard(seasonId),
+    seasonId === null ? null : getSeason(seasonId),
+    seasonId === null ? [] : getSeasonMetaLeaderboard(seasonId),
     loadFonts(),
   ]);
 
