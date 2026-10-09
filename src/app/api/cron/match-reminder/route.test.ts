@@ -70,7 +70,7 @@ async function main() {
   await test('POST — a non-integer, non-positive or out-of-range matchId is rejected (400)', async () => {
     process.env.CRON_SECRET = 'test-cron-secret';
     installFixture(buildFakeDb());
-    for (const matchId of [1.5, 0, -1, 2_147_483_648, true, '1e3']) {
+    for (const matchId of [1.5, 0, -1, 2_147_483_648, true, '1e3', [42]]) {
       const res = await POST(request({ matchId }, 'Bearer test-cron-secret'));
       assert.equal(res.status, 400);
     }

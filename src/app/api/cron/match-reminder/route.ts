@@ -18,8 +18,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
+  const raw = (body as { matchId?: unknown } | null)?.matchId;
   // `parseMatchId()` takes the id as text, so a JSON number or numeric string both parse.
-  const matchId = parseMatchId(String((body as { matchId?: unknown } | null)?.matchId));
+  const matchId = typeof raw === 'number' || typeof raw === 'string' ? parseMatchId(String(raw)) : null;
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid matchId' }, { status: 400 });
   }
