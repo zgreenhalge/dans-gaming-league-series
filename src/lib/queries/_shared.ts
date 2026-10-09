@@ -113,14 +113,15 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
   return requested.filter((id) => !coveredSet.has(id));
 }
 
-export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
+/** Read-only: the unscoped lookup is the request-wide cached instance, shared by every caller. */
+export type WeekLookup = ReadonlyMap<number, { season_id: number; week_number: number }>;
 
 const getAllWeeks = cacheQuery(async (client?: SupabaseClient): Promise<WeekLookup> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db.from('weeks').select('id, season_id, week_number');
   if (error) throw error;
 
-  const lookup: WeekLookup = new Map();
+  const lookup = new Map<number, { season_id: number; week_number: number }>();
   for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
     lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
   return lookup;

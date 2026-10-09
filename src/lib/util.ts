@@ -133,11 +133,12 @@ export function groupByMap<T>(
 const MAX_INT4 = 2_147_483_647;
 
 /**
- * Parse a route's `[id]` segment into a positive Postgres `integer` id, or `null` if it isn't one.
+ * Parse an id string — a route's `[id]` segment, or a request body's id field stringified — into a
+ * positive Postgres `integer` id, or `null` if it isn't one.
  * Only plain decimal digits pass — `''`, `0`, negatives, `1.5`, `1e3`, `0x10`, padded whitespace and
  * anything above the int4 ceiling all return `null`, so the route answers 400 instead of letting the
- * value reach Postgres. Every `[id]` API route and page parses through this so the param contract
- * is identical everywhere.
+ * value reach Postgres. Every `[id]` API route, page and image route parses through this so the id
+ * contract is identical everywhere.
  */
 export function parseRouteId(id: string): number | null {
   if (!/^\d+$/.test(id)) return null;
