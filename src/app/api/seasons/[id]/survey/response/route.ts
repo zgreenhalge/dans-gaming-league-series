@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAccess } from '@/lib/feedback-access';
 import { getSurveyForSeason, isSurveyOpen } from '@/lib/queries';
 import { validateSurveyAnswers } from '@/lib/survey';
@@ -19,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = validateSurveyAnswers(survey.questions, body?.answers);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  const { error } = await access.supabaseAdmin.from('survey_responses').upsert(
+  const { error } = await getAdminClient().from('survey_responses').upsert(
     { survey_id: survey.id, player_id: access.playerId, answers: parsed.value, updated_at: new Date().toISOString() },
     { onConflict: 'survey_id,player_id' },
   );

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/survey';
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const poll = await getSuperlativePoll(seasonId);
   if (poll && (await isSuperlativePollLocked(poll))) return NextResponse.json(LOCKED, { status: 409 });
   if (!poll) {
-    const { error: pollErr } = await access.supabaseAdmin
+    const { error: pollErr } = await getAdminClient()
       .from('superlative_polls')
       .upsert({ season_id: seasonId }, { onConflict: 'season_id', ignoreDuplicates: true });
     if (pollErr) return NextResponse.json({ error: pollErr.message }, { status: 500 });
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const position = Math.max(0, ...(poll?.superlatives.map((s) => s.position) ?? [])) + 1;
-  const { data, error } = await access.supabaseAdmin
+  const { data, error } = await getAdminClient()
     .from('superlatives')
     .insert({ season_id: seasonId, position, title: title.value })
     .select('id')
@@ -58,7 +59,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
   if (await isSuperlativePollLocked(poll)) return NextResponse.json(LOCKED, { status: 409 });
 
-  const { error } = await access.supabaseAdmin.from('superlatives').delete().eq('id', superlativeId).eq('season_id', seasonId);
+  const { error } = await getAdminClient().from('superlatives').delete().eq('id', superlativeId).eq('season_id', seasonId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
@@ -76,7 +77,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!order.ok) return NextResponse.json({ error: order.error }, { status: 400 });
   if (await isSuperlativePollLocked(poll)) return NextResponse.json(LOCKED, { status: 409 });
 
-  const { error } = await access.supabaseAdmin.rpc('reorder_superlatives', { p_season_id: seasonId, p_order: order.value });
+  const { error } = await getAdminClient().rpc('reorder_superlatives', { p_season_id: seasonId, p_order: order.value });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
@@ -105,7 +106,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (poll.superlatives.some((s) => s.id !== target.id && s.title.toLowerCase() === title.value.toLowerCase())) {
       return NextResponse.json({ error: 'That superlative already exists' }, { status: 409 });
     }
-    const { error } = await access.supabaseAdmin.from('superlatives').update({ title: title.value }).eq('id', target.id).eq('season_id', seasonId);
+    const { error } = await getAdminClient().from('superlatives').update({ title: title.value }).eq('id', target.id).eq('season_id', seasonId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
@@ -113,7 +114,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Add a superlative before opening the vote' }, { status: 400 });
   }
 
-  const { error } = await access.supabaseAdmin.from('superlative_polls').update({ is_open: open === true }).eq('season_id', seasonId);
+  const { error } = await getAdminClient().from('superlative_polls').update({ is_open: open === true }).eq('season_id', seasonId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -6,17 +6,13 @@
 
 import { requireSession } from './session';
 import { requireAdminAccess } from './admin-access';
-import { getAdminClient } from './supabase-admin';
 import { getSeason, getSeasonPlayedPlayers, hasPlayedSeason } from './queries';
 import { parseRouteId } from './util';
 import type { SeasonRosterEntry } from './queries';
 import type { AccessResult } from './access-control';
 
-type SupabaseAdmin = ReturnType<typeof getAdminClient>;
-
 export type SeasonFeedbackAccess = AccessResult<{
   seasonId: number;
-  supabaseAdmin: SupabaseAdmin;
   playerId: number;
   /** Everyone who played in the season — the valid superlative nominees. */
   eligible: SeasonRosterEntry[];
@@ -38,10 +34,10 @@ export async function requireSeasonFeedbackAccess(rawSeasonId: string): Promise<
   if (!hasPlayedSeason(eligible, playerId)) {
     return { ok: false, status: 403, error: 'Only players who played this season can respond' };
   }
-  return { ok: true, seasonId, supabaseAdmin: getAdminClient(), playerId, eligible };
+  return { ok: true, seasonId, playerId, eligible };
 }
 
-export type SeasonFeedbackAdminAccess = AccessResult<{ seasonId: number; supabaseAdmin: SupabaseAdmin }>;
+export type SeasonFeedbackAdminAccess = AccessResult<{ seasonId: number }>;
 
 /** Admin gate for setting up and controlling a season's survey or superlatives. No eligibility
  *  check — admins manage these for seasons they may not have played in. */
@@ -53,5 +49,5 @@ export async function requireSeasonFeedbackAdmin(rawSeasonId: string): Promise<S
   if (!access.ok) return access;
   const season = await getSeason(seasonId);
   if (!season || season.is_gauntlet) return { ok: false, status: 404, error: 'Regular season not found' };
-  return { ok: true, seasonId, supabaseAdmin: getAdminClient() };
+  return { ok: true, seasonId };
 }

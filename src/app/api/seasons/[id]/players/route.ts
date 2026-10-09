@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonRosterAccess, mapSeasonRosterWriteError } from '@/lib/season-roster-access';
 import { grantParticipantRole, revokeParticipantRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const access = await requireSeasonRosterAccess(req, seasonId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const { data: player, error: playerErr } = await access.supabaseAdmin
+  const { data: player, error: playerErr } = await getAdminClient()
     .from('players')
     .select('id, discord_id')
     .eq('id', access.targetPlayerId)
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (playerErr) return NextResponse.json({ error: playerErr.message }, { status: 500 });
   if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
-  const { error: insertErr } = await access.supabaseAdmin
+  const { error: insertErr } = await getAdminClient()
     .from('season_players')
     .insert({ season_id: seasonId, player_id: access.targetPlayerId });
   if (insertErr && (insertErr as { code?: string }).code !== '23505') {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const discordId = (player as { discord_id: string | null }).discord_id;
   afterBestEffort(`discord-roles: grant @Participants to player ${access.targetPlayerId}`, () =>
-    grantParticipantRole(access.supabaseAdmin, access.targetPlayerId, discordId),
+    grantParticipantRole(getAdminClient(), access.targetPlayerId, discordId),
   );
 
   return NextResponse.json({ ok: true }, { status: 201 });
@@ -47,8 +48,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Independent reads/writes — the discord_id lookup doesn't gate the delete (unlike POST's
   // player-exists check, which must happen first) — run them concurrently.
   const [{ data: player }, { error: deleteErr }] = await Promise.all([
-    access.supabaseAdmin.from('players').select('discord_id').eq('id', access.targetPlayerId).maybeSingle(),
-    access.supabaseAdmin.from('season_players').delete().eq('season_id', seasonId).eq('player_id', access.targetPlayerId),
+    getAdminClient().from('players').select('discord_id').eq('id', access.targetPlayerId).maybeSingle(),
+    getAdminClient().from('season_players').delete().eq('season_id', seasonId).eq('player_id', access.targetPlayerId),
   ]);
   if (deleteErr) {
     const mapped = mapSeasonRosterWriteError(deleteErr as { code?: string; message: string });
@@ -57,7 +58,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const discordId = (player as { discord_id: string | null } | null)?.discord_id ?? null;
   afterBestEffort(`discord-roles: revoke @Participants from player ${access.targetPlayerId}`, () =>
-    revokeParticipantRole(access.supabaseAdmin, access.targetPlayerId, discordId),
+    revokeParticipantRole(getAdminClient(), access.targetPlayerId, discordId),
   );
 
   return NextResponse.json({ ok: true });
