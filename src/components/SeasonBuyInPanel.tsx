@@ -63,10 +63,8 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
   return (
     <div className="flex flex-col gap-2 max-w-[240px]">
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
-        min={0}
-        step="0.01"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         placeholder="TBD"

@@ -23,13 +23,14 @@ export function CreateSeasonForm({ knownMaps }: Props) {
   const buyInInput = parseBuyInText(buyIn);
 
   async function submit() {
+    if (!buyInInput.ok) return;
     setError(null);
     setSubmitting(true);
     try {
       const res = await fetch('/api/seasons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps, buy_in_amount: buyInInput.ok ? buyInInput.amount : null }),
+        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps, buy_in_amount: buyInInput.amount }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -51,10 +52,8 @@ export function CreateSeasonForm({ knownMaps }: Props) {
       <label className="flex flex-col gap-1.5 max-w-[200px]">
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Buy-in ($)</span>
         <input
-          type="number"
+          type="text"
           inputMode="decimal"
-          min={0}
-          step="0.01"
           value={buyIn}
           onChange={(e) => setBuyIn(e.target.value)}
           className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
