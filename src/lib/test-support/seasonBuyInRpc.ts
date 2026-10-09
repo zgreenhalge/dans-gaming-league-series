@@ -6,6 +6,7 @@
  */
 
 import type { RpcHandler } from './fakeSupabase';
+import { draftWeeksOf, isMaterialized } from './seasonScheduleDraftRpc';
 
 export const seasonBuyInRpcs: Record<string, RpcHandler> = {
   set_season_buy_in: (args, db) => {
@@ -13,10 +14,7 @@ export const seasonBuyInRpcs: Record<string, RpcHandler> = {
     const season = (db.seasons ?? []).find((s) => s.id === seasonId);
     if (!season || season.is_gauntlet) return { status: 'not-found' };
     if (season.status !== 'UPCOMING') return { status: 'not-upcoming' };
-    const hasSchedule =
-      (db.season_schedule_draft_weeks ?? []).some((w) => w.season_id === seasonId) ||
-      (db.weeks ?? []).some((w) => w.season_id === seasonId);
-    if (hasSchedule) return { status: 'schedule-generated' };
+    if (draftWeeksOf(db, seasonId).length > 0 || isMaterialized(db, seasonId)) return { status: 'schedule-generated' };
     season.buy_in_amount = args.p_amount;
     return { status: 'ok' };
   },

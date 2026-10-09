@@ -10,7 +10,7 @@ import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { seasonBuyInRpcs } from '@/lib/test-support/seasonBuyInRpc';
-import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
+import { MALFORMED_ROUTE_IDS, jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
 
@@ -75,8 +75,9 @@ async function main() {
 
   await test('PATCH — a malformed season id is a 400', async () => {
     installFixture();
-    assert.equal((await call('abc', ADMIN_ID, { buy_in_amount: 5 })).status, 400);
-    assert.equal((await call('1.5', ADMIN_ID, { buy_in_amount: 5 })).status, 400);
+    for (const bad of MALFORMED_ROUTE_IDS) {
+      assert.equal((await call(bad, ADMIN_ID, { buy_in_amount: 5 })).status, 400);
+    }
   });
 
   await test('PATCH — a missing, negative or over-precise amount is a 400 and writes nothing', async () => {

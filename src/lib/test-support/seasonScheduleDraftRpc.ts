@@ -38,11 +38,11 @@ const ZERO_MATCH_STATS = {
   is_win: false,
 };
 
-function isMaterialized(db: FakeDb, seasonId: number): boolean {
+export function isMaterialized(db: FakeDb, seasonId: number): boolean {
   return (db.weeks ?? []).some((w) => w.season_id === seasonId);
 }
 
-function draftWeeksOf(db: FakeDb, seasonId: number): Row[] {
+export function draftWeeksOf(db: FakeDb, seasonId: number): Row[] {
   return (db.season_schedule_draft_weeks ?? []).filter((w) => w.season_id === seasonId);
 }
 

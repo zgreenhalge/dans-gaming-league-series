@@ -14,11 +14,11 @@ const REFUSALS: Record<Exclude<SetBuyInResult['status'], 'ok'>, { error: string;
 };
 
 /**
- * Sets an UPCOMING regular season's buy-in: an amount (`0` for a free season) or `null` for TBD. Editable only until its schedule is generated — once a
- * matchup draft (or a confirmed schedule) exists the roster is settled and so is what each player
- * owes. The `set_season_buy_in()` DB function checks the season's status and schedule and writes
- * the amount under the season row's lock, so a schedule generated concurrently can't slip between
- * the check and the write.
+ * Sets an UPCOMING regular season's buy-in: an amount (`0` for a free season) or `null` for TBD.
+ * Editable only until its schedule is generated — once a matchup draft (or a confirmed schedule)
+ * exists the roster is settled and so is what each player owes. The `set_season_buy_in()` DB
+ * function checks the season's status and schedule and writes the amount under the season row's
+ * lock, so a schedule generated concurrently can't slip between the check and the write.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
