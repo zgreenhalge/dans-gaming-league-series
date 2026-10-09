@@ -8,6 +8,7 @@ import { NextRequest } from 'next/server';
 import { requireSession } from './session';
 import { getAdminClient } from './supabase-admin';
 import { isPlayerAdmin } from './queries';
+import { parseRouteId } from './util';
 import type { AccessResult } from './access-control';
 
 export type SeasonRosterAccess = AccessResult<{ targetPlayerId: number }>;
@@ -32,8 +33,10 @@ export async function requireSeasonRosterAccess(req: NextRequest, seasonId: numb
   if (seasonErr) return { ok: false, status: 500, error: seasonErr.message };
   if (!season) return { ok: false, status: 404, error: 'Season not found' };
 
-  const targetPlayerId = Number((body as { player_id?: unknown } | null)?.player_id);
-  if (!Number.isFinite(targetPlayerId)) {
+  const rawPlayerId = (body as { player_id?: unknown } | null)?.player_id;
+  const targetPlayerId =
+    typeof rawPlayerId === 'number' || typeof rawPlayerId === 'string' ? parseRouteId(String(rawPlayerId)) : null;
+  if (targetPlayerId === null) {
     return { ok: false, status: 400, error: 'player_id is required' };
   }
 

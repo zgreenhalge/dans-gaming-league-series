@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { getMatchMeta } from '@/lib/seo/og';
+import { parseRouteId } from '@/lib/util';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, loadMapImageAsDataUri } from '@/lib/seo/og-card';
 
 export const alt = 'DGLS Match';
@@ -13,8 +14,9 @@ export default async function Image({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const matchId = parseRouteId(id);
   const [meta, fonts] = await Promise.all([
-    getMatchMeta(Number(id)),
+    matchId === null ? null : getMatchMeta(matchId),
     loadFonts(),
   ]);
 
