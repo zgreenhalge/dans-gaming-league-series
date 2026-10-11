@@ -114,18 +114,6 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
 }
 
-/** Whether a season has a superlatives poll — a cheaper check than `getSuperlativePoll()` when the
- *  superlatives themselves aren't needed. */
-export async function hasSuperlativePoll(seasonId: number): Promise<boolean> {
-  const { data, error } = await getAdminClient()
-    .from('superlative_polls')
-    .select('season_id')
-    .eq('season_id', seasonId)
-    .maybeSingle();
-  if (error) throw error;
-  return !!data;
-}
-
 /** The shared lock rule (`isFeedbackLocked()`) for a poll: open, or any vote exists. The
  *  superlatives list is frozen from then on, so no vote ever lands on a title or list the voter
  *  didn't see. */

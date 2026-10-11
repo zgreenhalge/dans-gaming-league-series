@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
+import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE } from '@/lib/feedback-routes';
 import { getSurveyForSeason } from '@/lib/queries';
 import type { Json } from '@/lib/database.types';
 import { buildSurveyQuestions, validateQuestionDrafts, type SurveyQuestionDraft } from '@/lib/survey';
@@ -62,15 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = (await req.json().catch(() => null)) as { open?: unknown } | null;
   if (typeof body?.open !== 'boolean') return NextResponse.json({ error: 'open must be a boolean' }, { status: 400 });
 
-  const existing = await getSurveyForSeason(seasonId);
-  if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
-
-  const { error } = await getAdminClient()
-    .from('surveys')
-    .update({ closed_at: body.open ? null : new Date().toISOString() })
-    .eq('id', existing.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return setFeedbackOpen(SURVEY_LIFECYCLE, seasonId, body.open);
 }
 
 /** Replaces a survey's questions (`{ questions, open? }`, same shape as the POST; `open: true` also
@@ -106,10 +99,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const access = await requireSeasonFeedbackAdmin((await params).id);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const existing = await getSurveyForSeason(access.seasonId);
-  if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
-
-  const { error } = await getAdminClient().rpc('reset_survey', { p_survey_id: existing.id });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return resetFeedback(SURVEY_LIFECYCLE, access.seasonId);
 }

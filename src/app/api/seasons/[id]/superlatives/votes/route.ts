@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAccess, requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { getSuperlativePoll, hasSuperlativePoll } from '@/lib/queries';
+import { getSuperlativePoll } from '@/lib/queries';
+import { resetFeedback, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-routes';
 import { validateSuperlativeVotes } from '@/lib/survey';
 
 /** Saves the signed-in player's ballot (`{ votes: [{ superlative_id, nominee_player_id }] }`). One
@@ -47,9 +48,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const { seasonId } = access;
 
-  if (!(await hasSuperlativePoll(seasonId))) return NextResponse.json({ error: 'No superlatives vote for this season' }, { status: 404 });
-
-  const { error } = await getAdminClient().rpc('reset_superlative_votes', { p_season_id: seasonId });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return resetFeedback(SUPERLATIVES_LIFECYCLE, seasonId);
 }
