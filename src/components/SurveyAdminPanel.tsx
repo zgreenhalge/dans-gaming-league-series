@@ -12,8 +12,7 @@ import { sendFeedbackRequest } from './feedbackRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import SectionLabel from './SectionLabel';
-import { FeedbackOpenControl } from './FeedbackOpenControl';
-import { FeedbackResetControl } from './FeedbackResetControl';
+import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
 import {
@@ -152,32 +151,21 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
 }
 
 function SurveyResults({ seasonId, survey }: { seasonId: number; survey: SurveyResultsData }) {
-  const router = useRouter();
-  const { busy, error, run } = useAsyncAction();
-
-  async function setOpen(open: boolean) {
-    await run(async () => {
-      await sendFeedbackRequest('PATCH', `/api/seasons/${seasonId}/survey`, { open });
-      router.refresh();
-    });
-  }
+  const url = `/api/seasons/${seasonId}/survey`;
 
   return (
     <div className="flex flex-col gap-6">
-      <FeedbackOpenControl
+      <FeedbackAdminControls
+        openUrl={url}
+        resetUrl={url}
         isOpen={survey.isOpen}
+        isLocked={survey.isLocked}
         status={`${survey.responseCount} of ${survey.eligibleCount} players responded`}
         openLabel="Open survey"
         closeLabel="Close survey"
-        busy={busy}
-        onToggle={() => setOpen(!survey.isOpen)}
+        resetLabel="Reset survey"
+        resetConfirmLabel="Delete all responses & close survey"
       />
-      <FeedbackResetControl
-        url={`/api/seasons/${seasonId}/survey`}
-        triggerLabel="Reset survey"
-        confirmLabel="Delete all responses & close survey"
-      />
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
       {survey.summaries.map((q) => (
         <div key={q.question_id} className="flex flex-col gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
