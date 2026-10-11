@@ -15,6 +15,7 @@ import {
 import { getPlayersById } from './player';
 import { getSeasonPlayedPlayers, hasPlayedSeason } from './seasons';
 import { batchedIn } from './_shared';
+import { isFeedbackLocked } from '../feedback';
 
 export interface Survey {
   id: number;
@@ -56,9 +57,7 @@ export async function getPlayerSurveyAnswers(
 export interface SurveyResults {
   survey: Survey;
   isOpen: boolean;
-  /** The survey lock rule: open, or has any response — its questions are frozen, so no answer lands
-   *  on a question list the player didn't see. `replace_survey_questions()` enforces the same rule
-   *  on save. */
+  /** The shared lock rule (`isFeedbackLocked()`): the questions are frozen. */
   isLocked: boolean;
   responseCount: number;
   eligibleCount: number;
@@ -81,7 +80,7 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   return {
     survey,
     isOpen: isSurveyOpen(survey),
-    isLocked: isSurveyOpen(survey) || answers.length > 0,
+    isLocked: isFeedbackLocked(isSurveyOpen(survey), answers.length > 0),
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
@@ -127,18 +126,18 @@ export async function hasSuperlativePoll(seasonId: number): Promise<boolean> {
   return !!data;
 }
 
-/** True once players can or did vote: voting is open, or any vote exists. The superlatives list is
- *  frozen from then on, so no vote ever lands on a title or list the voter didn't see. */
+/** The shared lock rule (`isFeedbackLocked()`) for a poll: open, or any vote exists. The
+ *  superlatives list is frozen from then on, so no vote ever lands on a title or list the voter
+ *  didn't see. */
 export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<boolean> {
-  if (poll.isOpen) return true;
-  if (poll.superlatives.length === 0) return false;
+  if (poll.isOpen || poll.superlatives.length === 0) return isFeedbackLocked(poll.isOpen, false);
   const { data, error } = await getAdminClient()
     .from('superlative_votes')
     .select('id')
     .in('superlative_id', poll.superlatives.map((s) => s.id))
     .limit(1);
   if (error) throw error;
-  return (data ?? []).length > 0;
+  return isFeedbackLocked(poll.isOpen, (data ?? []).length > 0);
 }
 
 /** One player's own ballot over the given superlatives, keyed by superlative id → nominee player id —
@@ -169,6 +168,8 @@ export interface SuperlativeResults {
 /** The admin view adds how many players were eligible to vote. */
 export interface SuperlativeAdminResults extends SuperlativeResults {
   eligibleCount: number;
+  /** The shared lock rule (`isFeedbackLocked()`): the superlatives list is frozen. */
+  isLocked: boolean;
 }
 
 async function tallyPoll(poll: SuperlativePoll): Promise<SuperlativeResults> {
@@ -200,7 +201,11 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
   const poll = await getSuperlativePoll(seasonId);
   if (!poll) return null;
   const [results, eligible] = await Promise.all([tallyPoll(poll), getSeasonPlayedPlayers(seasonId)]);
-  return { ...results, eligibleCount: eligible.length };
+  return {
+    ...results,
+    eligibleCount: eligible.length,
+    isLocked: isFeedbackLocked(results.isOpen, results.voterCount > 0),
+  };
 }
 
 /** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
