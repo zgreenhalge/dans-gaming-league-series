@@ -422,16 +422,37 @@ removes eligibility. The route gate (`requireSeasonFeedbackAccess()`, `feedback-
 season page's tabs (`getSeasonSurveyView()` / `getSeasonSuperlativesView()`) both read it from `getSeasonPlayedPlayers()`, which
 shares one cached lookup per request.
 
-The two are independent flows: an admin sets each up and opens/closes it on its own page
-(`/admin/seasons/survey/[id]`, `/admin/seasons/superlatives/[id]`), either can exist without the other,
-and a player answers each on its own tab. Both admin panels share one open/close control
-(`FeedbackOpenControl`): opening is the primary button, closing the small bordered one.
-The survey builder orders custom and core questions freely. Both forms follow one rule: the list is
-locked while open and stays locked once any answer exists, so no answer lands on a list the player
-didn't see; editing mutations return 409 when locked. For the survey, the `replace_survey_questions()` RPC
-checks the lock and saves in one statement, and `getSurveyResults()`'s `isLocked` reports it to the admin
-panel; for superlatives, `isSuperlativePollLocked()` gates each edit. Superlatives can be added, removed, renamed, and reordered while unlocked; a survey's questions are replaced as a whole (`PUT`). An admin reset (`DELETE .../survey`, `DELETE .../superlatives/votes`) closes the form and deletes every answer in one RPC call (`reset_survey()`, `reset_superlative_votes()`), keeping the questions or superlatives, which unlocks them for editing again. Neither can be answered unless open, and answers are
-editable until closed: the player-side saves (`save_survey_response()`, `replace_superlative_votes()`) take a share lock on the form's row and write only while it is open, so a save racing an admin close or reset is ordered with it — it either lands before the reset wipes it or is refused with a 409.
+The two are independent flows that follow one shared model. An admin sets each up and opens/closes
+it on its own page (`/admin/seasons/survey/[id]`, `/admin/seasons/superlatives/[id]`), either can exist
+without the other, and a player answers each on its own tab. What differs is only the content: a
+survey's typed questions are replaced as a whole (`PUT`) and answered in one jsonb row per player,
+while superlatives are added, removed, renamed, and reordered one at a time and voted on as one row
+per `(superlative, voter)`. Everything around the content is written once:
+
+- **Lock rule** — `isFeedbackLocked()` (`src/lib/feedback.ts`): the list is locked while the form is
+  open and stays locked once any answer exists, so no answer lands on a list the player didn't see.
+  Editing mutations return 409 when locked. `getSurveyResults()` and `getSuperlativeResults()` report
+  it as `isLocked` to their admin panels, `isSuperlativePollLocked()` gates each superlatives edit, and
+  the `replace_survey_questions()` RPC applies the same rule in one statement for the survey.
+- **Open/close and reset routes** — `setFeedbackOpen()` and `resetFeedback()`
+  (`src/lib/feedback-routes.ts`) run the lookup (404 if the season has none), the write, and the
+  error mapping for both forms; `SURVEY_LIFECYCLE` and `SUPERLATIVES_LIFECYCLE` adapt each form's
+  storage (`surveys.closed_at`, `superlative_polls.is_open`) and reset RPC to them. A reset
+  (`DELETE .../survey`, `DELETE .../superlatives/votes`) closes the form and deletes every answer in
+  one RPC call (`reset_survey()`, `reset_superlative_votes()`), keeping the questions or superlatives,
+  which unlocks them for editing again. A new lifecycle action is a new function there plus one
+  method per lifecycle object.
+- **Admin controls** — `FeedbackAdminControls` renders the status line, the open/close button
+  (opening is the primary button, closing the small bordered one) and, once locked, the reset;
+  both panels use it.
+- **Player forms** — `FeedbackEditor` owns the read-only → Edit → Save/Cancel flow, the "Saved"
+  confirmation, the error line, and the `PUT` + `router.refresh()` save. `SurveyForm` and
+  `SuperlativesBallot` supply only their inputs, their read-only view, and the request body.
+
+Neither form can be answered unless open, and answers are editable until closed: the player-side
+saves (`save_survey_response()`, `replace_superlative_votes()`) take a share lock on the form's row
+and write only while it is open, so a save racing an admin close or reset is ordered with it — it
+either lands before the reset wipes it or is refused with a 409.
 
 **Season-page tabs.** `getSeasonSurveyView()` and `getSeasonSuperlativesView()` each resolve, per
 viewer, whether their own tab exists, and `buildSurveyTab()` / `buildSuperlativesTab()`
