@@ -10,8 +10,7 @@ import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
-import { FeedbackOpenControl } from './FeedbackOpenControl';
-import { FeedbackResetControl } from './FeedbackResetControl';
+import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
 import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
@@ -24,8 +23,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
   const [editTitle, setEditTitle] = useState('');
   const { busy, error, run } = useAsyncAction();
   const url = `/api/seasons/${seasonId}/superlatives`;
-  // The list is frozen once voting opens (the server enforces it): open now, or votes already cast.
-  const locked = !!poll && (poll.isOpen || poll.voterCount > 0);
+  const locked = !!poll?.isLocked;
 
   function mutate(action: () => Promise<void>) {
     return run(async () => {
@@ -37,18 +35,17 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
   return (
     <section className="flex flex-col gap-4">
       {poll && (
-        <FeedbackOpenControl
+        <FeedbackAdminControls
+          openUrl={url}
+          resetUrl={`${url}/votes`}
           isOpen={poll.isOpen}
+          isLocked={locked}
           status={`${poll.voterCount} of ${poll.eligibleCount} players voted`}
           openLabel="Open voting"
           closeLabel="Close voting"
-          busy={busy}
-          onToggle={() => mutate(() => sendFeedbackRequest('PATCH', url, { open: !poll.isOpen }))}
+          resetLabel="Reset vote"
+          resetConfirmLabel="Delete all votes & close voting"
         />
-      )}
-
-      {locked && (
-        <FeedbackResetControl url={`${url}/votes`} triggerLabel="Reset vote" confirmLabel="Delete all votes & close voting" />
       )}
 
       {poll && (

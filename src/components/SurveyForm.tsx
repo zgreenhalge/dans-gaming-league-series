@@ -2,16 +2,12 @@
 
 // The player-facing post-season survey. Answers are keyed by question id; every question is
 // optional, and clicking a selected rating/yes-no choice again clears it. Saving again edits the
-// player's existing response (see `PUT /api/seasons/[id]/survey/response`). Once a player has
-// responded the survey shows read-only until they press Edit.
+// player's existing response (see `PUT /api/seasons/[id]/survey/response`). The Edit/Save/Cancel
+// flow is `FeedbackEditor`; this file is the question inputs.
 
 import { useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
-import { FeedbackFormFrame } from './FeedbackFormFrame';
+import { FeedbackEditor } from './FeedbackEditor';
 import { RATING_LABELS, RATING_MAX, RATING_MIN, MAX_TEXT_ANSWER_LENGTH, type SurveyAnswers, type SurveyQuestion } from '@/lib/survey';
 
 type AnswerValue = SurveyAnswers[string];
@@ -39,29 +35,15 @@ export function SurveyForm({
   manage?: ReactNode;
   note: string;
 }) {
-  const router = useRouter();
   const [answers, setAnswers] = useState<SurveyAnswers>(initialAnswers);
-  const [saved, setSaved] = useState(false);
-  const [editing, setEditing] = useState(!responded);
-  const { busy, error, run } = useAsyncAction();
 
   function setAnswer(id: number, value: AnswerValue | undefined) {
     const key = String(id);
-    setSaved(false);
     setAnswers((prev) => {
       const next = { ...prev };
       if (value === undefined) delete next[key];
       else next[key] = value;
       return next;
-    });
-  }
-
-  async function save() {
-    await run(async () => {
-      await sendFeedbackRequest('PUT', `/api/seasons/${seasonId}/survey/response`, { answers });
-      setSaved(true);
-      setEditing(false);
-      router.refresh();
     });
   }
 
@@ -139,46 +121,21 @@ export function SurveyForm({
           </div>
         );
       })}
-
-      <div className="flex items-center gap-4">
-        <button type="button" onClick={save} disabled={busy} className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}>
-          {busy ? 'Saving…' : responded || saved ? 'Update Answers' : 'Submit Survey'}
-        </button>
-        {(responded || saved) && (
-          <button
-            type="button"
-            onClick={() => {
-              setAnswers(initialAnswers);
-              setEditing(false);
-            }}
-            disabled={busy}
-            className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] disabled:opacity-40"
-          >
-            Cancel
-          </button>
-        )}
-        {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
-      </div>
     </div>
   );
 
   return (
-    <FeedbackFormFrame
+    <FeedbackEditor
+      url={`/api/seasons/${seasonId}/survey/response`}
+      responded={responded}
+      body={{ answers }}
+      onCancel={() => setAnswers(initialAnswers)}
       manage={manage}
-      edit={
-        editing
-          ? undefined
-          : {
-              saved,
-              onEdit: () => {
-                setSaved(false);
-                setEditing(true);
-              },
-            }
-      }
       note={note}
-    >
-      {editing ? renderForm() : renderReadOnly()}
-    </FeedbackFormFrame>
+      submitLabel="Submit Survey"
+      updateLabel="Update Answers"
+      renderForm={renderForm}
+      renderReadOnly={renderReadOnly}
+    />
   );
 }

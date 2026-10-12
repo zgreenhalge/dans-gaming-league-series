@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
+import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/survey';
 
@@ -110,11 +111,5 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
-  if (open && poll.superlatives.length === 0) {
-    return NextResponse.json({ error: 'Add a superlative before opening the vote' }, { status: 400 });
-  }
-
-  const { error } = await getAdminClient().from('superlative_polls').update({ is_open: open === true }).eq('season_id', seasonId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return setFeedbackOpen(SUPERLATIVES_LIFECYCLE, seasonId, open === true, poll);
 }

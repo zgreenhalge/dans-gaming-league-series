@@ -6,6 +6,7 @@
 
 import { getAdminClient } from '../supabase-admin';
 import {
+  isFeedbackLocked,
   summarizeSurvey,
   tallyVotes,
   type SurveyAnswers,
@@ -19,6 +20,8 @@ import { batchedIn } from './_shared';
 export interface Survey {
   id: number;
   season_id: number;
+  /** Null while open; read it through `isSurveyOpen()`. A superlatives vote stores open state as
+   *  `superlative_polls.is_open` — see `FeedbackLifecycle` (`feedback-lifecycle.ts`). */
   closed_at: string | null;
   questions: SurveyQuestion[];
 }
@@ -56,9 +59,7 @@ export async function getPlayerSurveyAnswers(
 export interface SurveyResults {
   survey: Survey;
   isOpen: boolean;
-  /** The survey lock rule: open, or has any response — its questions are frozen, so no answer lands
-   *  on a question list the player didn't see. `replace_survey_questions()` enforces the same rule
-   *  on save. */
+  /** The shared lock rule (`isFeedbackLocked()`): the questions are frozen. */
   isLocked: boolean;
   responseCount: number;
   eligibleCount: number;
@@ -78,10 +79,11 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   if (error) throw error;
 
   const answers = (responses ?? []).map((r) => r.answers as SurveyAnswers);
+  const isOpen = isSurveyOpen(survey);
   return {
     survey,
-    isOpen: isSurveyOpen(survey),
-    isLocked: isSurveyOpen(survey) || answers.length > 0,
+    isOpen,
+    isLocked: isFeedbackLocked(isOpen, answers.length > 0),
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
@@ -115,30 +117,17 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
 }
 
-/** Whether a season has a superlatives poll — a cheaper check than `getSuperlativePoll()` when the
- *  superlatives themselves aren't needed. */
-export async function hasSuperlativePoll(seasonId: number): Promise<boolean> {
-  const { data, error } = await getAdminClient()
-    .from('superlative_polls')
-    .select('season_id')
-    .eq('season_id', seasonId)
-    .maybeSingle();
-  if (error) throw error;
-  return !!data;
-}
-
-/** True once players can or did vote: voting is open, or any vote exists. The superlatives list is
- *  frozen from then on, so no vote ever lands on a title or list the voter didn't see. */
+/** The shared lock rule (`isFeedbackLocked()`) for a poll, for the route gates: open, or any vote
+ *  exists. Checks for votes only when voting is closed and there are superlatives to vote on. */
 export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<boolean> {
-  if (poll.isOpen) return true;
-  if (poll.superlatives.length === 0) return false;
+  if (poll.isOpen || poll.superlatives.length === 0) return poll.isOpen;
   const { data, error } = await getAdminClient()
     .from('superlative_votes')
     .select('id')
     .in('superlative_id', poll.superlatives.map((s) => s.id))
     .limit(1);
   if (error) throw error;
-  return (data ?? []).length > 0;
+  return isFeedbackLocked(poll.isOpen, (data ?? []).length > 0);
 }
 
 /** One player's own ballot over the given superlatives, keyed by superlative id → nominee player id —
@@ -169,6 +158,8 @@ export interface SuperlativeResults {
 /** The admin view adds how many players were eligible to vote. */
 export interface SuperlativeAdminResults extends SuperlativeResults {
   eligibleCount: number;
+  /** The shared lock rule (`isFeedbackLocked()`): the superlatives list is frozen. */
+  isLocked: boolean;
 }
 
 async function tallyPoll(poll: SuperlativePoll): Promise<SuperlativeResults> {
@@ -200,11 +191,16 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
   const poll = await getSuperlativePoll(seasonId);
   if (!poll) return null;
   const [results, eligible] = await Promise.all([tallyPoll(poll), getSeasonPlayedPlayers(seasonId)]);
-  return { ...results, eligibleCount: eligible.length };
+  return {
+    ...results,
+    eligibleCount: eligible.length,
+    isLocked: isFeedbackLocked(results.isOpen, results.voterCount > 0),
+  };
 }
 
 /** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
- *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. */
+ *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. Reads each
+ *  form's own open column (`surveys.closed_at is null`, `superlative_polls.is_open`). */
 export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
   const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
     getAdminClient().from('surveys').select('season_id').is('closed_at', null),

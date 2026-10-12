@@ -3,15 +3,11 @@
 // The player-facing superlatives ballot: one nominee picker per superlative, drawn from everyone
 // who played the season. Saving again replaces the player's existing ballot (see
 // `PUT /api/seasons/[id]/superlatives/votes`); a superlative left on "No vote" has its vote cleared.
-// Once a player has votes saved the ballot shows read-only until they press Edit.
+// The Edit/Save/Cancel flow is `FeedbackEditor`; this file is the nominee pickers.
 
 import { useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
-import { FeedbackFormFrame } from './FeedbackFormFrame';
+import { FeedbackEditor } from './FeedbackEditor';
 
 export function SuperlativesBallot({
   seasonId,
@@ -29,14 +25,9 @@ export function SuperlativesBallot({
   manage?: ReactNode;
   note: string;
 }) {
-  const router = useRouter();
   const [votes, setVotes] = useState<Record<number, number>>(initialVotes);
-  const [saved, setSaved] = useState(false);
-  const [editing, setEditing] = useState(() => Object.keys(initialVotes).length === 0);
-  const { busy, error, run } = useAsyncAction();
 
   function setVote(superlativeId: number, nomineeId: number | null) {
-    setSaved(false);
     setVotes((prev) => {
       const next = { ...prev };
       if (nomineeId == null) delete next[superlativeId];
@@ -45,19 +36,6 @@ export function SuperlativesBallot({
     });
   }
 
-  async function save() {
-    await run(async () => {
-      await sendFeedbackRequest('PUT', `/api/seasons/${seasonId}/superlatives/votes`, {
-        // Skips a vote for a superlative the admin has since removed, which the server would reject.
-        votes: superlatives.flatMap((s) => (votes[s.id] != null ? [{ superlative_id: s.id, nominee_player_id: votes[s.id] }] : [])),
-      });
-      setSaved(true);
-      setEditing(Object.keys(votes).length === 0);
-      router.refresh();
-    });
-  }
-
-  const hasSavedVotes = Object.keys(initialVotes).length > 0 || saved;
   const nomineeName = (id: number | undefined) => nominees.find((p) => p.id === id)?.name;
 
   const renderReadOnly = () => (
@@ -90,46 +68,23 @@ export function SuperlativesBallot({
           </select>
         </label>
       ))}
-
-      <div className="flex items-center gap-4">
-        <button type="button" onClick={save} disabled={busy} className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}>
-          {busy ? 'Saving…' : 'Save Votes'}
-        </button>
-        {hasSavedVotes && (
-          <button
-            type="button"
-            onClick={() => {
-              setVotes(initialVotes);
-              setEditing(false);
-            }}
-            disabled={busy}
-            className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] disabled:opacity-40"
-          >
-            Cancel
-          </button>
-        )}
-        {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
-      </div>
     </div>
   );
 
   return (
-    <FeedbackFormFrame
+    <FeedbackEditor
+      url={`/api/seasons/${seasonId}/superlatives/votes`}
+      responded={Object.keys(initialVotes).length > 0}
+      // Skips a vote for a superlative the admin has since removed, which the server would reject.
+      body={{
+        votes: superlatives.flatMap((s) => (votes[s.id] != null ? [{ superlative_id: s.id, nominee_player_id: votes[s.id] }] : [])),
+      }}
+      onCancel={() => setVotes(initialVotes)}
       manage={manage}
-      edit={
-        editing
-          ? undefined
-          : {
-              saved,
-              onEdit: () => {
-                setSaved(false);
-                setEditing(true);
-              },
-            }
-      }
       note={note}
-    >
-      {editing ? renderForm() : renderReadOnly()}
-    </FeedbackFormFrame>
+      submitLabel="Save Votes"
+      renderForm={renderForm}
+      renderReadOnly={renderReadOnly}
+    />
   );
 }
