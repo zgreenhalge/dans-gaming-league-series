@@ -10,8 +10,6 @@ import {
   deriveGroupPageView,
   deriveRoundView,
   deriveWeekView,
-  withGauntletNext,
-  withRegularSeasonPrev,
   type GauntletStageData,
   type GroupPageView,
   type RoundView,
@@ -58,6 +56,13 @@ export const getSeedNames = cache(async (hubSeasonId: number): Promise<Map<numbe
   const leaderboard = await getSeasonLeaderboard(hubSeasonId);
   return new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
 });
+
+/** The number of a gauntlet's first round (the lowest in its bracket), or `null` while it has no
+ *  bracket — where a week page's Gauntlet chip leads. */
+export async function getFirstGauntletRound(gauntletSeasonId: number): Promise<number | null> {
+  const shape = await getGauntletBracketShape(gauntletSeasonId);
+  return shape.length > 0 ? Math.min(...shape.map((p) => p.round_number)) : null;
+}
 
 /** The season a gauntlet pod belongs to, from its id. `null` if there's no such pod. */
 export async function getPodSeasonId(podId: number): Promise<number | null> {
@@ -109,16 +114,10 @@ export async function resolveWeekPage(
   const row = await getWeekRow(weekId);
   const owner = row ? await getSeason(row.season_id) : null;
   if (!row || !owner) return null;
-  const [scope, weekView] = await Promise.all([
+  const [scope, view] = await Promise.all([
     getSeasonScope(owner),
     owner.is_gauntlet ? Promise.resolve(null) : getWeekView(owner.id, weekId),
   ]);
-  // The season's last week leads on to the paired gauntlet's first round, once its bracket exists.
-  let view = weekView;
-  if (view && !view.nav.next && scope.gauntlet) {
-    const shape = await getGauntletBracketShape(scope.gauntlet.id);
-    view = withGauntletNext(view, scope.hub.id, shape.length > 0 ? Math.min(...shape.map((p) => p.round_number)) : null);
-  }
   return { week: row, owner, scope, view };
 }
 
@@ -132,15 +131,8 @@ export async function resolveRoundPage(
   const scope = await getSeasonScope(season);
   if (!scope.gauntlet) return null;
   const data = await getGauntletStageData(scope.gauntlet.id);
-  const roundView = deriveRoundView(scope.hub.id, data, roundNumber);
-  if (!roundView) return null;
-  // The first round steps back into the regular season it follows.
-  let view = roundView;
-  if (!view.nav.prev && !scope.hub.is_gauntlet) {
-    const weeks = await getSeasonWeekNav(scope.hub.id);
-    view = withRegularSeasonPrev(view, scope.hub.id, weeks.at(-1) ?? null);
-  }
-  return { scope, data, view };
+  const view = deriveRoundView(scope.hub.id, data, roundNumber);
+  return view ? { scope, data, view } : null;
 }
 
 /** A pod id → the gauntlet group's page view. */

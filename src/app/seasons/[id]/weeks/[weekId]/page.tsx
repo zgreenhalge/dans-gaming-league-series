@@ -9,7 +9,7 @@ import { WeekScorecard } from '@/components/StageScorecard';
 import { WeekMatchCard } from '@/components/ScheduleList';
 import EmptyState from '@/components/EmptyState';
 import { PlayerName } from '@/components/PlayerName';
-import { resolveWeekPage } from '@/lib/queries';
+import { getFirstGauntletRound, resolveWeekPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, roundHref, seasonHref, weekHref } from '@/lib/crumbs';
 import { describeMatchups, weekTitle } from '@/lib/seo/stage-meta';
@@ -32,7 +32,8 @@ const loadWeek = cache(async (idParam: string, weekIdParam: string) => {
   if (owner.is_gauntlet) redirect(roundHref(scope.hub.id, week.week_number));
   if (scope.hub.id !== seasonId) redirect(weekHref(scope.hub.id, weekId));
   if (!view) notFound();
-  return { season: owner, view };
+  const firstRound = scope.gauntlet ? await getFirstGauntletRound(scope.gauntlet.id) : null;
+  return { season: owner, hubId: scope.hub.id, view, firstRound };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -52,7 +53,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function WeekPage({ params }: { params: Promise<Params> }) {
   const { id, weekId } = await params;
-  const [{ season, view }, session] = await Promise.all([loadWeek(id, weekId), getServerSession(authOptions)]);
+  const [{ season, hubId, view, firstRound }, session] = await Promise.all([loadWeek(id, weekId), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const { week } = view;
   const win = weekWindow(season.start_date, week.week_number);
@@ -82,7 +83,11 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
           }
         />
         <div className="mb-6">
-          <StageNavStrip nav={view.nav} noun="Weeks" />
+          <StageNavStrip
+            items={view.nav}
+            label="Weeks"
+            meta={firstRound != null ? { label: 'Gauntlet →', href: roundHref(hubId, firstRound) } : undefined}
+          />
         </div>
 
         <h2 className="tracked text-[11px] font-semibold text-[var(--color-text-secondary)] mb-2">Scorecard</h2>

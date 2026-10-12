@@ -9,7 +9,7 @@ import { GroupPanel } from '@/components/GroupPanel';
 import EmptyState from '@/components/EmptyState';
 import { getSeedNames, resolveRoundPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, gauntletHref, roundHref } from '@/lib/crumbs';
+import { buildCrumbs, gauntletHref, roundHref, seasonHref } from '@/lib/crumbs';
 import { describeMatchups, roundTitle } from '@/lib/seo/stage-meta';
 import { parseRouteId, seasonTitle, weekLabel } from '@/lib/util';
 
@@ -62,7 +62,11 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
           details={view.isFinal && <span>Final round</span>}
         />
         <div className="mb-6">
-          <StageNavStrip nav={view.nav} noun="Rounds" />
+          <StageNavStrip
+            items={view.nav}
+            label="Rounds"
+            meta={hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id) }}
+          />
         </div>
         {view.groups.length > 0 ? (
           view.groups.map((g, i) => (

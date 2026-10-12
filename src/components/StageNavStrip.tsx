@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { StageNav, StageNavItem } from '@/lib/stage-views';
+import type { StageNavItem } from '@/lib/stage-views';
 
 function Chip({ item }: { item: StageNavItem }) {
   const base = 'inline-flex items-center px-2 py-1 font-mono text-[11px] border transition-colors';
@@ -36,45 +36,56 @@ function Chip({ item }: { item: StageNavItem }) {
   );
 }
 
-/** Previous / next links around a row of chips — one chip per sibling stage (week, round or group),
- *  the current one marked. Server-rendered; every link is a plain page. */
-export function StageNavStrip({
-  nav,
-  prev = nav.prev,
-  next = nav.next,
-  noun,
-}: {
-  nav: StageNav;
-  /** Override the neighbours (a group page steps across the whole bracket, not just its round). */
-  prev?: StageNavItem | null;
-  next?: StageNavItem | null;
-  /** What the chips are, for the nav's accessible label ("Weeks", "Groups"). */
-  noun: string;
-}) {
-  const arrowCls = 'tracked text-[10px] font-semibold px-2 py-1 border shrink-0 transition-colors';
-  const live = 'text-[var(--color-text-secondary)] border-[var(--color-border-primary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]';
-  const dead = 'text-[var(--color-text-secondary)] border-[var(--color-border-primary)] opacity-40';
+/** A chip leading out of the strip's own set of stages — a week page's way into the gauntlet, a
+ *  gauntlet page's way back to the regular season. Drawn in the site accent, apart from the chips. */
+function MetaChip({ meta }: { meta: StageNavMeta }) {
   return (
-    <nav aria-label={noun} className="flex items-center gap-2 flex-wrap">
-      {prev?.href ? (
-        <Link href={prev.href} className={`${arrowCls} ${live}`} title={prev.label}>
-          ← Prev
-        </Link>
-      ) : (
-        <span className={`${arrowCls} ${dead}`}>← Prev</span>
+    <Link
+      href={meta.href}
+      className="ml-auto inline-flex items-center px-2 py-1 tracked text-[10px] font-semibold border shrink-0 transition-opacity hover:opacity-80"
+      style={{
+        color: 'var(--color-site-accent)',
+        background: 'color-mix(in srgb, var(--color-site-accent) 12%, transparent)',
+        borderColor: 'var(--color-site-accent)',
+      }}
+    >
+      {meta.label}
+    </Link>
+  );
+}
+
+export interface StageNavMeta {
+  label: string;
+  href: string;
+}
+
+/** A labelled row of chips — one per sibling stage (week, round or group), the current one marked —
+ *  plus an optional meta chip on the right. Server-rendered; every link is a plain page. A lone
+ *  stage chip would only repeat the page's own title, so the row needs two or more to show; with
+ *  neither chips nor a meta chip, nothing renders. */
+export function StageNavStrip({
+  items,
+  label,
+  meta,
+}: {
+  items: StageNavItem[];
+  /** What the chips are ("Weeks", "Rounds", "Groups") — shown ahead of them and as the nav's label. */
+  label: string;
+  meta?: StageNavMeta;
+}) {
+  const showItems = items.length > 1;
+  if (!showItems && !meta) return null;
+  return (
+    <nav aria-label={label} className="flex items-center gap-2 flex-wrap">
+      {showItems && (
+        <div className="flex items-center gap-1 flex-wrap min-w-0">
+          <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] mr-1">{label}</span>
+          {items.map((item) => (
+            <Chip key={item.label} item={item} />
+          ))}
+        </div>
       )}
-      <div className="flex items-center gap-1 flex-wrap min-w-0">
-        {nav.items.map((item) => (
-          <Chip key={item.label} item={item} />
-        ))}
-      </div>
-      {next?.href ? (
-        <Link href={next.href} className={`${arrowCls} ${live}`} title={next.label}>
-          Next →
-        </Link>
-      ) : (
-        <span className={`${arrowCls} ${dead}`}>Next →</span>
-      )}
+      {meta && <MetaChip meta={meta} />}
     </nav>
   );
 }

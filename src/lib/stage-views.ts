@@ -41,20 +41,6 @@ export interface StageNavItem {
   current: boolean;
 }
 
-export interface StageNav {
-  items: StageNavItem[];
-  prev: StageNavItem | null;
-  next: StageNavItem | null;
-}
-
-/** Items plus the nearest linkable neighbours of the current one. */
-function buildNav(items: StageNavItem[]): StageNav {
-  const at = items.findIndex((i) => i.current);
-  const prev = at > 0 ? ([...items.slice(0, at)].reverse().find((i) => i.href != null) ?? null) : null;
-  const next = at >= 0 ? (items.slice(at + 1).find((i) => i.href != null) ?? null) : null;
-  return { items, prev, next };
-}
-
 // ─── Regular-season week ─────────────────────────────────────────────────────────────────────────
 
 export interface WeekScorecardRow extends PlayerRecord {
@@ -68,7 +54,8 @@ export interface WeekView {
   week: WeekWithMatches;
   status: StageStatus;
   scorecard: WeekScorecardRow[];
-  nav: StageNav;
+  /** One chip per week of the season. */
+  nav: StageNavItem[];
 }
 
 /**
@@ -96,21 +83,7 @@ export function deriveWeekView(
     played: anyMatchPlayed(w.matches),
     current: w.id === weekId,
   }));
-  return { week, status: stageStatus(week.matches), scorecard, nav: buildNav(items) };
-}
-
-/** A week view whose strip carries on past the regular season: the last week's "Next" leads to the
- *  paired gauntlet's first round. Any other week, or a missing round, is returned unchanged. */
-export function withGauntletNext(view: WeekView, hubSeasonId: number, firstRound: number | null): WeekView {
-  if (view.nav.next || firstRound == null) return view;
-  const next: StageNavItem = {
-    chip: weekLabel(firstRound, true),
-    label: `Gauntlet · ${weekLabel(firstRound, true)}`,
-    href: roundHref(hubSeasonId, firstRound),
-    played: false,
-    current: false,
-  };
-  return { ...view, nav: { ...view.nav, next } };
+  return { week, status: stageStatus(week.matches), scorecard, nav: items };
 }
 
 // ─── Gauntlet round / group ──────────────────────────────────────────────────────────────────────
@@ -214,7 +187,8 @@ export interface RoundView {
   isFinal: boolean;
   status: StageStatus;
   groups: GroupView[];
-  nav: StageNav;
+  /** One chip per round of the gauntlet. */
+  nav: StageNavItem[];
 }
 
 function roundNumbersOf(data: GauntletStageData): number[] {
@@ -244,72 +218,30 @@ export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, ro
     isFinal: groups.some((g) => g.isFinal),
     status: stageStatus(matches),
     groups,
-    nav: buildNav(items),
+    nav: items,
   };
-}
-
-/** A round view whose strip reaches back into the regular season: the gauntlet's first round's
- *  "Prev" leads to the paired season's last week. Any later round, or a season with no weeks, is
- *  returned unchanged. */
-export function withRegularSeasonPrev(
-  view: RoundView,
-  hubSeasonId: number,
-  lastWeek: { id: number; week_number: number } | null,
-): RoundView {
-  if (view.nav.prev || !lastWeek) return view;
-  const prev: StageNavItem = {
-    chip: weekLabel(lastWeek.week_number, false),
-    label: `Regular season · ${weekLabel(lastWeek.week_number, false)}`,
-    href: weekHref(hubSeasonId, lastWeek.id),
-    played: false,
-    current: false,
-  };
-  return { ...view, nav: { ...view.nav, prev } };
 }
 
 export interface GroupPageView {
   group: GroupView & { pod: BracketPod };
   roundNumber: number;
-  /** Chips for the groups of this group's round. */
-  nav: StageNav;
-  /** Previous/next group across the whole bracket (round, then pod order). */
-  prev: StageNavItem | null;
-  next: StageNavItem | null;
+  /** One chip per group of this group's round. */
+  nav: StageNavItem[];
 }
 
 export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData, podId: number): GroupPageView | null {
   const pod = data.bracketShape.find((p) => p.id === podId);
   if (!pod) return null;
-  const seeds = bracketSeeds(data);
-  const groups = groupsOfRound(data, pod.round_number, seeds);
+  const groups = groupsOfRound(data, pod.round_number, bracketSeeds(data));
   const found = groups.find((g) => g.pod?.id === podId);
   if (!found) return null;
-  const group = { ...found, pod };
 
-  const itemOf = (g: GroupView, current: boolean): StageNavItem => ({
+  const nav = groups.map<StageNavItem>((g) => ({
     chip: g.label ?? '•',
     label: g.label ?? 'Game',
     href: g.pod ? groupHref(hubSeasonId, g.pod.id) : null,
     played: g.status !== 'upcoming',
-    current,
-  });
-
-  // Bracket order across rounds for prev/next.
-  const ordered = [...data.bracketShape].sort((a, b) => a.round_number - b.round_number || a.pod_index - b.pod_index);
-  const at = ordered.findIndex((p) => p.id === podId);
-  const neighbour = (p: BracketPod | undefined): StageNavItem | null => {
-    if (!p) return null;
-    // Same round: already built. Another round is built once, for just this neighbour.
-    const siblings = p.round_number === pod.round_number ? groups : groupsOfRound(data, p.round_number, seeds);
-    const g = siblings.find((x) => x.pod?.id === p.id);
-    return g ? { ...itemOf(g, false), label: `${weekLabel(p.round_number, true)} · ${g.label}` } : null;
-  };
-
-  return {
-    group,
-    roundNumber: pod.round_number,
-    nav: buildNav(groups.map((g) => itemOf(g, g.pod?.id === podId))),
-    prev: neighbour(ordered[at - 1]),
-    next: neighbour(ordered[at + 1]),
-  };
+    current: g.pod?.id === podId,
+  }));
+  return { group: { ...found, pod }, roundNumber: pod.round_number, nav };
 }

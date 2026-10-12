@@ -9,7 +9,7 @@ import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
 import { getSeedNames, resolveGroupPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, gauntletHref, groupHref, roundHref } from '@/lib/crumbs';
+import { buildCrumbs, gauntletHref, groupHref, roundHref, seasonHref } from '@/lib/crumbs';
 import { describeMatchups, groupTitle } from '@/lib/seo/stage-meta';
 import { parseRouteId, seasonTitle, weekLabel } from '@/lib/util';
 
@@ -81,7 +81,11 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
           }
         />
         <div className="mb-6">
-          <StageNavStrip nav={view.nav} prev={view.prev} next={view.next} noun="Groups" />
+          <StageNavStrip
+            items={view.nav}
+            label="Groups"
+            meta={hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id) }}
+          />
         </div>
         <GroupPanel
           group={group}
