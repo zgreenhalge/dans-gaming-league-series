@@ -14,6 +14,8 @@ import { getWeekView, getGauntletStageData, getWeekRow, getPodSeasonId, getStage
 import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, type GauntletStageData } from './stage-views';
 import { getSeasonSchedule, getSeasonWeekNav } from './queries';
 import type { WeekWithMatches } from './queries';
+import { hubIdsBySeason } from './queries';
+import type { Season } from './types';
 import type { BracketPod, GauntletMatch } from './queries/gauntlet';
 import { test } from './test-support/miniTest';
 
@@ -87,6 +89,20 @@ test('getGauntletStageData: rounds, bracket shape and week ids for the paired ga
   const round = deriveRoundView(1, data, 1)!;
   assert.equal(round.groups.length, 1);
   assert.equal(round.groups[0].label, 'Final');
+});
+
+test('hubIdsBySeason: regular seasons are their own hub, a gauntlet maps to the first regular season with its number', () => {
+  const season = (id: number, name: string, is_gauntlet: boolean) => ({ id, name, is_gauntlet }) as Season;
+  const hubs = hubIdsBySeason([
+    season(1, 'Season 5', false),
+    season(2, 'Season 5 Gauntlet', true),
+    season(3, 'Season 4 Gauntlet', true),
+    season(4, 'Season 5', false),
+  ]);
+  assert.equal(hubs.get(1), 1);
+  assert.equal(hubs.get(2), 1, 'paired by season number');
+  assert.equal(hubs.get(3), 3, 'an unpaired gauntlet is its own hub');
+  assert.equal(hubs.get(4), 4);
 });
 
 test('getStagePagePaths: weeks, rounds and groups, with gauntlets filed under their paired regular season', async () => {

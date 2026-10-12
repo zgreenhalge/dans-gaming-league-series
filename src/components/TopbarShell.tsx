@@ -69,7 +69,6 @@ function DevToggle() {
   );
 }
 
-export type { Crumb };
 
 function NavToggleButton() {
   const { toggleDesktop, mobileOpen, setMobileOpen } = useNav();

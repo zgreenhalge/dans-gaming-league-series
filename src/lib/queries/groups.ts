@@ -114,18 +114,18 @@ export async function resolveWeekPage(
   return { week: row, owner, scope, view };
 }
 
-/** A season id and round number → the gauntlet round's view. `scope.gauntlet` is always set. */
+/** A season id and round number → the gauntlet round's view (`null` if the season has no gauntlet). */
 export async function resolveRoundPage(
   seasonId: number,
   roundNumber: number,
-): Promise<{ scope: SeasonScope & { gauntlet: Season }; data: GauntletStageData; view: RoundView } | null> {
+): Promise<{ scope: SeasonScope; data: GauntletStageData; view: RoundView } | null> {
   const season = await getSeason(seasonId);
   if (!season) return null;
   const scope = await getSeasonScope(season);
   if (!scope.gauntlet) return null;
   const data = await getGauntletStageData(scope.gauntlet.id);
   const view = deriveRoundView(scope.hub.id, data, roundNumber);
-  return view ? { scope: { ...scope, gauntlet: scope.gauntlet }, data, view } : null;
+  return view ? { scope, data, view } : null;
 }
 
 /** A pod id → the gauntlet group's page view. */

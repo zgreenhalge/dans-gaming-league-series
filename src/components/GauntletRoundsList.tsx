@@ -243,7 +243,7 @@ function GauntletRoundCard({
             return podEntries.map((entry, gi) => {
               // A pod header names its group so consecutive pods in one round read as distinct
               // matchups rather than one undifferentiated list of games — "Group N" 1-indexed to
-              // match the Groups tab (`groupLabel()` in gauntlet-draft.ts), or "Final" for the round
+              // match `groupName()` in crumbs.ts, or "Final" for the round
               // with the bracket's single final pod. `null` only for a legacy pod-less match (no
               // group concept).
               const groupLabel = entry.pod_index != null ? groupName(entry.pod_index, isFinalRound) : null;
