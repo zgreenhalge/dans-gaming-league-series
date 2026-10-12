@@ -23,6 +23,13 @@ export interface FeedbackLifecycle<Form> {
   reset(seasonId: number, form: Form): WriteResult;
 }
 
+// The two forms store "open" differently: a survey has `surveys.closed_at` (null = open, a timestamp
+// = closed), a superlatives vote has `superlative_polls.is_open`. The adapters below are the write
+// side of that difference, `isSurveyOpen()` and `getSuperlativePoll()` (`queries/feedback.ts`) the read
+// side, and `getOpenFeedbackSeasonIds()` queries each shape; the player-side save RPCs
+// (`save_survey_response()`, `replace_superlative_votes()`) test the matching column in SQL. Nothing
+// else branches on it, so a lifecycle change needs one new method on each adapter.
+
 export const SURVEY_LIFECYCLE: FeedbackLifecycle<Survey> = {
   missing: 'This season has no survey',
   find: getSurveyForSeason,

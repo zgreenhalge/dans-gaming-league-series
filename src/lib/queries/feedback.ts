@@ -20,6 +20,9 @@ import { isFeedbackLocked } from '../feedback';
 export interface Survey {
   id: number;
   season_id: number;
+  /** Null while open. A superlatives vote stores the same state as `superlative_polls.is_open`; the
+   *  difference is contained in `isSurveyOpen()`, `SURVEY_LIFECYCLE` / `SUPERLATIVES_LIFECYCLE`
+   *  (`feedback-routes.ts`) and `getOpenFeedbackSeasonIds()`. */
   closed_at: string | null;
   questions: SurveyQuestion[];
 }
@@ -197,7 +200,8 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
 }
 
 /** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
- *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. */
+ *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. Reads each
+ *  form's own open column (`surveys.closed_at is null`, `superlative_polls.is_open`). */
 export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
   const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
     getAdminClient().from('surveys').select('season_id').is('closed_at', null),

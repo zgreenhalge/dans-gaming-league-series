@@ -434,6 +434,10 @@ per `(superlative, voter)`. Everything around the content is written once:
   Editing mutations return 409 when locked. `getSurveyResults()` and `getSuperlativeResults()` report
   it as `isLocked` to their admin panels, `isSuperlativePollLocked()` gates each superlatives edit, and
   the `replace_survey_questions()` RPC applies the same rule in one statement for the survey.
+- **Open state** — stored per form: `surveys.closed_at` (null while open) and
+  `superlative_polls.is_open`. The difference is confined to `isSurveyOpen()`, the two lifecycle
+  adapters below, `getOpenFeedbackSeasonIds()`, and the player-side save RPCs; everything else reads an
+  `isOpen` boolean.
 - **Open/close and reset routes** — `setFeedbackOpen()` and `resetFeedback()`
   (`src/lib/feedback-routes.ts`) run the lookup (404 if the season has none), the write, and the
   error mapping for both forms; `SURVEY_LIFECYCLE` and `SUPERLATIVES_LIFECYCLE` adapt each form's
