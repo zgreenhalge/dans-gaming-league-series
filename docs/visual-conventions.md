@@ -122,7 +122,7 @@ reason reads as two unrelated features, not one drill-down.
 **Table header cells.** Use the shared **`Th`** (`src/components/Th.tsx`, `align="left"|"right"`)
 for a stat table's static (non-sortable) header cells instead of repeating the tracked/bordered class
 string per column. A column whose header is itself clickable to sort keeps its own `SortableTh`-style
-component — that's a different, interactive shape, not a `Th` variant.
+component — that's a different, interactive shape, not a `Th` variant. The scorecards on the week, round and group pages use the shared `SortableTh` (`src/components/SortableTh.tsx`, `Th`'s tracked style plus an arrow and `aria-sort`) with `useSortState()` (`src/components/useSortState.ts`, also behind `BasicStatsView` and `SabremetricsLeaderboardView`'s sorting).
 
 **Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
 `size="sm"|"lg"`) for a "nothing here" message — `sm` for an inline one-liner inside an existing

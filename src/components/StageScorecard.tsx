@@ -1,11 +1,50 @@
-import Th from './Th';
+'use client';
+
+import SortableTh from './SortableTh';
 import { PlayerName } from './PlayerName';
+import { useSortState, type SortState } from './useSortState';
 import type { WeekScorecardRow, GroupRow } from '@/lib/stage-views';
 import type { RankMovement } from '@/lib/season-standings';
 
 // The scorecard tables on the week, round and group pages. Both show the exact values the ranking is
 // computed from (`deriveGroupScorecard()` / `canonicalGauntletRankMap()` — group-scorecard.ts), in the
-// order they rank by.
+// order they rank by, and every column header re-sorts them (the `#` column keeps showing each
+// player's actual rank, so a re-sorted table still reads against it).
+
+type SortValue = number | string | null;
+
+/** `rows` ordered by the column in `state`; `null` values always sort last, and rows that tie keep
+ *  their incoming (canonical ranking) order whichever way the column runs. */
+function sortRows<T>(rows: T[], state: SortState, keys: Record<string, (row: T) => SortValue>): T[] {
+  const valueOf = keys[state.col];
+  if (!valueOf) return rows;
+  const dir = state.asc ? 1 : -1;
+  return rows
+    .map((row, i) => ({ row, i, v: valueOf(row) }))
+    .sort((a, b) => {
+      if (a.v === b.v) return a.i - b.i;
+      if (a.v == null) return 1;
+      if (b.v == null) return -1;
+      const cmp = typeof a.v === 'string' ? a.v.localeCompare(b.v as string) : a.v - (b.v as number);
+      return cmp === 0 ? a.i - b.i : cmp * dir;
+    })
+    .map((x) => x.row);
+}
+
+/** Columns that sort ascending on first click: places, seeds and names read best smallest/A-first. */
+const ASC_FIRST = ['rank', 'player', 'seed', 'season', 'result'] as const;
+
+const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
+  rank: (r) => r.rank,
+  player: (r) => r.player_name,
+  record: (r) => r.wins * 1000 - r.losses,
+  rwr: (r) => r.rwr_percentage,
+  adr: (r) => r.adr,
+  kad: (r) => r.kills,
+  season: (r) => r.movement?.after ?? null,
+};
+
+const OUTCOME_ORDER = { advances: 0, eliminated: 1, pending: 2 } as const;
 
 const td = 'py-2 px-3 font-mono text-[12px] tnum';
 const nameTd = 'py-2 px-3 font-display text-[14px] font-semibold';
@@ -58,21 +97,23 @@ export function WeekScorecard({
   showMovement: boolean;
   currentPlayerId: number | null;
 }) {
+  const [sort, onSort] = useSortState('rank', { defaultAsc: true, ascFirst: ASC_FIRST });
+  const sorted = sortRows(rows, sort, WEEK_SORT);
   return (
     <Frame>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
-          <Th>#</Th>
-          <Th>Player</Th>
-          <Th align="right">W-L</Th>
-          <Th align="right">RWR%</Th>
-          <Th align="right">ADR</Th>
-          <Th align="right">K/A/D</Th>
-          {showMovement && <Th align="right">Season</Th>}
+          <SortableTh label="#" sortKey="rank" state={sort} onSort={onSort} />
+          <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />
+          <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="RWR%" title="Round win rate" sortKey="rwr" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="ADR" title="Average damage per round" sortKey="adr" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="K/A/D" title="Sorts by kills" sortKey="kad" state={sort} onSort={onSort} align="right" />
+          {showMovement && <SortableTh label="Season" title="Season standing after this week" sortKey="season" state={sort} onSort={onSort} align="right" />}
         </tr>
       </thead>
       <tbody>
-        {rows.map((r) => (
+        {sorted.map((r) => (
           <tr key={r.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
             <td className={`${td} text-[var(--color-text-secondary)]`}>{r.rank}</td>
             <td className={nameTd}>
@@ -130,21 +171,32 @@ export function GroupScorecard({
   finished: boolean;
   currentPlayerId: number | null;
 }) {
+  const [sort, onSort] = useSortState('rank', { defaultAsc: true, ascFirst: ASC_FIRST });
+  const played = (r: GroupRow) => r.matches_played > 0;
+  const sorted = sortRows<GroupRow>(rows, sort, {
+    rank: (r) => r.rank,
+    seed: (r) => r.seed,
+    player: (r) => r.player_name,
+    record: (r) => (played(r) ? r.wins * 1000 - r.losses : null),
+    rwr: (r) => (played(r) ? r.rwr_percentage : null),
+    adr: (r) => (played(r) ? r.adr : null),
+    result: (r) => (isFinal ? r.rank : finished ? OUTCOME_ORDER[r.outcome] : null),
+  });
   return (
     <Frame>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
-          <Th>#</Th>
-          <Th align="right">Seed</Th>
-          <Th>Player</Th>
-          <Th align="right">W-L</Th>
-          <Th align="right">RWR%</Th>
-          <Th align="right">ADR</Th>
-          <Th align="right">{isFinal ? 'Place' : 'Result'}</Th>
+          <SortableTh label="#" sortKey="rank" state={sort} onSort={onSort} />
+          <SortableTh label="Seed" sortKey="seed" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />
+          <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="RWR%" title="Round win rate" sortKey="rwr" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="ADR" title="Average damage per round" sortKey="adr" state={sort} onSort={onSort} align="right" />
+          <SortableTh label={isFinal ? 'Place' : 'Result'} sortKey="result" state={sort} onSort={onSort} align="right" />
         </tr>
       </thead>
       <tbody>
-        {rows.map((r) => (
+        {sorted.map((r) => (
           <tr key={r.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
             <td className={`${td} text-[var(--color-text-secondary)]`}>{r.rank ?? '–'}</td>
             <td className={`${td} text-right text-[var(--color-text-secondary)]`}>{r.seed ?? '–'}</td>

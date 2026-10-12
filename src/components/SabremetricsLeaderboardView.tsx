@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useSortState, type SortState } from './useSortState';
 import Link from 'next/link';
 import {
   aggregateRows,
@@ -83,17 +84,6 @@ const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [] };
 // --- Sorting ---
 
 type SortKey = string;
-interface SortState { col: SortKey; asc: boolean }
-
-function useSortState(defaultCol: SortKey): [SortState, (col: SortKey) => void] {
-  const [sort, setSort] = useState<SortState>({ col: defaultCol, asc: false });
-  const toggle = useCallback(
-    (col: SortKey) => setSort((s) => s.col === col ? { col, asc: !s.asc } : { col, asc: false }),
-    [],
-  );
-  return [sort, toggle];
-}
-
 function SortableTh({ label, title, sortKey, state, onClick }: {
   label: string; title?: string; sortKey: SortKey; state: SortState; onClick: (key: SortKey) => void;
 }) {
