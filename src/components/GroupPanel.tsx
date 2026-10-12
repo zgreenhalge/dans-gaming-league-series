@@ -5,7 +5,7 @@ import { GroupScorecard } from './StageScorecard';
 import { StageStatusTag } from './StageStatusTag';
 import { groupHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, podsById as buildPodsById } from '@/lib/gauntlet-draft';
-import { groupCaption, type GroupView } from '@/lib/stage-views';
+import type { GroupView } from '@/lib/stage-views';
 import type { BracketPod } from '@/lib/queries';
 
 /**
@@ -50,7 +50,6 @@ export function GroupPanel({
             rows={group.scorecard}
             isFinal={group.isFinal}
             finished={finished}
-            caption={groupCaption(group)}
             currentPlayerId={currentPlayerId}
           />
         </div>

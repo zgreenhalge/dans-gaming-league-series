@@ -5,7 +5,7 @@ import type { RankMovement } from '@/lib/season-standings';
 
 // The scorecard tables on the week, round and group pages. Both show the exact values the ranking is
 // computed from (`deriveGroupScorecard()` / `canonicalGauntletRankMap()` — group-scorecard.ts), in the
-// order they rank by, with a caption naming the rule.
+// order they rank by.
 
 const td = 'py-2 px-3 font-mono text-[12px] tnum';
 const nameTd = 'py-2 px-3 font-display text-[14px] font-semibold';
@@ -38,15 +38,10 @@ function Movement({ movement }: { movement: RankMovement | null }) {
   );
 }
 
-function Frame({ caption, children }: { caption: string; children: React.ReactNode }) {
+function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <section className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-max">{children}</table>
-      </div>
-      <p className="px-3 py-2 font-mono text-[10px] text-[var(--color-text-secondary)] border-t border-[var(--color-border-tertiary)] bg-[var(--color-bg-secondary)]">
-        {caption}
-      </p>
+    <section className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+      <table className="w-full border-collapse min-w-max">{children}</table>
     </section>
   );
 }
@@ -64,11 +59,7 @@ export function WeekScorecard({
   currentPlayerId: number | null;
 }) {
   return (
-    <Frame
-      caption={`Ranked by Wins → RWR% → ADR, the same order as the season standings.${
-        showMovement ? " Season shows each player's standing after this week and how far it moved." : ''
-      }`}
-    >
+    <Frame>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
           <Th>#</Th>
@@ -132,17 +123,15 @@ export function GroupScorecard({
   rows,
   isFinal,
   finished,
-  caption,
   currentPlayerId,
 }: {
   rows: GroupRow[];
   isFinal: boolean;
   finished: boolean;
-  caption: string;
   currentPlayerId: number | null;
 }) {
   return (
-    <Frame caption={caption}>
+    <Frame>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
           <Th>#</Th>
