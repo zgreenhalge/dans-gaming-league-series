@@ -6,6 +6,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getReconciledServerState } from '@/lib/dathost-lifecycle';
 import { requireMatchAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 export async function GET(
   _req: NextRequest,
@@ -18,7 +19,7 @@ export async function GET(
   }
 
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   // Reconciles a stale `live` against real DatHost state (#135) so the UI never offers a dead server.
   const view = await getReconciledServerState(getAdminClient(), matchId);

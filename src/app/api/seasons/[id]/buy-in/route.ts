@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseRouteId } from '@/lib/util';
 import { parseBuyInInput } from '@/lib/season-buy-in';
+import { accessDenied } from '@/lib/access-control';
 
 type SetBuyInResult = { status: 'ok' | 'not-found' | 'not-upcoming' | 'schedule-generated' };
 
@@ -22,9 +23,7 @@ const REFUSALS: Record<Exclude<SetBuyInResult['status'], 'ok'>, { error: string;
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const { id } = await params;
   const seasonId = parseRouteId(id);

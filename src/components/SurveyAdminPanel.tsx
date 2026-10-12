@@ -29,6 +29,7 @@ import {
   type SurveyQuestionKind,
 } from '@/lib/survey';
 import type { SurveyResults as SurveyResultsData } from '@/lib/queries';
+import ErrorText from '@/components/ErrorText';
 
 const KIND_LABEL: Record<SurveyQuestionKind, string> = {
   rating: '1–5 rating',
@@ -144,7 +145,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
         <button type="button" onClick={() => submit(false)} disabled={invalid || busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
           Save questions
         </button>
-        {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
+        <ErrorText error={error} as="span" />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { r2, R2_BUCKET, demoSegmentKey, MAX_DEMO_SEGMENTS } from '@/lib/r2';
 import { putDemoManifest } from '@/lib/demo/segmentManifest';
 import { requireMatchAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 async function objectExists(key: string): Promise<boolean> {
   try {
@@ -32,7 +33,7 @@ export async function POST(
   }
 
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await req.json().catch(() => null);
   const paths = (body as { paths?: unknown } | null)?.paths;

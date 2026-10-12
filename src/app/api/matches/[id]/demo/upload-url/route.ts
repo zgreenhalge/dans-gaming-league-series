@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey, demoSegmentKey, demoManifestKey, deleteR2Object, MAX_DEMO_SEGMENTS } from '@/lib/r2';
 import { requireMatchAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(
   req: NextRequest,
@@ -16,7 +17,7 @@ export async function POST(
   }
 
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await req.json().catch(() => ({}));
   const rawCount = (body as { count?: unknown }).count;

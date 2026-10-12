@@ -7,6 +7,7 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { parseRouteId } from '@/lib/util';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(
   _req: NextRequest,
@@ -19,7 +20,7 @@ export async function POST(
   }
 
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   try {
     await teardownMatchServer(getAdminClient(), matchId);

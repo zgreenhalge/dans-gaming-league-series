@@ -11,6 +11,7 @@ import {
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 import EmptyState from './EmptyState';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import ErrorText from '@/components/ErrorText';
 
 interface Player {
   id: number;
@@ -206,7 +207,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
             Never double-header (fails to generate if the roster size needs one)
           </label>
         </div>
-        {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
+        <ErrorText error={error} size={12} />
         <button
           type="button"
           onClick={generate}
@@ -325,7 +326,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
         )}
       </div>
 
-      {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
+      <ErrorText error={error} size={12} />
 
       {editedWeekNumbers.length > 0 && (
         <div className="font-mono text-[11px]" style={{ color: 'var(--color-accent-amber-fg)' }}>

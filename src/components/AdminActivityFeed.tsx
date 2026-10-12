@@ -36,6 +36,7 @@ import { IngestJobActions } from './IngestJobActions';
 import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
 import type { OpsErrorHistoryRow } from '@/lib/queries';
+import ErrorText from '@/components/ErrorText';
 
 type View = 'events' | 'history';
 type Tag = 'errored' | 'progress' | 'completed';
@@ -226,9 +227,7 @@ function JobEventRow({ event, now }: { event: JobEvent; now: number | null }) {
             {job.subject.label}
           </Link>
         </div>
-        {job.errorMessage && (
-          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1 break-words">{job.errorMessage}</div>
-        )}
+        <ErrorText error={job.errorMessage} className="mt-1 break-words" />
         {stale && (
           <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1 break-words">
             ⚠ No update in {durationLabel ?? 'a long time'} — the GitHub Action likely finished without

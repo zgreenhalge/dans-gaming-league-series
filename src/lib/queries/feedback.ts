@@ -5,10 +5,10 @@
 // and the vote tally selects the voter id only to count distinct voters, never returning it.
 
 import { getAdminClient } from '../supabase-admin';
+import { isFeedbackLocked } from '../feedback-rules';
+import { tallyVotes } from '../superlatives';
 import {
-  isFeedbackLocked,
   summarizeSurvey,
-  tallyVotes,
   type SurveyAnswers,
   type SurveyQuestion,
   type SurveyQuestionSummary,

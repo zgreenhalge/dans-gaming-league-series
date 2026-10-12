@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LocalTime } from './LocalTime';
 import { JobRetryButton } from './JobActions';
+import ErrorText from '@/components/ErrorText';
 
 export interface OpsErrorItem {
   id: number;
@@ -109,7 +110,7 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
           <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mt-1">
             <LocalTime iso={item.occurredAt} />
           </div>
-          {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1">{error}</div>}
+          <ErrorText error={error} className="mt-1" />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {retryUrl && <JobRetryButton dispatchUrl={retryUrl} inProgress={false} />}

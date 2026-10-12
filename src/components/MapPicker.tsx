@@ -6,6 +6,7 @@
 
 import { toSentenceCase } from '@/lib/maps';
 import type { WorkshopMapOption } from '@/lib/queries';
+import ErrorText from '@/components/ErrorText';
 
 export const CUSTOM_MAP_CHOICE = '__custom__';
 
@@ -51,11 +52,7 @@ export function MapPicker({
             disabled={disabled}
             className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] disabled:opacity-50"
           />
-          {customInvalid && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">
-              Enter a valid Steam workshop ID or URL.
-            </div>
-          )}
+          <ErrorText error={customInvalid ? 'Enter a valid Steam workshop ID or URL.' : null} />
         </>
       )}
     </>

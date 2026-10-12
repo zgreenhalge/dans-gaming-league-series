@@ -7,10 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { setRepoVariable } from '@/lib/gh-dispatch';
 import { INTERVAL_VARIABLE } from '../status/route';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(req: NextRequest) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await req.json().catch(() => null);
   const days = Number(body?.days);

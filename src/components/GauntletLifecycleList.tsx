@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
+import ErrorText from '@/components/ErrorText';
 
 export interface GauntletRow {
   regularSeasonId: number;
@@ -78,7 +79,7 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
                 ? 'seeded, round 1 not yet played'
                 : 'shape built, not yet seeded'}
           </div>
-          {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1">{error}</div>}
+          <ErrorText error={error} className="mt-1" />
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

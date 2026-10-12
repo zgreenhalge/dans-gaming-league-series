@@ -11,6 +11,7 @@ import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { recordJobStatus, isJobInFlight, matchJobKey } from '@/lib/background-jobs';
 import { parseRouteId } from '@/lib/util';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE } from '@/lib/demo/ingestResult';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(
   _req: NextRequest,
@@ -23,7 +24,7 @@ export async function POST(
   }
 
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
 

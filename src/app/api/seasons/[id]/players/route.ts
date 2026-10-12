@@ -4,6 +4,7 @@ import { requireSeasonRosterAccess, mapSeasonRosterWriteError } from '@/lib/seas
 import { grantParticipantRole, revokeParticipantRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (seasonId === null) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
 
   const access = await requireSeasonRosterAccess(req, seasonId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const { data: player, error: playerErr } = await getAdminClient()
     .from('players')
@@ -43,7 +44,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (seasonId === null) return NextResponse.json({ error: 'Invalid season id' }, { status: 400 });
 
   const access = await requireSeasonRosterAccess(req, seasonId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   // Independent reads/writes — the discord_id lookup doesn't gate the delete (unlike POST's
   // player-exists check, which must happen first) — run them concurrently.

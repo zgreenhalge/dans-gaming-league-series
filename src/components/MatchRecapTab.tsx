@@ -19,6 +19,7 @@ import { weaponIconSrc } from '@/lib/weaponIcons';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { ReplayEvent } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
+import ErrorText from '@/components/ErrorText';
 
 type Side = 'CT' | 'T';
 
@@ -112,11 +113,7 @@ function ReplayStatusPanel({
               ? `Replay generation failed${job.stage ? ` at "${job.stage}"` : ''}.`
               : 'No replay has been generated for this match yet.'}
           </div>
-          {job.status === 'failed' && job.errorMessage && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] max-w-md mx-auto break-words">
-              {job.errorMessage}
-            </div>
-          )}
+          {job.status === 'failed' && <ErrorText error={job.errorMessage} className="max-w-md mx-auto break-words" />}
           {canDispatch ? (
             <button
               type="button"
@@ -135,9 +132,7 @@ function ReplayStatusPanel({
               A player in this match or an admin can generate the replay.
             </div>
           )}
-          {error && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>
-          )}
+          <ErrorText error={error} />
         </div>
       )}
     </div>
@@ -584,7 +579,7 @@ function RegenerateLink({ matchId }: { matchId: number }) {
   const { dispatch, busy, error, isPending } = useReplayDispatch(matchId);
   return (
     <div className="flex items-center gap-2">
-      {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <ErrorText error={error} as="span" />
       <button
         type="button"
         onClick={dispatch}

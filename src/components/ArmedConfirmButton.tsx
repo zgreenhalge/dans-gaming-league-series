@@ -8,6 +8,7 @@
 // this only extracts the interaction shape and styling, not the mutation logic.
 
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import ErrorText from '@/components/ErrorText';
 
 const CONFIRM_VARIANT: Record<'primary' | 'danger', string> = {
   primary: 'border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)]',
@@ -73,7 +74,7 @@ export function ArmedConfirmButton({
           {triggerLabel}
         </button>
       )}
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
+      <ErrorText error={error} />
     </div>
   );
 }

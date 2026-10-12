@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 /** Admin "Retry" action (`retryEndpointFor()`, `OpsErrorList.tsx`) on a live
  *  `discord_schedule_reminder`/`discord_notify_reminder` ops-errors row — re-runs
@@ -17,7 +18,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const { id } = await params;
   const matchId = parseRouteId(id);

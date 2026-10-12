@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./Modal";
+import ErrorText from '@/components/ErrorText';
 
 // Parse a YouTube video ID out of the URL a user pastes from the browser bar or the
 // "Share" button. Returns null for anything that isn't a recognizable YouTube URL, so
@@ -200,9 +201,7 @@ export function RecordingUrlForm({ matchId, videoId }: { matchId: number; videoI
         )}
       </form>
 
-      {error && (
-        <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>
-      )}
+      <ErrorText error={error} size={12} />
 
       {clearConfirm}
     </div>

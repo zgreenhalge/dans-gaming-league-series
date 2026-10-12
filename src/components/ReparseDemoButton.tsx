@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
+import ErrorText from '@/components/ErrorText';
 
 export function ReparseDemoButton({ matchId }: { matchId: number }) {
   const router = useRouter();
@@ -35,7 +36,7 @@ export function ReparseDemoButton({ matchId }: { matchId: number }) {
       >
         {busy ? '…' : queued ? 'queued ↻' : 'reparse demo'}
       </button>
-      {error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <ErrorText error={error} as="span" size={10} />
     </div>
   );
 }

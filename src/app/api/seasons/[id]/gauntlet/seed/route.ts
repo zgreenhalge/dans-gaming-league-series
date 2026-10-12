@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { trySeedGauntlet } from '@/lib/gauntlet-engine';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 /**
  * Seeds an already-built (but unseeded) gauntlet bracket from the regular season's *current*
@@ -16,9 +17,7 @@ import { parseRouteId } from '@/lib/util';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const { id } = await params;
   const regularSeasonId = parseRouteId(id);

@@ -7,6 +7,7 @@
 import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { ScheduleWarningBox } from './ScheduleWarning';
+import ErrorText from '@/components/ErrorText';
 
 function fmtScheduled(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -47,7 +48,7 @@ export function ScheduleEditor({
         >
           {scheduledAt ? 'Edit' : 'Set time'}
         </button>
-        {s.error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{s.error}</span>}
+        <ErrorText error={s.error} as="span" size={10} />
       </div>
     );
   }
@@ -95,7 +96,7 @@ export function ScheduleEditor({
         variant="compact"
       />
 
-      {s.error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{s.error}</span>}
+      <ErrorText error={s.error} as="span" size={10} />
     </div>
   );
 }

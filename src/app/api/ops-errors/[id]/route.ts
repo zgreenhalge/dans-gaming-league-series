@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 /** Dismisses a single `ops_errors` row by its id — the admin has seen it and either fixed the
  * underlying issue or is choosing to ignore it. Applies to any entity type (season, match, system)
@@ -9,9 +10,7 @@ import { parseRouteId } from '@/lib/util';
  * out of the live view but still counts toward `getOpsErrorHistory()`. */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;

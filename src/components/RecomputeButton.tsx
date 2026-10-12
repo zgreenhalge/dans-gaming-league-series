@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { useAsyncAction } from './useAsyncAction';
+import ErrorText from '@/components/ErrorText';
 
 export function RecomputeButton() {
   const { busy, error, run } = useAsyncAction();
@@ -35,9 +36,7 @@ export function RecomputeButton() {
       {started && !error && (
         <span className="font-mono text-[10px] text-[var(--color-accent-green-fg)]">recompute started — runs in the background</span>
       )}
-      {error && (
-        <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>
-      )}
+      <ErrorText error={error} as="span" size={10} />
     </div>
   );
 }

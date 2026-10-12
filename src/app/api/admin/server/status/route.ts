@@ -8,6 +8,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer, connectHost, type DathostServer } from '@/lib/dathost';
 import { getActiveServerMatch, type ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import { getConnectedPlayers, type ConnectedPlayer } from '@/lib/server-players';
+import { accessDenied } from '@/lib/access-control';
 
 export interface AdminServerStatus {
   configured: boolean;
@@ -20,7 +21,7 @@ export interface AdminServerStatus {
 
 export async function GET() {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   let serverId: string;
   try {

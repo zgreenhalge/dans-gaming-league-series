@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
+import ErrorText from '@/components/ErrorText';
 
 export default function PlayerNameEditor({ playerId, name }: { playerId: number; name: string }) {
   const router = useRouter();
@@ -110,7 +111,7 @@ export default function PlayerNameEditor({ playerId, name }: { playerId: number;
           {PLAYER_NAME_MIN_LENGTH}-{PLAYER_NAME_MAX_LENGTH} letters — spaces allowed between words, no numbers or symbols.
         </div>
       )}
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+      <ErrorText error={error} />
     </div>
   );
 }

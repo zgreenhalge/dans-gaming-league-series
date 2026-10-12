@@ -14,10 +14,11 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
 import { getServerOccupancy, occupancyMessage, stopSharedServer } from '@/lib/dathost-lifecycle';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(req: NextRequest) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await req.json().catch(() => ({}));
   const override = body?.override === true;

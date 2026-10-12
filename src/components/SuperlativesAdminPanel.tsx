@@ -13,8 +13,9 @@ import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
-import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
+import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/superlatives';
 import type { SuperlativeAdminResults } from '@/lib/queries';
+import ErrorText from '@/components/ErrorText';
 
 export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; poll: SuperlativeAdminResults | null }) {
   const router = useRouter();
@@ -152,7 +153,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
         </button>
       </form>
       )}
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
+      <ErrorText error={error} />
     </section>
   );
 }

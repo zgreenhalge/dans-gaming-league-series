@@ -61,7 +61,7 @@ Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = 
 
 Linking also creates a cosmetic per-player Discord role named after the player's current DGLS name (`createNameRole()`, `src/lib/discord-roles.ts`) — mentionable by anyone, positioned directly below the bot's own top role so its color is visible, id stored in `players.discord_name_role_id`. It's kept in sync on rename (`renameNameRole()`, wired into both `PATCH /api/players/[id]` and `PATCH /api/players/me/name`) and deleted on unlink (`deleteNameRole()`, wired into both unlink paths) — a name role only makes sense while linked, unlike `@Participants` (below), which unlinking deliberately never touches. The player sets the role's color themselves via the `/name-color` slash command (`setDiscordRoleColor()`). `scripts/backfill-discord-name-roles.ts` / `POST /api/admin/discord/backfill-name-roles` (admin console → Manage → "Backfill name-color roles") creates roles for anyone who linked before this feature existed — safe to re-run, since it only ever selects players still missing one.
 
-**Access-control gates:** session-scoped mutation routes (not `/admin/**` pages, which the layout above covers) delegate to one small dedicated gate file per access shape rather than reimplementing the check inline — `admin-access.ts` (admin-only), `match-access.ts` (admin-or-in-match), `season-roster-access.ts` (admin-or-self), `feedback-access.ts` (`requireSeasonFeedbackAccess()` for a player who played the season; `requireSeasonFeedbackAdmin()` for an admin acting on a regular season). All of them return the shared `AccessResult<T>` discriminated union (`src/lib/access-control.ts`): `{ ok: true, ...T }` or `{ ok: false, status, error }`, so a caller's `if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })` works identically regardless of which gate it called. A new permission tier (e.g. a "season commissioner" role) should get its own gate file returning `AccessResult<...>` rather than a bespoke shape. `machine-auth.ts` (shared-secret routes called by the game server, not a browser session) is deliberately not part of this family — see its own docstring.
+**Access-control gates:** session-scoped mutation routes (not `/admin/**` pages, which the layout above covers) delegate to one small dedicated gate file per access shape rather than reimplementing the check inline — `admin-access.ts` (admin-only), `match-access.ts` (admin-or-in-match), `season-roster-access.ts` (admin-or-self), `feedback-access.ts` (`requireSeasonFeedbackAccess()` for a player who played the season; `requireSeasonFeedbackAdmin()` for an admin acting on a regular season). All of them return the shared `AccessResult<T>` discriminated union (`src/lib/access-control.ts`): `{ ok: true, ...T }` or `{ ok: false, status, error }`, so a caller's `if (!access.ok) return accessDenied(access)` (also in `access-control.ts`, which builds the JSON error response from the result's `status` and `error`) works identically regardless of which gate it called. A new permission tier (e.g. a "season commissioner" role) should get its own gate file returning `AccessResult<...>` rather than a bespoke shape. `machine-auth.ts` (shared-secret routes called by the game server, not a browser session) is deliberately not part of this family — see its own docstring.
 
 ## API Routes (mutation endpoints)
 
@@ -429,7 +429,7 @@ survey's typed questions are replaced as a whole (`PUT`) and answered in one jso
 while superlatives are added, removed, renamed, and reordered one at a time and voted on as one row
 per `(superlative, voter)`. Everything around the content is written once:
 
-- **Lock rule** — `isFeedbackLocked()` (`src/lib/survey.ts`): the list is locked while the form is
+- **Lock rule** — `isFeedbackLocked()` (`src/lib/feedback-rules.ts`): the list is locked while the form is
   open and stays locked once any answer exists, so no answer lands on a list the player didn't see.
   Editing mutations return 409 when locked. `getSurveyResults()` and `getSuperlativeResults()` report
   it as `isLocked` to their admin panels, `isSuperlativePollLocked()` gates each superlatives edit, and
@@ -485,7 +485,7 @@ page and its admin survey/superlatives pages both redirect to the paired regular
 the regular season's id.
 
 **Anonymity.** Results queries aggregate by question or superlative and never return the
-responder/voter id (the vote tally reads the voter id only to count distinct voters), and `summarizeSurvey()`/`tallyVotes()` (`src/lib/survey.ts`) take only answer
+responder/voter id (the vote tally reads the voter id only to count distinct voters), and `summarizeSurvey()` (`src/lib/survey.ts`) and `tallyVotes()` (`src/lib/superlatives.ts`) take only answer
 values — so no results view can show who answered what. Those id columns sit in ordinary tables, so
 `anon` has no privileges on them, so the browser's API key cannot read them directly.
 Any new read path for results must keep returning aggregates only.

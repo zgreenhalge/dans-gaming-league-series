@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasonId: number;
@@ -61,7 +62,7 @@ export function SeasonScheduleEntryPoint({ seasonId, hasSchedule }: Props) {
         />
         Never double-header (fails to generate if the roster size needs one)
       </label>
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
+      <ErrorText error={error} />
       <button type="button" onClick={generate} disabled={generating} className={`${linkCls} disabled:opacity-40`}>
         {generating ? 'Generating…' : 'Generate Schedule'}
       </button>

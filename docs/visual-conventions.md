@@ -192,6 +192,10 @@ conventions, distinct from the content-page patterns above:
   a constant exported from a `'use client'` file is a client reference there) — use them rather than a
   re-typed class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,
   `self-start`) on top rather than forking the base style.
+- **A failed action's error line** is `<ErrorText error={error} />` (`src/components/ErrorText.tsx`),
+  which renders nothing when `error` is empty. `as="span"` swaps the element, `size` picks 10/11/12px,
+  and `className` carries spacing or wrapping (`mt-2`, `break-words`) — use it rather than a re-typed
+  red `font-mono` line.
 
 ## When extending this system
 
