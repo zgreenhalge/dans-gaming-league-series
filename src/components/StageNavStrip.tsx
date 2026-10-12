@@ -59,7 +59,7 @@ export interface StageNavMeta {
   href: string;
 }
 
-/** A labelled row of chips — one per sibling stage (week, round or group), the current one marked —
+/** A row of chips under its label — one per sibling stage (week, round or group), the current one marked —
  *  plus an optional meta chip on the right. Server-rendered; every link is a plain page. A lone
  *  stage chip would only repeat the page's own title, so the row needs two or more to show; with
  *  neither chips nor a meta chip, nothing renders. */
@@ -69,20 +69,22 @@ export function StageNavStrip({
   meta,
 }: {
   items: StageNavItem[];
-  /** What the chips are ("Weeks", "Rounds", "Groups") — shown ahead of them and as the nav's label. */
+  /** What the chips are ("Weeks", "Rounds", "Groups") — shown above them and as the nav's label. */
   label: string;
   meta?: StageNavMeta;
 }) {
   const showItems = items.length > 1;
   if (!showItems && !meta) return null;
   return (
-    <nav aria-label={label} className="flex items-center gap-2 flex-wrap">
+    <nav aria-label={label} className="flex items-end gap-2 flex-wrap">
       {showItems && (
-        <div className="flex items-center gap-1 flex-wrap min-w-0">
-          <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] mr-1">{label}</span>
-          {items.map((item) => (
-            <Chip key={item.label} item={item} />
-          ))}
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)]">{label}</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {items.map((item) => (
+              <Chip key={item.label} item={item} />
+            ))}
+          </div>
         </div>
       )}
       {meta && <MetaChip meta={meta} />}
