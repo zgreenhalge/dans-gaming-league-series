@@ -429,7 +429,7 @@ survey's typed questions are replaced as a whole (`PUT`) and answered in one jso
 while superlatives are added, removed, renamed, and reordered one at a time and voted on as one row
 per `(superlative, voter)`. Everything around the content is written once:
 
-- **Lock rule** — `isFeedbackLocked()` (`src/lib/feedback.ts`): the list is locked while the form is
+- **Lock rule** — `isFeedbackLocked()` (`src/lib/survey.ts`): the list is locked while the form is
   open and stays locked once any answer exists, so no answer lands on a list the player didn't see.
   Editing mutations return 409 when locked. `getSurveyResults()` and `getSuperlativeResults()` report
   it as `isLocked` to their admin panels, `isSuperlativePollLocked()` gates each superlatives edit, and
@@ -438,14 +438,14 @@ per `(superlative, voter)`. Everything around the content is written once:
   `superlative_polls.is_open`. The difference is confined to `isSurveyOpen()`, the two lifecycle
   adapters below, `getOpenFeedbackSeasonIds()`, and the player-side save RPCs; everything else reads an
   `isOpen` boolean.
-- **Open/close and reset routes** — `setFeedbackOpen()` and `resetFeedback()`
-  (`src/lib/feedback-routes.ts`) run the lookup (404 if the season has none), the write, and the
+- **Route handlers** — `setFeedbackOpen()`, `resetFeedback()` and `saveFeedbackAnswers()`
+  (`src/lib/feedback-lifecycle.ts`) run the lookup (404 if the season has none), the write, and the
   error mapping for both forms; `SURVEY_LIFECYCLE` and `SUPERLATIVES_LIFECYCLE` adapt each form's
-  storage (`surveys.closed_at`, `superlative_polls.is_open`) and reset RPC to them. A reset
-  (`DELETE .../survey`, `DELETE .../superlatives/votes`) closes the form and deletes every answer in
-  one RPC call (`reset_survey()`, `reset_superlative_votes()`), keeping the questions or superlatives,
-  which unlocks them for editing again. A new lifecycle action is a new function there plus one
-  method per lifecycle object.
+  storage (`surveys.closed_at`, `superlative_polls.is_open`), answer validation, and RPCs to them.
+  A reset (`DELETE .../survey`, `DELETE .../superlatives/votes`) closes the form and deletes every
+  answer in one RPC call (`reset_survey()`, `reset_superlative_votes()`), keeping the questions or
+  superlatives, which unlocks them for editing again. A new lifecycle step is a new function there
+  plus one method per adapter.
 - **Admin controls** — `FeedbackAdminControls` renders the status line, the open/close button
   (opening is the primary button, closing the small bordered one) and, once locked, the reset;
   both panels use it.
