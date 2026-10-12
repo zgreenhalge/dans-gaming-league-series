@@ -248,9 +248,6 @@ export interface GauntletMatch {
 
 export interface GauntletRound {
   round_number: number;
-  /** The round's `weeks.id` — its page is `roundHref(seasonId, week_id)`. Absent on a round that has
-   * no week row yet (the empty shells the Schedule tab pads in from the bracket shape). */
-  week_id?: number;
   matches: GauntletMatch[];
   /** True when this round is the bracket's actual final — sourced from `gauntlet_pods.is_final`,
    * not from "the highest round_number with matches scheduled so far." A gauntlet's true final
@@ -855,7 +852,6 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
     });
     rounds.push({
       round_number: week.week_number,
-      week_id: week.id,
       matches: gauntletMatches,
       is_final_round: finalRoundNumbers.has(week.week_number) || week.week_number === fallbackFinalRoundNumber,
     });

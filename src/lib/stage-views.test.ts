@@ -11,7 +11,9 @@ import { buildFakeDb } from './test-support/fixtures';
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getWeekView, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
-import { deriveGroupPageView, deriveRoundView, stageStatus, type GauntletStageData } from './stage-views';
+import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, type GauntletStageData } from './stage-views';
+import { getSeasonSchedule, getSeasonWeekNav } from './queries';
+import type { WeekWithMatches } from './queries';
 import type { BracketPod, GauntletMatch } from './queries/gauntlet';
 import { test } from './test-support/miniTest';
 
@@ -30,11 +32,45 @@ test('getWeekView: scorecard, status and nav for the fixture season', async () =
   assert.equal(view.status, 'in-progress', 'week 1 has a played match and an unplayed one');
   assert.equal(view.scorecard.length, 4);
   assert.deepEqual(view.scorecard.map((r) => r.rank), [1, 2, 3, 4]);
-  assert.equal(view.scorecard[0].movement?.before, null);
+  assert.ok(view.scorecard.every((r) => r.movement === null), 'week 1 has no movement to show');
   assert.deepEqual(view.nav.items.map((i) => i.href), ['/seasons/1/weeks/10', '/seasons/1/weeks/11']);
   assert.equal(view.nav.prev, null);
   assert.equal(view.nav.next?.href, '/seasons/1/weeks/11');
   assert.equal(await getWeekView(1, 9999), null);
+});
+
+test('getSeasonSchedule throughWeek and getSeasonWeekNav: full rosters to the week, a light listing of all', async () => {
+  assert.deepEqual((await getSeasonSchedule(1, undefined, { throughWeek: 1 })).map((w) => w.week_number), [1]);
+  assert.deepEqual((await getSeasonSchedule(1)).map((w) => w.week_number), [1, 2]);
+  const nav = await getSeasonWeekNav(1);
+  assert.deepEqual(nav.map((w) => w.week_number), [1, 2]);
+  assert.deepEqual(Object.keys(nav[0].matches[0]), ['final_score']);
+});
+
+test('deriveWeekView: movement reads only the weeks through this one, and is absent in week 1', () => {
+  const stat = (player_id: number, is_win: boolean, rounds_won: number, damage: number) => ({
+    player_id, player_name: `P${player_id}`, faction: 'SHIRTS' as const, kills: 0, assists: 0, deaths: 0, adr: damage / 22, damage, is_win, rounds_won, rounds_played: 22,
+  });
+  const match = (id: number, shirtsWin: boolean) => ({
+    id, final_score: shirtsWin ? '13-9' : '9-13',
+    shirts_stats: [stat(1, shirtsWin, shirtsWin ? 13 : 9, 1800), stat(2, shirtsWin, shirtsWin ? 13 : 9, 1500)],
+    skins_stats: [stat(3, !shirtsWin, shirtsWin ? 9 : 13, 1700), stat(4, !shirtsWin, shirtsWin ? 9 : 13, 1400)],
+  });
+  const week = (id: number, n: number, shirtsWin: boolean) =>
+    ({ id, season_id: 1, week_number: n, bye_player_id: null, bye_player_name: null, matches: [match(id * 10, shirtsWin)] }) as unknown as WeekWithMatches;
+  const w1 = week(1, 1, true);
+  const w2 = week(2, 2, false);
+  const navWeeks = [w1, w2, { id: 3, week_number: 3, matches: [{ final_score: null }] }];
+
+  const first = deriveWeekView(7, [w1], navWeeks, 1)!;
+  assert.ok(first.scorecard.every((r) => r.movement === null));
+
+  const second = deriveWeekView(7, [w1, w2], navWeeks, 2)!;
+  const p3 = second.scorecard.find((r) => r.player_id === 3)!;
+  assert.deepEqual(p3.movement, { before: 3, after: p3.movement!.after });
+  assert.ok(p3.movement!.after < 3, 'a player who won week 2 moved up');
+  assert.deepEqual(second.nav.items.map((i) => i.chip), ['1', '2', '3'], 'the strip lists weeks that are not loaded in full');
+  assert.equal(second.nav.next?.href, '/seasons/7/weeks/3');
 });
 
 test('getWeekRow / getPodSeasonId resolve ids to their season', async () => {
@@ -46,10 +82,9 @@ test('getWeekRow / getPodSeasonId resolve ids to their season', async () => {
 
 test('getGauntletStageData: rounds, bracket shape and week ids for the paired gauntlet', async () => {
   const data = await getGauntletStageData(2);
-  assert.equal(data.weekIdByRound.get(1), 12);
-  assert.equal(data.rounds[0].week_id, 12);
+  assert.equal(data.rounds[0].round_number, 1);
   assert.deepEqual(data.bracketShape.map((p) => p.id), [1000]);
-  const round = deriveRoundView(1, data, 12)!;
+  const round = deriveRoundView(1, data, 1)!;
   assert.equal(round.groups.length, 1);
   assert.equal(round.groups[0].label, 'Final');
 });
@@ -57,9 +92,9 @@ test('getGauntletStageData: rounds, bracket shape and week ids for the paired ga
 test('getStagePagePaths: weeks, rounds and groups, with gauntlets filed under their paired regular season', async () => {
   const paths = await getStagePagePaths();
   assert.ok(paths.includes('/seasons/1/weeks/10'));
-  assert.ok(paths.includes('/seasons/1/rounds/12'), 'gauntlet 2 pairs with regular season 1');
+  assert.ok(paths.includes('/seasons/1/rounds/1'), 'gauntlet 2 pairs with regular season 1');
   assert.ok(paths.includes('/seasons/1/groups/1000'));
-  assert.ok(paths.includes('/seasons/4/rounds/14'), 'an unpaired gauntlet is its own hub');
+  assert.ok(paths.includes('/seasons/4/rounds/1'), 'an unpaired gauntlet is its own hub');
 });
 
 // ── Synthetic two-round gauntlet ─────────────────────────────────────────────────────────────────
@@ -99,19 +134,25 @@ function stage(): GauntletStageData {
       pod(10, 1, 0, 'single', false, true, [[1, 1], [2, 2], [3, 3], [4, 4]]),
       pod(11, 2, 0, 'single', true, false, [[null, null], [null, null], [null, null], [null, null]]),
     ],
-    weekIdByRound: new Map([[1, 100]]),
   };
 }
 
 test('deriveRoundView: groups, nav and an unscheduled later round', () => {
-  const view = deriveRoundView(5, stage(), 100)!;
+  const view = deriveRoundView(5, stage(), 1)!;
   assert.equal(view.roundNumber, 1);
   assert.equal(view.status, 'complete');
   assert.equal(view.groups.length, 1);
   assert.equal(view.groups[0].label, 'Group 1');
-  assert.deepEqual(view.nav.items.map((i) => [i.chip, i.href]), [['1', '/seasons/5/rounds/100'], ['2', null]]);
-  assert.equal(view.nav.next, null, 'a round without a week row has nothing to link to');
+  assert.deepEqual(view.nav.items.map((i) => [i.chip, i.href, i.status]), [
+    ['1', '/seasons/5/rounds/1', 'complete'],
+    ['2', '/seasons/5/rounds/2', 'upcoming'],
+  ]);
+  assert.equal(view.nav.next?.href, '/seasons/5/rounds/2', 'a round not yet scheduled still has a page');
   assert.equal(deriveRoundView(5, stage(), 999), null);
+
+  const pending = deriveRoundView(5, stage(), 2)!;
+  assert.equal(pending.isFinal, true);
+  assert.equal(pending.groups[0].matches.length, 0);
 });
 
 test('group scorecard: ranks by the canonical gauntlet order and marks who advances', () => {
@@ -121,7 +162,6 @@ test('group scorecard: ranks by the canonical gauntlet order and marks who advan
   assert.equal(rows[0].wins, 2);
   assert.deepEqual(rows.map((r) => r.outcome), ['advances', 'eliminated', 'eliminated', 'eliminated']);
   assert.deepEqual(rows.map((r) => r.seed), rows.map((r) => r.player_id), 'seed comes from the pod slots');
-  assert.equal(view.weekId, 100);
   assert.equal(view.prev, null);
   assert.equal(view.next?.href, '/seasons/5/groups/11');
   assert.equal(view.next?.label, 'Round 2 · Final');
@@ -134,7 +174,6 @@ test('an unmaterialized pod lists its resolved slots in seed order, unranked and
   assert.equal(view.group.status, 'upcoming');
   assert.deepEqual(view.group.scorecard.map((r) => r.player_id), [1, 2, 3, 4]);
   assert.ok(view.group.scorecard.every((r) => r.rank === null && r.outcome === 'pending'));
-  assert.equal(view.weekId, null);
   assert.equal(deriveGroupPageView(5, data, 999), null);
 });
 

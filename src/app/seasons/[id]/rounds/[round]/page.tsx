@@ -7,58 +7,59 @@ import { StageHeader } from '@/components/StageHeader';
 import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
 import EmptyState from '@/components/EmptyState';
-import { getSeason, getSeasonScope, getWeekRow, getGauntletStageData } from '@/lib/queries';
+import { getSeason, getSeasonScope, getGauntletStageData, getSeedNames } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, gauntletHref, roundHref, weekHref } from '@/lib/crumbs';
+import { buildCrumbs, gauntletHref, roundHref } from '@/lib/crumbs';
 import { deriveRoundView } from '@/lib/stage-views';
 import { describeMatchups } from '@/lib/seo/stage-meta';
 import { parseRouteId, seasonTitle } from '@/lib/util';
 
 export const revalidate = 60;
 
-type Params = { id: string; weekId: string };
+type Params = { id: string; round: string };
 
-/** Resolves the URL to its gauntlet round (see the week page's loader for the redirect reasoning). */
-const loadRound = cache(async (idParam: string, weekIdParam: string) => {
+/** Resolves the URL to its gauntlet round. A round is identified by its number within the gauntlet,
+ *  so it has a page as soon as the bracket does — scheduled or not. A gauntlet's or an unrelated
+ *  season's id in the path redirects to the round's real hub. */
+const loadRound = cache(async (idParam: string, roundParam: string) => {
   const seasonId = parseRouteId(idParam);
-  const weekId = parseRouteId(weekIdParam);
-  if (seasonId === null || weekId === null) notFound();
-  const row = await getWeekRow(weekId);
-  if (!row) notFound();
-  const owner = await getSeason(row.season_id);
-  if (!owner) notFound();
-  const scope = await getSeasonScope(owner);
-  if (!owner.is_gauntlet) redirect(weekHref(scope.hub.id, weekId));
-  if (scope.hub.id !== seasonId) redirect(roundHref(scope.hub.id, weekId));
-  const data = await getGauntletStageData(owner.id);
-  const view = deriveRoundView(scope.hub.id, data, weekId);
+  const roundNumber = parseRouteId(roundParam);
+  if (seasonId === null || roundNumber === null) notFound();
+  const season = await getSeason(seasonId);
+  if (!season) notFound();
+  const scope = await getSeasonScope(season);
+  if (!scope.gauntlet) notFound();
+  if (scope.hub.id !== seasonId) redirect(roundHref(scope.hub.id, roundNumber));
+  const data = await getGauntletStageData(scope.gauntlet.id);
+  const view = deriveRoundView(scope.hub.id, data, roundNumber);
   if (!view) notFound();
-  return { hub: scope.hub, data, view };
+  const seedNames = view.groups.some((g) => g.matches.length === 0) ? await getSeedNames(scope.hub.id) : undefined;
+  return { hub: scope.hub, data, view, seedNames };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
-  const { id, weekId } = await params;
-  const { hub, view } = await loadRound(id, weekId);
+  const { id, round } = await params;
+  const { hub, view } = await loadRound(id, round);
   const title = `${seasonTitle(hub.name)} Gauntlet · Round ${view.roundNumber}`;
   const matchups = describeMatchups(view.groups.flatMap((g) => g.matches));
   const description = matchups ? `${title} — ${matchups}` : `${title} — groups and results in DGLS.`;
   return {
     title,
     description,
-    alternates: { canonical: roundHref(hub.id, view.weekId ?? 0) },
+    alternates: { canonical: roundHref(hub.id, view.roundNumber) },
     openGraph: { title: `DGLS · ${title}`, description },
     twitter: { card: 'summary_large_image', title: `DGLS · ${title}`, description },
   };
 }
 
 export default async function RoundPage({ params }: { params: Promise<Params> }) {
-  const { id, weekId } = await params;
-  const [{ hub, data, view }, session] = await Promise.all([loadRound(id, weekId), getServerSession(authOptions)]);
+  const { id, round } = await params;
+  const [{ hub, data, view, seedNames }, session] = await Promise.all([loadRound(id, round), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
 
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={buildCrumbs({ season: hub, gauntlet: true, week: { id: view.weekId, number: view.roundNumber } })} />
+      <TopbarShell crumbs={buildCrumbs({ season: hub, gauntlet: true, round: view.roundNumber })} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
           title={`${seasonTitle(hub.name)} Gauntlet · Round ${view.roundNumber}`}
@@ -84,6 +85,7 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
               group={g}
               hubSeasonId={hub.id}
               bracketShape={data.bracketShape}
+              seedNames={seedNames}
               currentPlayerId={currentPlayerId}
             />
           ))

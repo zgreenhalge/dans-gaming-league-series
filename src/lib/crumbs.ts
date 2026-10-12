@@ -4,8 +4,9 @@ import { seasonTitle } from './util';
 // Every public URL for a season's sub-pages is assembled here, so a link and the breadcrumb that
 // points back at it can't drift apart. Segments are readable, the ids in them are real: `seasonId`
 // is always the season *hub* (the regular season; a gauntlet is reached through its paired regular
-// season), `weekId` is `weeks.id` (a regular week or a gauntlet round), `podId` is
-// `gauntlet_pods.id`.
+// season), `weekId` is `weeks.id` of a regular week, a round is identified by its number within the
+// gauntlet (it has no row of its own, and exists in the bracket before any game is scheduled), and
+// `podId` is `gauntlet_pods.id`.
 
 export function seasonHref(hubSeasonId: number): string {
   return `/seasons/${hubSeasonId}`;
@@ -19,8 +20,8 @@ export function weekHref(hubSeasonId: number, weekId: number): string {
   return `/seasons/${hubSeasonId}/weeks/${weekId}`;
 }
 
-export function roundHref(hubSeasonId: number, weekId: number): string {
-  return `/seasons/${hubSeasonId}/rounds/${weekId}`;
+export function roundHref(hubSeasonId: number, roundNumber: number): string {
+  return `/seasons/${hubSeasonId}/rounds/${roundNumber}`;
 }
 
 export function groupHref(hubSeasonId: number, podId: number): string {
@@ -43,9 +44,10 @@ export interface CrumbTrail {
   season: { id: number; name: string };
   /** The trail runs through the paired gauntlet — adds a "Gauntlet" level. */
   gauntlet?: boolean;
-  /** A regular week, or a gauntlet round (`gauntlet` decides the word). A round whose week row
-   *  doesn't exist yet has `id: null` and links to the gauntlet view instead. */
-  week?: { id: number | null; number: number };
+  /** A regular-season week. */
+  week?: { id: number; number: number };
+  /** A gauntlet round number (the trail is a gauntlet one). */
+  round?: number;
   group?: { id: number; podIndex: number; isFinal: boolean };
   /** The page's leaf below the week/group, e.g. "Match 2" or "Game 1". */
   leaf?: string;
@@ -67,13 +69,8 @@ export function buildCrumbs(trail: CrumbTrail): Crumb[] {
     { label: seasonTitle(trail.season.name), href: seasonHref(hub) },
   ];
   if (trail.gauntlet) crumbs.push({ label: 'Gauntlet', href: gauntletHref(hub) });
-  if (trail.week) {
-    crumbs.push({
-      label: weekLabel(trail.week.number, !!trail.gauntlet),
-      href:
-        trail.week.id == null ? gauntletHref(hub) : trail.gauntlet ? roundHref(hub, trail.week.id) : weekHref(hub, trail.week.id),
-    });
-  }
+  if (trail.week) crumbs.push({ label: weekLabel(trail.week.number, false), href: weekHref(hub, trail.week.id) });
+  if (trail.round != null) crumbs.push({ label: weekLabel(trail.round, true), href: roundHref(hub, trail.round) });
   if (trail.group) {
     crumbs.push({ label: groupLabel(trail.group.podIndex, trail.group.isFinal), href: groupHref(hub, trail.group.id) });
   }

@@ -175,7 +175,7 @@ function GauntletRoundCard({
         (rankMap.get(a.player_id) ?? Infinity) - (rankMap.get(b.player_id) ?? Infinity))
     : unsortedRecords;
   const allPlayed = allMatchesPlayed(round.matches);
-  const roundLink = hubSeasonId != null && round.week_id != null ? roundHref(hubSeasonId, round.week_id) : null;
+  const roundLink = hubSeasonId != null ? roundHref(hubSeasonId, round.round_number) : null;
   const isFinalRound = round.is_final_round;
 
   // Pod ids by index within this round — for each group header's page link.

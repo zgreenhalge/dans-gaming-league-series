@@ -278,7 +278,8 @@ export default async function MatchPage({
   const crumbs = buildCrumbs({
     season: scope.hub,
     gauntlet: season.is_gauntlet,
-    week: { id: week.id, number: week.week_number },
+    week: season.is_gauntlet ? undefined : { id: week.id, number: week.week_number },
+    round: season.is_gauntlet ? week.week_number : undefined,
     group: pod ? { id: pod.id, podIndex: pod.pod_index, isFinal: pod.is_final } : undefined,
     leaf: pod ? `Game ${pod.match1_id === matchId ? 1 : 2}` : `Match ${match.match_number}`,
   });

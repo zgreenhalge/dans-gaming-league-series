@@ -31,7 +31,7 @@ test('buildCrumbs: a gauntlet game links through gauntlet, round and group', () 
   const crumbs = buildCrumbs({
     season,
     gauntlet: true,
-    week: { id: 90, number: 2 },
+    round: 2,
     group: { id: 14, podIndex: 0, isFinal: false },
     leaf: 'Game 2',
   });
@@ -42,7 +42,7 @@ test('buildCrumbs: a gauntlet game links through gauntlet, round and group', () 
       ['Seasons', '/seasons'],
       ['Season 5', '/seasons/5'],
       ['Gauntlet', '/seasons/5?view=gauntlet'],
-      ['Round 2', '/seasons/5/rounds/90'],
+      ['Round 2', '/seasons/5/rounds/2'],
       ['Group 1', '/seasons/5/groups/14'],
       ['Game 2', undefined],
     ],
@@ -52,7 +52,7 @@ test('buildCrumbs: a gauntlet game links through gauntlet, round and group', () 
 test('buildCrumbs: the last crumb is never a link, whichever level it is', () => {
   const week = buildCrumbs({ season, week: { id: 31, number: 3 } });
   assert.equal(week.at(-1)?.href, undefined);
-  const group = buildCrumbs({ season, gauntlet: true, week: { id: 90, number: 4 }, group: { id: 20, podIndex: 0, isFinal: true } });
+  const group = buildCrumbs({ season, gauntlet: true, round: 4, group: { id: 20, podIndex: 0, isFinal: true } });
   assert.deepEqual(group.at(-1), { label: 'Final' });
 });
 
@@ -64,17 +64,7 @@ test('groupLabel: 1-indexed, with Final for the final pod', () => {
 
 test('route helpers assemble the readable paths with real ids', () => {
   assert.equal(weekHref(5, 31), '/seasons/5/weeks/31');
-  assert.equal(roundHref(5, 90), '/seasons/5/rounds/90');
+  assert.equal(roundHref(5, 2), '/seasons/5/rounds/2');
   assert.equal(groupHref(5, 14), '/seasons/5/groups/14');
   assert.equal(gauntletHref(5), '/seasons/5?view=gauntlet');
-});
-
-test('buildCrumbs: a round with no week row yet links to the gauntlet view', () => {
-  const crumbs = buildCrumbs({
-    season,
-    gauntlet: true,
-    week: { id: null, number: 3 },
-    group: { id: 20, podIndex: 0, isFinal: true },
-  });
-  assert.equal(crumbs.find((c) => c.label === 'Round 3')?.href, '/seasons/5?view=gauntlet');
 });

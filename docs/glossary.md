@@ -119,7 +119,7 @@ so you don't have to reverse-engineer them from scratch each time.
   stored as a real FK graph in `gauntlet_pods`/`gauntlet_pod_slots`; materialized into playable
   `matches` rows by `src/lib/gauntlet-engine.ts` as the bracket progresses. See
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
-- **Week / Round / Group** — the linkable stages under a season. A regular-season **week** (`weeks` row) holds independent 2v2 matches and *is* the group; a gauntlet **round** (also a `weeks` row on the gauntlet season) holds **groups**, which are pods. Each has its own page (`/seasons/[id]/weeks/[weekId]`, `/rounds/[weekId]`, `/groups/[podId]`) with a scorecard and prev/next navigation; see [`architecture.md`](./architecture.md#week-round-and-group-pages) and [`calculations.md`](./calculations.md#group-scorecards).
+- **Week / Round / Group** — the linkable stages under a season. A regular-season **week** (`weeks` row) holds independent 2v2 matches and *is* the group; a gauntlet **round** (stored as a `weeks` row on the gauntlet season, but identified by its round number) holds **groups**, which are pods. Each has its own page (`/seasons/[id]/weeks/[weekId]`, `/rounds/[round]`, `/groups/[podId]`) with a scorecard and prev/next navigation; see [`architecture.md`](./architecture.md#week-round-and-group-pages) and [`calculations.md`](./calculations.md#group-scorecards).
 - **Gauntlet seeding projection** — the gold-bye/red-drop row tint on a regular season's own
   `LeaderboardTable`, never shown on a gauntlet season's own leaderboard (which gets a podium once
   complete instead — `GauntletStandings`). Computed by `SeasonTabView.tsx` and passed as the

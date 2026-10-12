@@ -20,8 +20,8 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/` | Home — active/upcoming seasons + an Upcoming Games panel (scheduled games soonest-first, plus unplayed games still needing a time) |
 | `/seasons` | Season index — all seasons (regular + gauntlet) |
 | `/seasons/[id]` | Season hub — leaderboard + weekly schedule (or gauntlet bracket). Top-level tabs Regular Season / Gauntlet, plus **Survey** and **Superlatives** tabs when this viewer has something to answer or see (see [Post-season survey and superlatives](#post-season-survey-and-superlatives)). A gauntlet season's id redirects here, to its paired regular season |
-| `/seasons/[id]/weeks/[weekId]` | Regular-season **week** page — match preview (every match in the week), a scorecard ranked Wins → RWR% → ADR with each player's season-standings movement across the week, a status-dotted chip strip and prev/next links across the season's weeks. `[id]` is the season hub (the regular season); `weekId` is `weeks.id`. The week id is authoritative: a mismatched `[id]` redirects to the week's real hub, and a gauntlet round's id redirects to `/rounds/` |
-| `/seasons/[id]/rounds/[weekId]` | Gauntlet **round** page — every group in the round (real or not yet scheduled) as a `GroupPanel`: scorecard + games. Same hub / redirect rules as the week page; `weekId` is the round's `weeks.id` |
+| `/seasons/[id]/weeks/[weekId]` | Regular-season **week** page — match preview (every match in the week), a scorecard ranked Wins → RWR% → ADR with each player's season-standings movement across the week, a status-dotted chip strip and prev/next links across the season's weeks. `[id]` is the season hub (the regular season); `weekId` is `weeks.id`. The week id is authoritative: a mismatched `[id]` redirects to the week's real hub, and the id of a gauntlet round's `weeks` row redirects to `/rounds/` |
+| `/seasons/[id]/rounds/[round]` | Gauntlet **round** page — every group in the round (real or not yet scheduled) as a `GroupPanel`: scorecard + games, plus a chip strip and prev/next across the rounds. `round` is the round number within the gauntlet; a round has a page as soon as the bracket does, scheduled or not. `[id]` is the season hub; a gauntlet's own id redirects to it |
 | `/seasons/[id]/groups/[podId]` | Gauntlet **group** (pod) page — one group's type (Elimination / Wildcard / Final), scorecard (seed, W-L, RWR%, ADR, who advances or the final place), its games or "not yet scheduled" lineup, and prev/next across the whole bracket. `podId` is `gauntlet_pods.id` |
 | `/matches/[id]` | Match detail — veto banner, scoreboards, score entry, demo upload |
 | `/players` | Player index |
@@ -40,16 +40,16 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 
 ### Week, round and group pages
 
-Weeks, rounds and groups are linkable stages under a season hub. A regular week is the group (its matches are independent 2v2s over the whole roster); a gauntlet round contains **groups**, which are pods. All URLs are built by the route helpers in `src/lib/crumbs.ts` (`weekHref()`, `roundHref()`, `groupHref()`, `gauntletHref()`) — readable path segments carrying real ids — and every page's breadcrumb trail comes from `buildCrumbs()` in the same file:
+Weeks, rounds and groups are linkable stages under a season hub. A regular week is the group (its matches are independent 2v2s over the whole roster); a gauntlet round contains **groups**, which are pods. All URLs are built by the route helpers in `src/lib/crumbs.ts` (`weekHref()`, `roundHref()`, `groupHref()`, `gauntletHref()`) — readable path segments carrying real ids (a round, which has no row of its own, by its number) — and every page's breadcrumb trail comes from `buildCrumbs()` in the same file:
 
 ```
 Regular:  DGLS › Seasons › Season 5 › Week 3 › Match 2
 Gauntlet: DGLS › Seasons › Season 5 › Gauntlet › Round 2 › Group 1 › Game 2
 ```
 
-Every level but the last links to its page; `TopbarShell` hides the middle levels below `sm`. A round whose week row doesn't exist yet has no page, so its crumb (and chip) falls back to the gauntlet view.
+Every level but the last links to its page; `TopbarShell` hides the middle levels below `sm`.
 
-Data and shaping are split: `getWeekView()` / `getGauntletStageData()` (`src/lib/queries/groups.ts`) fetch, and the pure `deriveWeekView()` / `deriveRoundView()` / `deriveGroupPageView()` (`src/lib/stage-views.ts`) build the scorecards, outcomes and navigation each page renders. `getSeasonScope()` (`queries/seasons.ts`) resolves a season to its hub and paired gauntlet. Each page exports its own `generateMetadata()` (title plus a one-line matchups description from `describeMatchups()`, `src/lib/seo/stage-meta.ts`) and an `opengraph-image.tsx` rendered by `renderStageOg()` (`src/lib/seo/stage-og.tsx`); `getStagePagePaths()` feeds the sitemap. The season hub's week, round and group headers link to these pages (`hubSeasonId` on `SeasonTabView`, `ScheduleList`, `GauntletRoundsList`). The scorecard ranking rules are in [`calculations.md`](./calculations.md#group-scorecards).
+Data and shaping are split: `getWeekView()` / `getGauntletStageData()` (`src/lib/queries/groups.ts`) fetch (a week page reads full rosters only for the weeks up to its own, plus a light all-weeks listing for the chip strip), and the pure `deriveWeekView()` / `deriveRoundView()` / `deriveGroupPageView()` (`src/lib/stage-views.ts`) build the scorecards, outcomes and navigation each page renders. `getSeasonScope()` (`queries/seasons.ts`) resolves a season to its hub and paired gauntlet. Each page exports its own `generateMetadata()` (title plus a one-line matchups description from `describeMatchups()`, `src/lib/seo/stage-meta.ts`) and an `opengraph-image.tsx` rendered by `renderStageOg()` (`src/lib/seo/stage-og.tsx`); `getStagePagePaths()` feeds the sitemap. The season hub's week, round and group headers link to these pages (`hubSeasonId` on `SeasonTabView`, `ScheduleList`, `GauntletRoundsList`). The scorecard ranking rules are in [`calculations.md`](./calculations.md#group-scorecards).
 
 ## Auth System
 

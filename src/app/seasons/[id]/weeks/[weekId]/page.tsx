@@ -20,7 +20,7 @@ export const revalidate = 60;
 type Params = { id: string; weekId: string };
 
 /** Resolves the URL to its week, redirecting to the canonical URL when the ids disagree with where
- *  the week really lives (a gauntlet round, or a different season's week). The week id is the
+ *  the week really lives (a gauntlet round's row, or a different season's week). The week id is the
  *  authority; the season id in the path is kept readable and corrected rather than trusted. */
 const loadWeek = cache(async (idParam: string, weekIdParam: string) => {
   const seasonId = parseRouteId(idParam);
@@ -31,7 +31,7 @@ const loadWeek = cache(async (idParam: string, weekIdParam: string) => {
   const owner = await getSeason(row.season_id);
   if (!owner) notFound();
   const scope = await getSeasonScope(owner);
-  if (owner.is_gauntlet) redirect(roundHref(scope.hub.id, weekId));
+  if (owner.is_gauntlet) redirect(roundHref(scope.hub.id, row.week_number));
   if (scope.hub.id !== seasonId) redirect(weekHref(scope.hub.id, weekId));
   const view = await getWeekView(owner.id, weekId);
   if (!view) notFound();
@@ -93,7 +93,7 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
         <h2 className="tracked text-[11px] font-semibold text-[var(--color-text-secondary)] mb-2">Scorecard</h2>
         <div className="mb-8">
           {view.scorecard.length > 0 ? (
-            <WeekScorecard rows={view.scorecard} currentPlayerId={currentPlayerId} />
+            <WeekScorecard rows={view.scorecard} showMovement={week.week_number > 1} currentPlayerId={currentPlayerId} />
           ) : (
             <EmptyState message="The scorecard fills in as this week's games are played." size="lg" />
           )}

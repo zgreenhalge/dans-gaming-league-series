@@ -1,4 +1,4 @@
-import { getSeason, getSeasonScope, getWeekRow, getGauntletStageData } from '@/lib/queries';
+import { getSeason, getSeasonScope, getGauntletStageData } from '@/lib/queries';
 import { deriveRoundView } from '@/lib/stage-views';
 import { parseRouteId, seasonTitle } from '@/lib/util';
 import { OG_SIZE } from '@/lib/seo/og-card';
@@ -9,13 +9,16 @@ export const size = OG_SIZE;
 export const contentType = 'image/png';
 export const revalidate = 60;
 
-export default async function Image({ params }: { params: Promise<{ id: string; weekId: string }> }) {
-  const { weekId: weekIdParam } = await params;
-  const weekId = parseRouteId(weekIdParam);
-  const row = weekId === null ? null : await getWeekRow(weekId);
-  const season = row ? await getSeason(row.season_id) : null;
-  const scope = season?.is_gauntlet ? await getSeasonScope(season) : null;
-  const view = season && scope && weekId !== null ? deriveRoundView(scope.hub.id, await getGauntletStageData(season.id), weekId) : null;
+export default async function Image({ params }: { params: Promise<{ id: string; round: string }> }) {
+  const { id, round } = await params;
+  const seasonId = parseRouteId(id);
+  const roundNumber = parseRouteId(round);
+  const season = seasonId === null ? null : await getSeason(seasonId);
+  const scope = season ? await getSeasonScope(season) : null;
+  const view =
+    scope?.gauntlet && roundNumber !== null
+      ? deriveRoundView(scope.hub.id, await getGauntletStageData(scope.gauntlet.id), roundNumber)
+      : null;
 
   return renderStageOg(
     view && scope

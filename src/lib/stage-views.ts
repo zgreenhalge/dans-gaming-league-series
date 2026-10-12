@@ -27,7 +27,7 @@ export interface StageNavItem {
   /** Short chip text: "3" for Week 3, "G2" for Group 2. */
   chip: string;
   label: string;
-  /** `null` when the stage has no page of its own yet (a round whose week row isn't created). */
+  /** `null` for a chip with nowhere to go. */
   href: string | null;
   status: StageStatus;
   current: boolean;
@@ -63,16 +63,34 @@ export interface WeekView {
   nav: StageNav;
 }
 
-export function deriveWeekView(hubSeasonId: number, schedule: WeekWithMatches[], weekId: number): WeekView | null {
+/** The slice of a week the chip strip needs — its id, number and match results. */
+export interface WeekNavSource {
+  id: number;
+  week_number: number;
+  matches: { final_score: string | null }[];
+}
+
+/**
+ * `schedule` is the season's weeks up to and including the one being viewed, with full rosters
+ * (everything the scorecard and standings need); `navWeeks` is every week of the season, light, for
+ * the chip strip. Standings are cumulative, so movement needs each earlier week, but nothing after
+ * this one. Week 1 has nothing to move from, so it carries no movement.
+ */
+export function deriveWeekView(
+  hubSeasonId: number,
+  schedule: WeekWithMatches[],
+  navWeeks: WeekNavSource[],
+  weekId: number,
+): WeekView | null {
   const week = schedule.find((w) => w.id === weekId);
   if (!week) return null;
 
-  const movement = rankMovementForWeek(schedule, week.week_number);
+  const movement = week.week_number > 1 ? rankMovementForWeek(schedule, week.week_number) : new Map<number, RankMovement>();
   const scorecard = [...aggregatePlayerRecords(week.matches).values()]
     .sort(compareRecords('wins'))
     .map((r, i) => ({ ...r, rank: i + 1, movement: movement.get(r.player_id) ?? null }));
 
-  const items = schedule.map<StageNavItem>((w) => ({
+  const items = navWeeks.map<StageNavItem>((w) => ({
     chip: String(w.week_number),
     label: weekLabel(w.week_number, false),
     href: weekHref(hubSeasonId, w.id),
@@ -112,8 +130,6 @@ export interface GroupView {
 export interface GauntletStageData {
   rounds: GauntletRound[];
   bracketShape: BracketPod[];
-  /** `weeks.id` for each round that has a week row. */
-  weekIdByRound: Map<number, number>;
 }
 
 function buildGroupView(matches: GauntletMatch[], pod: BracketPod | null, seeds: Map<number, number>): GroupView {
@@ -185,7 +201,6 @@ function groupsOfRound(data: GauntletStageData, roundNumber: number): GroupView[
 
 export interface RoundView {
   roundNumber: number;
-  weekId: number | null;
   isFinal: boolean;
   status: StageStatus;
   groups: GroupView[];
@@ -196,17 +211,15 @@ function roundNumbersOf(data: GauntletStageData): number[] {
   return [...new Set([...data.rounds.map((r) => r.round_number), ...data.bracketShape.map((p) => p.round_number)])].sort((a, b) => a - b);
 }
 
-export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, weekId: number): RoundView | null {
-  const roundNumber = [...data.weekIdByRound].find(([, id]) => id === weekId)?.[0];
-  if (roundNumber == null) return null;
+export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, roundNumber: number): RoundView | null {
+  if (!roundNumbersOf(data).includes(roundNumber)) return null;
 
   const groups = groupsOfRound(data, roundNumber);
   const items = roundNumbersOf(data).map<StageNavItem>((n) => {
-    const id = data.weekIdByRound.get(n) ?? null;
     return {
       chip: String(n),
       label: weekLabel(n, true),
-      href: id != null ? roundHref(hubSeasonId, id) : null,
+      href: roundHref(hubSeasonId, n),
       status: stageStatus(data.rounds.find((r) => r.round_number === n)?.matches ?? []),
       current: n === roundNumber,
     };
@@ -214,7 +227,6 @@ export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, we
   const matches = groups.flatMap((g) => g.matches);
   return {
     roundNumber,
-    weekId,
     isFinal: groups.some((g) => g.isFinal),
     status: stageStatus(matches),
     groups,
@@ -225,8 +237,6 @@ export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, we
 export interface GroupPageView {
   group: GroupView;
   roundNumber: number;
-  /** The round's `weeks.id`, `null` while the round has no week row. */
-  weekId: number | null;
   /** Chips for the groups of this group's round. */
   nav: StageNav;
   /** Previous/next group across the whole bracket (round, then pod order). */
@@ -261,7 +271,6 @@ export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData
   return {
     group,
     roundNumber: pod.round_number,
-    weekId: data.weekIdByRound.get(pod.round_number) ?? null,
     nav: buildNav(groups.map((g) => itemOf(g, g.pod?.id === podId))),
     prev: neighbour(ordered[at - 1]),
     next: neighbour(ordered[at + 1]),

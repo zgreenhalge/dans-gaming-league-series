@@ -53,9 +53,22 @@ function Frame({ caption, children }: { caption: string; children: React.ReactNo
 
 /** A regular-season week: who won what, ranked Wins → RWR% → ADR (the season-standings order), and
  *  how each player moved in the season standings across the week. */
-export function WeekScorecard({ rows, currentPlayerId }: { rows: WeekScorecardRow[]; currentPlayerId: number | null }) {
+export function WeekScorecard({
+  rows,
+  showMovement,
+  currentPlayerId,
+}: {
+  rows: WeekScorecardRow[];
+  /** Whether to show season-standings movement — not in week 1, which has nothing to move from. */
+  showMovement: boolean;
+  currentPlayerId: number | null;
+}) {
   return (
-    <Frame caption="Ranked by Wins → RWR% → ADR, the same order as the season standings. Season shows each player's standing after this week.">
+    <Frame
+      caption={`Ranked by Wins → RWR% → ADR, the same order as the season standings.${
+        showMovement ? " Season shows each player's standing after this week and how far it moved." : ''
+      }`}
+    >
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
           <Th>#</Th>
@@ -64,7 +77,7 @@ export function WeekScorecard({ rows, currentPlayerId }: { rows: WeekScorecardRo
           <Th align="right">RWR%</Th>
           <Th align="right">ADR</Th>
           <Th align="right">K/A/D</Th>
-          <Th align="right">Season</Th>
+          {showMovement && <Th align="right">Season</Th>}
         </tr>
       </thead>
       <tbody>
@@ -82,9 +95,11 @@ export function WeekScorecard({ rows, currentPlayerId }: { rows: WeekScorecardRo
             <td className={`${td} text-right text-[var(--color-text-secondary)]`}>
               {r.kills}/{r.assists}/{r.deaths}
             </td>
-            <td className={`${td} text-right`}>
-              <Movement movement={r.movement} />
-            </td>
+            {showMovement && (
+              <td className={`${td} text-right`}>
+                <Movement movement={r.movement} />
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

@@ -6,9 +6,9 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { StageHeader } from '@/components/StageHeader';
 import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
-import { getSeason, getSeasonScope, getPodSeasonId, getGauntletStageData } from '@/lib/queries';
+import { getSeason, getSeasonScope, getPodSeasonId, getGauntletStageData, getSeedNames } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, gauntletHref, groupHref, roundHref } from '@/lib/crumbs';
+import { buildCrumbs, groupHref, roundHref } from '@/lib/crumbs';
 import { deriveGroupPageView } from '@/lib/stage-views';
 import { describeMatchups } from '@/lib/seo/stage-meta';
 import { parseRouteId, seasonTitle } from '@/lib/util';
@@ -31,7 +31,8 @@ const loadGroup = cache(async (idParam: string, podIdParam: string) => {
   const data = await getGauntletStageData(owner.id);
   const view = deriveGroupPageView(scope.hub.id, data, podId);
   if (!view) notFound();
-  return { hub: scope.hub, data, view };
+  const seedNames = view.group.matches.length === 0 ? await getSeedNames(scope.hub.id) : undefined;
+  return { hub: scope.hub, data, view, seedNames };
 });
 
 function titleOf(hubName: string, roundNumber: number, label: string | null): string {
@@ -55,7 +56,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function GroupPage({ params }: { params: Promise<Params> }) {
   const { id, podId } = await params;
-  const [{ hub, data, view }, session] = await Promise.all([loadGroup(id, podId), getServerSession(authOptions)]);
+  const [{ hub, data, view, seedNames }, session] = await Promise.all([loadGroup(id, podId), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const { group } = view;
   const pod = group.pod!;
@@ -66,7 +67,7 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
         crumbs={buildCrumbs({
           season: hub,
           gauntlet: true,
-          week: { id: view.weekId, number: view.roundNumber },
+          round: view.roundNumber,
           group: { id: pod.id, podIndex: pod.pod_index, isFinal: pod.is_final },
         })}
       />
@@ -74,7 +75,7 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
         <StageHeader
           title={titleOf(hub.name, view.roundNumber, group.label)}
           status={group.status}
-          upHref={view.weekId != null ? roundHref(hub.id, view.weekId) : gauntletHref(hub.id)}
+          upHref={roundHref(hub.id, view.roundNumber)}
           upLabel={`Round ${view.roundNumber}`}
           details={
             <>
@@ -90,6 +91,7 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
           group={group}
           hubSeasonId={hub.id}
           bracketShape={data.bracketShape}
+          seedNames={seedNames}
           currentPlayerId={currentPlayerId}
           standalone
         />
