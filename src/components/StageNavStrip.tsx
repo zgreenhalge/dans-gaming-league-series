@@ -5,6 +5,8 @@ function Chip({ item }: { item: StageNavItem }) {
   const base = 'inline-flex items-center px-2 py-1 font-mono text-[11px] border transition-colors';
   const body = item.chip;
   const title = item.label;
+  // Played stages read bright, stages with nothing played yet read dim.
+  const tone = item.played ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]';
   if (item.current) {
     return (
       <span
@@ -27,7 +29,7 @@ function Chip({ item }: { item: StageNavItem }) {
     <Link
       href={item.href}
       title={title}
-      className={`${base} text-[var(--color-text-secondary)] border-[var(--color-border-primary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]`}
+      className={`${base} ${tone} border-[var(--color-border-primary)] hover:border-[var(--color-border-secondary)]`}
     >
       {body}
     </Link>

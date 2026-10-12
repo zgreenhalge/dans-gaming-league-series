@@ -159,9 +159,9 @@ test('deriveRoundView: groups, nav and an unscheduled later round', () => {
   assert.equal(view.status, 'complete');
   assert.equal(view.groups.length, 1);
   assert.equal(view.groups[0].label, 'Group 1');
-  assert.deepEqual(view.nav.items.map((i) => [i.chip, i.href]), [
-    ['1', '/seasons/5/rounds/1'],
-    ['2', '/seasons/5/rounds/2'],
+  assert.deepEqual(view.nav.items.map((i) => [i.chip, i.href, i.played]), [
+    ['1', '/seasons/5/rounds/1', true],
+    ['2', '/seasons/5/rounds/2', false],
   ]);
   assert.equal(view.nav.next?.href, '/seasons/5/rounds/2', 'a round not yet scheduled still has a page');
   assert.equal(deriveRoundView(5, stage(), 999), null);

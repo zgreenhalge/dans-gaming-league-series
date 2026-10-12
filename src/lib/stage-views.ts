@@ -36,6 +36,8 @@ export interface StageNavItem {
   label: string;
   /** `null` for a chip with nowhere to go. */
   href: string | null;
+  /** Whether any game in this stage has been played — drives the chip's bright/dim colour. */
+  played: boolean;
   current: boolean;
 }
 
@@ -91,6 +93,7 @@ export function deriveWeekView(
     chip: String(w.week_number),
     label: weekLabel(w.week_number, false),
     href: weekHref(hubSeasonId, w.id),
+    played: anyMatchPlayed(w.matches),
     current: w.id === weekId,
   }));
   return { week, status: stageStatus(week.matches), scorecard, nav: buildNav(items) };
@@ -218,6 +221,7 @@ export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, ro
     chip: String(n),
     label: weekLabel(n, true),
     href: roundHref(hubSeasonId, n),
+    played: anyMatchPlayed(data.rounds.find((r) => r.round_number === n)?.matches ?? []),
     current: n === roundNumber,
   }));
   const matches = groups.flatMap((g) => g.matches);
@@ -253,6 +257,7 @@ export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData
     chip: g.label ?? '•',
     label: g.label ?? 'Game',
     href: g.pod ? groupHref(hubSeasonId, g.pod.id) : null,
+    played: g.status !== 'upcoming',
     current,
   });
 
