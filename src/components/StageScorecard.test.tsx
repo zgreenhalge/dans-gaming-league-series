@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Component tests for the sortable scorecards (`StageScorecard.tsx`): the canonical ranking is the
- * default order, a header click re-sorts without touching the `#` rank values, names and ranks sort
- * A-first / smallest-first, and nulls stay last. Run: npx vitest run src/components/StageScorecard.test.tsx
+ * default order, a header click re-sorts, names and seeds sort A-first / smallest-first, and nulls
+ * stay last. Run: npx vitest run src/components/StageScorecard.test.tsx
  */
 
 import { describe, expect, test } from 'vitest';
@@ -24,9 +24,6 @@ const week: WeekScorecardRow[] = [
 
 /** The Player column's names, top to bottom. */
 function names(): string[] {
-  return screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent ?? '');
-}
-function ranks(): string[] {
   return screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent ?? '');
 }
 
@@ -34,24 +31,23 @@ describe('WeekScorecard sorting', () => {
   test('starts in canonical rank order', () => {
     render(<WeekScorecard rows={week} showMovement currentPlayerId={null} />);
     expect(names()).toEqual(['Carol', 'Alice', 'Bob']);
-    expect(screen.getByRole('columnheader', { name: /#/ })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getAllByRole('columnheader').map((h) => h.getAttribute('aria-sort'))).toEqual(Array(6).fill('none'));
   });
 
-  test('a stat column sorts descending first, then flips, and the # column keeps each real rank', async () => {
+  test('a stat column sorts descending first, then flips', async () => {
     render(<WeekScorecard rows={week} showMovement currentPlayerId={null} />);
     await userEvent.click(screen.getByRole('button', { name: /ADR/ }));
     expect(names()).toEqual(['Carol', 'Bob', 'Alice']);
-    expect(ranks()).toEqual(['1', '3', '2']);
     await userEvent.click(screen.getByRole('button', { name: /ADR/ }));
     expect(names()).toEqual(['Alice', 'Bob', 'Carol']);
   });
 
-  test('Player sorts A-first and clicking # returns to canonical order', async () => {
+  test('Player sorts A-first, then flips', async () => {
     render(<WeekScorecard rows={week} showMovement currentPlayerId={null} />);
     await userEvent.click(screen.getByRole('button', { name: /Player/ }));
     expect(names()).toEqual(['Alice', 'Bob', 'Carol']);
-    await userEvent.click(screen.getByRole('button', { name: /^#/ }));
-    expect(names()).toEqual(['Carol', 'Alice', 'Bob']);
+    await userEvent.click(screen.getByRole('button', { name: /Player/ }));
+    expect(names()).toEqual(['Carol', 'Bob', 'Alice']);
   });
 
   test('week 1 has no Season column', () => {
@@ -71,10 +67,10 @@ describe('GroupScorecard sorting', () => {
     render(<GroupScorecard rows={group} isFinal={false} finished={false} currentPlayerId={null} />);
     const cell = (i: number) => screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[i].textContent ?? '');
     await userEvent.click(screen.getByRole('button', { name: /Seed/ }));
-    expect(cell(2)).toEqual(['Fay', 'Eve', 'Dee']);
+    expect(cell(1)).toEqual(['Fay', 'Eve', 'Dee']);
     await userEvent.click(screen.getByRole('button', { name: /ADR/ }));
-    expect(cell(2)).toEqual(['Dee', 'Eve', 'Fay']);
+    expect(cell(1)).toEqual(['Dee', 'Eve', 'Fay']);
     await userEvent.click(screen.getByRole('button', { name: /ADR/ }));
-    expect(cell(2)).toEqual(['Eve', 'Dee', 'Fay']);
+    expect(cell(1)).toEqual(['Eve', 'Dee', 'Fay']);
   });
 });

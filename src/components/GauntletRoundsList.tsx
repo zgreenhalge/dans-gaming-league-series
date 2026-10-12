@@ -7,7 +7,7 @@ import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { aggregatePlayerRecords } from '@/lib/group-scorecard';
-import { groupHref, groupName, roundHref } from '@/lib/crumbs';
+import { groupName, roundHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
@@ -178,11 +178,6 @@ function GauntletRoundCard({
   const roundLink = hubSeasonId != null ? roundHref(hubSeasonId, round.round_number) : null;
   const isFinalRound = round.is_final_round;
 
-  // Pod ids by index within this round — for each group header's page link.
-  const podIdByIndex = useMemo(
-    () => new Map([...podsById.values()].filter((p) => p.round_number === round.round_number).map((p) => [p.pod_index, p.id])),
-    [podsById, round.round_number],
-  );
   const podEntries = useMemo(() => buildPodEntries(round.matches, pendingPods), [round.matches, pendingPods]);
   // When every pod in this round shares the same stakes, show it once in the header instead of once
   // per pod below — a round can also mix rules (e.g. one wildcard pod feeding one elimination pod),
@@ -258,14 +253,6 @@ function GauntletRoundCard({
                     <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)] flex items-baseline gap-2">
                       {groupLabel && <span className="tracked font-semibold text-[var(--color-text-primary)]">{groupLabel}</span>}
                       {stakesText && <span>{stakesText}</span>}
-                      {hubSeasonId != null && entry.pod_index != null && podIdByIndex.has(entry.pod_index) && (
-                        <Link
-                          href={groupHref(hubSeasonId, podIdByIndex.get(entry.pod_index)!)}
-                          className="ml-auto tracked text-[10px] font-semibold hover:text-[var(--color-text-primary)] transition-colors"
-                        >
-                          Open →
-                        </Link>
-                      )}
                     </div>
                   )}
                   {entry.kind === 'pending' ? (

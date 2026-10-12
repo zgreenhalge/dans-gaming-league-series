@@ -8,8 +8,7 @@ import type { RankMovement } from '@/lib/season-standings';
 
 // The scorecard tables on the week, round and group pages. Both show the exact values the ranking is
 // computed from (`deriveGroupScorecard()` / `canonicalGauntletRankMap()` — group-scorecard.ts), in the
-// order they rank by, and every column header re-sorts them (the `#` column keeps showing each
-// player's actual rank, so a re-sorted table still reads against it).
+// order they rank by (the rows open in that order), and every column header re-sorts them.
 
 type SortValue = number | string | null;
 
@@ -103,7 +102,6 @@ export function WeekScorecard({
     <Frame>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
-          <SortableTh label="#" sortKey="rank" state={sort} onSort={onSort} />
           <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />
           <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
           <SortableTh label="RWR%" title="Round win rate" sortKey="rwr" state={sort} onSort={onSort} align="right" />
@@ -115,7 +113,6 @@ export function WeekScorecard({
       <tbody>
         {sorted.map((r) => (
           <tr key={r.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
-            <td className={`${td} text-[var(--color-text-secondary)]`}>{r.rank}</td>
             <td className={nameTd}>
               <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
             </td>
@@ -186,7 +183,6 @@ export function GroupScorecard({
     <Frame>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
-          <SortableTh label="#" sortKey="rank" state={sort} onSort={onSort} />
           <SortableTh label="Seed" sortKey="seed" state={sort} onSort={onSort} align="right" />
           <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />
           <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
@@ -198,7 +194,6 @@ export function GroupScorecard({
       <tbody>
         {sorted.map((r) => (
           <tr key={r.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
-            <td className={`${td} text-[var(--color-text-secondary)]`}>{r.rank ?? '–'}</td>
             <td className={`${td} text-right text-[var(--color-text-secondary)]`}>{r.seed ?? '–'}</td>
             <td className={nameTd}>
               <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
