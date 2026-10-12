@@ -66,10 +66,10 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
           season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
           title={
             <>
-              <Link href={roundHref(hub.id, view.roundNumber)} className="hover:text-[var(--color-site-accent)] transition-colors">
+              <Link href={roundHref(hub.id, view.roundNumber)} className="block hover:text-[var(--color-site-accent)] transition-colors">
                 {weekLabel(view.roundNumber, true)}
               </Link>
-              {` · ${group.label}`}
+              <span className="block">{group.label}</span>
             </>
           }
           status={group.status}

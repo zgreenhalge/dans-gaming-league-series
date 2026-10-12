@@ -42,7 +42,7 @@ function MetaChip({ meta }: { meta: StageNavMeta }) {
   return (
     <Link
       href={meta.href}
-      className="ml-auto inline-flex items-center px-2 py-1 tracked text-[10px] font-semibold border shrink-0 transition-opacity hover:opacity-80"
+      className="self-start inline-flex items-center px-2 py-1 tracked text-[10px] font-semibold border shrink-0 transition-opacity hover:opacity-80"
       style={{
         color: 'var(--color-site-accent)',
         background: 'color-mix(in srgb, var(--color-site-accent) 12%, transparent)',
@@ -60,7 +60,7 @@ export interface StageNavMeta {
 }
 
 /** A row of chips under its label — one per sibling stage (week, round or group), the current one marked —
- *  plus an optional meta chip on the right. Server-rendered; every link is a plain page. A lone
+ *  plus an optional meta chip on its own line below. Server-rendered; every link is a plain page. A lone
  *  stage chip would only repeat the page's own title, so the row needs two or more to show; with
  *  neither chips nor a meta chip, nothing renders. */
 export function StageNavStrip({
@@ -76,7 +76,7 @@ export function StageNavStrip({
   const showItems = items.length > 1;
   if (!showItems && !meta) return null;
   return (
-    <nav aria-label={label} className="flex items-end gap-2 flex-wrap">
+    <nav aria-label={label} className="flex flex-col items-start gap-3">
       {showItems && (
         <div className="flex flex-col gap-1.5 min-w-0">
           <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)]">{label}</span>

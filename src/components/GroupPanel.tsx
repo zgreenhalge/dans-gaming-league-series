@@ -2,7 +2,6 @@ import Link from 'next/link';
 import EmptyState from './EmptyState';
 import { GameMatchCard, PendingPodRows } from './GauntletRoundsList';
 import { GroupScorecard } from './StageScorecard';
-import { StageStatusTag } from './StageStatusTag';
 import { groupHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GroupView } from '@/lib/stage-views';
@@ -42,7 +41,6 @@ export function GroupPanel({
             </Link>
           )}
         </h2>
-        <StageStatusTag status={group.status} />
       </div>
       {group.scorecard.length > 0 && (
         <div className="mb-3">
