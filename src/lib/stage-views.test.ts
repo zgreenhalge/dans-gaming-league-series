@@ -10,8 +10,8 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getWeekView, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
-import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, type GauntletStageData } from './stage-views';
+import { getWeekView, resolveWeekPage, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
+import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, withGauntletNext, type GauntletStageData } from './stage-views';
 import { getSeasonSchedule, getSeasonWeekNav } from './queries';
 import type { WeekWithMatches } from './queries';
 import { hubIdsBySeason } from './queries';
@@ -73,6 +73,24 @@ test('deriveWeekView: movement reads only the weeks through this one, and is abs
   assert.ok(p3.movement!.after < 3, 'a player who won week 2 moved up');
   assert.deepEqual(second.nav.items.map((i) => i.chip), ['1', '2', '3'], 'the strip lists weeks that are not loaded in full');
   assert.equal(second.nav.next?.href, '/seasons/7/weeks/3');
+});
+
+test("withGauntletNext: the last week's Next leads to the gauntlet's first round; other weeks are untouched", () => {
+  const w = (id: number, n: number) => ({ id, season_id: 1, week_number: n, bye_player_id: null, bye_player_name: null, matches: [] }) as unknown as WeekWithMatches;
+  const navWeeks = [{ id: 1, week_number: 1, matches: [] }, { id: 2, week_number: 2, matches: [] }];
+  const last = deriveWeekView(7, [w(1, 1), w(2, 2)], navWeeks, 2)!;
+  assert.equal(last.nav.next, null);
+  assert.equal(withGauntletNext(last, 7, 1).nav.next?.href, '/seasons/7/rounds/1');
+  assert.equal(withGauntletNext(last, 7, null).nav.next, null, 'no bracket, no link');
+  const first = deriveWeekView(7, [w(1, 1)], navWeeks, 1)!;
+  assert.equal(withGauntletNext(first, 7, 1).nav.next?.href, '/seasons/7/weeks/2');
+});
+
+test("resolveWeekPage: a season's last week carries on to its paired gauntlet's first round", async () => {
+  const last = await resolveWeekPage(11);
+  assert.equal(last?.view?.nav.next?.href, '/seasons/1/rounds/1');
+  const first = await resolveWeekPage(10);
+  assert.equal(first?.view?.nav.next?.href, '/seasons/1/weeks/11');
 });
 
 test('getWeekRow / getPodSeasonId resolve ids to their season', async () => {

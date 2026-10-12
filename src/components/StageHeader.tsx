@@ -2,32 +2,42 @@ import Link from 'next/link';
 import { StageStatusTag } from './StageStatusTag';
 import type { StageStatus } from '@/lib/stage-views';
 
-/** Title block shared by the week, round and group pages: status, title, a mono detail line and a
- *  link up to the season hub. */
+/** Title block shared by the week, round and group pages: status, the season's name (a link back to
+ *  the season) over the stage's own name, and a mono detail line. */
 export function StageHeader({
+  season,
   title,
   status,
   details,
-  upHref,
-  upLabel,
+  up,
 }: {
+  season: { label: string; href: string };
   title: string;
   status: StageStatus;
   details: React.ReactNode;
-  upHref: string;
-  upLabel: string;
+  /** An optional extra link up a level (a group page's round). */
+  up?: { label: string; href: string };
 }) {
   return (
     <div className="mt-8 mb-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <StageStatusTag status={status} />
-        <h1 className="font-display text-[32px] sm:text-[36px] font-semibold leading-tight">{title}</h1>
+      <div className="flex items-start gap-3">
+        <div className="mt-2">
+          <StageStatusTag status={status} />
+        </div>
+        <h1 className="font-display text-[32px] sm:text-[36px] font-semibold leading-tight">
+          <Link href={season.href} className="block hover:text-[var(--color-site-accent)] transition-colors">
+            {season.label}
+          </Link>
+          <span className="block">{title}</span>
+        </h1>
       </div>
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap">
         {details}
-        <Link href={upHref} className="hover:text-[var(--color-text-primary)] transition-colors underline-offset-2 hover:underline">
-          {upLabel} →
-        </Link>
+        {up && (
+          <Link href={up.href} className="hover:text-[var(--color-text-primary)] transition-colors underline-offset-2 hover:underline">
+            {up.label} →
+          </Link>
+        )}
       </div>
     </div>
   );

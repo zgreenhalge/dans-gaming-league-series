@@ -8,9 +8,9 @@ import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
 import { getSeedNames, resolveGroupPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, groupHref, roundHref } from '@/lib/crumbs';
+import { buildCrumbs, gauntletHref, groupHref, roundHref } from '@/lib/crumbs';
 import { describeMatchups, groupTitle } from '@/lib/seo/stage-meta';
-import { parseRouteId } from '@/lib/util';
+import { parseRouteId, seasonTitle, weekLabel } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -62,10 +62,10 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
       />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          title={groupTitle(hub.name, view.roundNumber, group.label)}
+          season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
+          title={`${weekLabel(view.roundNumber, true)} · ${group.label}`}
           status={group.status}
-          upHref={roundHref(hub.id, view.roundNumber)}
-          upLabel={`Round ${view.roundNumber}`}
+          up={{ label: weekLabel(view.roundNumber, true), href: roundHref(hub.id, view.roundNumber) }}
           details={
             <>
               <span>{group.isFinal ? 'Final' : group.advanceRule === 'wildcard' ? 'Wildcard' : 'Elimination'}</span>

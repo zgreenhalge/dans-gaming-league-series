@@ -10,6 +10,7 @@ import {
   deriveGroupPageView,
   deriveRoundView,
   deriveWeekView,
+  withGauntletNext,
   type GauntletStageData,
   type GroupPageView,
   type RoundView,
@@ -107,10 +108,16 @@ export async function resolveWeekPage(
   const row = await getWeekRow(weekId);
   const owner = row ? await getSeason(row.season_id) : null;
   if (!row || !owner) return null;
-  const [scope, view] = await Promise.all([
+  const [scope, weekView] = await Promise.all([
     getSeasonScope(owner),
     owner.is_gauntlet ? Promise.resolve(null) : getWeekView(owner.id, weekId),
   ]);
+  // The season's last week leads on to the paired gauntlet's first round, once its bracket exists.
+  let view = weekView;
+  if (view && !view.nav.next && scope.gauntlet) {
+    const shape = await getGauntletBracketShape(scope.gauntlet.id);
+    view = withGauntletNext(view, scope.hub.id, shape.length > 0 ? Math.min(...shape.map((p) => p.round_number)) : null);
+  }
   return { week: row, owner, scope, view };
 }
 

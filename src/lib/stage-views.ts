@@ -99,6 +99,20 @@ export function deriveWeekView(
   return { week, status: stageStatus(week.matches), scorecard, nav: buildNav(items) };
 }
 
+/** A week view whose strip carries on past the regular season: the last week's "Next" leads to the
+ *  paired gauntlet's first round. Any other week, or a missing round, is returned unchanged. */
+export function withGauntletNext(view: WeekView, hubSeasonId: number, firstRound: number | null): WeekView {
+  if (view.nav.next || firstRound == null) return view;
+  const next: StageNavItem = {
+    chip: weekLabel(firstRound, true),
+    label: `Gauntlet · ${weekLabel(firstRound, true)}`,
+    href: roundHref(hubSeasonId, firstRound),
+    played: false,
+    current: false,
+  };
+  return { ...view, nav: { ...view.nav, next } };
+}
+
 // ─── Gauntlet round / group ──────────────────────────────────────────────────────────────────────
 
 /** What a finished pod means for a player; `pending` until every game in the pod is played. */

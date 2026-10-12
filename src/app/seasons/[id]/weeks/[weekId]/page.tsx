@@ -13,7 +13,7 @@ import { resolveWeekPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, roundHref, seasonHref, weekHref } from '@/lib/crumbs';
 import { describeMatchups, weekTitle } from '@/lib/seo/stage-meta';
-import { fmtWindowDate, parseRouteId, weekWindow } from '@/lib/util';
+import { fmtWindowDate, parseRouteId, seasonTitle, weekLabel, weekWindow } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -62,10 +62,9 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
       <TopbarShell crumbs={buildCrumbs({ season, week: { id: week.id, number: week.week_number } })} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          title={weekTitle(season.name, week.week_number)}
+          season={{ label: seasonTitle(season.name), href: `${seasonHref(season.id)}?tab=schedule&week=${week.id}` }}
+          title={weekLabel(week.week_number, false)}
           status={view.status}
-          upHref={`${seasonHref(season.id)}?tab=schedule&week=${week.id}`}
-          upLabel="Season schedule"
           details={
             <>
               <span>{week.matches.length} matches</span>

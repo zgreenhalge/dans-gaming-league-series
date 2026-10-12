@@ -11,7 +11,7 @@ import { getSeedNames, resolveRoundPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, gauntletHref, roundHref } from '@/lib/crumbs';
 import { describeMatchups, roundTitle } from '@/lib/seo/stage-meta';
-import { parseRouteId } from '@/lib/util';
+import { parseRouteId, seasonTitle, weekLabel } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -56,10 +56,9 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
       <TopbarShell crumbs={buildCrumbs({ season: hub, gauntlet: true, round: view.roundNumber })} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          title={roundTitle(hub.name, view.roundNumber)}
+          season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
+          title={weekLabel(view.roundNumber, true)}
           status={view.status}
-          upHref={gauntletHref(hub.id)}
-          upLabel="Gauntlet bracket"
           details={
             <>
               <span>
