@@ -84,6 +84,7 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
           <StageNavStrip
             items={view.nav}
             label="Groups"
+            metaPosition="above"
             meta={hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id) }}
           />
         </div>

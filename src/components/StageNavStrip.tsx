@@ -60,23 +60,27 @@ export interface StageNavMeta {
 }
 
 /** A row of chips under its label — one per sibling stage (week, round or group), the current one marked —
- *  plus an optional meta chip on its own line below. Server-rendered; every link is a plain page. A lone
+ *  plus an optional meta chip on its own line, above or below the chips. Server-rendered; every link is a plain page. A lone
  *  stage chip would only repeat the page's own title, so the row needs two or more to show; with
  *  neither chips nor a meta chip, nothing renders. */
 export function StageNavStrip({
   items,
   label,
   meta,
+  metaPosition = 'below',
 }: {
   items: StageNavItem[];
   /** What the chips are ("Weeks", "Rounds", "Groups") — shown above them and as the nav's label. */
   label: string;
   meta?: StageNavMeta;
+  /** Whether the meta chip sits on its own line above the stage chips or below them. */
+  metaPosition?: 'above' | 'below';
 }) {
   const showItems = items.length > 1;
   if (!showItems && !meta) return null;
   return (
     <nav aria-label={label} className="flex flex-col items-start gap-3">
+      {metaPosition === 'above' && meta && <MetaChip meta={meta} />}
       {showItems && (
         <div className="flex flex-col gap-1.5 min-w-0">
           <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)]">{label}</span>
@@ -87,7 +91,7 @@ export function StageNavStrip({
           </div>
         </div>
       )}
-      {meta && <MetaChip meta={meta} />}
+      {metaPosition === 'below' && meta && <MetaChip meta={meta} />}
     </nav>
   );
 }

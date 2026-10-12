@@ -32,6 +32,15 @@ describe('StageNavStrip', () => {
     expect(screen.getByRole('link', { name: 'Gauntlet →' })).toHaveAttribute('href', '/seasons/5/rounds/1');
   });
 
+  test('the meta chip goes above or below the stage chips', () => {
+    const meta = { label: '← Regular season', href: '/seasons/5' };
+    const order = () => screen.getAllByRole('link').map((l) => l.textContent);
+    const { rerender } = render(<StageNavStrip items={[item('1'), item('2')]} label="Rounds" meta={meta} metaPosition="above" />);
+    expect(order()).toEqual(['← Regular season', '1', '2']);
+    rerender(<StageNavStrip items={[item('1'), item('2')]} label="Rounds" meta={meta} />);
+    expect(order()).toEqual(['1', '2', '← Regular season']);
+  });
+
   test('a lone stage chip is hidden; the meta chip stands alone, and with neither nothing renders', () => {
     const { container, rerender } = render(
       <StageNavStrip items={[item('Final', { current: true })]} label="Groups" meta={{ label: '← Regular season', href: '/seasons/5' }} />,

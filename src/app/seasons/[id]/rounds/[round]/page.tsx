@@ -65,6 +65,7 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
           <StageNavStrip
             items={view.nav}
             label="Rounds"
+            metaPosition="above"
             meta={hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id) }}
           />
         </div>
@@ -76,6 +77,7 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
               hubSeasonId={hub.id}
               bracketShape={data.bracketShape}
               seedNames={seedNames}
+              collapsible={view.groups.length > 1}
               currentPlayerId={currentPlayerId}
             />
           ))

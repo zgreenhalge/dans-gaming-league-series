@@ -76,9 +76,9 @@ function Movement({ movement }: { movement: RankMovement | null }) {
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ bare = false, children }: { bare?: boolean; children: React.ReactNode }) {
   return (
-    <section className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+    <section className={`bg-[var(--color-bg-primary)] overflow-x-auto ${bare ? '' : 'border border-[var(--color-border-primary)]'}`}>
       <table className="w-full border-collapse min-w-max">{children}</table>
     </section>
   );
@@ -159,11 +159,14 @@ export function GroupScorecard({
   rows,
   isFinal,
   finished,
+  bare = false,
   currentPlayerId,
 }: {
   rows: GroupRow[];
   isFinal: boolean;
   finished: boolean;
+  /** Drop the table's own border — for a table sitting flush inside a bordered container. */
+  bare?: boolean;
   currentPlayerId: number | null;
 }) {
   const [sort, onSort] = useSortState('rank', { defaultAsc: true, ascFirst: ASC_FIRST });
@@ -178,7 +181,7 @@ export function GroupScorecard({
     result: (r) => (isFinal ? r.rank : finished ? OUTCOME_ORDER[r.outcome] : null),
   });
   return (
-    <Frame>
+    <Frame bare={bare}>
       <thead className="bg-[var(--color-bg-secondary)]">
         <tr>
           <SortableTh label="Seed" sortKey="seed" state={sort} onSort={onSort} align="right" />
