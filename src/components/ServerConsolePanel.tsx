@@ -654,11 +654,7 @@ export function ServerConsolePanel({
           </div>
         </div>
 
-        {(statusError || startStopError || status?.error) && (
-          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">
-            {statusError ?? startStopError ?? status?.error}
-          </div>
-        )}
+        <ErrorText error={statusError || startStopError || status?.error} className="mt-3" />
         <ErrorText error={matchCfgError} className="mt-3" />
         {matchCfgSuccess && !matchCfgError && (
           <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)] mt-3">

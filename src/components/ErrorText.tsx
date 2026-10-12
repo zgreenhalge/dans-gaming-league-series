@@ -20,5 +20,6 @@ export default function ErrorText({
   className?: string;
 }) {
   if (!error) return null;
-  return <Tag className={`font-mono ${SIZE_CLS[size]} text-[var(--color-accent-red-fg)] ${className}`.trimEnd()}>{error}</Tag>;
+  const cls = ['font-mono', SIZE_CLS[size], 'text-[var(--color-accent-red-fg)]', className].filter(Boolean).join(' ');
+  return <Tag className={cls}>{error}</Tag>;
 }

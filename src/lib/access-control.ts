@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+
 // Shared result shape for session-based access gates (`admin-access.ts`, `match-access.ts`,
 // `season-roster-access.ts`) — every gate in this family already returned this discriminated union
 // by convention; this is that convention given one real type instead of three parallel copies, so a
@@ -8,13 +10,11 @@
 // header, not a player session) and already returns a ready-to-send `NextResponse | null` instead of
 // a result its caller has to translate into one.
 
-import { NextResponse } from 'next/server';
-
 export type AccessResult<T extends object = Record<string, never>> =
   | ({ ok: true } & T)
   | { ok: false; status: number; error: string };
 
 /** The response for a failed gate result: its `error` as the JSON body, with its `status`. */
-export function accessDenied(access: { ok: false; status: number; error: string }) {
+export function accessDenied(access: Extract<AccessResult, { ok: false }>) {
   return NextResponse.json({ error: access.error }, { status: access.status });
 }

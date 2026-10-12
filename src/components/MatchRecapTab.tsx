@@ -113,11 +113,7 @@ function ReplayStatusPanel({
               ? `Replay generation failed${job.stage ? ` at "${job.stage}"` : ''}.`
               : 'No replay has been generated for this match yet.'}
           </div>
-          {job.status === 'failed' && job.errorMessage && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] max-w-md mx-auto break-words">
-              {job.errorMessage}
-            </div>
-          )}
+          {job.status === 'failed' && <ErrorText error={job.errorMessage} className="max-w-md mx-auto break-words" />}
           {canDispatch ? (
             <button
               type="button"

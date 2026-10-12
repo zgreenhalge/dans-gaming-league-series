@@ -27,6 +27,7 @@ import { isServerLive } from '@/lib/util';
 import type { ConfigSetOption } from '@/lib/dathost-config';
 import type { WorkshopMapOption } from '@/lib/queries';
 import { useScrimStatus } from '@/components/ScrimStatusContext';
+import ErrorText from '@/components/ErrorText';
 
 const ACTION_CAP_MS = 90_000;
 
@@ -198,11 +199,7 @@ export function ScrimPanel({ configSets, maps }: { configSets: ConfigSetOption[]
           </div>
         </div>
 
-        {(statusError || startError || stopError || applyError || status.error) && (
-          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mb-3">
-            {statusError ?? startError ?? stopError ?? applyError ?? status.error}
-          </div>
-        )}
+        <ErrorText error={statusError || startError || stopError || applyError || status.error} className="mb-3" />
 
         {!serverOn && !starting && (
           <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
