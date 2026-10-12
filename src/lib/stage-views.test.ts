@@ -10,8 +10,8 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getWeekView, resolveWeekPage, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
-import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, withGauntletNext, type GauntletStageData } from './stage-views';
+import { getWeekView, resolveWeekPage, resolveRoundPage, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
+import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, withGauntletNext, withRegularSeasonPrev, type GauntletStageData } from './stage-views';
 import { getSeasonSchedule, getSeasonWeekNav } from './queries';
 import type { WeekWithMatches } from './queries';
 import { hubIdsBySeason } from './queries';
@@ -91,6 +91,20 @@ test("resolveWeekPage: a season's last week carries on to its paired gauntlet's 
   assert.equal(last?.view?.nav.next?.href, '/seasons/1/rounds/1');
   const first = await resolveWeekPage(10);
   assert.equal(first?.view?.nav.next?.href, '/seasons/1/weeks/11');
+});
+
+test("withRegularSeasonPrev: the first round's Prev leads back to the season's last week; later rounds are untouched", () => {
+  const first = deriveRoundView(5, stage(), 1)!;
+  assert.equal(first.nav.prev, null);
+  assert.equal(withRegularSeasonPrev(first, 5, { id: 31, week_number: 9 }).nav.prev?.href, '/seasons/5/weeks/31');
+  assert.equal(withRegularSeasonPrev(first, 5, null).nav.prev, null, 'no regular weeks, no link');
+  const second = deriveRoundView(5, stage(), 2)!;
+  assert.equal(withRegularSeasonPrev(second, 5, { id: 31, week_number: 9 }).nav.prev?.href, '/seasons/5/rounds/1');
+});
+
+test('resolveRoundPage: the fixture gauntlet\'s first round steps back to its season\'s last week', async () => {
+  const found = await resolveRoundPage(1, 1);
+  assert.equal(found?.view.nav.prev?.href, '/seasons/1/weeks/11');
 });
 
 test('getWeekRow / getPodSeasonId resolve ids to their season', async () => {

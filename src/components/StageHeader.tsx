@@ -9,14 +9,12 @@ export function StageHeader({
   title,
   status,
   details,
-  up,
 }: {
   season: { label: string; href: string };
-  title: string;
+  /** The stage's own name; a group page links its round part back to the round. */
+  title: React.ReactNode;
   status: StageStatus;
   details: React.ReactNode;
-  /** An optional extra link up a level (a group page's round). */
-  up?: { label: string; href: string };
 }) {
   return (
     <div className="mt-8 mb-6">
@@ -33,11 +31,6 @@ export function StageHeader({
       </div>
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap">
         {details}
-        {up && (
-          <Link href={up.href} className="hover:text-[var(--color-text-primary)] transition-colors underline-offset-2 hover:underline">
-            {up.label} →
-          </Link>
-        )}
       </div>
     </div>
   );

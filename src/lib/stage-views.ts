@@ -248,6 +248,25 @@ export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, ro
   };
 }
 
+/** A round view whose strip reaches back into the regular season: the gauntlet's first round's
+ *  "Prev" leads to the paired season's last week. Any later round, or a season with no weeks, is
+ *  returned unchanged. */
+export function withRegularSeasonPrev(
+  view: RoundView,
+  hubSeasonId: number,
+  lastWeek: { id: number; week_number: number } | null,
+): RoundView {
+  if (view.nav.prev || !lastWeek) return view;
+  const prev: StageNavItem = {
+    chip: weekLabel(lastWeek.week_number, false),
+    label: `Regular season · ${weekLabel(lastWeek.week_number, false)}`,
+    href: weekHref(hubSeasonId, lastWeek.id),
+    played: false,
+    current: false,
+  };
+  return { ...view, nav: { ...view.nav, prev } };
+}
+
 export interface GroupPageView {
   group: GroupView & { pod: BracketPod };
   roundNumber: number;

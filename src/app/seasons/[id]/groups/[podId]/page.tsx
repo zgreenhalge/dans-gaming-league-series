@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
@@ -63,9 +64,15 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
           season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
-          title={`${weekLabel(view.roundNumber, true)} · ${group.label}`}
+          title={
+            <>
+              <Link href={roundHref(hub.id, view.roundNumber)} className="hover:text-[var(--color-site-accent)] transition-colors">
+                {weekLabel(view.roundNumber, true)}
+              </Link>
+              {` · ${group.label}`}
+            </>
+          }
           status={group.status}
-          up={{ label: weekLabel(view.roundNumber, true), href: roundHref(hub.id, view.roundNumber) }}
           details={
             <>
               <span>{group.isFinal ? 'Final' : group.advanceRule === 'wildcard' ? 'Wildcard' : 'Elimination'}</span>

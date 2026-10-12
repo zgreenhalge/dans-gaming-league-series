@@ -11,6 +11,7 @@ import {
   deriveRoundView,
   deriveWeekView,
   withGauntletNext,
+  withRegularSeasonPrev,
   type GauntletStageData,
   type GroupPageView,
   type RoundView,
@@ -131,8 +132,15 @@ export async function resolveRoundPage(
   const scope = await getSeasonScope(season);
   if (!scope.gauntlet) return null;
   const data = await getGauntletStageData(scope.gauntlet.id);
-  const view = deriveRoundView(scope.hub.id, data, roundNumber);
-  return view ? { scope, data, view } : null;
+  const roundView = deriveRoundView(scope.hub.id, data, roundNumber);
+  if (!roundView) return null;
+  // The first round steps back into the regular season it follows.
+  let view = roundView;
+  if (!view.nav.prev && !scope.hub.is_gauntlet) {
+    const weeks = await getSeasonWeekNav(scope.hub.id);
+    view = withRegularSeasonPrev(view, scope.hub.id, weeks.at(-1) ?? null);
+  }
+  return { scope, data, view };
 }
 
 /** A pod id → the gauntlet group's page view. */
