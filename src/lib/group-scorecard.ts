@@ -115,3 +115,31 @@ export function compareRecords(rule: ScorecardRankRule): (a: PlayerRecord, b: Pl
 export function deriveGroupScorecard(matches: ScorecardMatch[], rule: ScorecardRankRule): PlayerRecord[] {
   return [...aggregatePlayerRecords(matches).values()].sort(compareRecords(rule));
 }
+
+/** A record for a player with no played match yet — a materialized pod's occupants appear on its
+ *  scorecard from the moment the pod exists. */
+export function emptyRecord(player_id: number, player_name: string): PlayerRecord {
+  return {
+    player_id,
+    player_name,
+    matches_played: 0,
+    wins: 0,
+    losses: 0,
+    win_rate: 0,
+    kills: 0,
+    assists: 0,
+    deaths: 0,
+    rounds_won: 0,
+    rounds_played: 0,
+    total_damage: 0,
+    rwr_percentage: 0,
+    adr: 0,
+  };
+}
+
+/** Whether a player moves on from a finished, non-final gauntlet pod: `single` pods keep only a
+ *  player who won every game, `wildcard` pods everyone who won at least one. Mirrors the rule
+ *  `resolveAndPropagate()` (gauntlet-engine.ts) applies when it fills the next round. */
+export function podAdvances(rule: 'single' | 'wildcard', wins: number, gamesInPod: number): boolean {
+  return rule === 'single' ? wins === gamesInPod : wins > 0;
+}

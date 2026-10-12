@@ -14,6 +14,9 @@ export interface RosterStat {
   assists: number;
   deaths: number;
   adr: number;
+  /** Raw `player_match_stats.damage` — distinct from `adr` (a rounded per-match average); what a
+   *  true aggregate ADR (`total_damage / total_rounds_played`) is built from. */
+  damage: number;
   is_win: boolean;
   rounds_won: number;
   rounds_played: number;
@@ -48,6 +51,7 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
       assists: r.assists ?? 0,
       deaths: r.deaths,
       adr: r.adr,
+      damage: r.damage,
       is_win: !!r.is_win,
       rounds_won: r.rounds_won,
       rounds_played: r.rounds_played,
