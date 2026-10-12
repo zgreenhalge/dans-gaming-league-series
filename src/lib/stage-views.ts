@@ -31,7 +31,7 @@ export function stageStatus(matches: { final_score: string | null }[]): StageSta
 }
 
 export interface StageNavItem {
-  /** Short chip text: "3" for Week 3, "G2" for Group 2, "Final" for the final. */
+  /** Chip text: "3" for Week 3, "Group 2" / "Final" for a group. */
   chip: string;
   label: string;
   /** `null` for a chip with nowhere to go. */
@@ -250,7 +250,7 @@ export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData
   const group = { ...found, pod };
 
   const itemOf = (g: GroupView, current: boolean): StageNavItem => ({
-    chip: g.pod ? (g.isFinal ? 'Final' : `G${g.pod.pod_index + 1}`) : '•',
+    chip: g.label ?? '•',
     label: g.label ?? 'Game',
     href: g.pod ? groupHref(hubSeasonId, g.pod.id) : null,
     current,
