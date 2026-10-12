@@ -1,46 +1,43 @@
 import { ImageResponse } from 'next/og';
 import { parseScore } from '../util';
+import { STAGE_STATUS_LABEL, type StageStatus } from '../stage-views';
+import type { PreviewMatch } from './stage-meta';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell } from './og-card';
 
 // The Open Graph card for a week, round or group page: a title, then the stage's matchups with their
 // scores, optionally beside the top of its scorecard. Shared so the three pages preview alike.
 
-export interface StageOgMatchup {
-  shirts: string;
-  skins: string;
-  finalScore: string | null;
-}
-
-export interface StageOgStanding {
+interface StageOgStanding {
   name: string;
   record: string;
 }
 
 export interface StageOgData {
   title: string;
-  /** "Live" / "Complete" / "Upcoming". */
-  status: string;
-  matchups: StageOgMatchup[];
+  status: StageStatus;
+  matches: PreviewMatch[];
   standings: StageOgStanding[];
 }
 
 const MAX_MATCHUPS = 6;
 
-function Matchup({ m }: { m: StageOgMatchup }) {
-  const score = parseScore(m.finalScore);
+function Matchup({ m }: { m: PreviewMatch }) {
+  const score = parseScore(m.final_score);
+  const shirts = m.shirts_stats.map((p) => p.player_name).join(' & ') || 'TBD';
+  const skins = m.skins_stats.map((p) => p.player_name).join(' & ') || 'TBD';
   const played = score != null && score.shirts + score.skins > 0;
   const shirtsWon = played && score.shirts > score.skins;
   const skinsWon = played && score.skins > score.shirts;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '18px', fontSize: '30px' }}>
       <span style={{ display: 'flex', flex: 1, justifyContent: 'flex-end', fontWeight: shirtsWon ? 600 : 400, color: shirtsWon ? colors.TEXT : colors.TEXT2 }}>
-        {m.shirts}
+        {shirts}
       </span>
       <span style={{ display: 'flex', width: '150px', justifyContent: 'center', fontFamily: 'JetBrains Mono', color: played ? colors.GREEN : colors.TEXT2 }}>
         {played ? `${score.shirts} – ${score.skins}` : 'vs'}
       </span>
       <span style={{ display: 'flex', flex: 1, fontWeight: skinsWon ? 600 : 400, color: skinsWon ? colors.TEXT : colors.TEXT2 }}>
-        {m.skins}
+        {skins}
       </span>
     </div>
   );
@@ -54,11 +51,11 @@ export async function renderStageOg(data: StageOgData | null, notFoundText: stri
       { ...OG_SIZE, fonts: fontConfig(fonts) },
     );
   }
-  const shown = data.matchups.slice(0, MAX_MATCHUPS);
-  const hidden = data.matchups.length - shown.length;
+  const shown = data.matches.slice(0, MAX_MATCHUPS);
+  const hidden = data.matches.length - shown.length;
   return new ImageResponse(
     (
-      <CardShell subtitle={data.status}>
+      <CardShell subtitle={STAGE_STATUS_LABEL[data.status]}>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '22px', marginTop: '8px' }}>
           <span style={{ fontSize: '64px', fontWeight: 600 }}>{data.title}</span>
           <div style={{ display: 'flex', flex: 1, gap: '40px' }}>
@@ -85,5 +82,3 @@ export async function renderStageOg(data: StageOgData | null, notFoundText: stri
     { ...OG_SIZE, fonts: fontConfig(fonts) },
   );
 }
-
-export const STATUS_LABEL = { complete: 'Complete', 'in-progress': 'Live', upcoming: 'Upcoming' } as const;

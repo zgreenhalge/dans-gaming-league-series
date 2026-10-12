@@ -7,12 +7,11 @@ import { StageHeader } from '@/components/StageHeader';
 import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
 import EmptyState from '@/components/EmptyState';
-import { getSeason, getSeasonScope, getGauntletStageData, getSeedNames } from '@/lib/queries';
+import { getSeedNames, resolveRoundPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, gauntletHref, roundHref } from '@/lib/crumbs';
-import { deriveRoundView } from '@/lib/stage-views';
-import { describeMatchups } from '@/lib/seo/stage-meta';
-import { parseRouteId, seasonTitle } from '@/lib/util';
+import { describeMatchups, roundTitle } from '@/lib/seo/stage-meta';
+import { parseRouteId } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -25,22 +24,17 @@ const loadRound = cache(async (idParam: string, roundParam: string) => {
   const seasonId = parseRouteId(idParam);
   const roundNumber = parseRouteId(roundParam);
   if (seasonId === null || roundNumber === null) notFound();
-  const season = await getSeason(seasonId);
-  if (!season) notFound();
-  const scope = await getSeasonScope(season);
-  if (!scope.gauntlet) notFound();
-  if (scope.hub.id !== seasonId) redirect(roundHref(scope.hub.id, roundNumber));
-  const data = await getGauntletStageData(scope.gauntlet.id);
-  const view = deriveRoundView(scope.hub.id, data, roundNumber);
-  if (!view) notFound();
-  const seedNames = view.groups.some((g) => g.matches.length === 0) ? await getSeedNames(scope.hub.id) : undefined;
-  return { hub: scope.hub, data, view, seedNames };
+  const found = await resolveRoundPage(seasonId, roundNumber);
+  if (!found) notFound();
+  if (found.scope.hub.id !== seasonId) redirect(roundHref(found.scope.hub.id, roundNumber));
+  const seedNames = found.view.groups.some((g) => g.matches.length === 0) ? await getSeedNames(found.scope.hub.id) : undefined;
+  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { id, round } = await params;
   const { hub, view } = await loadRound(id, round);
-  const title = `${seasonTitle(hub.name)} Gauntlet · Round ${view.roundNumber}`;
+  const title = roundTitle(hub.name, view.roundNumber);
   const matchups = describeMatchups(view.groups.flatMap((g) => g.matches));
   const description = matchups ? `${title} — ${matchups}` : `${title} — groups and results in DGLS.`;
   return {
@@ -62,7 +56,7 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
       <TopbarShell crumbs={buildCrumbs({ season: hub, gauntlet: true, round: view.roundNumber })} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          title={`${seasonTitle(hub.name)} Gauntlet · Round ${view.roundNumber}`}
+          title={roundTitle(hub.name, view.roundNumber)}
           status={view.status}
           upHref={gauntletHref(hub.id)}
           upLabel="Gauntlet bracket"

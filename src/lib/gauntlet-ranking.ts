@@ -3,8 +3,7 @@ import { aggregatePlayerRecords, type ScorecardMatch } from './group-scorecard';
 
 // Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
 // from queries/gauntlet.ts without creating a circular import.
-type _GauntletMatch = ScorecardMatch;
-interface _GauntletRound { round_number: number; matches: _GauntletMatch[]; is_final_round?: boolean }
+interface _GauntletRound { round_number: number; matches: ScorecardMatch[]; is_final_round?: boolean }
 
 /**
  * Canonical gauntlet ranking — returns a Map<player_id, rank> (1-indexed) matching
@@ -38,9 +37,6 @@ export function canonicalGauntletRankMap(
   }
   const maxRound = finalRound.round_number;
 
-  // Per-player record, win rate, RWR% and ADR for a set of matches — the shared scorecard rollup.
-  const aggregateRound = aggregatePlayerRecords;
-
   // Determine each player's last-appeared round.
   const playerLastRound = new Map<number, number>();
   for (const r of rounds) {
@@ -53,7 +49,7 @@ export function canonicalGauntletRankMap(
   }
 
   // Final round: rank 1–4 by win rate then RWR%.
-  const finalAgg = aggregateRound(finalRound.matches);
+  const finalAgg = aggregatePlayerRecords(finalRound.matches);
   const finalPlayers = Array.from(finalAgg.entries()).map(([id, s]) => ({
     player_id: id,
     winRate: s.win_rate,
@@ -72,7 +68,7 @@ export function canonicalGauntletRankMap(
   for (const [id, lastRound] of playerLastRound) {
     if (lastRound >= maxRound) continue;
     const r = rounds.find((r) => r.round_number === lastRound);
-    const agg = r ? aggregateRound(r.matches) : new Map();
+    const agg = r ? aggregatePlayerRecords(r.matches) : new Map();
     const s = agg.get(id);
     eliminated.push({
       player_id: id,

@@ -193,6 +193,11 @@ export function matchLabel(opts: {
   return parts.length ? parts.join(' · ') : `Match #${opts.matchId}`;
 }
 
+/** "Week N" for a regular season, "Round N" for a gauntlet. */
+export function weekLabel(weekNumber: number, isGauntlet: boolean): string {
+  return `${isGauntlet ? 'Round' : 'Week'} ${weekNumber}`;
+}
+
 /** "Week N · Match M" (gauntlets say "Round N" instead of "Week N") — the half of `matchTitle()`'s
  *  output that excludes the season name, for callers that render the season and week/match on
  *  separate lines (e.g. Discord notification embeds). */
@@ -201,8 +206,7 @@ export function matchWeekLabel(opts: {
   matchNumber: number;
   isGauntlet: boolean;
 }): string {
-  const weekLabel = opts.isGauntlet ? `Round ${opts.weekNumber}` : `Week ${opts.weekNumber}`;
-  return `${weekLabel} · Match ${opts.matchNumber}`;
+  return `${weekLabel(opts.weekNumber, opts.isGauntlet)} · Match ${opts.matchNumber}`;
 }
 
 /** Canonical match title: "Season · Week N · Match M" (gauntlets say "Round N" instead of "Week N"). */

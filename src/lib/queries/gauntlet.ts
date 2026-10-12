@@ -532,6 +532,16 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
   return { sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
 }
 
+/** A fully materialized pod, as `getGauntletPodForMatch()` resolves it from one of its games. */
+export interface GauntletPodRef {
+  id: number;
+  pod_index: number;
+  advance_rule: 'single' | 'wildcard';
+  is_final: boolean;
+  match1_id: number;
+  match2_id: number;
+}
+
 /** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
  * predating the bracket-scheduling feature (no gauntlet_pods rows), or a pod that isn't fully
  * materialized yet. Used (via `match1_id`/`match2_id`) to resolve a match's pod sibling for
@@ -542,7 +552,7 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
 export async function getGauntletPodForMatch(
   matchId: number,
   client?: SupabaseClient,
-): Promise<{ id: number; pod_index: number; advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
+): Promise<GauntletPodRef | null> {
   const db = client ?? getAdminClient();
   const { data, error } = await db
     .from('gauntlet_pods')
@@ -552,7 +562,7 @@ export async function getGauntletPodForMatch(
     .not('match2_id', 'is', null)
     .maybeSingle();
   if (error) throw error;
-  return data as { id: number; pod_index: number; advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null;
+  return data as GauntletPodRef | null;
 }
 
 export interface GauntletPodSibling {

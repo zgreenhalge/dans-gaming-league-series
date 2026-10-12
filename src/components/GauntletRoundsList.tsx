@@ -7,7 +7,7 @@ import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { aggregatePlayerRecords } from '@/lib/group-scorecard';
-import { groupHref, groupLabel as podGroupLabel, roundHref } from '@/lib/crumbs';
+import { groupHref, groupName, roundHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
@@ -246,7 +246,7 @@ function GauntletRoundCard({
               // match the Groups tab (`groupLabel()` in gauntlet-draft.ts), or "Final" for the round
               // with the bracket's single final pod. `null` only for a legacy pod-less match (no
               // group concept).
-              const groupLabel = entry.pod_index != null ? podGroupLabel(entry.pod_index, isFinalRound) : null;
+              const groupLabel = entry.pod_index != null ? groupName(entry.pod_index, isFinalRound) : null;
               const stakesText = !isFinalRound && !roundStakes && entry.advance_rule ? GAUNTLET_POD_STAKES_LABEL[entry.advance_rule] : null;
               let podGameNumber = 0; // 1-indexed within this pod, not across the whole round
               return (

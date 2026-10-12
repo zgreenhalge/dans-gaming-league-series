@@ -1,21 +1,28 @@
-import { allMatchesPlayed, anyMatchPlayed, GAUNTLET_POD_STAKES_LABEL } from './util';
-import { groupHref, groupLabel, roundHref, weekHref, weekLabel } from './crumbs';
+import { allMatchesPlayed, anyMatchPlayed, GAUNTLET_POD_STAKES_LABEL, weekLabel } from './util';
+import { groupHref, groupName, roundHref, weekHref } from './crumbs';
 import {
   aggregatePlayerRecords,
   compareRecords,
+  deriveGroupScorecard,
   emptyRecord,
   podAdvances,
   type PlayerRecord,
 } from './group-scorecard';
 import { rankMovementForWeek, type RankMovement } from './season-standings';
 import { seedByPlayerId } from './gauntlet-draft';
-import type { WeekWithMatches } from './queries/schedule';
+import type { SeasonWeekNavEntry, WeekWithMatches } from './queries/schedule';
 import type { BracketPod, GauntletMatch, GauntletRound } from './queries/gauntlet';
 
 // Pure derivations behind the week, round and group pages: given the data the queries return, shape
 // exactly what each page renders (scorecards, outcomes, navigation). No fetching in here.
 
 export type StageStatus = 'complete' | 'in-progress' | 'upcoming';
+
+export const STAGE_STATUS_LABEL: Record<StageStatus, string> = {
+  complete: 'Complete',
+  'in-progress': 'In progress',
+  upcoming: 'Upcoming',
+};
 
 /** Done once every match is played, in progress once any is, otherwise upcoming. */
 export function stageStatus(matches: { final_score: string | null }[]): StageStatus {
@@ -63,13 +70,6 @@ export interface WeekView {
   nav: StageNav;
 }
 
-/** The slice of a week the chip strip needs — its id, number and match results. */
-export interface WeekNavSource {
-  id: number;
-  week_number: number;
-  matches: { final_score: string | null }[];
-}
-
 /**
  * `schedule` is the season's weeks up to and including the one being viewed, with full rosters
  * (everything the scorecard and standings need); `navWeeks` is every week of the season, light, for
@@ -79,16 +79,14 @@ export interface WeekNavSource {
 export function deriveWeekView(
   hubSeasonId: number,
   schedule: WeekWithMatches[],
-  navWeeks: WeekNavSource[],
+  navWeeks: SeasonWeekNavEntry[],
   weekId: number,
 ): WeekView | null {
   const week = schedule.find((w) => w.id === weekId);
   if (!week) return null;
 
   const movement = week.week_number > 1 ? rankMovementForWeek(schedule, week.week_number) : new Map<number, RankMovement>();
-  const scorecard = [...aggregatePlayerRecords(week.matches).values()]
-    .sort(compareRecords('wins'))
-    .map((r, i) => ({ ...r, rank: i + 1, movement: movement.get(r.player_id) ?? null }));
+  const scorecard = deriveGroupScorecard(week.matches, 'wins').map((r, i) => ({ ...r, rank: i + 1, movement: movement.get(r.player_id) ?? null }));
 
   const items = navWeeks.map<StageNavItem>((w) => ({
     chip: String(w.week_number),
@@ -116,7 +114,6 @@ export interface GroupRow extends PlayerRecord {
 export interface GroupView {
   /** `null` only for a legacy gauntlet match with no pod behind it. */
   pod: BracketPod | null;
-  podIndex: number | null;
   /** "Group 2" / "Final"; `null` for a legacy pod-less match. */
   label: string | null;
   isFinal: boolean;
@@ -168,8 +165,7 @@ function buildGroupView(matches: GauntletMatch[], pod: BracketPod | null, seeds:
 
   return {
     pod,
-    podIndex: pod?.pod_index ?? matches[0]?.pod_index ?? null,
-    label: pod ? groupLabel(pod.pod_index, pod.is_final) : null,
+    label: pod ? groupName(pod.pod_index, pod.is_final) : null,
     isFinal,
     advanceRule,
     status: stageStatus(ordered),
@@ -180,8 +176,7 @@ function buildGroupView(matches: GauntletMatch[], pod: BracketPod | null, seeds:
 
 /** A round's groups in pod order: one per bracket pod (materialized or not), plus a standalone
  *  entry per legacy pod-less match. */
-function groupsOfRound(data: GauntletStageData, roundNumber: number): GroupView[] {
-  const seeds = seedByPlayerId(data.bracketShape.flatMap((p) => p.slots));
+function groupsOfRound(data: GauntletStageData, roundNumber: number, seeds: Map<number, number>): GroupView[] {
   const round = data.rounds.find((r) => r.round_number === roundNumber);
   const matches = round?.matches ?? [];
   const pods = data.bracketShape.filter((p) => p.round_number === roundNumber).sort((a, b) => a.pod_index - b.pod_index);
@@ -211,19 +206,23 @@ function roundNumbersOf(data: GauntletStageData): number[] {
   return [...new Set([...data.rounds.map((r) => r.round_number), ...data.bracketShape.map((p) => p.round_number)])].sort((a, b) => a - b);
 }
 
-export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, roundNumber: number): RoundView | null {
-  if (!roundNumbersOf(data).includes(roundNumber)) return null;
+/** Every original tournament seed in the bracket, by player. */
+function bracketSeeds(data: GauntletStageData): Map<number, number> {
+  return seedByPlayerId(data.bracketShape.flatMap((p) => p.slots));
+}
 
-  const groups = groupsOfRound(data, roundNumber);
-  const items = roundNumbersOf(data).map<StageNavItem>((n) => {
-    return {
-      chip: String(n),
-      label: weekLabel(n, true),
-      href: roundHref(hubSeasonId, n),
-      status: stageStatus(data.rounds.find((r) => r.round_number === n)?.matches ?? []),
-      current: n === roundNumber,
-    };
-  });
+export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, roundNumber: number): RoundView | null {
+  const roundNumbers = roundNumbersOf(data);
+  if (!roundNumbers.includes(roundNumber)) return null;
+
+  const groups = groupsOfRound(data, roundNumber, bracketSeeds(data));
+  const items = roundNumbers.map<StageNavItem>((n) => ({
+    chip: String(n),
+    label: weekLabel(n, true),
+    href: roundHref(hubSeasonId, n),
+    status: stageStatus(data.rounds.find((r) => r.round_number === n)?.matches ?? []),
+    current: n === roundNumber,
+  }));
   const matches = groups.flatMap((g) => g.matches);
   return {
     roundNumber,
@@ -235,7 +234,7 @@ export function deriveRoundView(hubSeasonId: number, data: GauntletStageData, ro
 }
 
 export interface GroupPageView {
-  group: GroupView;
+  group: GroupView & { pod: BracketPod };
   roundNumber: number;
   /** Chips for the groups of this group's round. */
   nav: StageNav;
@@ -247,12 +246,14 @@ export interface GroupPageView {
 export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData, podId: number): GroupPageView | null {
   const pod = data.bracketShape.find((p) => p.id === podId);
   if (!pod) return null;
-  const groups = groupsOfRound(data, pod.round_number);
-  const group = groups.find((g) => g.pod?.id === podId);
-  if (!group) return null;
+  const seeds = bracketSeeds(data);
+  const groups = groupsOfRound(data, pod.round_number, seeds);
+  const found = groups.find((g) => g.pod?.id === podId);
+  if (!found) return null;
+  const group = { ...found, pod };
 
   const itemOf = (g: GroupView, current: boolean): StageNavItem => ({
-    chip: g.isFinal ? 'F' : `G${(g.podIndex ?? 0) + 1}`,
+    chip: g.pod ? (g.isFinal ? 'F' : `G${g.pod.pod_index + 1}`) : '•',
     label: g.label ?? 'Game',
     href: g.pod ? groupHref(hubSeasonId, g.pod.id) : null,
     status: g.status,
@@ -264,7 +265,9 @@ export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData
   const at = ordered.findIndex((p) => p.id === podId);
   const neighbour = (p: BracketPod | undefined): StageNavItem | null => {
     if (!p) return null;
-    const g = groupsOfRound(data, p.round_number).find((x) => x.pod?.id === p.id);
+    // Same round: already built. Another round is built once, for just this neighbour.
+    const siblings = p.round_number === pod.round_number ? groups : groupsOfRound(data, p.round_number, seeds);
+    const g = siblings.find((x) => x.pod?.id === p.id);
     return g ? { ...itemOf(g, false), label: `${weekLabel(p.round_number, true)} · ${g.label}` } : null;
   };
 
@@ -281,7 +284,7 @@ const GROUP_RANK_RULE = 'Ranked by win rate → RWR% → ADR.';
 
 /** The scorecard caption for a group: its stakes, then the rule the rows are ordered by. */
 export function groupCaption(group: Pick<GroupView, 'isFinal' | 'advanceRule'>): string {
-  if (group.isFinal) return `Final — places are decided by record, then RWR%, then ADR.`;
+  if (group.isFinal) return 'Final — places are decided by record, then RWR%, then ADR.';
   if (group.advanceRule) return `${GAUNTLET_POD_STAKES_LABEL[group.advanceRule]} ${GROUP_RANK_RULE}`;
   return GROUP_RANK_RULE;
 }

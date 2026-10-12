@@ -9,11 +9,11 @@ import { WeekScorecard } from '@/components/StageScorecard';
 import { WeekMatchCard } from '@/components/ScheduleList';
 import EmptyState from '@/components/EmptyState';
 import { PlayerName } from '@/components/PlayerName';
-import { getSeason, getSeasonScope, getWeekRow, getWeekView } from '@/lib/queries';
+import { resolveWeekPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, roundHref, seasonHref, weekHref } from '@/lib/crumbs';
-import { describeMatchups } from '@/lib/seo/stage-meta';
-import { fmtWindowDate, parseRouteId, seasonTitle, weekWindow } from '@/lib/util';
+import { describeMatchups, weekTitle } from '@/lib/seo/stage-meta';
+import { fmtWindowDate, parseRouteId, weekWindow } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -26,14 +26,11 @@ const loadWeek = cache(async (idParam: string, weekIdParam: string) => {
   const seasonId = parseRouteId(idParam);
   const weekId = parseRouteId(weekIdParam);
   if (seasonId === null || weekId === null) notFound();
-  const row = await getWeekRow(weekId);
-  if (!row) notFound();
-  const owner = await getSeason(row.season_id);
-  if (!owner) notFound();
-  const scope = await getSeasonScope(owner);
-  if (owner.is_gauntlet) redirect(roundHref(scope.hub.id, row.week_number));
+  const found = await resolveWeekPage(weekId);
+  if (!found) notFound();
+  const { week, owner, scope, view } = found;
+  if (owner.is_gauntlet) redirect(roundHref(scope.hub.id, week.week_number));
   if (scope.hub.id !== seasonId) redirect(weekHref(scope.hub.id, weekId));
-  const view = await getWeekView(owner.id, weekId);
   if (!view) notFound();
   return { season: owner, view };
 });
@@ -41,7 +38,7 @@ const loadWeek = cache(async (idParam: string, weekIdParam: string) => {
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { id, weekId } = await params;
   const { season, view } = await loadWeek(id, weekId);
-  const title = `${seasonTitle(season.name)} · Week ${view.week.week_number}`;
+  const title = weekTitle(season.name, view.week.week_number);
   const matchups = describeMatchups(view.week.matches);
   const description = matchups ? `${title} — ${matchups}` : `${title} — matchups and results in DGLS.`;
   return {
@@ -65,7 +62,7 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
       <TopbarShell crumbs={buildCrumbs({ season, week: { id: week.id, number: week.week_number } })} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          title={`${seasonTitle(season.name)} · Week ${week.week_number}`}
+          title={weekTitle(season.name, week.week_number)}
           status={view.status}
           upHref={`${seasonHref(season.id)}?tab=schedule&week=${week.id}`}
           upLabel="Season schedule"

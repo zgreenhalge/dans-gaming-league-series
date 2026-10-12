@@ -1,5 +1,9 @@
-import type { Crumb } from '@/components/TopbarShell';
-import { seasonTitle } from './util';
+import { seasonTitle, weekLabel } from './util';
+
+export interface Crumb {
+  label: string;
+  href?: string;
+}
 
 // Every public URL for a season's sub-pages is assembled here, so a link and the breadcrumb that
 // points back at it can't drift apart. Segments are readable, the ids in them are real: `seasonId`
@@ -30,13 +34,8 @@ export function groupHref(hubSeasonId: number, podId: number): string {
 
 /** "Group N" (1-indexed) or "Final" for the bracket's one final pod — the one label for a pod
  *  everywhere it's named (breadcrumbs, round list, group page). */
-export function groupLabel(podIndex: number, isFinal: boolean): string {
+export function groupName(podIndex: number, isFinal: boolean): string {
   return isFinal ? 'Final' : `Group ${podIndex + 1}`;
-}
-
-/** "Week N" for a regular season, "Round N" for a gauntlet. */
-export function weekLabel(weekNumber: number, isGauntlet: boolean): string {
-  return `${isGauntlet ? 'Round' : 'Week'} ${weekNumber}`;
 }
 
 export interface CrumbTrail {
@@ -72,7 +71,7 @@ export function buildCrumbs(trail: CrumbTrail): Crumb[] {
   if (trail.week) crumbs.push({ label: weekLabel(trail.week.number, false), href: weekHref(hub, trail.week.id) });
   if (trail.round != null) crumbs.push({ label: weekLabel(trail.round, true), href: roundHref(hub, trail.round) });
   if (trail.group) {
-    crumbs.push({ label: groupLabel(trail.group.podIndex, trail.group.isFinal), href: groupHref(hub, trail.group.id) });
+    crumbs.push({ label: groupName(trail.group.podIndex, trail.group.isFinal), href: groupHref(hub, trail.group.id) });
   }
   if (trail.leaf) crumbs.push({ label: trail.leaf });
 

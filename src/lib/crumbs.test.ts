@@ -4,7 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildCrumbs, groupHref, groupLabel, roundHref, weekHref, gauntletHref } from './crumbs';
+import { buildCrumbs, groupHref, groupName, roundHref, weekHref, gauntletHref } from './crumbs';
 import { test } from './test-support/miniTest';
 
 const season = { id: 5, name: 'Season 5' };
@@ -56,10 +56,10 @@ test('buildCrumbs: the last crumb is never a link, whichever level it is', () =>
   assert.deepEqual(group.at(-1), { label: 'Final' });
 });
 
-test('groupLabel: 1-indexed, with Final for the final pod', () => {
-  assert.equal(groupLabel(0, false), 'Group 1');
-  assert.equal(groupLabel(3, false), 'Group 4');
-  assert.equal(groupLabel(0, true), 'Final');
+test('groupName: 1-indexed, with Final for the final pod', () => {
+  assert.equal(groupName(0, false), 'Group 1');
+  assert.equal(groupName(3, false), 'Group 4');
+  assert.equal(groupName(0, true), 'Final');
 });
 
 test('route helpers assemble the readable paths with real ids', () => {

@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import type { Player, Season } from '../types';
-import { allMatchesPlayed, extractSeasonNumber, isPlayedScore } from '../util';
+import { allMatchesPlayed, buildRegularToGauntletMap, extractSeasonNumber, isPlayedScore } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
 import { batchedIn, cacheQuery } from './_shared';
@@ -103,6 +103,19 @@ export async function getSeasonScope(season: Season, client?: SupabaseClient): P
     return { hub: (await getLinkedRegularSeason(season.name, client)) ?? season, gauntlet: season };
   }
   return { hub: season, gauntlet: await getLinkedGauntlet(season.name, client) };
+}
+
+/** The hub season id for every season in `seasons`, in one pass: a regular season is its own hub, a
+ *  gauntlet's is its paired regular season (name-based — `buildRegularToGauntletMap()`), or itself if
+ *  unpaired. The bulk form of `getSeasonScope()`'s hub rule, for callers listing many seasons. */
+export function hubIdsBySeason(seasons: Season[]): Map<number, number> {
+  const regularToGauntlet = buildRegularToGauntletMap(
+    seasons.filter((s) => !s.is_gauntlet),
+    seasons.filter((s) => s.is_gauntlet),
+  );
+  const hubs = new Map(seasons.map((s) => [s.id, s.id]));
+  for (const [regularId, gauntletId] of regularToGauntlet) hubs.set(gauntletId, regularId);
+  return hubs;
 }
 
 /** A season's explicit roster (`season_players`) — the pre-match-history source of who's on a

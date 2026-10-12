@@ -47,7 +47,7 @@ export interface PlayerRecord {
 
 /** Which first key orders a scorecard: raw `wins` (the regular-season `canonicalSort`) or `win_rate`
  *  (the canonical gauntlet ranking). Both then break ties by RWR% and ADR. */
-export type ScorecardRankRule = 'wins' | 'win_rate';
+type ScorecardRankRule = 'wins' | 'win_rate';
 
 /** Rolls the played matches up into one record per player, in order of first appearance. Unplayed
  *  matches (including `"0-0"` placeholders) are skipped, so a pre-staged week reads as empty. */
@@ -59,24 +59,7 @@ export function aggregatePlayerRecords(matches: ScorecardMatch[]): Map<number, P
     if (!scores) continue;
     const total = scores.shirts + scores.skins;
     for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-      const r =
-        records.get(p.player_id) ??
-        {
-          player_id: p.player_id,
-          player_name: p.player_name ?? `#${p.player_id}`,
-          matches_played: 0,
-          wins: 0,
-          losses: 0,
-          win_rate: 0,
-          kills: 0,
-          assists: 0,
-          deaths: 0,
-          rounds_won: 0,
-          rounds_played: 0,
-          total_damage: 0,
-          rwr_percentage: 0,
-          adr: 0,
-        };
+      const r = records.get(p.player_id) ?? emptyRecord(p.player_id, p.player_name ?? `#${p.player_id}`);
       r.matches_played += 1;
       if (p.is_win) r.wins += 1;
       else r.losses += 1;
