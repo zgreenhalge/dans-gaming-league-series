@@ -13,7 +13,7 @@ import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
-import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/survey';
+import { MAX_SUPERLATIVE_TITLE_LENGTH } from '@/lib/superlatives';
 import type { SuperlativeAdminResults } from '@/lib/queries';
 
 export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; poll: SuperlativeAdminResults | null }) {

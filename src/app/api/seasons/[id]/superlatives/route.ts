@@ -3,7 +3,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
-import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/survey';
+import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
 
 const LOCKED = { error: 'Voting has opened — superlatives can no longer be changed' };
 

@@ -429,7 +429,7 @@ survey's typed questions are replaced as a whole (`PUT`) and answered in one jso
 while superlatives are added, removed, renamed, and reordered one at a time and voted on as one row
 per `(superlative, voter)`. Everything around the content is written once:
 
-- **Lock rule** — `isFeedbackLocked()` (`src/lib/survey.ts`): the list is locked while the form is
+- **Lock rule** — `isFeedbackLocked()` (`src/lib/feedback-rules.ts`): the list is locked while the form is
   open and stays locked once any answer exists, so no answer lands on a list the player didn't see.
   Editing mutations return 409 when locked. `getSurveyResults()` and `getSuperlativeResults()` report
   it as `isLocked` to their admin panels, `isSuperlativePollLocked()` gates each superlatives edit, and
@@ -485,7 +485,7 @@ page and its admin survey/superlatives pages both redirect to the paired regular
 the regular season's id.
 
 **Anonymity.** Results queries aggregate by question or superlative and never return the
-responder/voter id (the vote tally reads the voter id only to count distinct voters), and `summarizeSurvey()`/`tallyVotes()` (`src/lib/survey.ts`) take only answer
+responder/voter id (the vote tally reads the voter id only to count distinct voters), and `summarizeSurvey()` (`src/lib/survey.ts`) and `tallyVotes()` (`src/lib/superlatives.ts`) take only answer
 values — so no results view can show who answered what. Those id columns sit in ordinary tables, so
 `anon` has no privileges on them, so the browser's API key cannot read them directly.
 Any new read path for results must keep returning aggregates only.

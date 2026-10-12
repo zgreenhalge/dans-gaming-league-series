@@ -15,7 +15,8 @@ import { getAdminClient } from './supabase-admin';
 import { getSuperlativePoll, getSurveyForSeason, isSurveyOpen } from './queries';
 import type { SuperlativePoll, Survey } from './queries';
 import type { SeasonFeedbackPlayer } from './feedback-access';
-import { validateSuperlativeVotes, validateSurveyAnswers } from './survey';
+import { validateSuperlativeVotes } from './superlatives';
+import { validateSurveyAnswers } from './survey';
 import type { Json } from './database.types';
 
 type DbError = { message: string } | null;
