@@ -39,7 +39,7 @@ const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
   record: (r) => r.wins * 1000 - r.losses,
   rwr: (r) => r.rwr_percentage,
   adr: (r) => r.adr,
-  kad: (r) => r.kills,
+  kd: (r) => r.kd_ratio,
   season: (r) => r.movement?.after ?? null,
 };
 
@@ -106,7 +106,7 @@ export function WeekScorecard({
           <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
           <SortableTh label="RWR%" title="Round win rate" sortKey="rwr" state={sort} onSort={onSort} align="right" />
           <SortableTh label="ADR" title="Average damage per round" sortKey="adr" state={sort} onSort={onSort} align="right" />
-          <SortableTh label="K/A/D" title="Sorts by kills" sortKey="kad" state={sort} onSort={onSort} align="right" />
+          <SortableTh label="K/D" title="Kills per death" sortKey="kd" state={sort} onSort={onSort} align="right" />
           {showMovement && <SortableTh label="Season" title="Season standing after this week" sortKey="season" state={sort} onSort={onSort} align="right" />}
         </tr>
       </thead>
@@ -121,9 +121,7 @@ export function WeekScorecard({
             </td>
             <td className={`${td} text-right`}>{pct(r.rwr_percentage)}</td>
             <td className={`${td} text-right`}>{r.adr.toFixed(1)}</td>
-            <td className={`${td} text-right text-[var(--color-text-secondary)]`}>
-              {r.kills}/{r.assists}/{r.deaths}
-            </td>
+            <td className={`${td} text-right`}>{r.kd_ratio.toFixed(2)}</td>
             {showMovement && (
               <td className={`${td} text-right`}>
                 <Movement movement={r.movement} />

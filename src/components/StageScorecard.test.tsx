@@ -54,6 +54,13 @@ describe('WeekScorecard sorting', () => {
     render(<WeekScorecard rows={week} showMovement={false} currentPlayerId={null} />);
     expect(screen.queryByRole('button', { name: /Season/ })).toBeNull();
   });
+
+  test('K/D sorts by kills per death', async () => {
+    const rows = week.map((r, i) => ({ ...r, kd_ratio: [1.1, 2.5, 0.8][i] }));
+    render(<WeekScorecard rows={rows} showMovement currentPlayerId={null} />);
+    await userEvent.click(screen.getByRole('button', { name: /K\/D/ }));
+    expect(names()).toEqual(['Alice', 'Carol', 'Bob']);
+  });
 });
 
 describe('GroupScorecard sorting', () => {

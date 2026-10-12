@@ -399,6 +399,12 @@ export function deriveAdr(totals: { total_rounds_played: number; total_damage: n
   return totals.total_rounds_played > 0 ? totals.total_damage / totals.total_rounds_played : 0;
 }
 
+/** The canonical `kd_ratio` — kills per death, or just the kills when there are no deaths. Call this
+ * directly (not `deriveRates()`) when only kill/death totals are in scope. */
+export function deriveKd(totals: { total_kills: number; total_deaths: number }): number {
+  return totals.total_deaths > 0 ? totals.total_kills / totals.total_deaths : totals.total_kills;
+}
+
 /**
  * Derives the four canonical leaderboard rates from summed totals — `rwr_percentage`/`overall_adr`
  * (two of the three `canonicalSort` keys, alongside `matches_won` from the raw totals) via
@@ -427,7 +433,7 @@ export function deriveRates(totals: {
   const { matches_played: mp, matches_won: mw, total_kills, total_deaths } = totals;
   return {
     win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
-    kd_ratio: total_deaths > 0 ? total_kills / total_deaths : total_kills,
+    kd_ratio: deriveKd({ total_kills, total_deaths }),
     rwr_percentage: deriveRwr(totals),
     overall_adr: deriveAdr(totals),
   };

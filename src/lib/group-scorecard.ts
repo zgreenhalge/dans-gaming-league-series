@@ -1,4 +1,4 @@
-import { canonicalSort, deriveAdr, deriveRwr, isPlayedScore, parseScore } from './util';
+import { canonicalSort, deriveAdr, deriveKd, deriveRwr, isPlayedScore, parseScore } from './util';
 
 // The one place a set of matches (a gauntlet pod's two games, a gauntlet round, a regular-season
 // week) is rolled up into per-player records and ranked. `canonicalGauntletRankMap()`
@@ -14,7 +14,6 @@ export interface ScorecardStat {
   is_win: boolean;
   adr: number;
   kills?: number;
-  assists?: number;
   deaths?: number;
 }
 
@@ -34,8 +33,9 @@ export interface PlayerRecord {
    *  (a regular-season doubleheader, a pod's fixed two games). */
   win_rate: number;
   kills: number;
-  assists: number;
   deaths: number;
+  /** Kills per death (`deriveKd()`). */
+  kd_ratio: number;
   rounds_won: number;
   rounds_played: number;
   /** Per-match `adr` weighted by the match's rounds — the same round-weighted ADR the canonical
@@ -64,7 +64,6 @@ export function aggregatePlayerRecords(matches: ScorecardMatch[]): Map<number, P
       if (p.is_win) r.wins += 1;
       else r.losses += 1;
       r.kills += p.kills ?? 0;
-      r.assists += p.assists ?? 0;
       r.deaths += p.deaths ?? 0;
       r.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
       r.rounds_played += total;
@@ -74,6 +73,7 @@ export function aggregatePlayerRecords(matches: ScorecardMatch[]): Map<number, P
   }
   for (const r of records.values()) {
     r.win_rate = (r.wins / r.matches_played) * 100;
+    r.kd_ratio = deriveKd({ total_kills: r.kills, total_deaths: r.deaths });
     r.rwr_percentage = deriveRwr({ total_rounds_played: r.rounds_played, total_rounds_won: r.rounds_won });
     r.adr = deriveAdr({ total_rounds_played: r.rounds_played, total_damage: r.total_damage });
   }
@@ -110,8 +110,8 @@ export function emptyRecord(player_id: number, player_name: string): PlayerRecor
     losses: 0,
     win_rate: 0,
     kills: 0,
-    assists: 0,
     deaths: 0,
+    kd_ratio: 0,
     rounds_won: 0,
     rounds_played: 0,
     total_damage: 0,

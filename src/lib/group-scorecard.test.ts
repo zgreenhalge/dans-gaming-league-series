@@ -12,7 +12,7 @@ import { canonicalSort } from './util';
 import { test } from './test-support/miniTest';
 
 function stat(player_id: number, faction: 'SHIRTS' | 'SKINS', is_win: boolean, adr = 80): ScorecardStat {
-  return { player_id, player_name: `P${player_id}`, faction, is_win, adr, kills: 10, assists: 2, deaths: 8 };
+  return { player_id, player_name: `P${player_id}`, faction, is_win, adr, kills: 10, deaths: 8 };
 }
 
 function match(score: string, shirts: [number, number], skins: [number, number], adr = 80): ScorecardMatch {
@@ -42,7 +42,16 @@ test('aggregatePlayerRecords: sums record, rounds and round-weighted ADR; skips 
   assert.equal(p1.rwr_percentage, (20 / 42) * 100);
   assert.equal(p1.adr, (100 * 22 + 60 * 20) / 42);
   assert.equal(p1.kills, 20);
+  assert.equal(p1.deaths, 16);
+  assert.equal(p1.kd_ratio, 1.25);
   assert.equal(records.get(1)!.player_name, 'P1');
+});
+
+test('aggregatePlayerRecords: a player with no deaths has a K/D equal to their kills', () => {
+  const records = aggregatePlayerRecords([
+    { final_score: '13-0', shirts_stats: [{ player_id: 1, faction: 'SHIRTS', is_win: true, adr: 90, kills: 7, deaths: 0 }], skins_stats: [] },
+  ]);
+  assert.equal(records.get(1)!.kd_ratio, 7);
 });
 
 test('aggregatePlayerRecords: falls back to #id when a stat has no name', () => {
