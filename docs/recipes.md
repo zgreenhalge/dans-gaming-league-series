@@ -57,7 +57,7 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
    `notFound()` on `null` before the data fetch, then `if (!detail) notFound()` after.
 3. **Set `export const revalidate = N`** (ISR) — most detail pages use `60`.
 4. **Add `generateMetadata()`** for the page `<title>`.
-5. **Wrap content in `<TopbarShell>`** and delegate the actual rendering to a `components/*View.tsx`
+5. **Wrap content in `<TopbarShell>`** (a page under a season builds its `crumbs` with `buildCrumbs()`, `src/lib/crumbs.ts`, rather than a literal array — see [`architecture.md`](./architecture.md#week-round-and-group-pages)) and delegate the actual rendering to a `components/*View.tsx`
    client/server component — keep the page itself thin (param handling + data fetching only).
    **A standalone page under `/admin/*` breadcrumbs back through the console:** crumbs read
    `DGLS › Admin (→ /admin) › <this page>`, so `Admin` is always a link back to the unified console —

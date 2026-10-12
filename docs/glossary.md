@@ -119,6 +119,7 @@ so you don't have to reverse-engineer them from scratch each time.
   stored as a real FK graph in `gauntlet_pods`/`gauntlet_pod_slots`; materialized into playable
   `matches` rows by `src/lib/gauntlet-engine.ts` as the bracket progresses. See
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
+- **Week / Round / Group** — the linkable stages under a season. A regular-season **week** (`weeks` row) holds independent 2v2 matches and *is* the group; a gauntlet **round** (also a `weeks` row on the gauntlet season) holds **groups**, which are pods. Each has its own page (`/seasons/[id]/weeks/[weekId]`, `/rounds/[weekId]`, `/groups/[podId]`) with a scorecard and prev/next navigation; see [`architecture.md`](./architecture.md#week-round-and-group-pages) and [`calculations.md`](./calculations.md#group-scorecards).
 - **Gauntlet seeding projection** — the gold-bye/red-drop row tint on a regular season's own
   `LeaderboardTable`, never shown on a gauntlet season's own leaderboard (which gets a podium once
   complete instead — `GauntletStandings`). Computed by `SeasonTabView.tsx` and passed as the
@@ -186,6 +187,9 @@ so you don't have to reverse-engineer them from scratch each time.
 | H2H (duo/rival) aggregation core | `src/lib/h2h.ts` |
 | Player per-match stat aggregation (career/season/per-map) | `src/lib/player-stats.ts` |
 | Canonical gauntlet finish-order ranking | `src/lib/gauntlet-ranking.ts` |
+| Per-group scorecard rollup + ranking rules (shared by the gauntlet rank map and the week/round/group pages) | `src/lib/group-scorecard.ts` |
+| Week / round / group page data shaping, season-standings movement | `src/lib/stage-views.ts`, `src/lib/season-standings.ts`, `src/lib/queries/groups.ts` |
+| Breadcrumb trails and week/round/group URLs | `src/lib/crumbs.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
 | Home page Upcoming Games panel (scheduled matches soonest-first, plus unplayed matches still needing a time) | `getUpcomingGames()` (`src/lib/queries/schedule.ts`, regular season, anchored on `findCurrentWeek()`) / `getUpcomingGauntletGames()` (`src/lib/queries/gauntlet.ts`, gauntlet — no weekly structure to anchor on, so every unscheduled bracket match qualifies), rendered by `src/components/UpcomingGamesPanel.tsx` |
