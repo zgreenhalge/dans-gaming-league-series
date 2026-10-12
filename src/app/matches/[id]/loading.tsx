@@ -4,7 +4,7 @@ import { SkeletonBar as Skeleton } from '@/components/Skeleton';
 export default function Loading() {
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: '…' }]} />
+      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Seasons', href: '/seasons' }, { label: '…' }]} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <Skeleton className="h-9 w-48 mb-2" />

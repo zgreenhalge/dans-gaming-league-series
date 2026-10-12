@@ -542,17 +542,17 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
 export async function getGauntletPodForMatch(
   matchId: number,
   client?: SupabaseClient,
-): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
+): Promise<{ id: number; pod_index: number; advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
   const db = client ?? getAdminClient();
   const { data, error } = await db
     .from('gauntlet_pods')
-    .select('advance_rule, is_final, match1_id, match2_id')
+    .select('id, pod_index, advance_rule, is_final, match1_id, match2_id')
     .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
     .not('match1_id', 'is', null)
     .not('match2_id', 'is', null)
     .maybeSingle();
   if (error) throw error;
-  return data as { advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null;
+  return data as { id: number; pod_index: number; advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null;
 }
 
 export interface GauntletPodSibling {

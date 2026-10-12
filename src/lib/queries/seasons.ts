@@ -89,6 +89,22 @@ export async function getLinkedRegularSeason(gauntletName: string, client?: Supa
   return seasons.find((s) => !s.is_gauntlet && extractSeasonNumber(s.name) === num) ?? null;
 }
 
+/** Where a season's sub-pages live: the *hub* is the regular season every public season link points
+ *  at (a gauntlet season id redirects there), and `gauntlet` is its paired gauntlet if one exists.
+ *  A gauntlet with no paired regular season is its own hub. Given either season of a pair, both
+ *  resolve identically. */
+export interface SeasonScope {
+  hub: Season;
+  gauntlet: Season | null;
+}
+
+export async function getSeasonScope(season: Season, client?: SupabaseClient): Promise<SeasonScope> {
+  if (season.is_gauntlet) {
+    return { hub: (await getLinkedRegularSeason(season.name, client)) ?? season, gauntlet: season };
+  }
+  return { hub: season, gauntlet: await getLinkedGauntlet(season.name, client) };
+}
+
 /** A season's explicit roster (`season_players`) — the pre-match-history source of who's on a
  * season before any matches exist to derive it from. Sorted by player name. Pass an
  * already-fetched `playersById` (e.g. one a caller needs for its own purposes too, like a full

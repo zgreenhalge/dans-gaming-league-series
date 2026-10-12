@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
+import { buildCrumbs } from '@/lib/crumbs';
 import {
   getSeason,
   getSeasonLeaderboard,
@@ -87,14 +88,7 @@ function seasonEndDate(startDate: string | null, finalWeekNumber: number | null)
 }
 
 function Topbar({ season }: { season: Season }) {
-  return (
-    <TopbarShell
-      crumbs={[
-        { label: 'DGLS', href: '/' },
-        { label: seasonTitle(season.name) },
-      ]}
-    />
-  );
+  return <TopbarShell crumbs={buildCrumbs({ season })} />;
 }
 
 function SeasonStatusTag({ status, needsSignup }: { status: Season['status']; needsSignup: boolean }) {
