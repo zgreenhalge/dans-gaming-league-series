@@ -4,7 +4,9 @@ import { useMemo } from 'react';
 import EmptyState from './EmptyState';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
+import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
+import { aggregatePlayerRecords } from '@/lib/group-scorecard';
+import { groupLabel as podGroupLabel } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
@@ -16,25 +18,8 @@ const EMPTY_PODS: BracketPod[] = [];
 const EMPTY_RANK_MAP: Map<number, number> = new Map();
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
-  const records = new Map<
-    number,
-    { player_id: number; name: string; wins: number; losses: number }
-  >();
-  for (const m of matches) {
-    if (!isPlayedScore(m.final_score)) continue;
-    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-      const prev = records.get(p.player_id) ?? {
-        player_id: p.player_id,
-        name: p.player_name,
-        wins: 0,
-        losses: 0,
-      };
-      if (p.is_win) prev.wins++; else prev.losses++;
-      records.set(p.player_id, prev);
-    }
-  }
-  return Array.from(records.values()).sort(
-    (a, b) => b.wins - a.wins || a.name.localeCompare(b.name),
+  return [...aggregatePlayerRecords(matches).values()].sort(
+    (a, b) => b.wins - a.wins || a.player_name.localeCompare(b.player_name),
   );
 }
 
@@ -216,7 +201,7 @@ function GauntletRoundCard({
               // match the Groups tab (`groupLabel()` in gauntlet-draft.ts), or "Final" for the round
               // with the bracket's single final pod. `null` only for a legacy pod-less match (no
               // group concept).
-              const groupLabel = entry.pod_index != null ? (isFinalRound ? 'Final' : `Group ${entry.pod_index + 1}`) : null;
+              const groupLabel = entry.pod_index != null ? podGroupLabel(entry.pod_index, isFinalRound) : null;
               const stakesText = !isFinalRound && !roundStakes && entry.advance_rule ? GAUNTLET_POD_STAKES_LABEL[entry.advance_rule] : null;
               let podGameNumber = 0; // 1-indexed within this pod, not across the whole round
               return (
@@ -292,7 +277,7 @@ function GauntletRoundCard({
                                 : 'var(--color-text-primary)',
                         }}
                       >
-                        <PlayerName name={r.name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
+                        <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
                       </span>
                       <div className="flex items-center gap-2">
                         <span
