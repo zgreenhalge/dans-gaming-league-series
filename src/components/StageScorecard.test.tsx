@@ -50,6 +50,15 @@ describe('WeekScorecard sorting', () => {
     expect(names()).toEqual(['Carol', 'Bob', 'Alice']);
   });
 
+  test("a bye player's row reads 0-0 with dashes for the stats and still shows their season rank", () => {
+    const bye = weekRow({ player_id: 9, player_name: 'Zed', rank: 4, matches_played: 0, movement: { before: 2, after: 4 } });
+    render(<WeekScorecard rows={[...week, bye]} showMovement currentPlayerId={null} />);
+    const row = screen.getByText('Zed').closest('tr')!;
+    const cells = within(row).getAllByRole('cell').map((c) => c.textContent);
+    expect(cells.slice(1, 5)).toEqual(['0-0', '–', '–', '–']);
+    expect(cells[5]).toContain('#4');
+  });
+
   test('week 1 has no Season column', () => {
     render(<WeekScorecard rows={week} showMovement={false} currentPlayerId={null} />);
     expect(screen.queryByRole('button', { name: /Season/ })).toBeNull();

@@ -37,9 +37,9 @@ const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
   rank: (r) => r.rank,
   player: (r) => r.player_name,
   record: (r) => r.wins * 1000 - r.losses,
-  rwr: (r) => r.rwr_percentage,
-  adr: (r) => r.adr,
-  kd: (r) => r.kd_ratio,
+  rwr: (r) => (r.matches_played > 0 ? r.rwr_percentage : null),
+  adr: (r) => (r.matches_played > 0 ? r.adr : null),
+  kd: (r) => (r.matches_played > 0 ? r.kd_ratio : null),
   season: (r) => r.movement?.after ?? null,
 };
 
@@ -119,9 +119,9 @@ export function WeekScorecard({
             <td className={`${td} text-right font-semibold`}>
               {r.wins}-{r.losses}
             </td>
-            <td className={`${td} text-right`}>{pct(r.rwr_percentage)}</td>
-            <td className={`${td} text-right`}>{r.adr.toFixed(1)}</td>
-            <td className={`${td} text-right`}>{r.kd_ratio.toFixed(2)}</td>
+            <td className={`${td} text-right`}>{r.matches_played > 0 ? pct(r.rwr_percentage) : '–'}</td>
+            <td className={`${td} text-right`}>{r.matches_played > 0 ? r.adr.toFixed(1) : '–'}</td>
+            <td className={`${td} text-right`}>{r.matches_played > 0 ? r.kd_ratio.toFixed(2) : '–'}</td>
             {showMovement && (
               <td className={`${td} text-right`}>
                 <Movement movement={r.movement} />

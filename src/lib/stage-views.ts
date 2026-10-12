@@ -74,7 +74,13 @@ export function deriveWeekView(
   if (!week) return null;
 
   const movement = week.week_number > 1 ? rankMovementForWeek(schedule, week.week_number) : new Map<number, RankMovement>();
-  const scorecard = deriveGroupScorecard(week.matches, 'wins').map((r, i) => ({ ...r, rank: i + 1, movement: movement.get(r.player_id) ?? null }));
+  const records = deriveGroupScorecard(week.matches, 'wins');
+  // The week's bye player sits on the scorecard too, last and with nothing played: their season rank
+  // can still move as everyone else's results land.
+  if (week.bye_player_id != null && !records.some((r) => r.player_id === week.bye_player_id)) {
+    records.push(emptyRecord(week.bye_player_id, week.bye_player_name ?? `#${week.bye_player_id}`));
+  }
+  const scorecard = records.map((r, i) => ({ ...r, rank: i + 1, movement: movement.get(r.player_id) ?? null }));
 
   const items = navWeeks.map<StageNavItem>((w) => ({
     chip: String(w.week_number),

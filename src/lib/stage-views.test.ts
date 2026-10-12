@@ -78,6 +78,33 @@ test('getFirstGauntletRound: the lowest round of the bracket, or null without on
   assert.equal(await getFirstGauntletRound(3), null);
 });
 
+test("deriveWeekView: the week's bye player is on the scorecard with nothing played, and their season rank can still move", () => {
+  const stat = (player_id: number, is_win: boolean, rounds_won: number) => ({
+    player_id, player_name: `P${player_id}`, faction: 'SHIRTS' as const, kills: 0, assists: 0, deaths: 0, adr: 60, damage: 1300, is_win, rounds_won, rounds_played: 22,
+  });
+  // Week 1: P5 and P6 win together (both 1-0, P5 ranked first). Week 2, P5 on a bye: P6 wins again and
+  // overtakes P5 without P5 playing.
+  const m = (id: number, winners: number[], losers: number[]) => ({
+    id, final_score: '13-9', shirts_stats: winners.map((p) => stat(p, true, 13)), skins_stats: losers.map((p) => ({ ...stat(p, false, 9), faction: 'SKINS' as const })),
+  });
+  const w1 = { id: 1, season_id: 1, week_number: 1, bye_player_id: null, bye_player_name: null, matches: [m(10, [5, 6], [7, 8])] } as unknown as WeekWithMatches;
+  const w2 = { id: 2, season_id: 1, week_number: 2, bye_player_id: 5, bye_player_name: 'P5', matches: [m(20, [6, 9], [7, 8])] } as unknown as WeekWithMatches;
+  const navWeeks = [w1, w2];
+
+  const second = deriveWeekView(7, [w1, w2], navWeeks, 2)!;
+  const bye = second.scorecard.at(-1)!;
+  assert.equal(bye.player_id, 5);
+  assert.equal(bye.matches_played, 0);
+  assert.equal(`${bye.wins}-${bye.losses}`, '0-0');
+  assert.ok(bye.movement && bye.movement.before !== null, 'a bye player ranked before still gets a season movement');
+  assert.ok(bye.movement!.after > bye.movement!.before!, "others' wins pushed them down");
+
+  const first = deriveWeekView(7, [{ ...w1, bye_player_id: 5, bye_player_name: 'P5' } as WeekWithMatches], navWeeks, 1);
+  assert.equal(first!.scorecard.length, 4, 'a bye player who already played the week is not added twice');
+  const neverPlayed = deriveWeekView(7, [{ ...w2, bye_player_id: 99, bye_player_name: 'P99' } as WeekWithMatches], navWeeks, 2)!;
+  assert.equal(neverPlayed.scorecard.at(-1)!.movement, null, 'a player with no season results yet has no rank to move');
+});
+
 test('getWeekRow / getPodSeasonId resolve ids to their season', async () => {
   assert.deepEqual(await getWeekRow(11), { id: 11, season_id: 1, week_number: 2 });
   assert.equal(await getWeekRow(9999), null);
