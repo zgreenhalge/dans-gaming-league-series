@@ -6,6 +6,7 @@
 
 import { getAdminClient } from '../supabase-admin';
 import {
+  isFeedbackLocked,
   summarizeSurvey,
   tallyVotes,
   type SurveyAnswers,
@@ -15,14 +16,12 @@ import {
 import { getPlayersById } from './player';
 import { getSeasonPlayedPlayers, hasPlayedSeason } from './seasons';
 import { batchedIn } from './_shared';
-import { isFeedbackLocked } from '../feedback';
 
 export interface Survey {
   id: number;
   season_id: number;
-  /** Null while open. A superlatives vote stores the same state as `superlative_polls.is_open`; the
-   *  difference is contained in `isSurveyOpen()`, `SURVEY_LIFECYCLE` / `SUPERLATIVES_LIFECYCLE`
-   *  (`feedback-routes.ts`) and `getOpenFeedbackSeasonIds()`. */
+  /** Null while open; read it through `isSurveyOpen()`. A superlatives vote stores open state as
+   *  `superlative_polls.is_open` — see `FeedbackLifecycle` (`feedback-lifecycle.ts`). */
   closed_at: string | null;
   questions: SurveyQuestion[];
 }
@@ -80,10 +79,11 @@ export async function getSurveyResults(seasonId: number): Promise<SurveyResults 
   if (error) throw error;
 
   const answers = (responses ?? []).map((r) => r.answers as SurveyAnswers);
+  const isOpen = isSurveyOpen(survey);
   return {
     survey,
-    isOpen: isSurveyOpen(survey),
-    isLocked: isFeedbackLocked(isSurveyOpen(survey), answers.length > 0),
+    isOpen,
+    isLocked: isFeedbackLocked(isOpen, answers.length > 0),
     responseCount: answers.length,
     eligibleCount: eligible.length,
     summaries: summarizeSurvey(survey.questions, answers),
@@ -117,11 +117,10 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
 }
 
-/** The shared lock rule (`isFeedbackLocked()`) for a poll: open, or any vote exists. The
- *  superlatives list is frozen from then on, so no vote ever lands on a title or list the voter
- *  didn't see. */
+/** The shared lock rule (`isFeedbackLocked()`) for a poll, for the route gates: open, or any vote
+ *  exists. Checks for votes only when voting is closed and there are superlatives to vote on. */
 export async function isSuperlativePollLocked(poll: SuperlativePoll): Promise<boolean> {
-  if (poll.isOpen || poll.superlatives.length === 0) return isFeedbackLocked(poll.isOpen, false);
+  if (poll.isOpen || poll.superlatives.length === 0) return poll.isOpen;
   const { data, error } = await getAdminClient()
     .from('superlative_votes')
     .select('id')

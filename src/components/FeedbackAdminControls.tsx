@@ -2,8 +2,8 @@
 
 // The lifecycle controls at the top of a season's survey or superlatives admin panel: a status line
 // with one open/close button (opening is the primary button, closing the small bordered one), and —
-// once the form is locked, i.e. open or answered (`isFeedbackLocked()`) — a reset. Both PATCH/DELETE
-// the same `url` shape, so a new lifecycle action is added here once for both panels.
+// once the form is locked, i.e. open or answered (`isFeedbackLocked()`) — a reset. A new lifecycle
+// action is added here once for both panels.
 
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';

@@ -18,6 +18,8 @@ export type SeasonFeedbackAccess = AccessResult<{
   eligible: SeasonRosterEntry[];
 }>;
 
+export type SeasonFeedbackPlayer = Extract<SeasonFeedbackAccess, { ok: true }>;
+
 /** Player gate: the caller must be signed in and have played in the season. */
 export async function requireSeasonFeedbackAccess(rawSeasonId: string): Promise<SeasonFeedbackAccess> {
   const seasonId = parseRouteId(rawSeasonId);

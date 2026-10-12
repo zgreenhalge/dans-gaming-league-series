@@ -23,7 +23,6 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
   const [editTitle, setEditTitle] = useState('');
   const { busy, error, run } = useAsyncAction();
   const url = `/api/seasons/${seasonId}/superlatives`;
-  // The list is frozen once voting opens (the server enforces it): open now, or votes already cast.
   const locked = !!poll?.isLocked;
 
   function mutate(action: () => Promise<void>) {

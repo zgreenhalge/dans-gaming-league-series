@@ -1,6 +1,14 @@
 // Pure logic for the post-season survey and the superlatives vote — question definitions,
 // input validation, and result summarising. No IO, so the routes, queries, and tests all share it.
 
+/** The lock rule both forms share: a form's questions (or superlatives) are frozen while it is open
+ *  or once any player has answered, so no answer lands on a list the player didn't see. Closing alone
+ *  doesn't unlock it — an admin reset, which deletes every answer, does. The
+ *  `replace_survey_questions()` RPC applies the same rule in SQL. */
+export function isFeedbackLocked(isOpen: boolean, hasAnswers: boolean): boolean {
+  return isOpen || hasAnswers;
+}
+
 export type SurveyQuestionKind = 'rating' | 'yes_no' | 'text';
 
 export const RATING_MIN = 1;
