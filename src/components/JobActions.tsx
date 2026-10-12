@@ -8,6 +8,7 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useVisibleInterval } from '@/components/useVisibleInterval';
+import ErrorText from '@/components/ErrorText';
 
 const ADMIN_REFRESH_INTERVAL_MS = 15_000;
 
@@ -60,7 +61,7 @@ export function JobRetryButton({
       >
         {busy ? '…' : label}
       </button>
-      {error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <ErrorText error={error} as="span" size={10} />
     </div>
   );
 }

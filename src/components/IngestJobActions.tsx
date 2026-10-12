@@ -7,6 +7,7 @@
 import { useRouter } from 'next/navigation';
 import { DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 import { useDemoIngestActions } from './useDemoIngestActions';
+import ErrorText from '@/components/ErrorText';
 
 export function IngestJobActions({
   matchId,
@@ -68,7 +69,7 @@ export function IngestJobActions({
           </button>
         )}
       </div>
-      {error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <ErrorText error={error} as="span" size={10} />
     </div>
   );
 }

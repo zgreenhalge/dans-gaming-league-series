@@ -12,6 +12,7 @@ import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackFormFrame } from './FeedbackFormFrame';
+import ErrorText from '@/components/ErrorText';
 
 export function FeedbackEditor({
   url,
@@ -93,7 +94,7 @@ export function FeedbackEditor({
                 Cancel
               </button>
             )}
-            {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
+            <ErrorText error={error} as="span" />
           </div>
         </div>
       ) : (

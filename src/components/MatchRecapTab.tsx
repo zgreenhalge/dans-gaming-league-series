@@ -19,6 +19,7 @@ import { weaponIconSrc } from '@/lib/weaponIcons';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { ReplayEvent } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
+import ErrorText from '@/components/ErrorText';
 
 type Side = 'CT' | 'T';
 
@@ -135,9 +136,7 @@ function ReplayStatusPanel({
               A player in this match or an admin can generate the replay.
             </div>
           )}
-          {error && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>
-          )}
+          <ErrorText error={error} />
         </div>
       )}
     </div>
@@ -584,7 +583,7 @@ function RegenerateLink({ matchId }: { matchId: number }) {
   const { dispatch, busy, error, isPending } = useReplayDispatch(matchId);
   return (
     <div className="flex items-center gap-2">
-      {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <ErrorText error={error} as="span" />
       <button
         type="button"
         onClick={dispatch}

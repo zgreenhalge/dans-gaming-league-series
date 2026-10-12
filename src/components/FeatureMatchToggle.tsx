@@ -5,6 +5,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
+import ErrorText from '@/components/ErrorText';
 
 export function FeatureMatchToggle({ matchId, isFeature }: { matchId: number; isFeature: boolean }) {
   const router = useRouter();
@@ -39,7 +40,7 @@ export function FeatureMatchToggle({ matchId, isFeature }: { matchId: number; is
       >
         {busy ? '…' : isFeature ? '★ feature match' : '☆ not featured'}
       </button>
-      {error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <ErrorText error={error} as="span" size={10} />
     </div>
   );
 }

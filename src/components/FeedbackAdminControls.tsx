@@ -10,6 +10,7 @@ import { useAsyncAction } from './useAsyncAction';
 import { sendFeedbackRequest } from './feedbackRequest';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackResetControl } from './FeedbackResetControl';
+import ErrorText from '@/components/ErrorText';
 
 export function FeedbackAdminControls({
   openUrl,
@@ -61,7 +62,7 @@ export function FeedbackAdminControls({
         </button>
       </div>
       {isLocked && <FeedbackResetControl url={resetUrl} triggerLabel={resetLabel} confirmLabel={resetConfirmLabel} />}
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
+      <ErrorText error={error} />
     </>
   );
 }

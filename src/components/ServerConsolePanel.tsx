@@ -32,6 +32,7 @@ import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib
 import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
+import ErrorText from '@/components/ErrorText';
 
 // Safety cap for the start/stop spinner — matches DatHost's own ready timeout (waitUntilReady). If an
 // action hasn't visibly settled by now, drop the spinner and show whatever raw state we have.
@@ -658,13 +659,13 @@ export function ServerConsolePanel({
             {statusError ?? startStopError ?? status?.error}
           </div>
         )}
-        {matchCfgError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{matchCfgError}</div>}
+        <ErrorText error={matchCfgError} className="mt-3" />
         {matchCfgSuccess && !matchCfgError && (
           <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)] mt-3">
             Match config re-pushed — the server is in warmup / knife-select.
           </div>
         )}
-        {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
+        <ErrorText error={teardownError} className="mt-3" />
 
         {/* Connected roster — shared with the scrim panel (`ConnectedRoster`), amber-tinted when
             someone's on the box outside a DGLS match ("casual use") instead of a separate bare-count
@@ -725,7 +726,7 @@ export function ServerConsolePanel({
               {applyBusy ? 'Applying…' : 'Apply config set'}
             </button>
           </div>
-          {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
+          <ErrorText error={applyError} />
           {applySuccess && !applyError && (
             <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
           )}
@@ -741,7 +742,7 @@ export function ServerConsolePanel({
               {diffBusy ? 'Comparing…' : 'Compare to live config'}
             </button>
           </div>
-          {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
+          <ErrorText error={diffError} className="mt-2" />
           {diff && !diffError && <ConfigDiffView diff={diff} />}
         </div>
       </CollapsiblePanel>
@@ -821,8 +822,8 @@ export function ServerConsolePanel({
               </button>
               {intervalSaved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved.</span>}
             </div>
-            {intervalError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{intervalError}</div>}
-            {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
+            <ErrorText error={intervalError} />
+            <ErrorText error={cleanupError} />
           </div>
         )}
       </CollapsiblePanel>
@@ -849,9 +850,7 @@ export function ServerConsolePanel({
                 {registerCommandsBusy ? 'Registering…' : 'Register commands'}
               </button>
             </div>
-            {registerCommandsError && (
-              <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{registerCommandsError}</div>
-            )}
+            <ErrorText error={registerCommandsError} />
             {registerCommandsMessage && !registerCommandsError && (
               <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{registerCommandsMessage}</div>
             )}
@@ -872,9 +871,7 @@ export function ServerConsolePanel({
                 {backfillRolesBusy ? 'Backfilling…' : 'Backfill name-color roles'}
               </button>
             </div>
-            {backfillRolesError && (
-              <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{backfillRolesError}</div>
-            )}
+            <ErrorText error={backfillRolesError} />
             {backfillRolesMessage && !backfillRolesError && (
               <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{backfillRolesMessage}</div>
             )}

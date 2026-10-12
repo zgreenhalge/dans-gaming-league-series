@@ -19,6 +19,7 @@ import {
   validateComplete,
   draftToPreviewPods,
 } from '@/lib/gauntlet-draft';
+import ErrorText from '@/components/ErrorText';
 
 interface Player {
   id: number;
@@ -214,7 +215,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         </div>
 
         <WarningsBanner warnings={warnings} />
-        {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
+        <ErrorText error={error} size={12} />
 
         <div className="flex gap-3">
           <button
@@ -326,7 +327,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         </div>
       )}
       <WarningsBanner warnings={warnings} />
-      {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
+      <ErrorText error={error} size={12} />
 
       <div className="flex items-center gap-4">
         <button
