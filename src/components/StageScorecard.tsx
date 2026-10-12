@@ -27,9 +27,7 @@ function Movement({ movement }: { movement: RankMovement | null }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
       <span className="text-[var(--color-text-primary)]">#{after}</span>
-      {delta == null ? (
-        <span className="tracked text-[9px] text-[var(--color-text-secondary)]">New</span>
-      ) : delta > 0 ? (
+      {delta == null ? null : delta > 0 ? (
         <span className="text-[var(--color-accent-green-fg)]">▲{delta}</span>
       ) : delta < 0 ? (
         <span className="text-[var(--color-accent-red-fg)]">▼{-delta}</span>
