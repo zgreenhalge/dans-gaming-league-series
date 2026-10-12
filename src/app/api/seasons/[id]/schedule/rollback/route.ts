@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { rollbackSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-schedule-draft-engine';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 /**
  * Un-confirms (rolls back) a regular season's real schedule — the inverse of
@@ -18,9 +19,7 @@ import { parseRouteId } from '@/lib/util';
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;

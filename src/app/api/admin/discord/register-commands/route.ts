@@ -6,10 +6,11 @@
 import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { registerDiscordCommands } from '@/lib/discord-command-registration';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST() {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const result = await registerDiscordCommands();
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });

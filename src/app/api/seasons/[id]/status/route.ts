@@ -5,6 +5,7 @@ import { getSeason } from '@/lib/queries';
 import { activateSeason } from '@/lib/season-lifecycle';
 import { hasMapPool } from '@/lib/season-map-pool';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 /**
  * Regular-season status transitions. Only UPCOMING -> ACTIVE ("go live") is supported today —
@@ -18,9 +19,7 @@ import { parseRouteId } from '@/lib/util';
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const { id } = await params;
   const seasonId = parseRouteId(id);

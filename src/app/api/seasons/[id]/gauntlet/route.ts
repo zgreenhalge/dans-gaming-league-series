@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getLinkedGauntlet, getGauntletRounds, getGauntletBracketShape } from '@/lib/queries';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
+import { accessDenied } from '@/lib/access-control';
 
 /**
  * Creates the paired "Season N Gauntlet" season row for a regular season and builds its bracket
@@ -18,9 +19,7 @@ import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engi
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
@@ -79,9 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;

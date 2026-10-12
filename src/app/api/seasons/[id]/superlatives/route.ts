@@ -4,6 +4,7 @@ import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
+import { accessDenied } from '@/lib/access-control';
 
 const LOCKED = { error: 'Voting has opened — superlatives can no longer be changed' };
 
@@ -12,7 +13,7 @@ const LOCKED = { error: 'Voting has opened — superlatives can no longer be cha
  *  opened. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { title?: unknown } | null;
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 /** Removes a superlative (`{ superlative_id }`), refused once voting has opened. */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { superlative_id?: unknown } | null;
@@ -68,7 +69,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 /** Reorders the season's superlatives (`{ order: [superlative_id, …] }`, every id once). */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { order?: unknown } | null;
@@ -87,7 +88,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  *  Renaming is refused once voting has opened. A vote with no superlatives can't be opened. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { open?: unknown; superlative_id?: unknown; title?: unknown } | null;

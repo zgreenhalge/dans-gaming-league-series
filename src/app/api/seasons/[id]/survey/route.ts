@@ -5,6 +5,7 @@ import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE } from '@/lib/feedback
 import { getSurveyForSeason } from '@/lib/queries';
 import type { Json } from '@/lib/database.types';
 import { buildSurveyQuestions, validateQuestionDrafts, type SurveyQuestionDraft } from '@/lib/survey';
+import { accessDenied } from '@/lib/access-control';
 
 /** Reads the `{ questions, open? }` body shared by POST and PUT. */
 async function readQuestionsBody(
@@ -23,7 +24,7 @@ async function readQuestionsBody(
  *  questions are fixed while it is open or has responses. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   const body = await readQuestionsBody(req);
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  *  just can no longer submit or edit. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   const body = (await req.json().catch(() => null)) as { open?: unknown } | null;
@@ -70,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  *  opens the survey). Refused (409) while the survey is open or has any response. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await readQuestionsBody(req);
   if (!body.ok) return NextResponse.json({ error: body.error }, { status: 400 });
@@ -97,7 +98,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  *  edited again. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   return resetFeedback(SURVEY_LIFECYCLE, access.seasonId);
 }

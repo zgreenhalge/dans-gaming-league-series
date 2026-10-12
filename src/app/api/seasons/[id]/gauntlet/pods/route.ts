@@ -5,6 +5,7 @@ import { saveManualDraft } from '@/lib/gauntlet-engine';
 import type { DraftPod, DraftSlot } from '@/lib/gauntlet-draft';
 import { recordOpsError } from '@/lib/ops-errors';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 function parseSlot(value: unknown): DraftSlot | null {
   if (!value || typeof value !== 'object') return null;
@@ -59,9 +60,7 @@ function parsePod(value: unknown): DraftPod | null {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const { id } = await params;
   const regularSeasonId = parseRouteId(id);

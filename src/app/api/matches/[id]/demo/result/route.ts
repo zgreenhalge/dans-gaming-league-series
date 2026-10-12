@@ -13,6 +13,7 @@ import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
 import { JOB_IN_PROGRESS_STATUSES, isStale } from '@/lib/jobs';
+import { accessDenied } from '@/lib/access-control';
 
 /** The job's status plus whether it's an in-progress row stuck past `STALE_IN_FLIGHT_MS` — the same
  *  heartbeat check the admin Activity feed's `jobIsStale()` makes, so a demo stuck behind a dead
@@ -82,7 +83,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const [{ status, stale }, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
   if (!buf) {
@@ -119,7 +120,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const disposition = req.nextUrl.searchParams.get('disposition') === 'confirmed' ? 'confirmed' : 'dismissed';
   // The map_result oracle's job is done once a score is confirmed; a dismiss leaves it in place in

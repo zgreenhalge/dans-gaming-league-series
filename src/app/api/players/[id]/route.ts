@@ -7,6 +7,7 @@ import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNam
 import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 
@@ -30,7 +31,7 @@ export async function PATCH(
   const supabaseAdmin = getAdminClient();
 
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const callerId = access.playerId;
 
   const { id } = await params;

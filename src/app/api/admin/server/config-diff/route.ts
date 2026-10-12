@@ -7,10 +7,11 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId } from '@/lib/dathost';
 import { diffConfigSet } from '@/lib/dathost-config';
+import { accessDenied } from '@/lib/access-control';
 
 export async function GET(req: NextRequest) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const configSet = req.nextUrl.searchParams.get('configSet') || 'golden';
 

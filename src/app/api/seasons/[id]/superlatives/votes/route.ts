@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { requireSeasonFeedbackAccess, requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { resetFeedback, saveFeedbackAnswers, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
+import { accessDenied } from '@/lib/access-control';
 
 /** Saves the signed-in player's ballot (`{ votes: [{ superlative_id, nominee_player_id }] }`). One
  *  vote per superlative; calling this again while voting is open replaces the ballot — a superlative
@@ -8,7 +9,7 @@ import { resetFeedback, saveFeedbackAnswers, SUPERLATIVES_LIFECYCLE } from '@/li
  *  included. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAccess((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   return saveFeedbackAnswers(SUPERLATIVES_LIFECYCLE, access, req);
 }
 
@@ -17,7 +18,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  *  — with no votes and voting closed — the list is editable again. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireSeasonFeedbackAdmin((await params).id);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
   const { seasonId } = access;
 
   return resetFeedback(SUPERLATIVES_LIFECYCLE, seasonId);

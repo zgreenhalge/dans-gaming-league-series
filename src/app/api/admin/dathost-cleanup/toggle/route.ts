@@ -6,10 +6,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { setWorkflowEnabled } from '@/lib/gh-dispatch';
 import { WORKFLOW_FILE } from '../status/route';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(req: NextRequest) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await req.json().catch(() => null);
   if (typeof body?.enabled !== 'boolean') {

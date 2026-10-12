@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;

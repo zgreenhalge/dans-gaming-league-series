@@ -10,12 +10,13 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
 import { listConfigSets } from '@/lib/dathost-config';
 import { getServerOccupancy, occupancyMessage, applyConfigSetOnly } from '@/lib/dathost-lifecycle';
+import { accessDenied } from '@/lib/access-control';
 
 const WORKSHOP_ID_RE = /^\d+$/;
 
 export async function POST(req: NextRequest) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const body = await req.json().catch(() => null);
   const configSet = typeof body?.configSet === 'string' ? body.configSet : '';

@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { parseRouteId } from '@/lib/util';
 import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
+import { accessDenied } from '@/lib/access-control';
 
 /**
  * Sets (or clears, with an empty `map_pool`) an UPCOMING regular season's map pool — a season can
@@ -13,9 +14,7 @@ import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const { id } = await params;
   const seasonId = parseRouteId(id);

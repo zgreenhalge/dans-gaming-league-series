@@ -11,6 +11,7 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { dathostServerId, loadMatch } from '@/lib/dathost';
 import { matchzyConfigContext, findServerOccupant } from '@/lib/dathost-lifecycle';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 export async function POST(
   req: NextRequest,
@@ -23,7 +24,7 @@ export async function POST(
   }
 
   const access = await requireMatchAccess(matchId);
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   // The DatHost server fetches this URL, so it must be the public deployment origin.
   const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;

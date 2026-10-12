@@ -11,6 +11,7 @@ import {
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 /**
  * Generates (or fully regenerates) a regular season's matchup draft from its current roster
@@ -25,9 +26,7 @@ import { parseRouteId } from '@/lib/util';
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
@@ -114,9 +113,7 @@ function isPlausibleDraftWeeks(value: unknown): value is DraftScheduleWeek[] {
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
@@ -159,9 +156,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  * DELETE route's played-match check, just against the draft/real-schedule boundary instead. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;

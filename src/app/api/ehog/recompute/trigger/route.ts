@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { triggerRatingRecompute } from '@/lib/ehog-recompute';
+import { accessDenied } from '@/lib/access-control';
 
 // Admin "recompute now" (#144). EHOG ratings recompute automatically on every score write; this
 // lets an admin force a full walk on demand (e.g. after a manual data fix). Fire-and-forget in
@@ -10,7 +11,7 @@ import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 
 export async function POST() {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   if (!process.env.RECOMPUTE_SECRET) {
     return NextResponse.json({ error: 'Recompute not configured (RECOMPUTE_SECRET missing)' }, { status: 500 });

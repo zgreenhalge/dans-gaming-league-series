@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { signPlayerClaim } from '@/lib/playerClaim';
 import { parseRouteId } from '@/lib/util';
+import { accessDenied } from '@/lib/access-control';
 
 // Mints a signed claim link (#322) for an unlinked player, so an admin can hand it to the actual
 // person out of band (Discord, text) instead of self-service registration trusting a caller's
@@ -13,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
   const { id } = await params;
