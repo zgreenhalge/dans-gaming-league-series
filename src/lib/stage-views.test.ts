@@ -10,7 +10,7 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getWeekView, getGauntletStageData, getWeekRow, getPodSeasonId } from './queries';
+import { getWeekView, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
 import { deriveGroupPageView, deriveRoundView, stageStatus, type GauntletStageData } from './stage-views';
 import type { BracketPod, GauntletMatch } from './queries/gauntlet';
 import { test } from './test-support/miniTest';
@@ -52,6 +52,14 @@ test('getGauntletStageData: rounds, bracket shape and week ids for the paired ga
   const round = deriveRoundView(1, data, 12)!;
   assert.equal(round.groups.length, 1);
   assert.equal(round.groups[0].label, 'Final');
+});
+
+test('getStagePagePaths: weeks, rounds and groups, with gauntlets filed under their paired regular season', async () => {
+  const paths = await getStagePagePaths();
+  assert.ok(paths.includes('/seasons/1/weeks/10'));
+  assert.ok(paths.includes('/seasons/1/rounds/12'), 'gauntlet 2 pairs with regular season 1');
+  assert.ok(paths.includes('/seasons/1/groups/1000'));
+  assert.ok(paths.includes('/seasons/4/rounds/14'), 'an unpaired gauntlet is its own hub');
 });
 
 // ── Synthetic two-round gauntlet ─────────────────────────────────────────────────────────────────
