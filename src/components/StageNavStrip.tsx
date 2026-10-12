@@ -1,21 +1,10 @@
 import Link from 'next/link';
 import type { StageNav, StageNavItem } from '@/lib/stage-views';
 
-const DOT: Record<StageNavItem['status'], string> = {
-  complete: 'bg-[var(--color-text-secondary)]',
-  'in-progress': 'bg-[var(--color-accent-green-fill)]',
-  upcoming: 'border border-[var(--color-text-secondary)]',
-};
-
 function Chip({ item }: { item: StageNavItem }) {
-  const base = 'inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[11px] border transition-colors';
-  const body = (
-    <>
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${DOT[item.status]}`} aria-hidden />
-      {item.chip}
-    </>
-  );
-  const title = `${item.label} · ${item.status === 'in-progress' ? 'in progress' : item.status}`;
+  const base = 'inline-flex items-center px-2 py-1 font-mono text-[11px] border transition-colors';
+  const body = item.chip;
+  const title = item.label;
   if (item.current) {
     return (
       <span
@@ -46,7 +35,7 @@ function Chip({ item }: { item: StageNavItem }) {
 }
 
 /** Previous / next links around a row of chips — one chip per sibling stage (week, round or group),
- *  dotted by status, the current one marked. Server-rendered; every link is a plain page. */
+ *  the current one marked. Server-rendered; every link is a plain page. */
 export function StageNavStrip({
   nav,
   prev = nav.prev,
