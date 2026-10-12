@@ -10,7 +10,7 @@ function Chip({ item }: { item: StageNavItem }) {
   if (item.current) {
     return (
       <span
-        className={`${base} text-[var(--color-text-primary)] border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)] font-semibold`}
+        className={`${base} font-bold text-[var(--color-bg-primary)] bg-[var(--color-site-accent)] border-[var(--color-site-accent)]`}
         aria-current="page"
         title={title}
       >
