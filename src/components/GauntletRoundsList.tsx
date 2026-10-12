@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
 import EmptyState from './EmptyState';
+import { StageBar } from './StageBar';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
@@ -197,15 +197,7 @@ function GauntletRoundCard({
 
   return (
     <div id={roundAnchorId(round.round_number)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
-      <div className="relative">
-      <button
-        onClick={onToggle}
-        className={`lift-row w-full px-4 py-2.5 ${roundLink ? 'pr-20' : ''} flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left`}
-        aria-expanded={isOpen}
-      >
-        <span className="text-[var(--color-text-secondary)] text-[12px] leading-none select-none w-3 shrink-0">
-          {isOpen ? '−' : '+'}
-        </span>
+      <StageBar open={isOpen} onToggle={onToggle} href={roundLink ?? undefined} label={`Round ${round.round_number}`}>
         <div className="flex items-baseline gap-2.5 flex-1 min-w-0">
           <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
             Round {round.round_number}
@@ -216,16 +208,7 @@ function GauntletRoundCard({
             </span>
           )}
         </div>
-      </button>
-        {roundLink && (
-          <Link
-            href={roundLink}
-            className="absolute right-3 top-1/2 -translate-y-1/2 tracked text-[10px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            Open →
-          </Link>
-        )}
-      </div>
+      </StageBar>
 
       {isOpen && (
         <>

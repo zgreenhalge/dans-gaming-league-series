@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import EmptyState from './EmptyState';
+import { StageBar } from './StageBar';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { fmtWindowDate, weekWindow, weekAnchorId } from '@/lib/util';
@@ -54,15 +54,12 @@ function WeekBlock({
   const win = weekWindow(seasonStartDate, week.week_number);
   return (
     <div id={weekAnchorId(week.id)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
-      <div className="relative">
-      <button
-        onClick={onToggle}
-        className={`lift-row w-full px-4 py-2.5 ${hubSeasonId != null ? 'pr-20' : ''} flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left`}
-        aria-expanded={isOpen}
+      <StageBar
+        open={isOpen}
+        onToggle={onToggle}
+        href={hubSeasonId != null ? weekHref(hubSeasonId, week.id) : undefined}
+        label={`Week ${week.week_number}`}
       >
-        <span className="text-[var(--color-text-secondary)] text-[12px] leading-none select-none w-3 shrink-0">
-          {isOpen ? '−' : '+'}
-        </span>
         <div className="flex items-baseline gap-2.5 flex-1 min-w-0">
           <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
             Week {week.week_number}
@@ -79,16 +76,7 @@ function WeekBlock({
             <PlayerName name={week.bye_player_name} isMe={currentPlayerId !== null && week.bye_player_id === currentPlayerId} />
           </span>
         )}
-      </button>
-        {hubSeasonId != null && (
-          <Link
-            href={weekHref(hubSeasonId, week.id)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 tracked text-[10px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            Open →
-          </Link>
-        )}
-      </div>
+      </StageBar>
       {isOpen &&
         week.matches.map((m) => (
           <WeekMatchCard key={m.id} match={m} win={win} currentPlayerId={currentPlayerId} />
