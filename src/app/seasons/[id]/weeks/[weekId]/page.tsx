@@ -67,7 +67,6 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
           status={view.status}
           details={
             <>
-              <span>{week.matches.length} matches</span>
               {win && (
                 <span>
                   {fmtWindowDate(win.start)} – {fmtWindowDate(win.end)}

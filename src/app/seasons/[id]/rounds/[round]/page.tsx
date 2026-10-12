@@ -59,14 +59,7 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
           season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
           title={weekLabel(view.roundNumber, true)}
           status={view.status}
-          details={
-            <>
-              <span>
-                {view.groups.length} {view.groups.length === 1 ? 'group' : 'groups'}
-              </span>
-              {view.isFinal && <span>Final round</span>}
-            </>
-          }
+          details={view.isFinal && <span>Final round</span>}
         />
         <div className="mb-6">
           <StageNavStrip nav={view.nav} noun="Rounds" />

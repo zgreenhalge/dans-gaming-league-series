@@ -76,7 +76,7 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
           details={
             <>
               <span>{group.isFinal ? 'Final' : group.advanceRule === 'wildcard' ? 'Wildcard' : 'Elimination'}</span>
-              <span>{group.matches.length > 0 ? `${group.matches.length} ${group.matches.length === 1 ? 'game' : 'games'}` : 'Not yet scheduled'}</span>
+              {group.matches.length === 0 && <span>Not yet scheduled</span>}
             </>
           }
         />

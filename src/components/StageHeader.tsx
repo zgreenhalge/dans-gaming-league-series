@@ -3,7 +3,7 @@ import { StageStatusTag } from './StageStatusTag';
 import type { StageStatus } from '@/lib/stage-views';
 
 /** Title block shared by the week, round and group pages: the season's name (a link back to
- *  the season) over the stage's own name, and a mono detail line, with the status tag at the top right. */
+ *  the season) over the stage's own name, and mono detail lines (one per fact), with the status tag at the top right. */
 export function StageHeader({
   season,
   title,
@@ -29,7 +29,7 @@ export function StageHeader({
           <StageStatusTag status={status} />
         </div>
       </div>
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap">
+      <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5 flex flex-col gap-1">
         {details}
       </div>
     </div>
