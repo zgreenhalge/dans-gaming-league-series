@@ -1,12 +1,13 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import EmptyState from './EmptyState';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { aggregatePlayerRecords } from '@/lib/group-scorecard';
-import { groupLabel as podGroupLabel } from '@/lib/crumbs';
+import { groupHref, groupLabel as podGroupLabel, roundHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
@@ -67,7 +68,7 @@ function buildPodEntries(matches: GauntletMatch[], pendingPods: BracketPod[]): P
  * prediction of the real pairing. Each slot names its occupant the same way the Groups tab names an
  * undecided one (`pendingSlotLabel`), since this pod has no real matches yet to render as
  * `MatchCard`s. */
-function PendingPodRows({
+export function PendingPodRows({
   pod,
   podsById,
   advanceOrdinals,
@@ -116,6 +117,31 @@ function PendingPodRows({
   );
 }
 
+/** One gauntlet game as a schedule row — shared by the round list and the round/group pages. */
+export function GameMatchCard({
+  match: m,
+  gameNumber,
+  currentPlayerId,
+}: {
+  match: GauntletMatch;
+  gameNumber: number;
+  currentPlayerId: number | null;
+}) {
+  return (
+    <MatchCard
+      href={`/matches/${m.id}`}
+      map={m.shirts_pick ?? m.picked_map}
+      label={{ type: 'game', gameNumber, isFeatureMatch: m.is_feature_match }}
+      right={matchCardRight(m.final_score, m.scheduled_at, { type: 'pending' })}
+      shirtsStats={m.shirts_stats}
+      skinsStats={m.skins_stats}
+      shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+      skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+      currentPlayerId={currentPlayerId}
+    />
+  );
+}
+
 function GauntletRoundCard({
   round,
   allRounds,
@@ -124,6 +150,7 @@ function GauntletRoundCard({
   advanceOrdinals,
   seedNames,
   rankMap,
+  hubSeasonId,
   currentPlayerId,
   isOpen,
   onToggle,
@@ -136,6 +163,8 @@ function GauntletRoundCard({
   advanceOrdinals: Map<string, number>;
   seedNames?: Map<number, string>;
   rankMap: Map<number, number>;
+  /** The season hub's id for the round/group page links; `null` renders without links. */
+  hubSeasonId: number | null;
   currentPlayerId: number | null;
   isOpen: boolean;
   onToggle: () => void;
@@ -146,8 +175,14 @@ function GauntletRoundCard({
         (rankMap.get(a.player_id) ?? Infinity) - (rankMap.get(b.player_id) ?? Infinity))
     : unsortedRecords;
   const allPlayed = allMatchesPlayed(round.matches);
+  const roundLink = hubSeasonId != null && round.week_id != null ? roundHref(hubSeasonId, round.week_id) : null;
   const isFinalRound = round.is_final_round;
 
+  // Pod ids by index within this round — for each group header's page link.
+  const podIdByIndex = useMemo(
+    () => new Map([...podsById.values()].filter((p) => p.round_number === round.round_number).map((p) => [p.pod_index, p.id])),
+    [podsById, round.round_number],
+  );
   const podEntries = useMemo(() => buildPodEntries(round.matches, pendingPods), [round.matches, pendingPods]);
   // When every pod in this round shares the same stakes, show it once in the header instead of once
   // per pod below — a round can also mix rules (e.g. one wildcard pod feeding one elimination pod),
@@ -167,9 +202,10 @@ function GauntletRoundCard({
 
   return (
     <div id={roundAnchorId(round.round_number)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
+      <div className="relative">
       <button
         onClick={onToggle}
-        className="lift-row w-full px-4 py-2.5 flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left"
+        className={`lift-row w-full px-4 py-2.5 ${roundLink ? 'pr-20' : ''} flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left`}
         aria-expanded={isOpen}
       >
         <span className="text-[var(--color-text-secondary)] text-[12px] leading-none select-none w-3 shrink-0">
@@ -186,6 +222,15 @@ function GauntletRoundCard({
           )}
         </div>
       </button>
+        {roundLink && (
+          <Link
+            href={roundLink}
+            className="absolute right-3 top-1/2 -translate-y-1/2 tracked text-[10px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+          >
+            Open →
+          </Link>
+        )}
+      </div>
 
       {isOpen && (
         <>
@@ -213,6 +258,14 @@ function GauntletRoundCard({
                     <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)] flex items-baseline gap-2">
                       {groupLabel && <span className="tracked font-semibold text-[var(--color-text-primary)]">{groupLabel}</span>}
                       {stakesText && <span>{stakesText}</span>}
+                      {hubSeasonId != null && entry.pod_index != null && podIdByIndex.has(entry.pod_index) && (
+                        <Link
+                          href={groupHref(hubSeasonId, podIdByIndex.get(entry.pod_index)!)}
+                          className="ml-auto tracked text-[10px] font-semibold hover:text-[var(--color-text-primary)] transition-colors"
+                        >
+                          Open →
+                        </Link>
+                      )}
                     </div>
                   )}
                   {entry.kind === 'pending' ? (
@@ -224,24 +277,14 @@ function GauntletRoundCard({
                       currentPlayerId={currentPlayerId}
                     />
                   ) : (
-                    entry.matches.map((m) => {
-                      const gameNumber = entry.pod_index != null ? ++podGameNumber : ++soloGameNumber;
-                      const right = matchCardRight(m.final_score, m.scheduled_at, { type: 'pending' });
-                      return (
-                        <MatchCard
-                          key={m.id}
-                          href={`/matches/${m.id}`}
-                          map={m.shirts_pick ?? m.picked_map}
-                          label={{ type: 'game', gameNumber, isFeatureMatch: m.is_feature_match }}
-                          right={right}
-                          shirtsStats={m.shirts_stats}
-                          skinsStats={m.skins_stats}
-                          shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                          skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
-                          currentPlayerId={currentPlayerId}
-                        />
-                      );
-                    })
+                    entry.matches.map((m) => (
+                      <GameMatchCard
+                        key={m.id}
+                        match={m}
+                        gameNumber={entry.pod_index != null ? ++podGameNumber : ++soloGameNumber}
+                        currentPlayerId={currentPlayerId}
+                      />
+                    ))
                   )}
                 </div>
               );
@@ -325,6 +368,7 @@ export default function GauntletRoundsList({
   bracketShape = [],
   rankMap = EMPTY_RANK_MAP,
   seedNames,
+  hubSeasonId,
   myGamesOnly = false,
   openRounds,
   onToggleRound,
@@ -343,6 +387,8 @@ export default function GauntletRoundsList({
    *  this same prop). Omitted (or empty) renders as if the gauntlet weren't complete yet. */
   rankMap?: Map<number, number>;
   seedNames?: Map<number, string>;
+  /** The season hub's id, for each round's and group's page link; omit to render without links. */
+  hubSeasonId?: number;
   /** Mirrors the "My games" toggle `displayRounds` was already filtered by — applied here to
    * `bracketShape`'s pending pods too, so a pod nobody-you've-tracked-yet is in doesn't reappear
    * once the toggle is on. A pod with no resolved slots at all is always shown: there's nothing yet
@@ -384,6 +430,7 @@ export default function GauntletRoundsList({
           advanceOrdinals={advanceOrdinals}
           seedNames={seedNames}
           rankMap={rankMap}
+          hubSeasonId={hubSeasonId ?? null}
           currentPlayerId={currentPlayerId}
           isOpen={openRounds.has(r.round_number)}
           onToggle={() => onToggleRound(r.round_number)}

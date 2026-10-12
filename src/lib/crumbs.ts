@@ -43,8 +43,9 @@ export interface CrumbTrail {
   season: { id: number; name: string };
   /** The trail runs through the paired gauntlet — adds a "Gauntlet" level. */
   gauntlet?: boolean;
-  /** A regular week, or a gauntlet round (`gauntlet` decides the word). */
-  week?: { id: number; number: number };
+  /** A regular week, or a gauntlet round (`gauntlet` decides the word). A round whose week row
+   *  doesn't exist yet has `id: null` and links to the gauntlet view instead. */
+  week?: { id: number | null; number: number };
   group?: { id: number; podIndex: number; isFinal: boolean };
   /** The page's leaf below the week/group, e.g. "Match 2" or "Game 1". */
   leaf?: string;
@@ -69,7 +70,8 @@ export function buildCrumbs(trail: CrumbTrail): Crumb[] {
   if (trail.week) {
     crumbs.push({
       label: weekLabel(trail.week.number, !!trail.gauntlet),
-      href: trail.gauntlet ? roundHref(hub, trail.week.id) : weekHref(hub, trail.week.id),
+      href:
+        trail.week.id == null ? gauntletHref(hub) : trail.gauntlet ? roundHref(hub, trail.week.id) : weekHref(hub, trail.week.id),
     });
   }
   if (trail.group) {

@@ -1,4 +1,4 @@
-import { allMatchesPlayed, anyMatchPlayed } from './util';
+import { allMatchesPlayed, anyMatchPlayed, GAUNTLET_POD_STAKES_LABEL } from './util';
 import { groupHref, groupLabel, roundHref, weekHref, weekLabel } from './crumbs';
 import {
   aggregatePlayerRecords,
@@ -266,4 +266,13 @@ export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData
     prev: neighbour(ordered[at - 1]),
     next: neighbour(ordered[at + 1]),
   };
+}
+
+const GROUP_RANK_RULE = 'Ranked by win rate → RWR% → ADR.';
+
+/** The scorecard caption for a group: its stakes, then the rule the rows are ordered by. */
+export function groupCaption(group: Pick<GroupView, 'isFinal' | 'advanceRule'>): string {
+  if (group.isFinal) return `Final — places are decided by record, then RWR%, then ADR.`;
+  if (group.advanceRule) return `${GAUNTLET_POD_STAKES_LABEL[group.advanceRule]} ${GROUP_RANK_RULE}`;
+  return GROUP_RANK_RULE;
 }

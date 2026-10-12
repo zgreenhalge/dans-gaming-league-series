@@ -44,6 +44,16 @@ test('getWeekRow / getPodSeasonId resolve ids to their season', async () => {
   assert.equal(await getPodSeasonId(9999), null);
 });
 
+test('getGauntletStageData: rounds, bracket shape and week ids for the paired gauntlet', async () => {
+  const data = await getGauntletStageData(2);
+  assert.equal(data.weekIdByRound.get(1), 12);
+  assert.equal(data.rounds[0].week_id, 12);
+  assert.deepEqual(data.bracketShape.map((p) => p.id), [1000]);
+  const round = deriveRoundView(1, data, 12)!;
+  assert.equal(round.groups.length, 1);
+  assert.equal(round.groups[0].label, 'Final');
+});
+
 // ── Synthetic two-round gauntlet ─────────────────────────────────────────────────────────────────
 
 function gm(id: number, matchNumber: number, podIndex: number, rule: 'single' | 'wildcard', score: string | null, wins: number[], players: number[]): GauntletMatch {

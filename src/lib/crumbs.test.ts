@@ -68,3 +68,13 @@ test('route helpers assemble the readable paths with real ids', () => {
   assert.equal(groupHref(5, 14), '/seasons/5/groups/14');
   assert.equal(gauntletHref(5), '/seasons/5?view=gauntlet');
 });
+
+test('buildCrumbs: a round with no week row yet links to the gauntlet view', () => {
+  const crumbs = buildCrumbs({
+    season,
+    gauntlet: true,
+    week: { id: null, number: 3 },
+    group: { id: 20, podIndex: 0, isFinal: true },
+  });
+  assert.equal(crumbs.find((c) => c.label === 'Round 3')?.href, '/seasons/5?view=gauntlet');
+});
