@@ -1,36 +1,48 @@
 import Link from 'next/link';
 import { StageStatusTag } from './StageStatusTag';
 import type { StageStatus } from '@/lib/stage-views';
+import type { StageHeading } from '@/lib/crumbs';
 
 /** Title block shared by the week, round and group pages: the season's name (a link back to
- *  the season) over the stage's own name, and mono detail lines (one per fact), with the status tag at the top right. */
+ *  the season) over the stage's own name, and mono detail lines (one per fact, empty ones skipped),
+ *  with the status tag at the top right. The heading comes from `stageHeading()` (crumbs.ts). */
 export function StageHeader({
-  season,
-  title,
+  heading,
   status,
   details,
 }: {
-  season: { label: string; href: string };
-  /** The stage's own name; a group page links its round part back to the round. */
-  title: React.ReactNode;
+  heading: StageHeading;
   status: StageStatus;
-  details: React.ReactNode;
+  details: React.ReactNode[];
 }) {
+  const link = 'block hover:text-[var(--color-site-accent)] transition-colors';
   return (
     <div className="mt-8 mb-6">
       <div className="flex items-start justify-between gap-3">
         <h1 className="font-display text-[32px] sm:text-[36px] font-semibold leading-tight">
-          <Link href={season.href} className="block hover:text-[var(--color-site-accent)] transition-colors">
-            {season.label}
+          <Link href={heading.parent.href} className={link}>
+            {heading.parent.label}
           </Link>
-          <span className="block">{title}</span>
+          {heading.title.map((level) =>
+            level.href ? (
+              <Link key={level.label} href={level.href} className={link}>
+                {level.label}
+              </Link>
+            ) : (
+              <span key={level.label} className="block">
+                {level.label}
+              </span>
+            ),
+          )}
         </h1>
         <div className="mt-2 shrink-0">
           <StageStatusTag status={status} />
         </div>
       </div>
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5 flex flex-col gap-1">
-        {details}
+        {details.filter(Boolean).map((detail, i) => (
+          <span key={i}>{detail}</span>
+        ))}
       </div>
     </div>
   );

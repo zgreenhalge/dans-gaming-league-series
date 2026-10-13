@@ -11,9 +11,9 @@ import EmptyState from '@/components/EmptyState';
 import { PlayerName } from '@/components/PlayerName';
 import { getFirstGauntletRound, resolveWeekPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, roundHref, seasonHref, weekHref } from '@/lib/crumbs';
+import { buildCrumbs, gauntletLink, roundHref, stageHeading, weekHref } from '@/lib/crumbs';
 import { describeMatchups, weekTitle } from '@/lib/seo/stage-meta';
-import { fmtWindowDate, parseRouteId, seasonTitle, weekLabel, weekWindow } from '@/lib/util';
+import { fmtWindowDate, parseRouteId, weekWindow } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -57,37 +57,27 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
   const currentPlayerId = session?.user?.playerId ?? null;
   const { week } = view;
   const win = weekWindow(season.start_date, week.week_number);
+  const trail = { season, week: { id: week.id, number: week.week_number } };
 
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={buildCrumbs({ season, week: { id: week.id, number: week.week_number } })} />
+      <TopbarShell crumbs={buildCrumbs(trail)} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          season={{ label: seasonTitle(season.name), href: `${seasonHref(season.id)}?tab=schedule&week=${week.id}` }}
-          title={weekLabel(week.week_number, false)}
+          heading={stageHeading(trail)}
           status={view.status}
-          details={
-            <>
-              {win && (
-                <span>
-                  {fmtWindowDate(win.start)} – {fmtWindowDate(win.end)}
-                </span>
-              )}
-              {week.bye_player_name && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="tracked">Bye</span>
-                  <PlayerName name={week.bye_player_name} isMe={currentPlayerId !== null && week.bye_player_id === currentPlayerId} />
-                </span>
-              )}
-            </>
-          }
+          details={[
+            win && `${fmtWindowDate(win.start)} – ${fmtWindowDate(win.end)}`,
+            week.bye_player_name && (
+              <span className="inline-flex items-center gap-1">
+                <span className="tracked">Bye</span>
+                <PlayerName name={week.bye_player_name} isMe={currentPlayerId !== null && week.bye_player_id === currentPlayerId} />
+              </span>
+            ),
+          ]}
         />
         <div className="mb-6">
-          <StageNavStrip
-            items={view.nav}
-            label="Weeks"
-            meta={firstRound != null ? { label: 'Gauntlet →', href: roundHref(hubId, firstRound) } : undefined}
-          />
+          <StageNavStrip items={view.nav} label="Weeks" meta={gauntletLink(hubId, firstRound)} />
         </div>
 
         <h2 className="tracked text-[11px] font-semibold text-[var(--color-text-secondary)] mb-2">Scorecard</h2>

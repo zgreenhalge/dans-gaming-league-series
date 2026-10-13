@@ -28,22 +28,23 @@ describe('StageNavStrip', () => {
   });
 
   test('a meta chip links out and is not one of the stage chips', () => {
-    render(<StageNavStrip items={[item('1')]} label="Weeks" meta={{ label: 'Gauntlet →', href: '/seasons/5/rounds/1' }} />);
+    render(<StageNavStrip items={[item('1')]} label="Weeks" meta={{ label: 'Gauntlet →', href: '/seasons/5/rounds/1', direction: 'forward' }} />);
     expect(screen.getByRole('link', { name: 'Gauntlet →' })).toHaveAttribute('href', '/seasons/5/rounds/1');
   });
 
-  test('the meta chip goes above or below the stage chips', () => {
-    const meta = { label: '← Regular season', href: '/seasons/5' };
+  test('a back link goes above the stage chips and a forward link below them', () => {
+    const back = { label: '← Regular season', href: '/seasons/5', direction: 'back' as const };
+    const forward = { label: 'Gauntlet →', href: '/seasons/5/rounds/1', direction: 'forward' as const };
     const order = () => screen.getAllByRole('link').map((l) => l.textContent);
-    const { rerender } = render(<StageNavStrip items={[item('1'), item('2')]} label="Rounds" meta={meta} metaPosition="above" />);
+    const { rerender } = render(<StageNavStrip items={[item('1'), item('2')]} label="Rounds" meta={back} />);
     expect(order()).toEqual(['← Regular season', '1', '2']);
-    rerender(<StageNavStrip items={[item('1'), item('2')]} label="Rounds" meta={meta} />);
-    expect(order()).toEqual(['1', '2', '← Regular season']);
+    rerender(<StageNavStrip items={[item('1'), item('2')]} label="Weeks" meta={forward} />);
+    expect(order()).toEqual(['1', '2', 'Gauntlet →']);
   });
 
   test('a lone stage chip is hidden; the meta chip stands alone, and with neither nothing renders', () => {
     const { container, rerender } = render(
-      <StageNavStrip items={[item('Final', { current: true })]} label="Groups" meta={{ label: '← Regular season', href: '/seasons/5' }} />,
+      <StageNavStrip items={[item('Final', { current: true })]} label="Groups" meta={{ label: '← Regular season', href: '/seasons/5', direction: 'back' }} />,
     );
     expect(screen.getByRole('link', { name: '← Regular season' })).toBeInTheDocument();
     expect(screen.queryByText('Groups')).toBeNull();
