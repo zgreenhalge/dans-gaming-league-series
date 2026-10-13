@@ -79,6 +79,14 @@ describe('GroupScorecard sorting', () => {
     { ...emptyRecord(3, 'Fay'), matches_played: 0, rank: null, seed: 1, outcome: 'pending' },
   ];
 
+  test("the Result column is only sortable once the group's games are all in", () => {
+    const { rerender } = render(<GroupScorecard rows={group} isFinal={false} finished={false} currentPlayerId={null} />);
+    expect(screen.queryByRole('button', { name: /Result/ })).toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Result' })).toBeInTheDocument();
+    rerender(<GroupScorecard rows={group} isFinal={false} finished currentPlayerId={null} />);
+    expect(screen.getByRole('button', { name: /Result/ })).toBeInTheDocument();
+  });
+
   test('Seed sorts smallest-first; unplayed rows (no ADR) stay last whichever way ADR runs', async () => {
     render(<GroupScorecard rows={group} isFinal={false} finished={false} currentPlayerId={null} />);
     const cell = (i: number) => screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[i].textContent ?? '');

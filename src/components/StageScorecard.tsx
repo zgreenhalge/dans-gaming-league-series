@@ -1,6 +1,7 @@
 'use client';
 
 import SortableTh from './SortableTh';
+import Th from './Th';
 import { PlayerName } from './PlayerName';
 import { useSortState } from './useSortState';
 import { sortRows, type SortValue } from '@/lib/sort-rows';
@@ -157,7 +158,7 @@ export function GroupScorecard({
     record: (r) => (played(r) ? r.wins * 1000 - r.losses : null),
     rwr: (r) => (played(r) ? r.rwr_percentage : null),
     adr: (r) => (played(r) ? r.adr : null),
-    result: (r) => (isFinal ? r.rank : finished ? OUTCOME_ORDER[r.outcome] : null),
+    result: (r) => (isFinal ? r.rank : OUTCOME_ORDER[r.outcome]),
   });
   return (
     <Frame bare={bare}>
@@ -168,7 +169,12 @@ export function GroupScorecard({
           <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
           <SortableTh label="RWR%" title="Round win rate" sortKey="rwr" state={sort} onSort={onSort} align="right" />
           <SortableTh label="ADR" title="Average damage per round" sortKey="adr" state={sort} onSort={onSort} align="right" />
-          <SortableTh label={isFinal ? 'Place' : 'Result'} sortKey="result" state={sort} onSort={onSort} align="right" />
+          {/* Results only exist once every game is in; until then there is nothing to sort by. */}
+          {finished ? (
+            <SortableTh label={isFinal ? 'Place' : 'Result'} sortKey="result" state={sort} onSort={onSort} align="right" />
+          ) : (
+            <Th align="right">{isFinal ? 'Place' : 'Result'}</Th>
+          )}
         </tr>
       </thead>
       <tbody>
