@@ -260,6 +260,20 @@ export function findPairedSeason<T extends { id: number; name: string }>(name: s
 }
 
 /**
+ * The name for the next regular season to create: one past the highest season number among the
+ * regular (non-gauntlet) `seasons`, e.g. "Season 6 Regular Season".
+ */
+export function nextRegularSeasonName(seasons: { name: string; is_gauntlet: boolean }[]): string {
+  let maxNum = 0;
+  for (const s of seasons) {
+    if (s.is_gauntlet) continue;
+    const n = extractSeasonNumber(s.name);
+    if (n !== null && n > maxNum) maxNum = n;
+  }
+  return `Season ${maxNum + 1} Regular Season`;
+}
+
+/**
  * Maps each regular season ID to its paired gauntlet season ID (`findPairedSeason()`'s rule).
  */
 export function buildRegularToGauntletMap(

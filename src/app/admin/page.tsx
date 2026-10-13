@@ -14,7 +14,7 @@ import {
 import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
 import { listConfigSets } from '@/lib/dathost-config';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { buildRegularToGauntletMap, extractSeasonNumber } from '@/lib/util';
+import { buildRegularToGauntletMap, nextRegularSeasonName } from '@/lib/util';
 import type { GauntletRow } from '@/components/GauntletLifecycleList';
 
 export const metadata = {
@@ -83,13 +83,7 @@ export default async function AdminPage() {
   // Next season's default name — shown on the "+ New Season" link, which now points at its own page
   // (/admin/seasons/new) rather than an inline form; the create flow's own map-pool derivation lives
   // there.
-  let maxNum = 0;
-  for (const s of seasons) {
-    if (s.is_gauntlet) continue;
-    const n = extractSeasonNumber(s.name);
-    if (n !== null && n > maxNum) maxNum = n;
-  }
-  const nextSeasonName = `Season ${maxNum + 1} Regular Season`;
+  const nextSeasonName = nextRegularSeasonName(seasons);
 
   const allSeasons = [...seasons]
     .sort((a, b) => b.id - a.id)

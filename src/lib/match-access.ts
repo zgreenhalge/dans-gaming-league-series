@@ -1,6 +1,7 @@
 // Shared session gate for match-scoped mutations: the caller must be a site admin or a player in
-// the match. Composes the existing auth (next-auth session + `players.is_admin`) — it does not modify
-// auth logic. Used by the demo upload-url / result and server provision/status/teardown routes.
+// the match, checked against the next-auth session and `players.is_admin`. Used by the match-scoped
+// mutation routes (score, veto, schedule, recording, demo, replay dispatch, server provision/status/
+// teardown).
 
 import { requireSession } from './session';
 import { getAdminClient } from './supabase-admin';

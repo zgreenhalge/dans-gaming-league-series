@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { accessDenied } from '@/lib/access-control';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { extractSeasonNumber } from '@/lib/util';
+import { nextRegularSeasonName } from '@/lib/util';
+import type { Season } from '@/lib/types';
 import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
 import { parseBuyInInput } from '@/lib/season-buy-in';
 
@@ -25,20 +26,13 @@ export async function POST(req: NextRequest) {
 
   const { data: seasons, error: fetchErr } = await supabaseAdmin
     .from('seasons')
-    .select('name')
-    .eq('is_gauntlet', false);
+    .select('name, is_gauntlet');
 
   if (fetchErr) {
     return NextResponse.json({ error: fetchErr.message }, { status: 500 });
   }
 
-  let maxNum = 0;
-  for (const s of seasons ?? []) {
-    const n = extractSeasonNumber((s as { name: string }).name);
-    if (n !== null && n > maxNum) maxNum = n;
-  }
-
-  const name = `Season ${maxNum + 1} Regular Season`;
+  const name = nextRegularSeasonName((seasons ?? []) as Pick<Season, 'name' | 'is_gauntlet'>[]);
 
   const mapErr = await upsertNewMaps(supabaseAdmin, input.newMaps);
   if (mapErr) {
