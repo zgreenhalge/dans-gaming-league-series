@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import type { Player, Season } from '../types';
-import { allMatchesPlayed, extractSeasonNumber, isPlayedScore } from '../util';
+import { allMatchesPlayed, findPairedSeason, isPlayedScore } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
 import { batchedIn, cacheQuery } from './_shared';
@@ -69,24 +69,20 @@ export const getSeason = cacheQuery(async (id: number, client?: SupabaseClient):
   return (data ?? null) as Season | null;
 });
 
-/** Find the gauntlet season paired to a regular season by season number in name. Reads through the
+/** Find the gauntlet season paired to a regular season (`findPairedSeason()`'s rule). Reads through the
  *  `cache()`-wrapped `getSeasons()` rather than its own query, so repeat lookups in the same request
  *  (e.g. one per row in `getAdminMatches()`) collapse into the single round trip already made
  *  elsewhere in that request instead of adding their own. */
 export async function getLinkedGauntlet(regularSeasonName: string, client?: SupabaseClient): Promise<Season | null> {
-  const num = extractSeasonNumber(regularSeasonName);
-  if (num == null) return null;
   const seasons = await getSeasons(client);
-  return seasons.find((s) => s.is_gauntlet && extractSeasonNumber(s.name) === num) ?? null;
+  return findPairedSeason(regularSeasonName, seasons.filter((s) => s.is_gauntlet));
 }
 
-/** Find the regular season paired to a gauntlet season by season number in name. Same
+/** Find the regular season paired to a gauntlet season (`findPairedSeason()`'s rule). Same
  *  `getSeasons()`-backed reasoning as `getLinkedGauntlet()` above. */
 export async function getLinkedRegularSeason(gauntletName: string, client?: SupabaseClient): Promise<Season | null> {
-  const num = extractSeasonNumber(gauntletName);
-  if (num == null) return null;
   const seasons = await getSeasons(client);
-  return seasons.find((s) => !s.is_gauntlet && extractSeasonNumber(s.name) === num) ?? null;
+  return findPairedSeason(gauntletName, seasons.filter((s) => !s.is_gauntlet));
 }
 
 /** Where a season's sub-pages live: the *hub* is the regular season every public season link points
@@ -105,21 +101,13 @@ export async function getSeasonScope(season: Season, client?: SupabaseClient): P
   return { hub: season, gauntlet: await getLinkedGauntlet(season.name, client) };
 }
 
-/** The hub season id for every season in `seasons`, in one pass: a regular season is its own hub, a
- *  gauntlet's is the first regular season with the same season number (`getLinkedRegularSeason()`'s
- *  rule), or itself if unpaired. The bulk form of `getSeasonScope()`'s hub rule, for callers listing
- *  many seasons. */
+/** The hub season id for every season in `seasons`: a regular season is its own hub, a gauntlet's is
+ *  its paired regular season (`findPairedSeason()`), or itself if unpaired. The bulk form of
+ *  `getSeasonScope()`'s hub rule, for callers listing many seasons. */
 export function hubIdsBySeason(seasons: Season[]): Map<number, number> {
-  const regularByNumber = new Map<number, number>();
-  for (const s of seasons) {
-    const n = s.is_gauntlet ? null : extractSeasonNumber(s.name);
-    if (n != null && !regularByNumber.has(n)) regularByNumber.set(n, s.id);
-  }
+  const regulars = seasons.filter((s) => !s.is_gauntlet);
   return new Map(
-    seasons.map((s) => {
-      const n = s.is_gauntlet ? extractSeasonNumber(s.name) : null;
-      return [s.id, (n != null ? regularByNumber.get(n) : undefined) ?? s.id];
-    }),
+    seasons.map((s) => [s.id, (s.is_gauntlet ? findPairedSeason(s.name, regulars)?.id : undefined) ?? s.id]),
   );
 }
 

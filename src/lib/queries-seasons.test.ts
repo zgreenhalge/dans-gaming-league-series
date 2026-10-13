@@ -16,7 +16,8 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster, getSeasonParticipants, getActiveRegularSeason } from './queries';
+import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster, getSeasonParticipants, getActiveRegularSeason, hubIdsBySeason } from './queries';
+import type { Season } from './types';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -87,6 +88,19 @@ async function main() {
     assert.equal(season?.id, 3);
     assert.equal(season?.is_gauntlet, false);
     assert.equal(season?.status, 'ACTIVE');
+  });
+
+  await test('hubIdsBySeason — a gauntlet maps to its paired regular season by the same rule as getLinkedRegularSeason', async () => {
+    const seasons = [
+      { id: 7, name: 'Season 2 Gauntlet', is_gauntlet: true },
+      { id: 9, name: 'Season 2', is_gauntlet: false },
+      { id: 4, name: 'Season 2 (rerun)', is_gauntlet: false },
+      { id: 11, name: 'Season 8 Gauntlet', is_gauntlet: true },
+    ] as Season[];
+    const hubs = hubIdsBySeason(seasons);
+    assert.equal(hubs.get(9), 9); // a regular season is its own hub
+    assert.equal(hubs.get(7), 4); // duplicate numbers: the lowest id wins
+    assert.equal(hubs.get(11), 11); // unpaired gauntlet is its own hub
   });
 
   report();
