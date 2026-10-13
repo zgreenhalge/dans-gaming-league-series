@@ -11,9 +11,9 @@ import type { BracketPod } from '@/lib/queries';
 
 /**
  * One gauntlet group: its scorecard, then its games — or the "not yet scheduled" lineup while the pod
- * is still waiting on its bracket. On a round with several groups each is a collapsible section
- * (`collapsible`, the season schedule's week-row look, its title linking to the group's page); a lone group, or
- * the group page itself, shows a plain heading over the same content.
+ * is still waiting on its bracket. On a round page each group is a collapsible section (`collapsible`,
+ * the season schedule's week-row look, its title linking to the group's page); the group page itself
+ * shows a plain heading over the same content.
  */
 export function GroupPanel({
   group,
