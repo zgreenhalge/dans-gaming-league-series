@@ -15,6 +15,7 @@ import {
   type DemoIngestResult,
 } from '@/lib/demo/ingestResult';
 import { useDemoIngestActions } from './useDemoIngestActions';
+import ErrorText from '@/components/ErrorText';
 
 interface ResultResponse {
   status: string | null; // background_jobs status
@@ -93,7 +94,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
         >
           {busy ? 'Starting…' : 'Retry parsing'}
         </button>
-        {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
+        <ErrorText error={error} tone="onDark" size={12} className="mt-2" />
       </Card>
     );
   }
@@ -142,7 +143,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
         >
           {busy ? 'Starting…' : 'Process demo'}
         </button>
-        {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
+        <ErrorText error={error} tone="onDark" size={12} className="mt-2" />
       </Card>
     );
   }
@@ -213,7 +214,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
           Dismiss
         </button>
       </div>
-      {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
+      <ErrorText error={error} tone="onDark" size={12} className="mt-2" />
     </Card>
   );
 }

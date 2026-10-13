@@ -7,6 +7,7 @@ import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import EmptyState from './EmptyState';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import type { BracketPod } from '@/lib/queries';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasons: { id: number; name: string }[];
@@ -88,7 +89,7 @@ export function CreateGauntletForm({ seasons }: Props) {
           </div>
         </div>
         <GauntletBracketDiagram pods={pods} currentPlayerId={null} />
-        {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+        <ErrorText error={error} size={12} />
         <div className="flex gap-3">
           <button
             type="button"
@@ -158,7 +159,7 @@ export function CreateGauntletForm({ seasons }: Props) {
         />
       </div>
 
-      {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+      <ErrorText error={error} size={12} />
 
       <button
         type="button"

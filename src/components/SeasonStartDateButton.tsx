@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasonId: number;
@@ -133,9 +134,7 @@ export default function SeasonStartDateButton({ seasonId, startDate, canEdit, se
           Cancel
         </button>
       </div>
-      {error && (
-        <div className="text-[12px] text-[var(--color-accent-red-fg, #f87171)]">{error}</div>
-      )}
+      <ErrorText error={error} size={12} />
     </div>
   );
 }

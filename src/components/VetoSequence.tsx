@@ -9,6 +9,7 @@ import { isPlayedScore } from '@/lib/util';
 import { useMapLookup } from './MapContext';
 import { SIDE_ICON } from './icons/SideIcons';
 import type { Match } from '@/lib/types';
+import ErrorText from '@/components/ErrorText';
 
 const REGULAR_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -367,9 +368,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
       {/* Map selection panel */}
       {activeField && canVeto && (
         <div className="mt-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-3">
-          {error && (
-            <p className="text-[var(--color-accent-red-fg,#ef4444)] text-[12px] mb-3">{error}</p>
-          )}
+          <ErrorText error={error} as="p" size={12} className="mb-3" />
 
           {activeField === 'skins_starting_side' ? (
             <div className="flex gap-2">

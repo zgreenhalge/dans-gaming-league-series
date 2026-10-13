@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Player } from '@/lib/types';
+import ErrorText from '@/components/ErrorText';
 
 const cellBtn =
   'font-mono text-[11px] px-2 py-0.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40';
@@ -256,8 +257,8 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
 
       {error && (
         <tr>
-          <td colSpan={6} className="px-3 pb-2 font-mono text-[11px] text-[var(--color-accent-red-fg)]">
-            {error}
+          <td colSpan={6} className="px-3 pb-2">
+            <ErrorText error={error} />
           </td>
         </tr>
       )}

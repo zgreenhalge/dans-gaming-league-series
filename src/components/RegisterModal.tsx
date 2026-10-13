@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { useSession } from "next-auth/react";
 import { useHasMounted } from "./useHasMounted";
 import Modal from "./Modal";
+import ErrorText from '@/components/ErrorText';
 
 const subscribeNever = () => () => {};
 
@@ -84,7 +85,7 @@ export default function RegisterModal() {
         <p className="text-[13px] text-[var(--color-text-secondary)] mb-6">
           Please don&apos;t make me edit the database…
         </p>
-        {error && <p className="text-[12px] text-red-500 mb-3">{error}</p>}
+        <ErrorText error={error} as="p" size={12} className="mb-3" />
         <div className="flex gap-3">
           <button
             onClick={() => submit({ claim: claimToken })}
@@ -136,7 +137,7 @@ export default function RegisterModal() {
           creating a new entry.
         </p>
 
-        {error && <p className="text-[12px] text-red-500">{error}</p>}
+        <ErrorText error={error} as="p" size={12} />
 
         <button
           onClick={() => submit({ name: newName })}

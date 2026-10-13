@@ -19,6 +19,7 @@
 
 import { useState } from 'react';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import ErrorText from '@/components/ErrorText';
 
 interface ThreadResult {
   matchId: number;
@@ -106,7 +107,7 @@ export function DiscordThreadPublisher({ seasonId, periodLabel = 'Week' }: { sea
         </div>
       </div>
 
-      {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+      <ErrorText error={error} size={12} />
 
       {results.length > 0 && (
         <div className="flex flex-col gap-1 border border-[var(--color-border-tertiary)] rounded px-3 py-2.5">

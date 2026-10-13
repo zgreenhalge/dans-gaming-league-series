@@ -319,13 +319,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         </button>
       </div>
 
-      {!integrity.valid && (
-        <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">
-          {integrity.errors.map((e) => (
-            <div key={e}>{e}</div>
-          ))}
-        </div>
-      )}
+      {!integrity.valid && <ErrorText error={integrity.errors} size={12} />}
       <WarningsBanner warnings={warnings} />
       <ErrorText error={error} size={12} />
 
