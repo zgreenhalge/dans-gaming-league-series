@@ -1,7 +1,7 @@
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateSeasonForm } from '@/components/CreateSeasonForm';
 import { getSeasons, getKnownMapNames } from '@/lib/queries';
-import { extractSeasonNumber } from '@/lib/util';
+import { nextRegularSeasonName } from '@/lib/util';
 
 export const metadata = {
   title: 'Create Season',
@@ -18,13 +18,7 @@ export const metadata = {
 export default async function NewSeasonPage() {
   const [seasons, knownMaps] = await Promise.all([getSeasons(), getKnownMapNames()]);
 
-  let maxNum = 0;
-  for (const s of seasons) {
-    if (s.is_gauntlet) continue;
-    const n = extractSeasonNumber(s.name);
-    if (n !== null && n > maxNum) maxNum = n;
-  }
-  const nextName = `Season ${maxNum + 1} Regular Season`;
+  const nextName = nextRegularSeasonName(seasons);
 
   return (
     <div className="min-h-screen">

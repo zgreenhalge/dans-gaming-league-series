@@ -25,6 +25,7 @@ import {
   seasonTitle,
   buildRegularToGauntletMap,
   findPairedSeason,
+  nextRegularSeasonName,
   initials,
   firstName,
   winRatePct,
@@ -258,6 +259,20 @@ test('findPairedSeason: null when the name has no number or nothing shares it', 
 test('findPairedSeason: several candidates sharing the number resolve to the lowest id', () => {
   const dupes = [{ id: 30, name: 'Season 4' }, { id: 12, name: 'Season 4 (rerun)' }, { id: 20, name: 'Season 4' }];
   assert.equal(findPairedSeason('Season 4 Gauntlet', dupes)?.id, 12);
+});
+
+// --- nextRegularSeasonName ---
+test('nextRegularSeasonName: one past the highest regular season number, ignoring gauntlets', () => {
+  const seasons = [
+    { name: 'Season 2 Regular Season', is_gauntlet: false },
+    { name: 'Season 9 Gauntlet', is_gauntlet: true },
+    { name: 'Season 4 Regular Season', is_gauntlet: false },
+  ];
+  assert.equal(nextRegularSeasonName(seasons), 'Season 5 Regular Season');
+});
+test('nextRegularSeasonName: starts at Season 1 when there are no numbered regular seasons', () => {
+  assert.equal(nextRegularSeasonName([]), 'Season 1 Regular Season');
+  assert.equal(nextRegularSeasonName([{ name: 'Playoffs', is_gauntlet: false }]), 'Season 1 Regular Season');
 });
 
 // --- initials / firstName ---
