@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { aggregatePlayerRecords, deriveGroupScorecard, type ScorecardMatch, type ScorecardStat } from './group-scorecard';
+import { aggregatePlayerRecords, deriveGroupScorecard, hasPlayed, type ScorecardMatch, type ScorecardStat } from './group-scorecard';
 import { canonicalGauntletRankMap } from './gauntlet-ranking';
 import { canonicalSort } from './util';
 import { test } from './test-support/miniTest';
@@ -198,4 +198,21 @@ test('aggregatePlayerRecords: exact and fallback stats add up across matches for
   const p1 = records.get(1)!;
   assert.equal(p1.total_damage, 2000 + 90 * 20);
   assert.equal(p1.rounds_played, 22 + 20);
+});
+
+test('deriveGroupScorecard: roster players with no played match follow the ranked rows, in roster order', () => {
+  const rows = deriveGroupScorecard(
+    [match('13-9', [1, 2], [3, 4]), { final_score: '0-0', shirts_stats: [stat(7, 'SHIRTS', false)], skins_stats: [] }],
+    'wins',
+    [
+      { player_id: 9, player_name: 'Bye' },
+      { player_id: 1, player_name: 'P1' },
+      { player_id: 7, player_name: 'Unplayed' },
+    ],
+  );
+  assert.deepEqual(rows.map((r) => r.player_id), [1, 2, 3, 4, 9, 7]);
+  assert.equal(rows[4].matches_played, 0);
+  assert.equal(rows[4].player_name, 'Bye');
+  assert.equal(hasPlayed(rows[0]), true);
+  assert.equal(hasPlayed(rows[4]), false);
 });

@@ -1,5 +1,6 @@
 import { resolveGroupPage } from '@/lib/queries';
 import { parseRouteId } from '@/lib/util';
+import { hasPlayed } from '@/lib/group-scorecard';
 import { OG_SIZE } from '@/lib/seo/og-card';
 import { groupTitle } from '@/lib/seo/stage-meta';
 import { renderStageOg } from '@/lib/seo/stage-og';
@@ -23,7 +24,7 @@ export default async function Image({ params }: { params: Promise<{ id: string; 
           matches: group.matches,
           standings: group.scorecard.map((r) => ({
             name: r.player_name,
-            record: r.matches_played > 0 ? `${r.wins}-${r.losses}` : r.seed != null ? `Seed ${r.seed}` : '',
+            record: hasPlayed(r) ? `${r.wins}-${r.losses}` : r.seed != null ? `Seed ${r.seed}` : '',
           })),
         }
       : null,

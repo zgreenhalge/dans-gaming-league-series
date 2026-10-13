@@ -114,10 +114,25 @@ export function compareRecords(rule: ScorecardRankRule): (a: PlayerRecord, b: Pl
   return (a, b) => b.win_rate - a.win_rate || b.rwr_percentage - a.rwr_percentage || b.adr - a.adr;
 }
 
-/** A group's scorecard: every player who played, ranked by `rule`. Ties on every key keep first-
- *  appearance order (a stable sort), exactly as the canonical gauntlet ranking always has. */
-export function deriveGroupScorecard(matches: ScorecardMatch[], rule: ScorecardRankRule): PlayerRecord[] {
-  return [...aggregatePlayerRecords(matches).values()].sort(compareRecords(rule));
+/** A group's scorecard: every player who played, ranked by `rule`, then each `roster` player with no
+ *  played match yet (a week's bye player, an unplayed pod's occupants) as an empty record, in roster
+ *  order. Ties on every key keep first-appearance order (a stable sort), exactly as the canonical
+ *  gauntlet ranking always has. */
+export function deriveGroupScorecard(
+  matches: ScorecardMatch[],
+  rule: ScorecardRankRule,
+  roster: { player_id: number; player_name: string }[] = [],
+): PlayerRecord[] {
+  const records = aggregatePlayerRecords(matches);
+  const ranked = [...records.values()].sort(compareRecords(rule));
+  const waiting = roster.filter((p) => !records.has(p.player_id)).map((p) => emptyRecord(p.player_id, p.player_name));
+  return [...ranked, ...waiting];
+}
+
+/** Whether a record has any played match behind its figures — the scorecards show a dash for a
+ *  player's rates until they do. */
+export function hasPlayed(record: Pick<PlayerRecord, 'matches_played'>): boolean {
+  return record.matches_played > 0;
 }
 
 /** A record for a player with no played match yet — a materialized pod's occupants appear on its
