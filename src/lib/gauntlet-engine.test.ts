@@ -274,6 +274,58 @@ function twoPodFixture(): FakeDb {
   assert.deepEqual(filled.sort(), [1, 2]);
 });
 
+  await test('resolveAndPropagate: survivors fill the downstream slots best seed first, whatever order the stats rows arrive in', async () => {
+  // Wildcard pod A (round 1) sends players 1 and 2 on (one win each). Player 2 holds the better
+  // seed (1 vs 2) but player 1's stat rows come first, so row order alone would hand player 1 the
+  // first slot the database returns. The earlier group (pod 201, pod_index 0) must get the best seed.
+  const db: FakeDb = {
+    seasons: [
+      { id: 10, name: 'Season 9', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: 20, name: 'Season 9 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
+    ],
+    weeks: [
+      { id: 1, season_id: 20, week_number: 1, bye_player_id: null },
+      { id: 2, season_id: 10, week_number: 1, bye_player_id: null },
+    ],
+    matches: [
+      { id: 500, week_id: 1, match_number: 1, final_score: '13-9', is_playoff_game: true },
+      { id: 501, week_id: 1, match_number: 2, final_score: '13-11', is_playoff_game: true },
+      { id: 502, week_id: 2, match_number: 1, final_score: '13-9' },
+    ],
+    player_match_stats: [
+      { id: 1, match_id: 500, player_id: 1, is_win: true },
+      { id: 2, match_id: 500, player_id: 4, is_win: false },
+      { id: 3, match_id: 500, player_id: 2, is_win: false },
+      { id: 4, match_id: 500, player_id: 3, is_win: false },
+      { id: 5, match_id: 501, player_id: 1, is_win: false },
+      { id: 6, match_id: 501, player_id: 3, is_win: false },
+      { id: 7, match_id: 501, player_id: 2, is_win: true },
+      { id: 8, match_id: 501, player_id: 4, is_win: false },
+    ],
+    gauntlet_pods: [
+      { id: 100, season_id: 20, round_number: 1, pod_index: 0, advance_rule: 'wildcard', is_final: false, week_id: 1, match1_id: 500, match2_id: 501 },
+      { id: 200, season_id: 20, round_number: 2, pod_index: 1, advance_rule: 'single', is_final: true, week_id: null, match1_id: null, match2_id: null },
+      { id: 201, season_id: 20, round_number: 2, pod_index: 0, advance_rule: 'single', is_final: false, week_id: null, match1_id: null, match2_id: null },
+    ],
+    gauntlet_pod_slots: [
+      { id: 1, pod_id: 100, slot_index: 0, source_kind: 'seed', source_seed: 2, source_pod_id: null, player_id: 1 },
+      { id: 2, pod_id: 100, slot_index: 1, source_kind: 'seed', source_seed: 1, source_pod_id: null, player_id: 2 },
+      { id: 3, pod_id: 100, slot_index: 2, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: 3 },
+      { id: 4, pod_id: 100, slot_index: 3, source_kind: 'seed', source_seed: 4, source_pod_id: null, player_id: 4 },
+      { id: 6, pod_id: 201, slot_index: 0, source_kind: 'pod', source_seed: null, source_pod_id: 100, player_id: null },
+      { id: 5, pod_id: 200, slot_index: 0, source_kind: 'pod', source_seed: null, source_pod_id: 100, player_id: null },
+    ],
+    players: makePlayers([1, 2, 3, 4]),
+  };
+  const client = installFixture(db);
+
+  await resolveAndPropagate(client as never, 500);
+
+  const playerIn = (slotId: number) => db.gauntlet_pod_slots.find((sl) => sl.id === slotId)!.player_id;
+  assert.equal(playerIn(6), 2, 'the best seed takes the earlier group (round 2, pod_index 0)');
+  assert.equal(playerIn(5), 1, 'the 2nd-best seed takes the later group');
+});
+
   await test('resolveAndPropagate: no-ops when the pod is the Final (nobody advances from it)', async () => {
   const db = twoPodFixture();
   // Make pod A itself the Final so propagation must not touch anything.

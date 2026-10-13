@@ -23,7 +23,7 @@ import {
   isSeasonFullyPlayed,
 } from './queries';
 import { clearOpsError, recordOpsError } from './ops-errors';
-import { validateIntegrity, groupLabel, seedByPlayerId, type DraftPod } from './gauntlet-draft';
+import { validateIntegrity, groupLabel, seedByPlayerId, assignSurvivorsToSlots, type DraftPod } from './gauntlet-draft';
 
 export interface GauntletPodRow {
   id: number;
@@ -587,21 +587,31 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
 
   const { data: downstreamSlots, error: slotsErr } = await supabaseAdmin
     .from('gauntlet_pod_slots')
-    .select('id, pod_id')
+    .select('id, pod_id, slot_index')
     .eq('source_pod_id', pod.id);
   if (slotsErr) throw slotsErr;
-  const slots = (downstreamSlots ?? []) as { id: number; pod_id: number }[];
+  const slots = (downstreamSlots ?? []) as { id: number; pod_id: number; slot_index: number }[];
   if (slots.length === 0) return;
 
-  for (let i = 0; i < slots.length && i < survivors.length; i++) {
-    const { error } = await supabaseAdmin
-      .from('gauntlet_pod_slots')
-      .update({ player_id: survivors[i] })
-      .eq('id', slots[i].id);
+  const downstreamPodIds = [...new Set(slots.map((s) => s.pod_id))];
+  const { data: downstreamPods, error: downstreamPodsErr } = await supabaseAdmin
+    .from('gauntlet_pods')
+    .select('id, round_number, pod_index')
+    .in('id', downstreamPodIds);
+  if (downstreamPodsErr) throw downstreamPodsErr;
+
+  const seedByPlayer = await getSeedByPlayer(supabaseAdmin, pod.season_id);
+  const assignments = assignSurvivorsToSlots(
+    survivors,
+    seedByPlayer,
+    slots,
+    (downstreamPods ?? []) as { id: number; round_number: number; pod_index: number }[],
+  );
+  for (const { slotId, playerId } of assignments) {
+    const { error } = await supabaseAdmin.from('gauntlet_pod_slots').update({ player_id: playerId }).eq('id', slotId);
     if (error) throw error;
   }
 
-  const downstreamPodIds = [...new Set(slots.map((s) => s.pod_id))];
   if (downstreamPodIds.length > 0) {
     const seasonDone = await regularSeasonIsDone(supabaseAdmin, pod.season_id);
     for (const downstreamPodId of downstreamPodIds) {
