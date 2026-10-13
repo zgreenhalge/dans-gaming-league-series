@@ -77,7 +77,6 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
               hubSeasonId={hub.id}
               bracketShape={data.bracketShape}
               seedNames={seedNames}
-              collapsible
               currentPlayerId={currentPlayerId}
             />
           ))
