@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSession } from '@/lib/session';
+import { requireMatchAccess } from '@/lib/match-access';
+import { accessDenied } from '@/lib/access-control';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseDemoBuffers } from '@/lib/demo/parseDemo';
 import { getReplayInputs } from '@/lib/replay/inputs';
@@ -18,25 +19,16 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession();
-  if (!session?.user?.playerId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const { id } = await params;
   const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
-  const playerId = session.user.playerId;
-  const supabaseAdmin = getAdminClient();
+  const access = await requireMatchAccess(matchId);
+  if (!access.ok) return accessDenied(access);
 
-  const { data: playerRow } = await supabaseAdmin
-    .from('players')
-    .select('is_admin')
-    .eq('id', playerId)
-    .maybeSingle();
+  const supabaseAdmin = getAdminClient();
 
   // Roster/sides/target-rounds via the shared resolver (one source of roster truth,
   // also used by the replay pipeline — see src/lib/replay/inputs.ts).
@@ -45,12 +37,6 @@ export async function POST(
     inputs = await getReplayInputs(supabaseAdmin, matchId);
   } catch {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-  }
-
-  const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  const isInMatch = inputs.roster.some((r) => r.player_id === playerId);
-  if (!isAdmin && !isInMatch) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // A manifest means this match's demo was uploaded as multiple segments (see

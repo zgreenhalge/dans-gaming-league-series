@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSession } from '@/lib/session';
+import { requireMatchAccess } from '@/lib/match-access';
+import { accessDenied } from '@/lib/access-control';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
 import { after } from '@/lib/after';
@@ -9,40 +10,19 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession();
-  if (!session?.user?.playerId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
-  const playerId = session.user.playerId;
+  const access = await requireMatchAccess(matchId);
+  if (!access.ok) return accessDenied(access);
 
-  // Resolve match, player admin status, and whether the player is in this match
-  const [{ data: matchRow }, { data: playerRow }, { data: statRow }] = await Promise.all([
-    supabaseAdmin.from('matches').select('id').eq('id', matchId).maybeSingle(),
-    supabaseAdmin.from('players').select('is_admin').eq('id', playerId).maybeSingle(),
-    supabaseAdmin
-      .from('player_match_stats')
-      .select('player_id')
-      .eq('match_id', matchId)
-      .eq('player_id', playerId)
-      .maybeSingle(),
-  ]);
-
+  const supabaseAdmin = getAdminClient();
+  const { data: matchRow } = await supabaseAdmin.from('matches').select('id').eq('id', matchId).maybeSingle();
   if (!matchRow) {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-  }
-
-  const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  const isInMatch = statRow !== null;
-  if (!isAdmin && !isInMatch) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // A gauntlet pod's two games are paired 30 minutes apart automatically only when their time comes

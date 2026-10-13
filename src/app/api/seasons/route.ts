@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSession } from '@/lib/session';
+import { requireAdminAccess } from '@/lib/admin-access';
+import { accessDenied } from '@/lib/access-control';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { isPlayerAdmin } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
 import { parseBuyInInput } from '@/lib/season-buy-in';
 
 export async function POST(req: NextRequest) {
-  const session = await requireSession();
-  if (!session?.user?.playerId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (!(await isPlayerAdmin(session.user.playerId))) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const access = await requireAdminAccess();
+  if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
 
