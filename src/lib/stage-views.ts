@@ -44,8 +44,6 @@ export interface StageNavItem {
 // ─── Regular-season week ─────────────────────────────────────────────────────────────────────────
 
 export interface WeekScorecardRow extends PlayerRecord {
-  /** 1-indexed place within this week, by the canonical regular-season sort. */
-  rank: number;
   /** Season-standings movement across this week. */
   movement: RankMovement | null;
 }
@@ -80,7 +78,7 @@ export function deriveWeekView(
   if (week.bye_player_id != null && !records.some((r) => r.player_id === week.bye_player_id)) {
     records.push(emptyRecord(week.bye_player_id, week.bye_player_name ?? `#${week.bye_player_id}`));
   }
-  const scorecard = records.map((r, i) => ({ ...r, rank: i + 1, movement: movement.get(r.player_id) ?? null }));
+  const scorecard = records.map((r) => ({ ...r, movement: movement.get(r.player_id) ?? null }));
 
   const items = navWeeks.map<StageNavItem>((w) => ({
     chip: String(w.week_number),
@@ -246,7 +244,7 @@ export function deriveGroupPageView(hubSeasonId: number, data: GauntletStageData
     chip: g.label ?? '•',
     label: g.label ?? 'Game',
     href: g.pod ? groupHref(hubSeasonId, g.pod.id) : null,
-    played: g.status !== 'upcoming',
+    played: anyMatchPlayed(g.matches),
     current: g.pod?.id === podId,
   }));
   return { group: { ...found, pod }, roundNumber: pod.round_number, nav };

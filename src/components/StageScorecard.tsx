@@ -2,7 +2,8 @@
 
 import SortableTh from './SortableTh';
 import { PlayerName } from './PlayerName';
-import { useSortState, type SortState } from './useSortState';
+import { useSortState } from './useSortState';
+import { sortRows, type SortValue } from '@/lib/sort-rows';
 import type { WeekScorecardRow, GroupRow } from '@/lib/stage-views';
 import type { RankMovement } from '@/lib/season-standings';
 
@@ -10,31 +11,10 @@ import type { RankMovement } from '@/lib/season-standings';
 // computed from (`deriveGroupScorecard()` / `canonicalGauntletRankMap()` — group-scorecard.ts), in the
 // order they rank by (the rows open in that order), and every column header re-sorts them.
 
-type SortValue = number | string | null;
-
-/** `rows` ordered by the column in `state`; `null` values always sort last, and rows that tie keep
- *  their incoming (canonical ranking) order whichever way the column runs. */
-function sortRows<T>(rows: T[], state: SortState, keys: Record<string, (row: T) => SortValue>): T[] {
-  const valueOf = keys[state.col];
-  if (!valueOf) return rows;
-  const dir = state.asc ? 1 : -1;
-  return rows
-    .map((row, i) => ({ row, i, v: valueOf(row) }))
-    .sort((a, b) => {
-      if (a.v === b.v) return a.i - b.i;
-      if (a.v == null) return 1;
-      if (b.v == null) return -1;
-      const cmp = typeof a.v === 'string' ? a.v.localeCompare(b.v as string) : a.v - (b.v as number);
-      return cmp === 0 ? a.i - b.i : cmp * dir;
-    })
-    .map((x) => x.row);
-}
-
 /** Columns that sort ascending on first click: places, seeds and names read best smallest/A-first. */
-const ASC_FIRST = ['rank', 'player', 'seed', 'season', 'result'] as const;
+const ASC_FIRST = ['player', 'seed', 'season', 'result'] as const;
 
 const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
-  rank: (r) => r.rank,
   player: (r) => r.player_name,
   record: (r) => r.wins * 1000 - r.losses,
   rwr: (r) => (r.matches_played > 0 ? r.rwr_percentage : null),
@@ -96,7 +76,7 @@ export function WeekScorecard({
   showMovement: boolean;
   currentPlayerId: number | null;
 }) {
-  const [sort, onSort] = useSortState('rank', { defaultAsc: true, ascFirst: ASC_FIRST });
+  const [sort, onSort] = useSortState('', { ascFirst: ASC_FIRST });
   const sorted = sortRows(rows, sort, WEEK_SORT);
   return (
     <Frame>
@@ -169,10 +149,9 @@ export function GroupScorecard({
   bare?: boolean;
   currentPlayerId: number | null;
 }) {
-  const [sort, onSort] = useSortState('rank', { defaultAsc: true, ascFirst: ASC_FIRST });
+  const [sort, onSort] = useSortState('', { ascFirst: ASC_FIRST });
   const played = (r: GroupRow) => r.matches_played > 0;
   const sorted = sortRows<GroupRow>(rows, sort, {
-    rank: (r) => r.rank,
     seed: (r) => r.seed,
     player: (r) => r.player_name,
     record: (r) => (played(r) ? r.wins * 1000 - r.losses : null),

@@ -58,11 +58,18 @@ export const getSeedNames = cache(async (hubSeasonId: number): Promise<Map<numbe
 });
 
 /** The number of a gauntlet's first round (the lowest in its bracket), or `null` while it has no
- *  bracket — where a week page's Gauntlet chip leads. */
-export async function getFirstGauntletRound(gauntletSeasonId: number): Promise<number | null> {
-  const shape = await getGauntletBracketShape(gauntletSeasonId);
-  return shape.length > 0 ? Math.min(...shape.map((p) => p.round_number)) : null;
-}
+ *  bracket — where a week page's Gauntlet chip leads. One narrow read, not the whole bracket shape. */
+export const getFirstGauntletRound = cache(async (gauntletSeasonId: number): Promise<number | null> => {
+  const { data, error } = await getAdminClient()
+    .from('gauntlet_pods')
+    .select('round_number')
+    .eq('season_id', gauntletSeasonId)
+    .order('round_number', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? (data as { round_number: number }).round_number : null;
+});
 
 /** The season a gauntlet pod belongs to, from its id. `null` if there's no such pod. */
 export async function getPodSeasonId(podId: number): Promise<number | null> {

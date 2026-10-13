@@ -3,8 +3,6 @@ import type { StageNavItem } from '@/lib/stage-views';
 
 function Chip({ item }: { item: StageNavItem }) {
   const base = 'inline-flex items-center px-2 py-1 font-mono text-[11px] border transition-colors';
-  const body = item.chip;
-  const title = item.label;
   // Played stages read bright, stages with nothing played yet read dim.
   const tone = item.played ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]';
   if (item.current) {
@@ -12,26 +10,26 @@ function Chip({ item }: { item: StageNavItem }) {
       <span
         className={`${base} font-bold text-[var(--color-bg-primary)] bg-[var(--color-site-accent)] border-[var(--color-site-accent)]`}
         aria-current="page"
-        title={title}
+        title={item.label}
       >
-        {body}
+        {item.chip}
       </span>
     );
   }
   if (!item.href) {
     return (
       <span className={`${base} text-[var(--color-text-secondary)] border-[var(--color-border-primary)] opacity-60`} title={`${item.label} · not scheduled yet`}>
-        {body}
+        {item.chip}
       </span>
     );
   }
   return (
     <Link
       href={item.href}
-      title={title}
+      title={item.label}
       className={`${base} ${tone} border-[var(--color-border-primary)] hover:border-[var(--color-border-secondary)]`}
     >
-      {body}
+      {item.chip}
     </Link>
   );
 }
@@ -54,7 +52,7 @@ function MetaChip({ meta }: { meta: StageNavMeta }) {
   );
 }
 
-export interface StageNavMeta {
+interface StageNavMeta {
   label: string;
   href: string;
 }

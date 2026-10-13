@@ -12,14 +12,14 @@ import { GroupScorecard, WeekScorecard } from './StageScorecard';
 import type { GroupRow, WeekScorecardRow } from '@/lib/stage-views';
 import { emptyRecord } from '@/lib/group-scorecard';
 
-function weekRow(over: Partial<WeekScorecardRow> & { player_id: number; player_name: string; rank: number }): WeekScorecardRow {
+function weekRow(over: Partial<WeekScorecardRow> & { player_id: number; player_name: string }): WeekScorecardRow {
   return { ...emptyRecord(over.player_id, over.player_name), matches_played: 1, movement: null, ...over };
 }
 
 const week: WeekScorecardRow[] = [
-  weekRow({ player_id: 1, player_name: 'Carol', rank: 1, wins: 2, losses: 0, adr: 90, rwr_percentage: 60, movement: { before: 3, after: 1 } }),
-  weekRow({ player_id: 2, player_name: 'Alice', rank: 2, wins: 1, losses: 1, adr: 70, rwr_percentage: 55, movement: { before: 1, after: 2 } }),
-  weekRow({ player_id: 3, player_name: 'Bob', rank: 3, wins: 0, losses: 2, adr: 80, rwr_percentage: 40, movement: { before: 2, after: 3 } }),
+  weekRow({ player_id: 1, player_name: 'Carol', wins: 2, losses: 0, adr: 90, rwr_percentage: 60, movement: { before: 3, after: 1 } }),
+  weekRow({ player_id: 2, player_name: 'Alice', wins: 1, losses: 1, adr: 70, rwr_percentage: 55, movement: { before: 1, after: 2 } }),
+  weekRow({ player_id: 3, player_name: 'Bob', wins: 0, losses: 2, adr: 80, rwr_percentage: 40, movement: { before: 2, after: 3 } }),
 ];
 
 /** The Player column's names, top to bottom. */
@@ -51,7 +51,7 @@ describe('WeekScorecard sorting', () => {
   });
 
   test("a bye player's row reads 0-0 with dashes for the stats and still shows their season rank", () => {
-    const bye = weekRow({ player_id: 9, player_name: 'Zed', rank: 4, matches_played: 0, movement: { before: 2, after: 4 } });
+    const bye = weekRow({ player_id: 9, player_name: 'Zed', matches_played: 0, movement: { before: 2, after: 4 } });
     render(<WeekScorecard rows={[...week, bye]} showMovement currentPlayerId={null} />);
     const row = screen.getByText('Zed').closest('tr')!;
     const cells = within(row).getAllByRole('cell').map((c) => c.textContent);

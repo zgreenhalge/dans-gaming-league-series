@@ -465,6 +465,14 @@ export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = 
   wildcard: 'Wildcard — only last place is eliminated (3 of 4 advance).',
 };
 
+/** The short name of a gauntlet pod's kind — "Final", "Wildcard" or "Elimination" — or `null` for a
+ * pod with no `advance_rule` (a legacy pod-less match). */
+export function podKindLabel(isFinal: boolean, rule: 'single' | 'wildcard' | null): string | null {
+  if (isFinal) return 'Final';
+  if (rule === 'wildcard') return 'Wildcard';
+  return rule === 'single' ? 'Elimination' : null;
+}
+
 /** Picks a gauntlet round list's final round — the one round every "is this over/who won" derivation
  * (`canonicalGauntletRankMap`, `GauntletRoundCard`) needs to single out.
  *

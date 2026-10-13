@@ -33,7 +33,7 @@ test('getWeekView: scorecard, status and nav for the fixture season', async () =
   assert.equal(view.week.week_number, 1);
   assert.equal(view.status, 'in-progress', 'week 1 has a played match and an unplayed one');
   assert.equal(view.scorecard.length, 4);
-  assert.deepEqual(view.scorecard.map((r) => r.rank), [1, 2, 3, 4]);
+  assert.deepEqual(view.scorecard.map((r) => r.player_name), ['Alice', 'Bob', 'Carol', 'Dave'], 'canonical order: wins, then RWR%, then ADR');
   assert.ok(view.scorecard.every((r) => r.movement === null), 'week 1 has no movement to show');
   assert.deepEqual(view.nav.map((i) => i.href), ['/seasons/1/weeks/10', '/seasons/1/weeks/11']);
   assert.deepEqual(view.nav.map((i) => i.current), [true, false]);

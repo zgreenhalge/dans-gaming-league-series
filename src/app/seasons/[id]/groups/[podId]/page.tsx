@@ -11,7 +11,7 @@ import { getSeedNames, resolveGroupPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, gauntletHref, groupHref, roundHref, seasonHref } from '@/lib/crumbs';
 import { describeMatchups, groupTitle } from '@/lib/seo/stage-meta';
-import { parseRouteId, seasonTitle, weekLabel } from '@/lib/util';
+import { parseRouteId, podKindLabel, seasonTitle, weekLabel } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -75,7 +75,7 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
           status={group.status}
           details={
             <>
-              <span>{group.isFinal ? 'Final' : group.advanceRule === 'wildcard' ? 'Wildcard' : 'Elimination'}</span>
+              <span>{podKindLabel(group.isFinal, group.advanceRule)}</span>
               {group.matches.length === 0 && <span>Not yet scheduled</span>}
             </>
           }

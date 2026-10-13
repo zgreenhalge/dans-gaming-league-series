@@ -4,6 +4,7 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { GameMatchCard, PendingPodRows } from './GauntletRoundsList';
 import { GroupScorecard } from './StageScorecard';
 import { groupHref } from '@/lib/crumbs';
+import { podKindLabel } from '@/lib/util';
 import { computeAdvanceOrdinals, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GroupView } from '@/lib/stage-views';
 import type { BracketPod } from '@/lib/queries';
@@ -53,18 +54,18 @@ export function GroupPanel({
       <EmptyState message="No games yet." />
     );
 
+  const scorecard = (bare: boolean) => (
+    <GroupScorecard rows={group.scorecard} isFinal={group.isFinal} finished={finished} bare={bare} currentPlayerId={currentPlayerId} />
+  );
+
   if (collapsible) {
     return (
       <CollapsibleSection
         title={title}
-        detail={group.isFinal ? undefined : group.advanceRule === 'wildcard' ? 'Wildcard' : group.advanceRule ? 'Elimination' : undefined}
+        detail={group.isFinal ? undefined : (podKindLabel(false, group.advanceRule) ?? undefined)}
         href={href}
       >
-        {group.scorecard.length > 0 && (
-          <div className="border-b border-[var(--color-border-primary)]">
-            <GroupScorecard rows={group.scorecard} isFinal={group.isFinal} finished={finished} bare currentPlayerId={currentPlayerId} />
-          </div>
-        )}
+        {group.scorecard.length > 0 && <div className="border-b border-[var(--color-border-primary)]">{scorecard(true)}</div>}
         {games}
       </CollapsibleSection>
     );
@@ -81,11 +82,7 @@ export function GroupPanel({
           </Link>
         )}
       </h2>
-      {group.scorecard.length > 0 && (
-        <div className="mb-3">
-          <GroupScorecard rows={group.scorecard} isFinal={group.isFinal} finished={finished} currentPlayerId={currentPlayerId} />
-        </div>
-      )}
+      {group.scorecard.length > 0 && <div className="mb-3">{scorecard(false)}</div>}
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">{games}</div>
     </section>
   );
