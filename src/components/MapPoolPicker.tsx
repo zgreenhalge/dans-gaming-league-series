@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { toSentenceCase } from '@/lib/maps';
-import { MAP_POOL_SIZE, WORKSHOP_URL_HINT, isValidNewMap, isValidWorkshopUrl, type NewMap } from '@/lib/season-map-pool';
+import { MAP_POOL_SIZE, WORKSHOP_URL_HINT, isValidNewMap, type NewMap } from '@/lib/season-map-pool';
+import { isValidWorkshopUrl } from '@/lib/workshop';
 import EmptyState from './EmptyState';
 
 /** Selection state for `MapPoolPicker`, owned by the parent so it can submit it. `newMaps` only

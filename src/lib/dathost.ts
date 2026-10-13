@@ -150,13 +150,6 @@ export function dathostServerId(): string {
   return id;
 }
 
-/** Extract the Steam workshop id from a `maps.workshop_url` (`…?id=<ID>`). `null` if not present. */
-export function workshopIdFromUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const m = url.match(/[?&]id=(\d+)/);
-  return m ? m[1] : null;
-}
-
 export async function getServer(id: string): Promise<DathostServer> {
   return (await call('GET', `/game-servers/${id}`)) as DathostServer;
 }

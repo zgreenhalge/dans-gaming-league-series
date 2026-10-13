@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { workshopIdFromUrl } from './replay/radar';
+import { isValidWorkshopUrl, workshopIdFromUrl } from './workshop';
 
 /** A regular season's map pool is either unset (signups can open before maps are decided) or
  * exactly this many maps. A season can't go live — confirm its schedule or be marked active —
@@ -13,19 +13,9 @@ export function hasMapPool(pool: string[] | null | undefined): boolean {
   return (pool?.length ?? 0) > 0;
 }
 
-const WORKSHOP_URL_RE =
-  /^https:\/\/(www\.)?steamcommunity\.com\/(sharedfiles|workshop)\/filedetails\/\?id=\d+(&|$)/;
-
-/** Shown beside `MapPoolPicker`'s Add button when the entered link fails `isValidWorkshopUrl()`. */
+/** Shown beside `MapPoolPicker`'s Add button when the entered link fails `isValidWorkshopUrl()` (`src/lib/workshop.ts`). */
 export const WORKSHOP_URL_HINT =
   'Use a Steam Workshop item link: https://steamcommunity.com/sharedfiles/filedetails/?id=<number>';
-
-/** Whether `workshopUrl` is a Steam Workshop item link: `https://steamcommunity.com/` (with or
- * without `www.`) `sharedfiles/` or `workshop/` `filedetails/?id=<digits>`, the id ending at `&` or
- * the end of the string. A format check only — it doesn't confirm the item exists. */
-export function isValidWorkshopUrl(workshopUrl: string): boolean {
-  return WORKSHOP_URL_RE.test(workshopUrl.trim());
-}
 
 /** Whether a new map can be added: a non-blank name and a Steam Workshop item link. The one rule
  * behind both `parseMapPoolInput()` and `MapPoolPicker`'s Add button. Both arguments are trimmed. */

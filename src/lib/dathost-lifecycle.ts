@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
+import { workshopIdFromUrl } from './workshop';
 import { matchLabel, isPlayedScore, isServerOff, isServerLive } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './server-schedule-collision';
 import {
@@ -23,7 +24,6 @@ import {
   waitUntilReady,
   loadMatch,
   connectHost,
-  workshopIdFromUrl,
   getServer,
   runConsole,
   type DathostServer,

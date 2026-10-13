@@ -6,7 +6,7 @@ import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifac
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc, deriveRates } from '../util';
 import { classifyMatchVeto } from '../mapSideStats';
 import { mapSlug } from '../maps';
-import { workshopIdFromUrl } from '../replay/radar';
+import { workshopIdFromUrl } from '../workshop';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
 import { getSeasons } from './seasons';

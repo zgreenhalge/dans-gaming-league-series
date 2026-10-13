@@ -37,16 +37,3 @@ export function parseOverview(text: string): OverviewCalibration | null {
   const matMatch = text.match(/["']?\bmaterial\b["']?\s*[=:]?\s*["']?([^"'\s]+)/i);
   return { posX, posY, scale, material: matMatch ? matMatch[1] : null };
 }
-
-/**
- * Extract the numeric Steam Workshop file id from a workshop URL (the value
- * SteamCMD's `+workshop_download_item 730 <id>` needs). Handles the canonical
- * `?id=` form and falls back to the first long digit run.
- */
-export function workshopIdFromUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const byParam = url.match(/[?&]id=(\d+)/);
-  if (byParam) return byParam[1];
-  const byDigits = url.match(/(\d{6,})/);
-  return byDigits ? byDigits[1] : null;
-}
