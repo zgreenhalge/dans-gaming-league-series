@@ -8,6 +8,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { PlayerName } from './PlayerName';
 import { formatBuyIn } from '@/lib/season-buy-in';
 import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
+import ErrorText from '@/components/ErrorText';
 
 interface RosterEntry {
   player_id: number;
@@ -166,9 +167,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
           </button>
         </div>
       )}
-      {error && (
-        <div className="px-4 pb-3 text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>
-      )}
+      <ErrorText error={error} size={12} className="px-4 pb-3" />
     </div>
   );
 }

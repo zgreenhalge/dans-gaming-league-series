@@ -7,6 +7,7 @@ import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   map: string | null;
@@ -236,11 +237,7 @@ export default function MatchHeaderSection({
         </div>
       )}
 
-      {error && (
-        <div className="flex justify-start text-[12px] text-[var(--color-accent-red-fg, #f87171)]">
-          {error}
-        </div>
-      )}
+      <ErrorText error={error} size={12} />
     </div>
   );
 }

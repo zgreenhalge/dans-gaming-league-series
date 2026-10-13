@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import { ServerSpinner } from '@/components/ServerSpinner';
+import ErrorText from '@/components/ErrorText';
 
 interface StatusResponse {
   serverState: ServerState;
@@ -179,7 +180,7 @@ export default function MatchServerPanel({
         </div>
       )}
 
-      {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
+      <ErrorText error={error} tone="onDark" size={12} className="mt-2" />
     </div>
   );
 }

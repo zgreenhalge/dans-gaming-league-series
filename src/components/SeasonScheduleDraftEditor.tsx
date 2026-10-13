@@ -259,13 +259,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
                 </label>
               </div>
 
-              {weekLevelIssues.length > 0 && (
-                <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] flex flex-col gap-0.5">
-                  {weekLevelIssues.map((issue, i) => (
-                    <div key={i}>{issue.message}</div>
-                  ))}
-                </div>
-              )}
+              <ErrorText error={weekLevelIssues.map((issue) => issue.message)} />
 
               <div className="flex flex-col gap-2">
                 {week.matches.map((m) => {
@@ -288,13 +282,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
                         <PlayerSelect players={players} value={m.skins[0]} excludeIds={excludeFor('skins0')} onChange={onSlotChange('skins0')} />
                         <PlayerSelect players={players} value={m.skins[1]} excludeIds={excludeFor('skins1')} onChange={onSlotChange('skins1')} />
                       </div>
-                      {matchIssues.length > 0 && (
-                        <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] pl-16 flex flex-col gap-0.5">
-                          {matchIssues.map((issue, i) => (
-                            <div key={i}>{issue.message}</div>
-                          ))}
-                        </div>
-                      )}
+                      <ErrorText error={matchIssues.map((issue) => issue.message)} className="pl-16" />
                     </div>
                   );
                 })}

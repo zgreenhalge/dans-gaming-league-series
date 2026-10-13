@@ -21,6 +21,7 @@ import { GauntletLifecycleList, type GauntletRow } from './GauntletLifecycleList
 import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import ErrorText from '@/components/ErrorText';
 
 export interface SeasonSummary {
   id: number;
@@ -124,11 +125,7 @@ export function SeasonManager({
                         {s.status}
                       </span>
                     </div>
-                    {error && (
-                      <div className="font-mono text-[10.5px] text-[var(--color-accent-red-fg)] mt-1 break-words">
-                        ⚠ {error.message}
-                      </div>
-                    )}
+                    <ErrorText error={error && `⚠ ${error.message}`} className="mt-1 break-words" />
                   </div>
                   {!s.isGauntlet && s.status !== 'UPCOMING' && (
                     <div className="shrink-0 flex items-center gap-2">

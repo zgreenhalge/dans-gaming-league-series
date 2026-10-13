@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatBuyIn, parseBuyInText } from '@/lib/season-buy-in';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { useAsyncAction } from './useAsyncAction';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasonId: number;
@@ -71,7 +72,7 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         aria-label="Buy-in in dollars (blank for TBD)"
         className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
       />
-      {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+      <ErrorText error={error} size={12} />
       <div className="flex items-center gap-3">
         <button
           type="button"

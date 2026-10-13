@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ErrorText from '@/components/ErrorText';
 
 const FEEDBACK: Record<string, { message: string; isError?: boolean }> = {
   linked: { message: 'Discord linked.' },
@@ -75,7 +76,7 @@ export default function DiscordLinkButton({
           Link Discord
         </Link>
       )}
-      {error && <span className="text-[var(--color-accent-red-fg,#f87171)]">{error}</span>}
+      <ErrorText error={error} as="span" size={12} />
       {!error && feedbackEntry && (
         <span
           className={

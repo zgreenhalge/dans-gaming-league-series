@@ -193,9 +193,13 @@ conventions, distinct from the content-page patterns above:
   re-typed class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,
   `self-start`) on top rather than forking the base style.
 - **A failed action's error line** is `<ErrorText error={error} />` (`src/components/ErrorText.tsx`),
-  which renders nothing when `error` is empty. `as="span"` swaps the element, `size` picks 10/11/12px,
-  and `className` carries spacing or wrapping (`mt-2`, `break-words`) — use it rather than a re-typed
-  red `font-mono` line.
+  which renders nothing when `error` is empty. `as` swaps the element (`div`, `span`, `p`), `size`
+  picks 10/11/12px, and `className` carries spacing or wrapping (`mt-2`, `break-words`) — use it
+  rather than a re-typed red line. An array of messages renders one line each (validation lists).
+  `tone="onDark"` is the lighter `text-red-300` in the surrounding font, for the dark match panels
+  (`MatchServerPanel`, `MatchDemoReviewBlock`) where `--color-accent-red-fg` is too dim. A state
+  label that happens to be red (`Server failed to start.`, the force-reset warning) is not an error
+  line and stays hand-written.
 
 ## When extending this system
 

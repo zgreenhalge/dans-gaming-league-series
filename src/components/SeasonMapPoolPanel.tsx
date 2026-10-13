@@ -7,6 +7,7 @@ import { hasMapPool } from '@/lib/season-map-pool';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { useAsyncAction } from './useAsyncAction';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasonId: number;
@@ -77,7 +78,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
   return (
     <div className="flex flex-col gap-4 max-w-[640px]">
       <MapPoolPicker knownMaps={knownMaps} selection={selection} />
-      {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+      <ErrorText error={error} size={12} />
       <div className="flex items-center gap-3">
         <button
           type="button"

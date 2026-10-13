@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { parseBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
+import ErrorText from '@/components/ErrorText';
 
 interface Props {
   knownMaps: string[];
@@ -67,9 +68,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
           Leave the map pool empty to open signups now and pick maps later. Leave the buy-in blank for
           TBD, or enter 0 for a free season.
         </div>
-        {error && (
-          <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>
-        )}
+        <ErrorText error={error} size={12} />
         <button
           type="button"
           onClick={submit}

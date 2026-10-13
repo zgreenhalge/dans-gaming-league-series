@@ -285,9 +285,7 @@ function OpsEventRow({ event, onJump, onDismissed }: {
               {OPERATION_LABELS[err.operation] ?? err.operation}
             </span>
           </div>
-          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1 break-words max-w-[520px]">
-            {err.message}
-          </div>
+          <ErrorText error={err.message} className="mt-1 break-words max-w-[520px]" />
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums">

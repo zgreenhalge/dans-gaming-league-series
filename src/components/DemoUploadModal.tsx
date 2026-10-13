@@ -14,6 +14,7 @@ import {
   lookupDerivedSabFields, sumAccuracyTotals, deriveUtilityCounts, deriveRoundsBySide,
   type KillCreditFlags, type UtilityThrowRow,
 } from '@/lib/queries';
+import ErrorText from '@/components/ErrorText';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -753,9 +754,7 @@ export default function DemoUploadModal({
                   );
                 })()}
 
-                {error && (
-                  <p className="text-[12px] text-[var(--color-accent-red-fg,#ef4444)]">{error}</p>
-                )}
+                <ErrorText error={error} as="p" size={12} />
 
                 <button
                   onClick={handleSubmit}
@@ -779,9 +778,7 @@ export default function DemoUploadModal({
               </>
             )}
 
-            {error && stage === 'idle' && (
-              <p className="text-[12px] text-[var(--color-accent-red-fg,#ef4444)]">{error}</p>
-            )}
+            {stage === 'idle' && <ErrorText error={error} as="p" size={12} />}
           </div>
         </Modal>
       )}
