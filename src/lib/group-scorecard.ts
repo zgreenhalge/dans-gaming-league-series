@@ -2,8 +2,9 @@ import { canonicalSort, deriveAdr, deriveKd, deriveRwr, isPlayedScore, parseScor
 
 // The one place a set of matches (a gauntlet pod's two games, a gauntlet round, a regular-season
 // week) is rolled up into per-player records and ranked. `canonicalGauntletRankMap()`
-// (gauntlet-ranking.ts), the round list's results panel, and the week/round/group page scorecards
-// all read it, so what a scorecard shows is by construction what the rankings are computed from.
+// (gauntlet-ranking.ts), `rankPlayersThroughWeek()` (season-standings.ts), the round list's results
+// panel, and the week/round/group page scorecards all read it, so what a scorecard shows is by
+// construction what the rankings are computed from.
 
 /** The per-player fields a scorecard needs from a match — structurally satisfied by `RosterStat`
  *  (schedule.ts) and `GauntletPlayerStat` (queries/gauntlet.ts). */
@@ -15,6 +16,12 @@ export interface ScorecardStat {
   adr: number;
   kills?: number;
   deaths?: number;
+  /** The raw `player_match_stats` totals. When a stat carries all three (with `rounds_played` > 0)
+   *  the rollup uses them as they are — the same `damage / rounds_played` the season leaderboard
+   *  divides — instead of rebuilding rounds from the score and damage from the rounded `adr`. */
+  damage?: number;
+  rounds_won?: number;
+  rounds_played?: number;
 }
 
 export interface ScorecardMatch {
@@ -38,8 +45,8 @@ export interface PlayerRecord {
   kd_ratio: number;
   rounds_won: number;
   rounds_played: number;
-  /** Per-match `adr` weighted by the match's rounds — the same round-weighted ADR the canonical
-   *  gauntlet ranking has always used. */
+  /** Summed raw damage (`ScorecardStat.damage`), or the rounded per-match `adr` weighted by the
+   *  match's rounds for a stat without raw totals. */
   total_damage: number;
   rwr_percentage: number;
   adr: number;
@@ -49,6 +56,20 @@ export interface PlayerRecord {
  *  (the canonical gauntlet ranking). Both then break ties by RWR% and ADR. */
 type ScorecardRankRule = 'wins' | 'win_rate';
 
+/** What one stat adds to a player's rounds and damage in a played match: its own raw totals when it
+ *  has them, else the rounds the score implies and the rounded `adr` times the match's rounds. */
+function matchTotals(p: ScorecardStat, scores: { shirts: number; skins: number }) {
+  if (p.damage != null && p.rounds_won != null && p.rounds_played != null && p.rounds_played > 0) {
+    return { rounds_won: p.rounds_won, rounds_played: p.rounds_played, damage: p.damage };
+  }
+  const total = scores.shirts + scores.skins;
+  return {
+    rounds_won: p.faction === 'SHIRTS' ? scores.shirts : scores.skins,
+    rounds_played: total,
+    damage: p.adr * total,
+  };
+}
+
 /** Rolls the played matches up into one record per player, in order of first appearance. Unplayed
  *  matches (including `"0-0"` placeholders) are skipped, so a pre-staged week reads as empty. */
 export function aggregatePlayerRecords(matches: ScorecardMatch[]): Map<number, PlayerRecord> {
@@ -57,17 +78,17 @@ export function aggregatePlayerRecords(matches: ScorecardMatch[]): Map<number, P
     if (!isPlayedScore(m.final_score)) continue;
     const scores = parseScore(m.final_score);
     if (!scores) continue;
-    const total = scores.shirts + scores.skins;
     for (const p of [...m.shirts_stats, ...m.skins_stats]) {
+      const totals = matchTotals(p, scores);
       const r = records.get(p.player_id) ?? emptyRecord(p.player_id, p.player_name ?? `#${p.player_id}`);
       r.matches_played += 1;
       if (p.is_win) r.wins += 1;
       else r.losses += 1;
       r.kills += p.kills ?? 0;
       r.deaths += p.deaths ?? 0;
-      r.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
-      r.rounds_played += total;
-      r.total_damage += p.adr * total;
+      r.rounds_won += totals.rounds_won;
+      r.rounds_played += totals.rounds_played;
+      r.total_damage += totals.damage;
       records.set(p.player_id, r);
     }
   }
