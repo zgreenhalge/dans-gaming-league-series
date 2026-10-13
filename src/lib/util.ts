@@ -193,6 +193,11 @@ export function matchLabel(opts: {
   return parts.length ? parts.join(' · ') : `Match #${opts.matchId}`;
 }
 
+/** "Week N" for a regular season, "Round N" for a gauntlet. */
+export function weekLabel(weekNumber: number, isGauntlet: boolean): string {
+  return `${isGauntlet ? 'Round' : 'Week'} ${weekNumber}`;
+}
+
 /** "Week N · Match M" (gauntlets say "Round N" instead of "Week N") — the half of `matchTitle()`'s
  *  output that excludes the season name, for callers that render the season and week/match on
  *  separate lines (e.g. Discord notification embeds). */
@@ -201,8 +206,7 @@ export function matchWeekLabel(opts: {
   matchNumber: number;
   isGauntlet: boolean;
 }): string {
-  const weekLabel = opts.isGauntlet ? `Round ${opts.weekNumber}` : `Week ${opts.weekNumber}`;
-  return `${weekLabel} · Match ${opts.matchNumber}`;
+  return `${weekLabel(opts.weekNumber, opts.isGauntlet)} · Match ${opts.matchNumber}`;
 }
 
 /** Canonical match title: "Season · Week N · Match M" (gauntlets say "Round N" instead of "Week N"). */
@@ -395,6 +399,12 @@ export function deriveAdr(totals: { total_rounds_played: number; total_damage: n
   return totals.total_rounds_played > 0 ? totals.total_damage / totals.total_rounds_played : 0;
 }
 
+/** The canonical `kd_ratio` — kills per death, or just the kills when there are no deaths. Call this
+ * directly (not `deriveRates()`) when only kill/death totals are in scope. */
+export function deriveKd(totals: { total_kills: number; total_deaths: number }): number {
+  return totals.total_deaths > 0 ? totals.total_kills / totals.total_deaths : totals.total_kills;
+}
+
 /**
  * Derives the four canonical leaderboard rates from summed totals — `rwr_percentage`/`overall_adr`
  * (two of the three `canonicalSort` keys, alongside `matches_won` from the raw totals) via
@@ -423,7 +433,7 @@ export function deriveRates(totals: {
   const { matches_played: mp, matches_won: mw, total_kills, total_deaths } = totals;
   return {
     win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
-    kd_ratio: total_deaths > 0 ? total_kills / total_deaths : total_kills,
+    kd_ratio: deriveKd({ total_kills, total_deaths }),
     rwr_percentage: deriveRwr(totals),
     overall_adr: deriveAdr(totals),
   };
@@ -454,6 +464,14 @@ export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = 
   single: 'Elimination — win both games to survive (3 of 4 are out).',
   wildcard: 'Wildcard — only last place is eliminated (3 of 4 advance).',
 };
+
+/** The short name of a gauntlet pod's kind — "Final", "Wildcard" or "Elimination" — or `null` for a
+ * pod with no `advance_rule` (a legacy pod-less match). */
+export function podKindLabel(isFinal: boolean, rule: 'single' | 'wildcard' | null): string | null {
+  if (isFinal) return 'Final';
+  if (rule === 'wildcard') return 'Wildcard';
+  return rule === 'single' ? 'Elimination' : null;
+}
 
 /** Picks a gauntlet round list's final round — the one round every "is this over/who won" derivation
  * (`canonicalGauntletRankMap`, `GauntletRoundCard`) needs to single out.

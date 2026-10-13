@@ -20,6 +20,9 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/` | Home — active/upcoming seasons + an Upcoming Games panel (scheduled games soonest-first, plus unplayed games still needing a time) |
 | `/seasons` | Season index — all seasons (regular + gauntlet) |
 | `/seasons/[id]` | Season hub — leaderboard + weekly schedule (or gauntlet bracket). Top-level tabs Regular Season / Gauntlet, plus **Survey** and **Superlatives** tabs when this viewer has something to answer or see (see [Post-season survey and superlatives](#post-season-survey-and-superlatives)). A gauntlet season's id redirects here, to its paired regular season |
+| `/seasons/[id]/weeks/[weekId]` | Regular-season **week** page — match preview (every match in the week), a scorecard ranked Wins → RWR% → ADR with each player's season-standings movement across the week, a labelled chip strip across the season's weeks (shown only when there is more than one stage to jump between, as on the round and group pages) and, once the paired gauntlet has a bracket, a Gauntlet chip to its first round. `[id]` is the season hub (the regular season); `weekId` is `weeks.id`. The week id is authoritative: a mismatched `[id]` redirects to the week's real hub, and the id of a gauntlet round's `weeks` row redirects to `/rounds/` |
+| `/seasons/[id]/rounds/[round]` | Gauntlet **round** page — every group in the round (real or not yet scheduled) as a `GroupPanel`: scorecard + games (a collapsible title bar in the season schedule's week-row style when the round has several groups), plus a labelled chip strip across the rounds and a Regular season chip back to the season. `round` is the round number within the gauntlet; a round has a page as soon as the bracket does, scheduled or not. `[id]` is the season hub; a gauntlet's own id redirects to it |
+| `/seasons/[id]/groups/[podId]` | Gauntlet **group** (pod) page — one group's type (Elimination / Wildcard / Final), scorecard (seed, W-L, RWR%, ADR, who advances or the final place), its games or "not yet scheduled" lineup, a chip strip across the round's groups and a Regular season chip. `podId` is `gauntlet_pods.id` |
 | `/matches/[id]` | Match detail — veto banner, scoreboards, score entry, demo upload |
 | `/players` | Player index |
 | `/players/[id]` | Player profile — career stats + per-season breakdown + match log. Shows a "Formerly …" line if the player has past names. The viewer can rename themself in place here (`PlayerNameEditor`) if it's their own profile |
@@ -34,6 +37,19 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
 `/career-stats` is a permanent redirect to `/statistics`, not a standalone page.
+
+### Week, round and group pages
+
+Weeks, rounds and groups are linkable stages under a season hub. A regular week is the group (its matches are independent 2v2s over the whole roster); a gauntlet round contains **groups**, which are pods. All URLs are built by the route helpers in `src/lib/crumbs.ts` (`weekHref()`, `roundHref()`, `groupHref()`, `gauntletHref()`) — readable path segments carrying real ids (a round, which has no row of its own, by its number) — and every page's breadcrumb trail comes from `buildCrumbs()` in the same file:
+
+```
+Regular:  DGLS › Seasons › Season 5 › Week 3 › Match 2
+Gauntlet: DGLS › Seasons › Season 5 › Gauntlet › Round 2 › Group 1 › Game 2
+```
+
+Every level but the last links to its page; `TopbarShell` hides the middle levels below `sm`.
+
+Data and shaping are split: `getWeekView()` / `getGauntletStageData()` (`src/lib/queries/groups.ts`) fetch (a week page reads full rosters only for the weeks up to its own, plus a light all-weeks listing for the chip strip), and the pure `deriveWeekView()` / `deriveRoundView()` / `deriveGroupPageView()` (`src/lib/stage-views.ts`) build the scorecards, outcomes and navigation each page renders. `getSeasonScope()` (`queries/seasons.ts`) resolves a season to its hub and paired gauntlet. Each page exports its own `generateMetadata()` (title plus a one-line matchups description from `describeMatchups()`, `src/lib/seo/stage-meta.ts`) and an `opengraph-image.tsx` rendered by `renderStageOg()` (`src/lib/seo/stage-og.tsx`); `getStagePagePaths()` feeds the sitemap. The collapsible title bars (`StageBar`: a caret button that expands/collapses, and a title that links to the page) of the season hub's week and round rows, and of each group on a multi-group round page, lead to these pages (`hubSeasonId` on `SeasonTabView`, `ScheduleList`, `GauntletRoundsList`). The scorecard ranking rules are in [`calculations.md`](./calculations.md#group-scorecards).
 
 ## Auth System
 

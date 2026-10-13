@@ -192,6 +192,7 @@ export default function CombinedSeasonTabView({
         (regularData ? (
           <SeasonTabView
             kind="regular"
+            hubSeasonId={regularSeasonId}
             leaderboard={leaderboard}
             schedule={regularData.schedule}
             seasonStartDate={seasonStartDate}
@@ -230,6 +231,7 @@ export default function CombinedSeasonTabView({
         (gauntletData ? (
           <SeasonTabView
             kind="gauntlet"
+            hubSeasonId={regularSeasonId}
             leaderboard={gauntletData.leaderboard}
             rounds={gauntletData.rounds}
             bracketShape={gauntletBracketShape}

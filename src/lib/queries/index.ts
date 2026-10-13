@@ -10,6 +10,7 @@ export * from './admin';
 export * from './player';
 export * from './leaderboard';
 export * from './gauntlet';
+export * from './groups';
 export * from './trophies';
 export * from './maps';
 export * from './h2h';

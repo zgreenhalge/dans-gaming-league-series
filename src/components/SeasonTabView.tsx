@@ -96,6 +96,9 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
    *  Stats sub-tab is opened, via `GET /api/seasons/[id]/stats`. Only meaningful in uncontrolled
    *  mode — see `onStatsRetry`'s doc comment below. */
   seasonId?: number;
+  /** The season hub's id (the regular season) — the season id in the week/round/group page links.
+   *  Falls back to `seasonId`; only differs for the gauntlet tab, whose `seasonId` is the gauntlet's. */
+  hubSeasonId?: number;
   /** Whether this season has at least one match with parsed sabremetrics — decides whether the
    *  Advanced Stats tab shows at all, independent of whether `statsData` has loaded yet. */
   hasAdvancedStats?: boolean;
@@ -534,6 +537,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             bracketShape={bracketShape}
             rankMap={gauntletRanking}
             seedNames={seedNames}
+            hubSeasonId={props.hubSeasonId ?? seasonId}
             myGamesOnly={myGamesOnly}
             openRounds={openItems}
             onToggleRound={toggleItem}
@@ -545,6 +549,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             openWeeks={openItems}
             onToggleWeek={toggleItem}
             seasonStartDate={seasonStartDate}
+            hubSeasonId={props.hubSeasonId ?? seasonId}
             currentPlayerId={currentPlayerId}
           />
         )

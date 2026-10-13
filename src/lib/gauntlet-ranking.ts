@@ -1,10 +1,9 @@
-import { allMatchesPlayed, isPlayedScore, parseScore, deriveRwr, deriveAdr, finalRoundOf } from './util';
+import { allMatchesPlayed, finalRoundOf } from './util';
+import { aggregatePlayerRecords, type ScorecardMatch } from './group-scorecard';
 
 // Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
 // from queries/gauntlet.ts without creating a circular import.
-interface _GauntletPlayer { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number }
-interface _GauntletMatch { final_score: string | null; shirts_stats: _GauntletPlayer[]; skins_stats: _GauntletPlayer[] }
-interface _GauntletRound { round_number: number; matches: _GauntletMatch[]; is_final_round?: boolean }
+interface _GauntletRound { round_number: number; matches: ScorecardMatch[]; is_final_round?: boolean }
 
 /**
  * Canonical gauntlet ranking — returns a Map<player_id, rank> (1-indexed) matching
@@ -38,34 +37,6 @@ export function canonicalGauntletRankMap(
   }
   const maxRound = finalRound.round_number;
 
-  // Compute per-player record, RWR% and ADR for a given set of matches.
-  // ADR is round-weighted (per-match adr * rounds) so it aggregates correctly.
-  function aggregateRound(matches: _GauntletMatch[]) {
-    const agg = new Map<number, { wins: number; matches_played: number; rounds_won: number; rounds_played: number; total_damage: number }>();
-    for (const m of matches) {
-      if (!isPlayedScore(m.final_score)) continue;
-      const scores = parseScore(m.final_score);
-      if (!scores) continue;
-      const total = scores.shirts + scores.skins;
-      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-        const prev = agg.get(p.player_id) ?? { wins: 0, matches_played: 0, rounds_won: 0, rounds_played: 0, total_damage: 0 };
-        prev.wins += p.is_win ? 1 : 0;
-        prev.matches_played += 1;
-        prev.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
-        prev.rounds_played += total;
-        prev.total_damage += p.adr * total;
-        agg.set(p.player_id, prev);
-      }
-    }
-    return agg;
-  }
-
-  // Win rate (0-100) within a round's aggregated record — normalizes for rounds where players
-  // face a different number of matches (e.g. pod round-robins), unlike a raw win count.
-  function winRateOf(s: { wins: number; matches_played: number } | undefined): number {
-    return s && s.matches_played > 0 ? (s.wins / s.matches_played) * 100 : 0;
-  }
-
   // Determine each player's last-appeared round.
   const playerLastRound = new Map<number, number>();
   for (const r of rounds) {
@@ -78,12 +49,12 @@ export function canonicalGauntletRankMap(
   }
 
   // Final round: rank 1–4 by win rate then RWR%.
-  const finalAgg = aggregateRound(finalRound.matches);
+  const finalAgg = aggregatePlayerRecords(finalRound.matches);
   const finalPlayers = Array.from(finalAgg.entries()).map(([id, s]) => ({
     player_id: id,
-    winRate: winRateOf(s),
-    rwr: deriveRwr({ total_rounds_played: s.rounds_played, total_rounds_won: s.rounds_won }),
-    adr: deriveAdr({ total_rounds_played: s.rounds_played, total_damage: s.total_damage }),
+    winRate: s.win_rate,
+    rwr: s.rwr_percentage,
+    adr: s.adr,
   }));
 
   finalPlayers.sort((a, b) => b.winRate - a.winRate || b.rwr - a.rwr || b.adr - a.adr);
@@ -97,14 +68,14 @@ export function canonicalGauntletRankMap(
   for (const [id, lastRound] of playerLastRound) {
     if (lastRound >= maxRound) continue;
     const r = rounds.find((r) => r.round_number === lastRound);
-    const agg = r ? aggregateRound(r.matches) : new Map();
+    const agg = r ? aggregatePlayerRecords(r.matches) : new Map();
     const s = agg.get(id);
     eliminated.push({
       player_id: id,
       lastRound,
-      winRate: winRateOf(s),
-      rwr: deriveRwr({ total_rounds_played: s?.rounds_played ?? 0, total_rounds_won: s?.rounds_won ?? 0 }),
-      adr: deriveAdr({ total_rounds_played: s?.rounds_played ?? 0, total_damage: s?.total_damage ?? 0 }),
+      winRate: s?.win_rate ?? 0,
+      rwr: s?.rwr_percentage ?? 0,
+      adr: s?.adr ?? 0,
     });
   }
 

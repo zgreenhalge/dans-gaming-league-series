@@ -6,6 +6,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
 import { useNav } from './NavContext';
+import type { Crumb } from '@/lib/crumbs';
 
 const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
   { label: 'Anonymous', playerId: null, providerId: null },
@@ -68,10 +69,6 @@ function DevToggle() {
   );
 }
 
-export interface Crumb {
-  label: string;
-  href?: string;
-}
 
 function NavToggleButton() {
   const { toggleDesktop, mobileOpen, setMobileOpen } = useNav();
@@ -110,8 +107,12 @@ export function TopbarShell({
           {crumbs.map((crumb, i) => {
             const isFirst = i === 0;
             const isLast = i === crumbs.length - 1;
+            // A deep trail (Season › Gauntlet › Round › Group › Game) can't fit a phone-width topbar,
+            // so below `sm` only the root and the last two levels show; the levels between stay
+            // reachable from the page body (nav strip) and from the wider layout.
+            const collapsesOnMobile = i > 0 && i < crumbs.length - 2;
             return (
-              <span key={i} className="flex items-center shrink-0">
+              <span key={i} className={`${collapsesOnMobile ? 'hidden sm:flex' : 'flex'} items-center shrink-0`}>
                 {i > 0 && (
                   <span className="mx-2 text-[var(--color-border-primary)] font-mono text-[12px] select-none">
                     /

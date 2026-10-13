@@ -631,6 +631,20 @@ Implemented by `canonicalGauntletRankMap(rounds, finalRoundNumber)` in `src/lib/
 Pass the result as the `canonicalRanking` prop to `LeaderboardTable` and the `rankMap` prop to
 `GauntletStandings` and `GauntletRoundsList` anywhere gauntlet leaderboards are ranked.
 
+## Group Scorecards
+
+The week, round and group pages each show a **scorecard**: one row per player who played, with the exact values the ranking uses. Every scorecard — and `canonicalGauntletRankMap()` — rolls matches up through one function, `aggregatePlayerRecords()` (`src/lib/group-scorecard.ts`): wins/losses, win rate, kills/assists/deaths, rounds won/played, RWR% (`deriveRwr()`), and ADR (`deriveAdr()` over per-match `adr` weighted by the match's rounds — the same round-weighted ADR the canonical gauntlet ranking uses). Unplayed and `"0-0"` matches are skipped. `deriveGroupScorecard(matches, rule)` then orders the rows by one of two rules:
+
+| Rule | Order | Used by |
+|---|---|---|
+| `wins` | Wins → RWR% → ADR, via `canonicalSort()` itself | A regular-season week |
+| `win_rate` | Win rate → RWR% → ADR (win rate, not raw wins, so players who played a different number of games compare fairly) | A gauntlet group; the canonical gauntlet ranking's final round and per-round tiebreaks |
+
+Exact ties keep first-appearance order; a gauntlet group's display then falls back to seed, and lists occupants in seed order, unranked, until a game is played.
+
+- **Week scorecard** — also shows each player's season-standings rank after the week and how it moved from the week before (`rankMovementForWeek()`, `src/lib/season-standings.ts`); week 1 has nothing to move from, so it shows no movement column. The week's bye player is listed too, last, as 0-0 with dashes for the stats; their season rank still shows, since it can move on others' results. That rank is `canonicalSort()` over wins, rounds won/played and `damage / rounds played` summed through the week — the same totals the season leaderboard aggregates — over players with at least one played match by then. Standings are cumulative, so the page reads the weeks up to and including this one, never later ones.
+- **Group scorecard** — shows the seed (the player's original `source_seed`) and a Result: once every game in a non-final pod is played, `podAdvances()` marks who advances (`single`: won every game; `wildcard`: won at least one — the rule `resolveAndPropagate()` applies) and who is eliminated. In the final pod the rows show places 1st–4th and a Champion badge instead.
+
 ## Gauntlet Seeding Projection
 
 The gold-bye/red-drop row tint on a regular season's own leaderboard — never shown on a gauntlet

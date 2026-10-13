@@ -81,6 +81,12 @@ test('every top-level page renders and every tab is reachable without hitting th
     await clickThroughTabs(page);
   });
 
+  await test.step('week', async () => {
+    await page.goto(`/seasons/${fixture.seasonId}/weeks/${fixture.weekId}`);
+    await assertNoErrorBoundary(page);
+    await expect(page.getByRole('heading', { name: 'Scorecard' })).toBeVisible();
+  });
+
   await test.step('maps', async () => {
     await page.goto('/maps');
     await assertNoErrorBoundary(page);

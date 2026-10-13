@@ -89,6 +89,40 @@ export async function getLinkedRegularSeason(gauntletName: string, client?: Supa
   return seasons.find((s) => !s.is_gauntlet && extractSeasonNumber(s.name) === num) ?? null;
 }
 
+/** Where a season's sub-pages live: the *hub* is the regular season every public season link points
+ *  at (a gauntlet season id redirects there), and `gauntlet` is its paired gauntlet if one exists.
+ *  A gauntlet with no paired regular season is its own hub. Given either season of a pair, both
+ *  resolve identically. */
+export interface SeasonScope {
+  hub: Season;
+  gauntlet: Season | null;
+}
+
+export async function getSeasonScope(season: Season, client?: SupabaseClient): Promise<SeasonScope> {
+  if (season.is_gauntlet) {
+    return { hub: (await getLinkedRegularSeason(season.name, client)) ?? season, gauntlet: season };
+  }
+  return { hub: season, gauntlet: await getLinkedGauntlet(season.name, client) };
+}
+
+/** The hub season id for every season in `seasons`, in one pass: a regular season is its own hub, a
+ *  gauntlet's is the first regular season with the same season number (`getLinkedRegularSeason()`'s
+ *  rule), or itself if unpaired. The bulk form of `getSeasonScope()`'s hub rule, for callers listing
+ *  many seasons. */
+export function hubIdsBySeason(seasons: Season[]): Map<number, number> {
+  const regularByNumber = new Map<number, number>();
+  for (const s of seasons) {
+    const n = s.is_gauntlet ? null : extractSeasonNumber(s.name);
+    if (n != null && !regularByNumber.has(n)) regularByNumber.set(n, s.id);
+  }
+  return new Map(
+    seasons.map((s) => {
+      const n = s.is_gauntlet ? extractSeasonNumber(s.name) : null;
+      return [s.id, (n != null ? regularByNumber.get(n) : undefined) ?? s.id];
+    }),
+  );
+}
+
 /** A season's explicit roster (`season_players`) — the pre-match-history source of who's on a
  * season before any matches exist to derive it from. Sorted by player name. Pass an
  * already-fetched `playersById` (e.g. one a caller needs for its own purposes too, like a full

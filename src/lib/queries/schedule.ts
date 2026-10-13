@@ -14,6 +14,9 @@ export interface RosterStat {
   assists: number;
   deaths: number;
   adr: number;
+  /** Raw `player_match_stats.damage` — distinct from `adr` (a rounded per-match average); what a
+   *  true aggregate ADR (`total_damage / total_rounds_played`) is built from. */
+  damage: number;
   is_win: boolean;
   rounds_won: number;
   rounds_played: number;
@@ -48,6 +51,7 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
       assists: r.assists ?? 0,
       deaths: r.deaths,
       adr: r.adr,
+      damage: r.damage,
       is_win: !!r.is_win,
       rounds_won: r.rounds_won,
       rounds_played: r.rounds_played,
@@ -61,15 +65,18 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
 export async function getSeasonSchedule(
   seasonId: number,
   client?: SupabaseClient,
+  opts?: { throughWeek?: number },
 ): Promise<WeekWithMatches[]> {
   const db = client ?? getAdminClient();
+  let weeksQuery = db
+    .from('weeks')
+    .select('*, matches(*, player_match_stats(*))')
+    .eq('season_id', seasonId);
+  // Only the weeks up to `throughWeek` — a page that needs everything *so far* (a week's standings
+  // movement) skips the rest.
+  if (opts?.throughWeek != null) weeksQuery = weeksQuery.lte('week_number', opts.throughWeek);
   const [{ data: weeks, error: wErr }, players] = await Promise.all([
-    db
-      .from('weeks')
-      .select('*, matches(*, player_match_stats(*))')
-      .eq('season_id', seasonId)
-      .order('week_number')
-      .order('match_number', { referencedTable: 'matches' }),
+    weeksQuery.order('week_number').order('match_number', { referencedTable: 'matches' }),
     getPlayersById(client),
   ]);
   if (wErr) throw wErr;
@@ -99,6 +106,25 @@ export async function getSeasonSchedule(
       }),
     };
   });
+}
+
+export interface SeasonWeekNavEntry {
+  id: number;
+  week_number: number;
+  matches: { final_score: string | null }[];
+}
+
+/** Every week of a season with just its match results (`final_score`) — enough to tell played from
+ *  upcoming weeks for navigation, without `getSeasonSchedule()`'s per-match roster embed. */
+export async function getSeasonWeekNav(seasonId: number, client?: SupabaseClient): Promise<SeasonWeekNavEntry[]> {
+  const db = client ?? getAdminClient();
+  const { data, error } = await db
+    .from('weeks')
+    .select('id, week_number, matches(final_score)')
+    .eq('season_id', seasonId)
+    .order('week_number');
+  if (error) throw error;
+  return (data ?? []) as unknown as SeasonWeekNavEntry[];
 }
 
 export interface SeasonMatchSummary {

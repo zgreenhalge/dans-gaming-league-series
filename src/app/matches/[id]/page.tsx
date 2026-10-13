@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats, getMatchRoundEconomy } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats, getMatchRoundEconomy } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -11,6 +11,7 @@ import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
+import { buildCrumbs } from '@/lib/crumbs';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
@@ -64,30 +65,6 @@ function shirtsFaction(skinsSide: 'CT' | 'T' | null): Faction {
   if (skinsSide === 'CT') return 'T';
   if (skinsSide === 'T') return 'CT';
   return null;
-}
-
-function Topbar({
-  seasonId,
-  seasonName,
-  weekNumber,
-  matchNumber,
-  isGauntlet,
-}: {
-  seasonId: number;
-  seasonName: string;
-  weekNumber: number;
-  matchNumber: number;
-  isGauntlet: boolean;
-}) {
-  return (
-    <TopbarShell
-      crumbs={[
-        { label: 'DGLS', href: '/' },
-        { label: seasonName, href: `/seasons/${seasonId}` },
-        { label: `${isGauntlet ? 'Round' : 'Week'} ${weekNumber} · Match ${matchNumber}` },
-      ]}
-    />
-  );
 }
 
 function matchWeekWindow(
@@ -147,9 +124,8 @@ export default async function MatchPage({
 
   // A pod's sibling lookup needs the pod itself first — chained rather than a second query, since
   // both games share one `gauntlet_pods` row.
-  const podSiblingPromise = (season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null)).then(
-    (pod) => (pod ? getGauntletPodSibling(matchId, pod) : null),
-  );
+  const podPromise = season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null);
+  const podSiblingPromise = podPromise.then((pod) => (pod ? getGauntletPodSibling(matchId, pod) : null));
   // Independent of podSiblingPromise (getOtherScheduledMatches() itself has no gauntlet awareness) —
   // the pod sibling it needs to exclude from the collision pool is filtered out below, once both
   // promises have resolved.
@@ -182,7 +158,9 @@ export default async function MatchPage({
     ? getPlayerRatings(allScoutedPlayerIds)
     : Promise.resolve([]);
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows, isMultiSegmentDemo] = await Promise.all([
+  const [scope, pod, scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows, isMultiSegmentDemo] = await Promise.all([
+    getSeasonScope(season),
+    podPromise,
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -297,6 +275,14 @@ export default async function MatchPage({
     }
   }
 
+  const crumbs = buildCrumbs({
+    season: scope.hub,
+    gauntlet: season.is_gauntlet,
+    week: season.is_gauntlet ? undefined : { id: week.id, number: week.week_number },
+    round: season.is_gauntlet ? week.week_number : undefined,
+    group: pod ? { id: pod.id, podIndex: pod.pod_index, isFinal: pod.is_final } : undefined,
+    leaf: pod ? `Game ${pod.match1_id === matchId ? 1 : 2}` : `Match ${match.match_number}`,
+  });
   const window = matchWeekWindow(season.start_date, week.week_number);
 
   // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
@@ -338,7 +324,7 @@ export default async function MatchPage({
         {match.is_feature_match && <FeatureMatchBanner />}
         {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
       </div>
-      <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
+      <TopbarShell crumbs={crumbs} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
         <div

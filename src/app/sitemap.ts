@@ -1,13 +1,14 @@
 import type { MetadataRoute } from 'next';
 import { SITE_URL, matchUrl } from '@/lib/seo/site';
-import { getSeasons, getPlayersById, getMapLookup, getAllPlayedMatchIds } from '@/lib/queries';
+import { getSeasons, getPlayersById, getMapLookup, getAllPlayedMatchIds, getStagePagePaths } from '@/lib/queries';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [seasons, playersById, mapLookup, matchIds] = await Promise.all([
+  const [seasons, playersById, mapLookup, matchIds, stagePaths] = await Promise.all([
     getSeasons(),
     getPlayersById(),
     getMapLookup(),
     getAllPlayedMatchIds(),
+    getStagePagePaths(),
   ]);
 
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -21,6 +22,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: `${SITE_URL}/seasons/${s.id}`,
     changeFrequency: 'weekly',
     priority: 0.7,
+  }));
+
+  const stageRoutes: MetadataRoute.Sitemap = stagePaths.map((path) => ({
+    url: `${SITE_URL}${path}`,
+    changeFrequency: 'weekly',
+    priority: 0.5,
   }));
 
   const matchRoutes: MetadataRoute.Sitemap = matchIds.map((id) => ({
@@ -41,5 +48,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  return [...staticRoutes, ...seasonRoutes, ...matchRoutes, ...playerRoutes, ...mapRoutes];
+  return [...staticRoutes, ...seasonRoutes, ...stageRoutes, ...matchRoutes, ...playerRoutes, ...mapRoutes];
 }

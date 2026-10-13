@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useSortState, type SortState } from './useSortState';
 import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
@@ -14,20 +15,6 @@ import PerSideStatsTable from './PerSideStatsTable';
 import { CONDITION_LABEL } from './icons/ConditionIcons';
 
 type SortKey = string;
-
-interface SortState {
-  col: SortKey;
-  asc: boolean;
-}
-
-function useSortState(defaultCol: SortKey): [SortState, (col: SortKey) => void] {
-  const [sort, setSort] = useState<SortState>({ col: defaultCol, asc: false });
-  const toggle = useCallback(
-    (col: SortKey) => setSort((s) => s.col === col ? { col, asc: !s.asc } : { col, asc: false }),
-    [],
-  );
-  return [sort, toggle];
-}
 
 interface RowWithStats {
   row: LeaderboardRowWithId;
