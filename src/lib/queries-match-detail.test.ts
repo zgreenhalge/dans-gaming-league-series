@@ -1,6 +1,6 @@
 /**
  * Regression harness for queries.ts's match-detail functions (#63) — getMatch,
- * getMatchSabremetrics, getMatchScoutingData.
+ * getMatchSabremetrics, getMatchScoutingData, getMatchServerState.
  *
  * Run:  npx vitest run src/lib/queries-match-detail.test.ts
  */
@@ -11,9 +11,14 @@ import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 
-__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
+__setTestAdminClient(
+  createFakeSupabaseClient({
+    ...buildFakeDb(),
+    match_server_state: [{ match_id: 100, server_state: 'live', connect_string: '1.2.3.4:27015' }],
+  }),
+);
 
-import { getMatch, getMatchSabremetrics, getMatchScoutingData } from './queries';
+import { getMatch, getMatchSabremetrics, getMatchScoutingData, getMatchServerState } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -63,6 +68,11 @@ async function main() {
 
   await test('getMatchScoutingData(9999) — no roster returns null', async () => {
     assert.equal(await getMatchScoutingData(9999), null);
+  });
+
+  await test('getMatchServerState — the row\'s state, or idle for a match never provisioned', async () => {
+    assert.equal(await getMatchServerState(100), 'live');
+    assert.equal(await getMatchServerState(101), 'idle');
   });
 
   report();

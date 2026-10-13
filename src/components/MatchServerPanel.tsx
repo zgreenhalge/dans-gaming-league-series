@@ -3,11 +3,12 @@
 // In-match server panel. Once the 5-stage veto completes, this drives the hosting UX:
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
-// Updates via Supabase Realtime on the match's `match_server_state` row (no polling). The Realtime
-// event carries only `server_state` (the anon role can read no other column), so the connect string
-// comes from the access-checked status route, read on mount and whenever the row flips to `live` —
-// and only for viewers who can manage the server, the same admin-or-in-match rule the route
-// enforces. Teardown itself isn't a control here — it happens automatically once the match is
+// The match page passes the row's `server_state` as `initialState`, so every viewer starts from the
+// real state. Updates then come via Supabase Realtime on the match's `match_server_state` row (no
+// polling). The Realtime event carries only `server_state` (the anon role can read no other
+// column), so the connect string comes from the access-checked status route, read on mount and
+// whenever the row flips to `live` — and only for viewers who can manage the server, the same
+// admin-or-in-match rule the route enforces. Teardown itself isn't a control here — it happens automatically once the match is
 // scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
 // safety valve on the admin server console for a server left live.
 
@@ -25,14 +26,18 @@ export default function MatchServerPanel({
   matchId,
   canManage,
   autoProvisioning,
+  initialState = 'idle',
 }: {
   matchId: number;
   canManage: boolean;
   /** Veto just completed, so a server provision is imminent (fired server-side in `after()`) —
    *  show the spinner immediately instead of racing the idle state against the Realtime update. */
   autoProvisioning?: boolean;
+  /** The row's `server_state` as of the page render. Managers re-read it, with the connect string,
+   *  from the status route on mount. */
+  initialState?: ServerState;
 }) {
-  const [state, setState] = useState<ServerState>('idle');
+  const [state, setState] = useState<ServerState>(initialState);
   const [connect, setConnect] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -57,7 +62,8 @@ export default function MatchServerPanel({
     }
   }, [matchId]);
 
-  // Initial read (Realtime only delivers subsequent changes).
+  // Managers' initial read adds the connect string and reconciles a stale `live` (Realtime only
+  // delivers subsequent changes).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (canManage) void loadStatus();
