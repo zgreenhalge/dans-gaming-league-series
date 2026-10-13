@@ -24,8 +24,8 @@ describe('MatchServerPanel initialState', () => {
     expect(screen.queryByText(/connect /)).toBeNull();
   });
 
-  test('defaults to idle', () => {
-    render(<MatchServerPanel matchId={7} canManage={false} />);
+  test('an idle server shows the empty state', () => {
+    render(<MatchServerPanel matchId={7} canManage={false} initialState="idle" />);
     expect(screen.getByText('No server running for this match.')).toBeInTheDocument();
   });
 });

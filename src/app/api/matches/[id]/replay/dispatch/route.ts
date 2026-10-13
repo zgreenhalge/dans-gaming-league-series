@@ -20,7 +20,6 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
-  // Authorize: admin or a player in the match.
   const access = await requireMatchAccess(matchId);
   if (!access.ok) return accessDenied(access);
   const { playerId } = access;

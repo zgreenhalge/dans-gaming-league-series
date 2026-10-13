@@ -113,9 +113,10 @@ in.
    `getPlayersById()`, `getMapLookup()`). A `cache()` key is an array argument's identity, not its
    contents, so `getWeekLookup()` caches one read of every week and filters it for a `seasonIds`
    scope instead of caching per array.
-6. If the new helper needs season pairing (regular ↔ gauntlet), use `extractSeasonNumber()` /
+6. If the new helper needs season pairing (regular ↔ gauntlet), use `findPairedSeason()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
-   `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs (see
+   `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs or compare
+   `extractSeasonNumber()` results inline (see
    [`glossary.md`](./glossary.md)).
 7. Gate "did this match actually happen" on `isPlayedScore(m.final_score)`, not `final_score !=
    null` — Season 3 has `"0-0"` placeholder rows.

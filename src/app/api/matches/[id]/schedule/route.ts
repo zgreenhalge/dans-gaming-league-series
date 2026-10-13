@@ -16,11 +16,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
-  const access = await requireMatchAccess(matchId);
-  if (!access.ok) return accessDenied(access);
-
   const supabaseAdmin = getAdminClient();
-  const { data: matchRow } = await supabaseAdmin.from('matches').select('id').eq('id', matchId).maybeSingle();
+  const [access, { data: matchRow }] = await Promise.all([
+    requireMatchAccess(matchId),
+    supabaseAdmin.from('matches').select('id').eq('id', matchId).maybeSingle(),
+  ]);
+  if (!access.ok) return accessDenied(access);
   if (!matchRow) {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
   }

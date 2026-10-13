@@ -7,7 +7,6 @@ import { getPlayersById } from './player';
 
 export type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry };
 
-
 type RosterStatRow = Omit<RosterStat, 'player_name'>;
 
 type EmbeddedMatch = Match & { player_match_stats: RosterStatRow[] };

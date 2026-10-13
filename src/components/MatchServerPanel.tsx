@@ -8,9 +8,10 @@
 // polling). The Realtime event carries only `server_state` (the anon role can read no other
 // column), so the connect string comes from the access-checked status route, read on mount and
 // whenever the row flips to `live` — and only for viewers who can manage the server, the same
-// admin-or-in-match rule the route enforces. Teardown itself isn't a control here — it happens automatically once the match is
-// scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
-// safety valve on the admin server console for a server left live.
+// admin-or-in-match rule the route enforces. Teardown itself isn't a control here — it happens
+// automatically once the match is scored (`teardownMatchServer` in the score route / MatchZy log
+// ingest), with a manual "Tear down" safety valve on the admin server console for a server left
+// live.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
@@ -26,7 +27,7 @@ export default function MatchServerPanel({
   matchId,
   canManage,
   autoProvisioning,
-  initialState = 'idle',
+  initialState,
 }: {
   matchId: number;
   canManage: boolean;
@@ -35,7 +36,7 @@ export default function MatchServerPanel({
   autoProvisioning?: boolean;
   /** The row's `server_state` as of the page render. Managers re-read it, with the connect string,
    *  from the status route on mount. */
-  initialState?: ServerState;
+  initialState: ServerState;
 }) {
   const [state, setState] = useState<ServerState>(initialState);
   const [connect, setConnect] = useState<string | null>(null);

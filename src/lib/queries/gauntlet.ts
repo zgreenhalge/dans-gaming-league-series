@@ -7,8 +7,6 @@ import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod } from '../stage-types';
 import { getPlayersById } from './player';
-
-export type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod };
 import { getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
 import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
@@ -17,6 +15,8 @@ import { getAllMatchRounds } from './rounds';
 import { getAllMatchKills } from './kills';
 import { getAllWeaponClassStats, getAllEconomyStats } from './weaponStats';
 import type { SeasonStatsView } from './seasons';
+
+export type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod };
 
 
 function aggToRow(

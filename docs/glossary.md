@@ -102,7 +102,8 @@ so you don't have to reverse-engineer them from scratch each time.
     gauntlet is in progress.
 - **Regular ↔ gauntlet pairing** — each regular season has a companion gauntlet season (playoffs),
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
-  `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the
+  `findPairedSeason()` / `buildRegularToGauntletMap()` in `src/lib/util.ts` (on a duplicate season
+  number the lowest id wins), or the
   `getLinkedGauntlet()` / `getLinkedRegularSeason()` query helpers — never assume adjacent IDs.
 - **Post-season survey / superlatives** — two per-regular-season feedback forms an admin opens after
   a season. The survey is custom questions followed by core ones (length of games/season/playoffs,
