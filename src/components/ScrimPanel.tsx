@@ -22,7 +22,7 @@ import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { workshopIdFromUrl } from '@/lib/replay/radar';
+import { workshopIdFromInput } from '@/lib/workshop';
 import { isServerLive } from '@/lib/util';
 import type { ConfigSetOption } from '@/lib/dathost-config';
 import type { WorkshopMapOption } from '@/lib/queries';
@@ -52,7 +52,7 @@ export function ScrimPanel({ configSets, maps }: { configSets: ConfigSetOption[]
     return () => requestFastPoll(false);
   }, [requestFastPoll]);
 
-  const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? workshopIdFromUrl(customMapId.trim()) : mapChoice || null;
+  const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? workshopIdFromInput(customMapId.trim()) : mapChoice || null;
   const customMapInvalid = mapChoice === CUSTOM_MAP_CHOICE && customMapId.trim() !== '' && !resolvedMapId;
 
   const startScrim = async () => {

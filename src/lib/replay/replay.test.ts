@@ -47,7 +47,7 @@ import {
 import { buildHeatmapPoints } from './heatmap';
 import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
 import { freezeDeadPositions, mergeReplayResults, roundForTick, type BuildReplayResult } from './extract';
-import { parseOverview, workshopIdFromUrl } from './radar';
+import { parseOverview } from './radar';
 import type { ReplayFrame, ReplayPayload, ReplayPlayerFrame, ReplayPlayerMeta } from './types';
 import { test, report } from '../test-support/miniTest';
 import { round } from '../test-support/replayFixtures';
@@ -761,12 +761,6 @@ test('parseOverview: reads the CS2 KV3 form (unquoted, = separator, decimals)', 
 test('parseOverview: null when a required key or a usable scale is missing', () => {
   assert.equal(parseOverview('"x" { "pos_x" "1" "pos_y" "2" }'), null); // no scale
   assert.equal(parseOverview('"x" { "pos_x" "1" "pos_y" "2" "scale" "0" }'), null); // scale 0
-});
-
-test('workshopIdFromUrl: pulls the id from ?id= and from a bare digit run', () => {
-  assert.equal(workshopIdFromUrl('https://steamcommunity.com/sharedfiles/filedetails/?id=3070284539'), '3070284539');
-  assert.equal(workshopIdFromUrl('steam://url/CommunityFilePage/3070284539'), '3070284539');
-  assert.equal(workshopIdFromUrl(null), null);
 });
 
 // --- grenadeEffectRadius: per-type AoE radius, world units ---

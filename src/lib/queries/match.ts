@@ -7,6 +7,7 @@ import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
 import { getLinkedRegularSeason } from './seasons';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
+import type { ServerState } from '../dathost-lifecycle';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 import {
   getMatchKills, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
@@ -265,6 +266,21 @@ export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
     .eq('match_id', matchId)
     .maybeSingle();
   return data != null;
+}
+
+/**
+ * A match's `match_server_state.server_state`, `'idle'` when the match has never been provisioned.
+ * The state only — the connect string stays behind the access-checked status route
+ * (`/api/matches/[id]/server/status`) — so the match page can hand every viewer the panel's
+ * starting state, the same two columns the `anon` Realtime grant exposes.
+ */
+export async function getMatchServerState(matchId: number): Promise<ServerState> {
+  const { data } = await getAdminClient()
+    .from('match_server_state')
+    .select('server_state')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return (data as { server_state: ServerState } | null)?.server_state ?? 'idle';
 }
 
 /**

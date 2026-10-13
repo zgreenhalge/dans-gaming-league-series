@@ -1,6 +1,6 @@
 /**
  * Coverage for dathost.ts's pure, IO-free surface — buildScalarFields(), dathostServerId(),
- * workshopIdFromUrl(), connectHost(), isDathostNotFound(), and applyConfigSet()'s no-mapWorkshopId
+ * connectHost(), isDathostNotFound(), and applyConfigSet()'s no-mapWorkshopId
  * guard (which throws before ever calling the DatHost API, so it needs no mock to exercise).
  *
  * Per docs/patterns.md's "Test external IO by extracting the logic around it, not by mocking the
@@ -13,7 +13,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { buildScalarFields, dathostServerId, workshopIdFromUrl, connectHost, isDathostNotFound, applyConfigSet, DathostError, type DathostServer } from './dathost';
+import { buildScalarFields, dathostServerId, connectHost, isDathostNotFound, applyConfigSet, DathostError, type DathostServer } from './dathost';
 
 // ─── buildScalarFields ───────────────────────────────────────────────────────
 
@@ -54,21 +54,6 @@ test('dathostServerId: throws when unset', () => {
   delete process.env.DATHOST_SERVER_ID;
   assert.throws(() => dathostServerId(), /DATHOST_SERVER_ID must be set/);
   if (prev !== undefined) process.env.DATHOST_SERVER_ID = prev;
-});
-
-// ─── workshopIdFromUrl ───────────────────────────────────────────────────────
-
-test('workshopIdFromUrl: extracts the id query param', () => {
-  assert.equal(workshopIdFromUrl('https://steamcommunity.com/sharedfiles/filedetails/?id=123456'), '123456');
-});
-
-test('workshopIdFromUrl: null for a missing url', () => {
-  assert.equal(workshopIdFromUrl(null), null);
-  assert.equal(workshopIdFromUrl(undefined), null);
-});
-
-test('workshopIdFromUrl: null when the url has no id param', () => {
-  assert.equal(workshopIdFromUrl('https://steamcommunity.com/sharedfiles/filedetails/'), null);
 });
 
 // ─── connectHost ─────────────────────────────────────────────────────────────

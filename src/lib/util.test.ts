@@ -24,6 +24,7 @@ import {
   matchLabel,
   seasonTitle,
   buildRegularToGauntletMap,
+  findPairedSeason,
   initials,
   firstName,
   winRatePct,
@@ -234,6 +235,29 @@ test('buildRegularToGauntletMap: a regular season with no matching gauntlet is o
   const regular = [{ id: 10, name: 'Season 1' }];
   const map = buildRegularToGauntletMap(regular, []);
   assert.equal(map.has(10), false);
+});
+
+test('buildRegularToGauntletMap: duplicate gauntlet numbers resolve to the lowest id, whatever the input order', () => {
+  const regular = [{ id: 10, name: 'Season 1' }];
+  const gauntlet = [{ id: 30, name: 'Season 1 Gauntlet' }, { id: 20, name: 'Season 1 Gauntlet (redo)' }];
+  assert.equal(buildRegularToGauntletMap(regular, gauntlet).get(10), 20);
+});
+
+// --- findPairedSeason: the one season ↔ gauntlet pairing rule ---
+test('findPairedSeason: matches by season number, ignoring ids and the rest of the name', () => {
+  const gauntlets = [{ id: 99, name: 'Season 1 Gauntlet' }, { id: 5, name: 'Season 2 Gauntlet' }];
+  assert.equal(findPairedSeason('Season 2', gauntlets)?.id, 5);
+  assert.equal(findPairedSeason('season 1', gauntlets)?.id, 99);
+});
+test('findPairedSeason: null when the name has no number or nothing shares it', () => {
+  const gauntlets = [{ id: 5, name: 'Season 2 Gauntlet' }];
+  assert.equal(findPairedSeason('Playoffs', gauntlets), null);
+  assert.equal(findPairedSeason('Season 3', gauntlets), null);
+  assert.equal(findPairedSeason('Season 2', []), null);
+});
+test('findPairedSeason: several candidates sharing the number resolve to the lowest id', () => {
+  const dupes = [{ id: 30, name: 'Season 4' }, { id: 12, name: 'Season 4 (rerun)' }, { id: 20, name: 'Season 4' }];
+  assert.equal(findPairedSeason('Season 4 Gauntlet', dupes)?.id, 12);
 });
 
 // --- initials / firstName ---

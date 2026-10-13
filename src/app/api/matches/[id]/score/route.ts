@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSession } from '@/lib/session';
+import { requireMatchAccess } from '@/lib/match-access';
+import { accessDenied } from '@/lib/access-control';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
@@ -35,20 +36,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const supabaseAdmin = getAdminClient();
-  const session = await requireSession();
-  if (!session?.user?.playerId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const { id } = await params;
   const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
-  const playerId = session.user.playerId;
+  const access = await requireMatchAccess(matchId);
+  if (!access.ok) return accessDenied(access);
+  const { isAdmin } = access;
 
-  const [{ data: matchRow }, { data: playerRow }, { data: matchStats }] = await Promise.all([
+  const [{ data: matchRow }, { data: matchStats }] = await Promise.all([
     supabaseAdmin
       .from('matches')
       .select(
@@ -56,7 +54,6 @@ export async function PATCH(
       )
       .eq('id', matchId)
       .maybeSingle(),
-    supabaseAdmin.from('players').select('is_admin').eq('id', playerId).maybeSingle(),
     supabaseAdmin
       .from('player_match_stats')
       .select('player_id, faction')
@@ -68,14 +65,8 @@ export async function PATCH(
   }
 
   const m = matchRow as unknown as MatchRow;
-  const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
-  const isInMatch = allStats.some((s) => s.player_id === playerId);
   const statsByPlayerId = toStatsByPlayerId(allStats);
-
-  if (!isAdmin && !isInMatch) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   const alreadyPlayed = isPlayedScore(m.final_score);
 

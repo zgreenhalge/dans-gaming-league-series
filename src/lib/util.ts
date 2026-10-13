@@ -244,9 +244,23 @@ export function seasonTitle(name: string): string {
 }
 
 /**
- * Maps each regular season ID to its paired gauntlet season ID, matched by
- * season number (e.g. "Season 3" regular ↔ "Season 3" gauntlet). Pairing is
- * name-based, not ID-based — see `extractSeasonNumber`.
+ * The one season ↔ gauntlet pairing rule: of `candidates` (the seasons of the *other* kind), the one
+ * whose name carries the same season number as `name` (e.g. "Season 3" ↔ "Season 3 Gauntlet"), or
+ * `null` when `name` has no number or nothing matches. Pairing is name-based, not ID-based — see
+ * `extractSeasonNumber()`. If several candidates share the number, the lowest id wins.
+ */
+export function findPairedSeason<T extends { id: number; name: string }>(name: string, candidates: T[]): T | null {
+  const n = extractSeasonNumber(name);
+  if (n == null) return null;
+  let best: T | null = null;
+  for (const c of candidates) {
+    if (extractSeasonNumber(c.name) === n && (best === null || c.id < best.id)) best = c;
+  }
+  return best;
+}
+
+/**
+ * Maps each regular season ID to its paired gauntlet season ID (`findPairedSeason()`'s rule).
  */
 export function buildRegularToGauntletMap(
   regularSeasons: { id: number; name: string }[],
@@ -254,9 +268,7 @@ export function buildRegularToGauntletMap(
 ): Map<number, number> {
   const map = new Map<number, number>();
   for (const r of regularSeasons) {
-    const n = extractSeasonNumber(r.name);
-    if (n == null) continue;
-    const g = gauntletSeasons.find((s) => extractSeasonNumber(s.name) === n);
+    const g = findPairedSeason(r.name, gauntletSeasons);
     if (g) map.set(r.id, g.id);
   }
   return map;

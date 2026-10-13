@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats, getMatchRoundEconomy } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getMatchServerState, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats, getMatchRoundEconomy } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -15,6 +15,7 @@ import { buildCrumbs } from '@/lib/crumbs';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
+import type { ServerState } from '@/lib/dathost-lifecycle';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import MatchScoreHero from '@/components/MatchScoreHero';
 import MatchTabView from '@/components/MatchTabView';
@@ -99,6 +100,11 @@ export default async function MatchPage({
 
   const { match, week, season, stats } = detail;
   const played = isPlayedScore(match.final_score);
+
+  // Veto complete: all required pick/ban fields are filled. Falls back to the match's own
+  // is_playoff_game if the season's is_gauntlet was never set (e.g. a gauntlet CSV import whose
+  // season-patch step failed) — the pairing is a convention, not a DB constraint.
+  const vetoComplete = isVetoComplete(match, season.is_gauntlet || match.is_playoff_game);
   const score = played ? parseScore(match.final_score) : null;
   const map = match.shirts_pick ?? match.picked_map;
   const mapImg = mapImageFor(map, mapLookup);
@@ -158,7 +164,10 @@ export default async function MatchPage({
     ? getPlayerRatings(allScoutedPlayerIds)
     : Promise.resolve([]);
 
-  const [scope, pod, scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows, isMultiSegmentDemo] = await Promise.all([
+  // The match server panel shows once the veto is done (always in dev) and the match is unplayed.
+  const showServerPanel = !played && (vetoComplete || process.env.NODE_ENV === 'development');
+
+  const [scope, pod, scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows, isMultiSegmentDemo, serverState] = await Promise.all([
     getSeasonScope(season),
     podPromise,
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
@@ -196,6 +205,9 @@ export default async function MatchPage({
     // Recap tab uses this to skip offering replay generation, which only ever reads a single demo
     // and would just fail or produce a one-segment replay for a match like this.
     played ? getDemoManifest(matchId).then((m) => !!m).catch(() => false) : Promise.resolve(false),
+    // The server panel's starting state for every viewer — non-managers can't call the status
+    // route, and a server that is live all match may never fire another Realtime update.
+    showServerPanel ? getMatchServerState(matchId) : Promise.resolve<ServerState>('idle'),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
   const { job: replayJob, events: replayEvents } = replay;
@@ -232,11 +244,6 @@ export default async function MatchPage({
   const scheduledTime = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
   // eslint-disable-next-line react-hooks/purity
   const vetoWindowOpen = !!scheduledTime && Date.now() >= scheduledTime - 10 * 60 * 1000;
-
-  // Veto complete: all required pick/ban fields are filled. Falls back to the match's own
-  // is_playoff_game if the season's is_gauntlet was never set (e.g. a gauntlet CSV import whose
-  // season-patch step failed) — the pairing is a convention, not a DB constraint.
-  const vetoComplete = isVetoComplete(match, season.is_gauntlet || match.is_playoff_game);
 
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
@@ -392,10 +399,10 @@ export default async function MatchPage({
           {/* Match server — below pick/ban, still in the header. Always shown in dev.
               Hidden once the match has a final score — a scored match doesn't need a server,
               whether or not it went through the demo pipeline (#140). */}
-          {!played && (vetoComplete || process.env.NODE_ENV === 'development') && (
+          {showServerPanel && (
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">
-                <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} />
+                <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} initialState={serverState} />
               </div>
             </div>
           )}

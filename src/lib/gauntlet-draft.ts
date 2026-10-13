@@ -16,7 +16,7 @@
  */
 
 import type { BracketPlan, AdvanceRule } from './gauntlet-bracket';
-import type { BracketPod, BracketSlot } from './queries';
+import type { BracketPod, BracketSlot } from './stage-types';
 
 export type { AdvanceRule };
 

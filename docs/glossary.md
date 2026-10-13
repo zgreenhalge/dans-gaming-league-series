@@ -49,7 +49,7 @@ so you don't have to reverse-engineer them from scratch each time.
   - **Who picked** is determined by `shirts_pick != null` (shirts picked) vs `shirts_pick == null`
     (skins picked). Do **not** compare `shirts_pick === picked_map` — they are never equal because
     only one is populated per match.
-  - **`GauntletMatch`** (`src/lib/queries/gauntlet.ts`, the bracket-display read shape) surfaces only
+  - **`GauntletMatch`** (`src/lib/stage-types.ts`, the bracket-display read shape) surfaces only
     `picked_map`/`shirts_pick`/`skins_starting_side` — never the four ban fields. It is not the same
     struct as the underlying `matches` row, which stores the full gauntlet ban history like any other
     match (see below). Veto aggregations over ban data must be guarded with `is_gauntlet` checks or
@@ -102,7 +102,8 @@ so you don't have to reverse-engineer them from scratch each time.
     gauntlet is in progress.
 - **Regular ↔ gauntlet pairing** — each regular season has a companion gauntlet season (playoffs),
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
-  `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the
+  `findPairedSeason()` / `buildRegularToGauntletMap()` in `src/lib/util.ts` (on a duplicate season
+  number the lowest id wins), or the
   `getLinkedGauntlet()` / `getLinkedRegularSeason()` query helpers — never assume adjacent IDs.
 - **Post-season survey / superlatives** — two per-regular-season feedback forms an admin opens after
   a season. The survey is custom questions followed by core ones (length of games/season/playoffs,
@@ -188,7 +189,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Player per-match stat aggregation (career/season/per-map) | `src/lib/player-stats.ts` |
 | Canonical gauntlet finish-order ranking | `src/lib/gauntlet-ranking.ts` |
 | Per-group scorecard rollup + ranking rules (shared by the gauntlet rank map and the week/round/group pages) | `src/lib/group-scorecard.ts` |
-| Week / round / group page data shaping, season-standings movement | `src/lib/stage-views.ts`, `src/lib/season-standings.ts`, `src/lib/queries/groups.ts` |
+| Week / round / group page data shaping, season-standings movement | `src/lib/stage-views.ts`, `src/lib/season-standings.ts`, `src/lib/queries/groups.ts`; their shared row shapes (`WeekWithMatches`, `GauntletRound`, `BracketPod`, …) in `src/lib/stage-types.ts` |
 | Breadcrumb trails and week/round/group URLs | `src/lib/crumbs.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |

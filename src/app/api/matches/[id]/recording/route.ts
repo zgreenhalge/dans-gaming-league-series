@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/lib/session";
+import { requireMatchAccess } from "@/lib/match-access";
+import { accessDenied } from "@/lib/access-control";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { parseRouteId } from "@/lib/util";
 
@@ -7,33 +8,20 @@ import { parseRouteId } from "@/lib/util";
 // gate the score route uses, since a recording is part of a match's result.
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireSession();
-  const playerId = session?.user?.playerId;
-  if (!playerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const matchId = parseRouteId(id);
   if (matchId === null) {
     return NextResponse.json({ error: "Invalid match ID" }, { status: 400 });
   }
 
+  const access = await requireMatchAccess(matchId);
+  if (!access.ok) return accessDenied(access);
+
+  const supabaseAdmin = getAdminClient();
+
   const body = await request.json().catch(() => null);
   if (!body || (body.value !== null && typeof body.value !== "string")) {
     return NextResponse.json({ error: "Missing string|null value" }, { status: 400 });
-  }
-
-  const [{ data: playerRow }, { data: matchStats }] = await Promise.all([
-    supabaseAdmin.from("players").select("is_admin").eq("id", playerId).maybeSingle(),
-    supabaseAdmin.from("player_match_stats").select("player_id").eq("match_id", matchId),
-  ]);
-
-  const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  const isInMatch = ((matchStats ?? []) as { player_id: number }[]).some(
-    (s) => s.player_id === playerId,
-  );
-  if (!isAdmin && !isInMatch) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { error } = await supabaseAdmin

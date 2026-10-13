@@ -2,37 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import type { Week, Match, Faction } from '../types';
 import { allMatchesPlayed, isPlayedScore, weekWindow, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
+import type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry } from '../stage-types';
 import { getPlayersById } from './player';
 
-
-export interface RosterStat {
-  match_id: number;
-  player_id: number;
-  player_name: string;
-  faction: Faction;
-  kills: number;
-  assists: number;
-  deaths: number;
-  adr: number;
-  /** Raw `player_match_stats.damage` — distinct from `adr` (a rounded per-match average); what a
-   *  true aggregate ADR (`total_damage / total_rounds_played`) is built from. */
-  damage: number;
-  is_win: boolean;
-  rounds_won: number;
-  rounds_played: number;
-}
-
-export interface MatchWithRoster extends Match {
-  shirts: { player_id: number; player_name: string }[];
-  skins: { player_id: number; player_name: string }[];
-  shirts_stats: RosterStat[];
-  skins_stats: RosterStat[];
-}
-
-export interface WeekWithMatches extends Week {
-  bye_player_name: string | null;
-  matches: MatchWithRoster[];
-}
+export type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry };
 
 type RosterStatRow = Omit<RosterStat, 'player_name'>;
 
@@ -106,12 +79,6 @@ export async function getSeasonSchedule(
       }),
     };
   });
-}
-
-export interface SeasonWeekNavEntry {
-  id: number;
-  week_number: number;
-  matches: { final_score: string | null }[];
 }
 
 /** Every week of a season with just its match results (`final_score`) — enough to tell played from

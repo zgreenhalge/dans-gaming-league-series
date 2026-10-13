@@ -26,7 +26,7 @@ import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
 import { fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
-import { workshopIdFromUrl } from '@/lib/replay/radar';
+import { workshopIdFromInput } from '@/lib/workshop';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
 import type { WorkshopMapOption } from '@/lib/queries';
@@ -443,7 +443,7 @@ export function ServerConsolePanel({
 
   // Lenient: accepts a bare numeric ID or a full workshop URL (same parser used elsewhere for map
   // workshop URLs), so pasting either into the custom field just works.
-  const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? workshopIdFromUrl(customMapId.trim()) : mapChoice || null;
+  const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? workshopIdFromInput(customMapId.trim()) : mapChoice || null;
   const customMapInvalid = mapChoice === CUSTOM_MAP_CHOICE && customMapId.trim() !== '' && !resolvedMapId;
 
   const applyConfig = async (override = false) => {

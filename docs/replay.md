@@ -463,7 +463,7 @@ map — see the Heatmap/Pathing tab sections above. `map-rollup` is fail-soft: a
 
 `radar-build`: `validate-workshop-id → steamcmd-download → extract-vpk → decode-vtex →
 compute-calibration → upload-radar → upsert-map → done`. The deterministic parsing
-(`parseOverview()`, `workshopIdFromUrl()` in `radar.ts`) is unit-tested; the SteamCMD/Source2Viewer
+(`parseOverview()` in `radar.ts`; `workshopIdFromUrl()` in `src/lib/workshop.ts`) is unit-tested; the SteamCMD/Source2Viewer
 orchestration is best-effort and isolated — a choke leaves the map uncalibrated (auto-fit fallback),
 never blocking playback.
 
