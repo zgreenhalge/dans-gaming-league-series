@@ -4,7 +4,7 @@ import EmptyState from './EmptyState';
 import { CollapsibleSection } from './CollapsibleSection';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { fmtWindowDate, weekWindow, weekAnchorId } from '@/lib/util';
+import { fmtWindowDate, weekLabel, weekWindow, weekAnchorId } from '@/lib/util';
 import { weekHref } from '@/lib/crumbs';
 import type { MatchWithRoster, WeekWithMatches } from '@/lib/queries';
 
@@ -55,7 +55,7 @@ function WeekBlock({
   return (
     <CollapsibleSection
       id={weekAnchorId(week.id)}
-      title={`Week ${week.week_number}`}
+      title={weekLabel(week.week_number, false)}
       detail={win ? `${fmtWindowDate(win.start)} – ${fmtWindowDate(win.end)}` : undefined}
       trailing={
         week.bye_player_name && (

@@ -12,15 +12,20 @@ import { StageBar } from './StageBar';
  * Uncontrolled by default (`defaultOpen`). Pass `open` and `onToggle` to hold the state elsewhere —
  * the hub's lists keep it in the URL so a link can open a given week or round.
  */
+type OpenState =
+  /** Controlled: the caller holds the state, and the bar calls `onToggle` instead of toggling itself. */
+  | { open: boolean; onToggle: () => void; defaultOpen?: never }
+  | { open?: never; onToggle?: never; defaultOpen?: boolean };
+
 export function CollapsibleSection({
   title,
   detail,
   trailing,
   href,
   id,
+  defaultOpen = true,
   open,
   onToggle,
-  defaultOpen = true,
   children,
 }: {
   title: string;
@@ -32,15 +37,11 @@ export function CollapsibleSection({
   href?: string;
   /** Anchor id on the section, for links that scroll to it. */
   id?: string;
-  /** Controlled open state; with it, `onToggle` is called instead of the section toggling itself. */
-  open?: boolean;
-  onToggle?: () => void;
-  defaultOpen?: boolean;
   children: React.ReactNode;
-}) {
+} & OpenState) {
   const [innerOpen, setInnerOpen] = useState(defaultOpen);
   const isOpen = open ?? innerOpen;
-  const toggle = open === undefined ? () => setInnerOpen((v) => !v) : (onToggle ?? (() => {}));
+  const toggle = onToggle ?? (() => setInnerOpen((v) => !v));
   return (
     <div id={id} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
       <StageBar open={isOpen} onToggle={toggle} href={href} label={title}>

@@ -5,7 +5,7 @@ import EmptyState from './EmptyState';
 import { CollapsibleSection } from './CollapsibleSection';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
+import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId, weekLabel } from '@/lib/util';
 import { aggregatePlayerRecords } from '@/lib/group-scorecard';
 import { groupName, roundHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
@@ -198,7 +198,7 @@ function GauntletRoundCard({
   return (
     <CollapsibleSection
       id={roundAnchorId(round.round_number)}
-      title={`Round ${round.round_number}`}
+      title={weekLabel(round.round_number, true)}
       detail={roundStakes ? GAUNTLET_POD_STAKES_LABEL[roundStakes] : undefined}
       href={roundLink ?? undefined}
       open={isOpen}
@@ -207,8 +207,8 @@ function GauntletRoundCard({
       {(() => {
         // Legacy pod-less matches (pod_index null — a gauntlet predating bracket scheduling)
         // have no per-pod grouping to number games within, so they keep one continuous "Game N"
-        // count across the whole round, same as before this diff — only a real pod's own two
-        // games reset to Game 1/Game 2 per pod, declared inside the map below.
+        // count across the whole round; a real pod's own two games number Game 1/Game 2 per pod,
+        // declared inside the map below.
         let soloGameNumber = 0;
         return podEntries.map((entry, gi) => {
           // A pod header names its group so consecutive pods in one round read as distinct

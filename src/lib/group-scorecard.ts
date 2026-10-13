@@ -116,8 +116,8 @@ export function compareRecords(rule: ScorecardRankRule): (a: PlayerRecord, b: Pl
 
 /** A group's scorecard: every player who played, ranked by `rule`, then each `roster` player with no
  *  played match yet (a week's bye player, an unplayed pod's occupants) as an empty record, in roster
- *  order. Ties on every key keep first-appearance order (a stable sort), exactly as the canonical
- *  gauntlet ranking always has. */
+ *  order. Ties on every key keep first-appearance order (a stable sort), as in the canonical
+ *  gauntlet ranking. */
 export function deriveGroupScorecard(
   matches: ScorecardMatch[],
   rule: ScorecardRankRule,
