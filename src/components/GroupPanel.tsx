@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import EmptyState from './EmptyState';
 import { CollapsibleSection } from './CollapsibleSection';
 import { GameMatchCard, PendingPodRows } from './GauntletRoundsList';
@@ -11,9 +10,9 @@ import type { BracketPod } from '@/lib/queries';
 
 /**
  * One gauntlet group: its scorecard, then its games — or the "not yet scheduled" lineup while the pod
- * is still waiting on its bracket. On a round with several groups each is a collapsible section
- * (`collapsible`, the season schedule's week-row look, its title linking to the group's page); a lone group, or
- * the group page itself, shows a plain heading over the same content.
+ * is still waiting on its bracket. On a round page each group is a collapsible section (the season
+ * schedule's week-row look, its title linking to the group's page); the group page itself (`standalone`)
+ * shows a plain heading over the same content.
  */
 export function GroupPanel({
   group,
@@ -21,7 +20,6 @@ export function GroupPanel({
   bracketShape,
   seedNames,
   currentPlayerId,
-  collapsible = false,
   standalone = false,
 }: {
   group: GroupView;
@@ -29,13 +27,11 @@ export function GroupPanel({
   bracketShape: BracketPod[];
   seedNames?: Map<number, string>;
   currentPlayerId: number | null;
-  collapsible?: boolean;
-  /** The group's own page: its heading doesn't link to itself. */
+  /** The group's own page: a plain heading over the content instead of a collapsible title bar. */
   standalone?: boolean;
 }) {
   const finished = group.status === 'complete';
   const title = group.label ?? 'Games';
-  const href = group.pod ? groupHref(hubSeasonId, group.pod.id) : undefined;
 
   const games =
     group.matches.length > 0 ? (
@@ -58,12 +54,12 @@ export function GroupPanel({
     <GroupScorecard rows={group.scorecard} isFinal={group.isFinal} finished={finished} bare={bare} currentPlayerId={currentPlayerId} />
   );
 
-  if (collapsible) {
+  if (!standalone) {
     return (
       <CollapsibleSection
         title={title}
         detail={group.isFinal ? undefined : (podKindLabel(false, group.advanceRule) ?? undefined)}
-        href={href}
+        href={group.pod ? groupHref(hubSeasonId, group.pod.id) : undefined}
       >
         {group.scorecard.length > 0 && <div className="border-b border-[var(--color-border-primary)]">{scorecard(true)}</div>}
         {games}
@@ -73,15 +69,7 @@ export function GroupPanel({
 
   return (
     <section className="mb-6 last:mb-0">
-      <h2 className="font-display text-[20px] font-semibold leading-tight mb-2">
-        {standalone || !href ? (
-          title
-        ) : (
-          <Link href={href} className="hover:text-[var(--color-site-accent)] transition-colors">
-            {title}
-          </Link>
-        )}
-      </h2>
+      <h2 className="font-display text-[20px] font-semibold leading-tight mb-2">{title}</h2>
       {group.scorecard.length > 0 && <div className="mb-3">{scorecard(false)}</div>}
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">{games}</div>
     </section>
