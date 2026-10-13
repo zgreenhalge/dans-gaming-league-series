@@ -10,8 +10,7 @@ import {
 } from './group-scorecard';
 import { rankMovementForWeek, type RankMovement } from './season-standings';
 import { seedByPlayerId } from './gauntlet-draft';
-import type { SeasonWeekNavEntry, WeekWithMatches } from './queries/schedule';
-import type { BracketPod, GauntletMatch, GauntletRound } from './queries/gauntlet';
+import type { SeasonWeekNavEntry, WeekWithMatches, BracketPod, GauntletMatch, GauntletRound } from './stage-types';
 
 // Pure derivations behind the week, round and group pages: given the data the queries return, shape
 // exactly what each page renders (scorecards, outcomes, navigation). No fetching in here.
