@@ -67,7 +67,7 @@ export function emptyDraftPod(key: string, round_number: number, pod_index: numb
 }
 
 /** Human name for a pod, shared by the diagram and the editor's slot picker so both read
- * "Round 1 Group 1 Winner" / "Second of Round 1 Group 2" identically. Groups are 1-indexed for
+ * "Round 1 Group 1 Winner" / "2nd-best seed of Round 1 Group 2" identically. Groups are 1-indexed for
  * display; `pod_index` is 0-indexed. */
 export function groupLabel(pod: { round_number: number; pod_index: number; is_final: boolean }): string {
   return pod.is_final ? 'the Final' : `Round ${pod.round_number} Group ${pod.pod_index + 1}`;
@@ -82,13 +82,23 @@ function winnerLabel(pod: { round_number: number; pod_index: number; is_final: b
   return pod.is_final ? 'Final Winner' : `${groupLabel(pod)} Winner`;
 }
 
-const ORDINALS = ['First', 'Second', 'Third', 'Fourth'];
-export function ordinalWord(n: number): string {
-  return ORDINALS[n] ?? `${n + 1}th`;
+const SEED_RANKS = ['best seed', '2nd-best seed', '3rd-best seed'];
+/** Which survivor of a multi-advance pod a slot takes: the 0-based `ordinal` read as a rank among the
+ * survivors' original tournament seeds ("best seed", "2nd-best seed", …), the order
+ * `assignSurvivorsToSlots()` fills them in. */
+export function seedRankPhrase(ordinal: number): string {
+  return SEED_RANKS[ordinal] ?? `${ordinal + 1}th-best seed`;
+}
+
+/** "Best seed of Round 1 Group 2" — the label for one survivor of a pod that sends several onward. */
+function advanceLabel(pod: { round_number: number; pod_index: number; is_final: boolean }, ordinal: number): string {
+  const phrase = seedRankPhrase(ordinal);
+  return `${phrase.charAt(0).toUpperCase()}${phrase.slice(1)} of ${groupLabel(pod)}`;
 }
 
 /** Derives a stable 0-based ordinal for every pod-sourced slot among all slots fed by the same
- * source pod, in (round_number, pod_index, slot_index) order — the same derivation
+ * source pod, in (round_number, pod_index, slot_index) order — the order `assignSurvivorsToSlots()`
+ * hands the source pod's survivors out in — the same derivation
  * `GauntletBracketDiagram` uses for display labels, shared here so a freshly-loaded persisted shape
  * (which has no stored ordinal — the DB doesn't track "which survivor" a slot expects, only that
  * it's fed by a given source pod) gets the identical assignment. Keyed by `${consumingPodId}:${slot_index}`. */
@@ -96,7 +106,7 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
   const bySource = new Map<number, { podId: number; slotIndex: number }[]>();
   const ordered = [...pods].sort((a, b) => a.round_number - b.round_number || a.pod_index - b.pod_index);
   for (const pod of ordered) {
-    for (const slot of pod.slots) {
+    for (const slot of [...pod.slots].sort((a, b) => a.slot_index - b.slot_index)) {
       if (slot.source_kind === 'pod' && slot.source_pod_id != null) {
         const list = bySource.get(slot.source_pod_id) ?? [];
         list.push({ podId: pod.id, slotIndex: slot.slot_index });
@@ -109,6 +119,33 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
     list.forEach((entry, i) => result.set(`${entry.podId}:${entry.slotIndex}`, i));
   }
   return result;
+}
+
+/** Which advancing player fills which downstream slot of a finished pod. Survivors are ranked by
+ * original tournament seed (`seedByPlayerId()`, best first; an unseeded player sorts last, then by
+ * player id) and the downstream slots by (round_number, pod_index, slot_index) of the pod they
+ * belong to — the order `computeAdvanceOrdinals()` labels them in — so the Nth-best seed takes the
+ * slot labelled `seedRankPhrase(N)`. Pairs up to the shorter of the two lists. */
+export function assignSurvivorsToSlots(
+  survivors: number[],
+  seedByPlayer: Map<number, number>,
+  slots: { id: number; pod_id: number; slot_index: number }[],
+  pods: { id: number; round_number: number; pod_index: number }[],
+): { slotId: number; playerId: number }[] {
+  const podsById = new Map(pods.map((p) => [p.id, p]));
+  const seedOf = (playerId: number) => seedByPlayer.get(playerId) ?? Infinity;
+  const rankedPlayers = [...survivors].sort((a, b) => (seedOf(a) === seedOf(b) ? a - b : seedOf(a) - seedOf(b)));
+  const orderedSlots = [...slots].sort((a, b) => {
+    const pa = podsById.get(a.pod_id);
+    const pb = podsById.get(b.pod_id);
+    return (
+      (pa?.round_number ?? Number.MAX_SAFE_INTEGER) - (pb?.round_number ?? Number.MAX_SAFE_INTEGER) ||
+      (pa?.pod_index ?? Number.MAX_SAFE_INTEGER) - (pb?.pod_index ?? Number.MAX_SAFE_INTEGER) ||
+      a.slot_index - b.slot_index
+    );
+  });
+  const count = Math.min(rankedPlayers.length, orderedSlots.length);
+  return Array.from({ length: count }, (_, i) => ({ slotId: orderedSlots[i].id, playerId: rankedPlayers[i] }));
 }
 
 /** A bracket shape's pods keyed by id — the lookup both `GauntletBracketDiagram` and
@@ -177,7 +214,7 @@ export function pendingSlotLabel(
   }
   if (slot.source_kind === 'pod' && sourcePod) {
     if (capacityFor(sourcePod.advance_rule) <= 1) return winnerLabel(sourcePod);
-    return `${ordinalWord(ordinal)} of ${groupLabel(sourcePod)}`;
+    return advanceLabel(sourcePod, ordinal);
   }
   return 'TBD';
 }
@@ -347,7 +384,7 @@ export function availableAdvancements(pods: DraftPod[]): AdvancementOption[] {
       options.push({
         sourcePodKey: pod.key,
         ordinal,
-        label: capacity === 1 ? winnerLabel(pod) : `${ordinalWord(ordinal)} of ${groupLabel(pod)}`,
+        label: capacity === 1 ? winnerLabel(pod) : advanceLabel(pod, ordinal),
       });
     }
   }
@@ -391,7 +428,7 @@ export function validateIntegrity(pods: DraftPod[]): IntegrityResult {
       }
       const seen = seenOrdinals.get(slot.sourcePodKey) ?? new Set<number>();
       if (seen.has(slot.ordinal)) {
-        errors.add(`${groupLabel(source)}'s ${ordinalWord(slot.ordinal)} advancement is claimed by more than one slot.`);
+        errors.add(`${groupLabel(source)}'s ${seedRankPhrase(slot.ordinal)} advancement is claimed by more than one slot.`);
       }
       seen.add(slot.ordinal);
       seenOrdinals.set(slot.sourcePodKey, seen);

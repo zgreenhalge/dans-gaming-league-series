@@ -14,7 +14,8 @@ import {
   capacityFor,
   emptyDraftPod,
   groupLabel,
-  ordinalWord,
+  seedRankPhrase,
+  assignSurvivorsToSlots,
   computeAdvanceOrdinals,
   pendingSlotLabel,
   fromPersistedShape,
@@ -46,12 +47,12 @@ test('groupLabel: the Final vs Round N Group M (1-indexed display)', () => {
   assert.equal(groupLabel({ round_number: 1, pod_index: 2, is_final: false }), 'Round 1 Group 3');
 });
 
-test('ordinalWord: named ordinals 0-3, numeric fallback beyond', () => {
-  assert.equal(ordinalWord(0), 'First');
-  assert.equal(ordinalWord(1), 'Second');
-  assert.equal(ordinalWord(2), 'Third');
-  assert.equal(ordinalWord(3), 'Fourth');
-  assert.equal(ordinalWord(4), '5th');
+test('seedRankPhrase: named ranks 0-2, numeric fallback beyond', () => {
+  assert.equal(seedRankPhrase(0), 'best seed');
+  assert.equal(seedRankPhrase(1), '2nd-best seed');
+  assert.equal(seedRankPhrase(2), '3rd-best seed');
+  assert.equal(seedRankPhrase(3), '4th-best seed');
+  assert.equal(seedRankPhrase(4), '5th-best seed');
 });
 
 test('emptyDraftPod: fresh pod is wildcard, non-final, 4 empty slots', () => {
@@ -154,11 +155,11 @@ test('pendingSlotLabel: pod-sourced slot from a single-elimination pod reads "..
   assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Round 1 Group 1 Winner');
 });
 
-test('pendingSlotLabel: pod-sourced slot from a wildcard pod reads "<Ordinal> of ..." by the given ordinal', () => {
+test('pendingSlotLabel: pod-sourced slot from a wildcard pod reads "<Nth-best seed> of ..." by the given ordinal', () => {
   const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 10 });
   const sourcePod = bracketPod({ id: 10, round_number: 1, pod_index: 1, advance_rule: 'wildcard' });
-  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'First of Round 1 Group 2');
-  assert.equal(pendingSlotLabel(slot, sourcePod, 1), 'Second of Round 1 Group 2');
+  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Best seed of Round 1 Group 2');
+  assert.equal(pendingSlotLabel(slot, sourcePod, 1), '2nd-best seed of Round 1 Group 2');
 });
 
 test('pendingSlotLabel: pod-sourced slot names the Final, never a bare "TBD"', () => {
@@ -342,17 +343,62 @@ test('availableSeeds: with nothing placed and nobody dropped, every seed 1..rost
   assert.deepEqual(availableSeeds([], roster, new Set()), [1, 2, 3]);
 });
 
+// ─── assignSurvivorsToSlots / computeAdvanceOrdinals ─────────────────────────
+
+test('assignSurvivorsToSlots: the best seed takes the first slot by (round, pod, slot_index), whatever order the inputs arrive in', () => {
+  const pods = [
+    { id: 20, round_number: 2, pod_index: 1 },
+    { id: 21, round_number: 2, pod_index: 0 },
+  ];
+  const slots = [
+    { id: 902, pod_id: 20, slot_index: 0 },
+    { id: 901, pod_id: 21, slot_index: 1 },
+    { id: 900, pod_id: 21, slot_index: 0 },
+  ];
+  const seeds = new Map([[7, 1], [8, 2], [9, 3]]);
+  assert.deepEqual(assignSurvivorsToSlots([9, 7, 8], seeds, slots, pods), [
+    { slotId: 900, playerId: 7 },
+    { slotId: 901, playerId: 8 },
+    { slotId: 902, playerId: 9 },
+  ]);
+});
+
+test('assignSurvivorsToSlots: an unseeded survivor sorts last, ties break by player id, and extra survivors or slots are left over', () => {
+  const pods = [{ id: 1, round_number: 2, pod_index: 0 }];
+  const slots = [{ id: 10, pod_id: 1, slot_index: 0 }, { id: 11, pod_id: 1, slot_index: 1 }];
+  assert.deepEqual(assignSurvivorsToSlots([5, 4, 3], new Map([[5, 1]]), slots, pods), [
+    { slotId: 10, playerId: 5 },
+    { slotId: 11, playerId: 3 },
+  ]);
+  assert.deepEqual(assignSurvivorsToSlots([5], new Map([[5, 1]]), slots, pods), [{ slotId: 10, playerId: 5 }]);
+});
+
+test('computeAdvanceOrdinals: ordinals follow slot_index within a pod, not the array order of its slots', () => {
+  const dst = bracketPod({
+    id: 2,
+    round_number: 2,
+    pod_index: 0,
+    slots: [
+      bracketSlot({ slot_index: 1, source_kind: 'pod', source_pod_id: 1 }),
+      bracketSlot({ slot_index: 0, source_kind: 'pod', source_pod_id: 1 }),
+    ],
+  });
+  const ordinals = computeAdvanceOrdinals([dst]);
+  assert.equal(ordinals.get('2:0'), 0);
+  assert.equal(ordinals.get('2:1'), 1);
+});
+
 // ─── availableAdvancements ───────────────────────────────────────────────────
 
-test('availableAdvancements: a wildcard pod offers 3 ordinals with First/Second/Third labels, minus any already claimed', () => {
+test('availableAdvancements: a wildcard pod offers 3 ordinals with best/2nd-best/3rd-best seed labels, minus any already claimed', () => {
   const pods: DraftPod[] = [
     draftPod({ key: 'src', round_number: 1, pod_index: 0, advance_rule: 'wildcard' }),
     draftPod({ key: 'dst', is_final: true, slots: [{ kind: 'advance', sourcePodKey: 'src', ordinal: 1 }, { kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }] }),
   ];
   const options = availableAdvancements(pods);
   assert.deepEqual(options, [
-    { sourcePodKey: 'src', ordinal: 0, label: 'First of Round 1 Group 1' },
-    { sourcePodKey: 'src', ordinal: 2, label: 'Third of Round 1 Group 1' },
+    { sourcePodKey: 'src', ordinal: 0, label: 'Best seed of Round 1 Group 1' },
+    { sourcePodKey: 'src', ordinal: 2, label: '3rd-best seed of Round 1 Group 1' },
   ]);
 });
 
@@ -411,7 +457,7 @@ test('validateIntegrity: two slots claiming the same (source, ordinal) advanceme
   ];
   const result = validateIntegrity(pods);
   assert.equal(result.valid, false);
-  assert.ok(!result.valid && result.errors.includes("Round 1 Group 1's First advancement is claimed by more than one slot."));
+  assert.ok(!result.valid && result.errors.includes("Round 1 Group 1's best seed advancement is claimed by more than one slot."));
 });
 
 test('validateIntegrity: a well-formed draft is valid', () => {
