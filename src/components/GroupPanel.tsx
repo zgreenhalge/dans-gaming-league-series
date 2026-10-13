@@ -32,7 +32,6 @@ export function GroupPanel({
 }) {
   const finished = group.status === 'complete';
   const title = group.label ?? 'Games';
-  const href = group.pod ? groupHref(hubSeasonId, group.pod.id) : undefined;
 
   const games =
     group.matches.length > 0 ? (
@@ -60,7 +59,7 @@ export function GroupPanel({
       <CollapsibleSection
         title={title}
         detail={group.isFinal ? undefined : (podKindLabel(false, group.advanceRule) ?? undefined)}
-        href={href}
+        href={group.pod ? groupHref(hubSeasonId, group.pod.id) : undefined}
       >
         {group.scorecard.length > 0 && <div className="border-b border-[var(--color-border-primary)]">{scorecard(true)}</div>}
         {games}
