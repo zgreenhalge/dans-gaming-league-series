@@ -8,6 +8,7 @@ import { StageNavStrip } from '@/components/StageNavStrip';
 import { WeekScorecard } from '@/components/StageScorecard';
 import { WeekMatchCard } from '@/components/ScheduleList';
 import EmptyState from '@/components/EmptyState';
+import { PlayerName } from '@/components/PlayerName';
 import { getFirstGauntletRound, resolveWeekPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, roundHref, seasonHref, weekHref } from '@/lib/crumbs';
@@ -66,11 +67,19 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
           title={weekLabel(week.week_number, false)}
           status={view.status}
           details={
-            win && (
-              <span>
-                {fmtWindowDate(win.start)} – {fmtWindowDate(win.end)}
-              </span>
-            )
+            <>
+              {win && (
+                <span>
+                  {fmtWindowDate(win.start)} – {fmtWindowDate(win.end)}
+                </span>
+              )}
+              {week.bye_player_name && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="tracked">Bye</span>
+                  <PlayerName name={week.bye_player_name} isMe={currentPlayerId !== null && week.bye_player_id === currentPlayerId} />
+                </span>
+              )}
+            </>
           }
         />
         <div className="mb-6">
