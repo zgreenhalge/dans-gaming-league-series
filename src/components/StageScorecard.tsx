@@ -27,8 +27,8 @@ const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
 
 const OUTCOME_ORDER = { advances: 0, eliminated: 1, pending: 2 } as const;
 
-const td = 'py-2 px-3 font-mono text-[12px] tnum';
-const nameTd = 'py-2 px-3 font-display text-[14px] font-semibold';
+const td = 'p-2 font-mono text-[12px] tnum';
+const nameTd = 'p-2 font-display text-[14px] font-semibold';
 
 function ordinal(n: number): string {
   const v = n % 100;

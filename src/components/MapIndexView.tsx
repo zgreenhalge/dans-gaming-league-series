@@ -175,19 +175,19 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                 const stats = displayStats.get(map.slug);
                 return (
                   <tr key={map.slug} className="lift-row border-b border-[var(--color-border-primary)]">
-                    <td className="py-2 pr-4">
+                    <td className="p-2">
                       <Link href={`/maps/${map.slug}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
                         {toSentenceCase(map.name)}
                       </Link>
                     </td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.seasonsPlayed || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.pickCount || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.banCount || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.noPickCount || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.pickAndWon || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.totalKills || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
-                    <td className="py-2 pl-4 text-right text-[var(--color-text-secondary)]">{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.seasonsPlayed || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickCount || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.banCount || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.noPickCount || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickAndWon || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.totalKills || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</td>
                   </tr>
                 );
               })}

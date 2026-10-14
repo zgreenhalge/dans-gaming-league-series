@@ -71,10 +71,10 @@ describe('SortableTh', () => {
 });
 
 describe('Th', () => {
-  test('matches the sortable header: 10px, tinted band, aligned, optionally sticky', () => {
+  test('matches the sortable header: 10px, 8px padding, tinted band, aligned, optionally sticky', () => {
     inRow(<Th align="right" sticky title="Rounds won">RW</Th>);
     const cell = screen.getByRole('columnheader', { name: 'RW' });
-    expect(cell).toHaveClass('text-[10px]', 'text-right', 'sticky-col', 'bg-[var(--color-bg-secondary)]');
+    expect(cell).toHaveClass('text-[10px]', 'p-2', 'text-right', 'sticky-col', 'bg-[var(--color-bg-secondary)]');
     expect(cell).toHaveAttribute('title', 'Rounds won');
     expect(cell).not.toHaveClass('uppercase');
   });

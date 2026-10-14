@@ -516,16 +516,16 @@ export default function PlayerView({
                     <tbody>
                       {playerMapStats.map((m) => (
                         <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.wins}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctPlayed}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tPlayed}</td>
-                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
+                          <td className="p-2 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.wins}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctPlayed}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tPlayed}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -556,11 +556,11 @@ export default function PlayerView({
                     <tbody>
                       {playerSideStats.map((s) => (
                         <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</td>
+                          <td className="p-2 tracked text-[11px] font-semibold">{s.side}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -600,16 +600,16 @@ export default function PlayerView({
                     })
                     .map((m) => (
                       <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum">{m.wins}-{m.losses}</td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum">
+                        <td className="p-2 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
+                        <td className="p-2 text-right font-mono tnum">{m.wins}-{m.losses}</td>
+                        <td className="p-2 text-right font-mono tnum">
                           {m.wr.toFixed(1)}%
                           <span className="inline-block w-[60px] h-[4px] bg-[var(--color-bg-secondary)] ml-2 align-middle">
                             <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum">{m.rwr.toFixed(1)}%</td>
-                        <td className="px-3 pr-4 py-2.5 text-right font-mono tnum font-semibold">{m.adr.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum">{m.rwr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{m.adr.toFixed(2)}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -780,12 +780,12 @@ export default function PlayerView({
                         </thead>
                         <tbody>
                           <tr>
-                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.kills}</td>
-                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.assists}</td>
-                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.deaths}</td>
-                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.win_rate_percentage.toFixed(1)}%</td>
-                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.rounds_won}-{t.stats.rounds_lost}</td>
-                            <td className="font-mono tnum font-semibold text-right">{t.stats.overall_adr.toFixed(2)}</td>
+                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.kills}</td>
+                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.assists}</td>
+                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.deaths}</td>
+                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.win_rate_percentage.toFixed(1)}%</td>
+                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.rounds_won}-{t.stats.rounds_lost}</td>
+                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.overall_adr.toFixed(2)}</td>
                           </tr>
                         </tbody>
                       </table>

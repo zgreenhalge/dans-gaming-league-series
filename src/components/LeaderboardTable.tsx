@@ -221,13 +221,13 @@ export default function LeaderboardTable({
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : 'var(--color-bg-primary)'; onPlayerHover?.(null); }}
               >
                 {firstColMode === 'player' && showRank && (
-                  <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
+                  <td className="p-2 font-mono text-[11px] tnum"
                     style={{ color: textColor ?? 'var(--color-text-secondary)' }}
                   >
                     <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
                   </td>
                 )}
-                <td className={`${stickyNameCol ? 'sticky-col ' : ''}py-2.5 font-display font-semibold ${firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'}`}
+                <td className={`p-2 ${stickyNameCol ? 'sticky-col ' : ''}font-display font-semibold`}
                   style={{ color: textColor ?? undefined }}
                 >
                   <Link href={href} className="flex items-center w-full h-full">
@@ -235,13 +235,13 @@ export default function LeaderboardTable({
                   </Link>
                 </td>
                 {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
-                  <td key={c.key} className="py-2.5 px-2 text-right font-mono tnum">
+                  <td key={c.key} className="p-2 text-right font-mono tnum">
                     <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
                   </td>
                 ))}
                 {hasEhog && (
                   <td
-                    className="py-2.5 px-2 text-right font-mono tnum font-semibold"
+                    className="p-2 text-right font-mono tnum font-semibold"
                     title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
                     style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
                   >
@@ -252,22 +252,22 @@ export default function LeaderboardTable({
                     </Link>
                   </td>
                 )}
-                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
                   <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
                 </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
                 </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
+                <td className="p-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
                 </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Link>
                 </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
+                <td className="p-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
                 </td>
-                <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
+                <td className="p-2 text-right font-mono tnum font-semibold">
                   <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
                 </td>
               </tr>

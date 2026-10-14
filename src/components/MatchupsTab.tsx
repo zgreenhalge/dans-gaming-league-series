@@ -335,26 +335,26 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
                         onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
                       >
-                        <td className="sticky-col pl-4 pr-2 py-2.5">
+                        <td className="p-2 sticky-col">
                           <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
                             <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
                             <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
                           </Link>
                         </td>
-                        <td className="py-2.5 px-2 text-center">
+                        <td className="p-2 text-center">
                           <div className="flex justify-center">
                             <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
                           </div>
                         </td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.myWins}–{row.myLosses}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.games}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.kills}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.assists}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.deaths}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.kd.toFixed(2)}</td>
-                        <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">{row.adr.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.myWins}–{row.myLosses}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.games}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum">{row.kills}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.assists}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.deaths}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.kd.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{row.adr.toFixed(2)}</td>
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
@@ -412,26 +412,26 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
                         onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
                       >
-                        <td className="sticky-col pl-4 pr-2 py-2.5">
+                        <td className="p-2 sticky-col">
                           <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
                             <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
                             <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
                           </Link>
                         </td>
-                        <td className="py-2.5 px-2 text-center">
+                        <td className="p-2 text-center">
                           <div className="flex justify-center">
                             <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
                           </div>
                         </td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.wins}–{row.losses}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.games}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</td>
-                        <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.wins}–{row.losses}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.games}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</td>
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">

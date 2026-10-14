@@ -45,7 +45,7 @@ export default function SortableTh<K extends string = string>({
         type="button"
         title={title}
         onClick={() => onSort(sortKey)}
-        className={`w-full cursor-pointer select-none whitespace-nowrap p-2.5 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
+        className={`w-full cursor-pointer select-none whitespace-nowrap p-2 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
           active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
         }`}
       >

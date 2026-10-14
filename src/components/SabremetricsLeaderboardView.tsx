@@ -124,13 +124,13 @@ function OpeningDuels({ wins, losses }: { wins: number; losses: number }) {
 
 function PlayerCell({ id, name }: { id: number; name: string }) {
   return (
-    <td className="sticky-col px-3 py-2">
+    <td className="p-2 sticky-col">
       <Link href={`/players/${id}`} className="block">{name}</Link>
     </td>
   );
 }
 
-const tdRight = 'px-3 py-2 text-right tnum';
+const tdRight = 'p-2 text-right tnum';
 
 // --- Impact Stats ---
 
@@ -556,7 +556,7 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
             {sorted.map((r) => (
               <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className="px-3 py-2 text-left"><WeaponLabel weapon={r.weapon} label={r.label} /></td>
+                <td className="p-2 text-left"><WeaponLabel weapon={r.weapon} label={r.label} /></td>
                 <td className={tdRight}>{r.kills}</td>
                 <td className={tdRight}>{pct(r.headshotKills, r.kills)}</td>
                 <td className={tdRight}>{r.noscopeKills}</td>

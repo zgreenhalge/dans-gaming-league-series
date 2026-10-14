@@ -13,7 +13,7 @@ export interface SabremetricsTableProps {
   players: PlayerSabRow[];
 }
 
-const tdCls = 'px-3 py-2.5 text-right font-mono tnum text-[13px]';
+const tdCls = 'p-2 text-right font-mono tnum text-[13px]';
 
 function pct(num: number, den: number): string {
   if (den === 0) return '—';
@@ -100,7 +100,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
                     col.key === 'name'
                       ? 'sticky-col pl-4 pr-3 py-2.5 font-display font-semibold text-[var(--color-text-primary)]'
                       : i === cols.length - 1
-                        ? `${tdCls} pr-4 font-semibold`
+                        ? `${tdCls} font-semibold`
                         : tdCls
                   }
                 >

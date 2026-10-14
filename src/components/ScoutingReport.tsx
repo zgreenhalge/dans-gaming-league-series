@@ -123,25 +123,25 @@ function MapCard({
         <tbody>
           {rows.map(({ player, stat }) => (
             <tr key={player.id} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer">
-              <td className="px-4 py-1.5 font-display font-semibold text-[12px] truncate">
+              <td className="p-2 font-display font-semibold text-[12px] truncate">
                 <Link href={`/players/${player.id}`}>{player.name}</Link>
               </td>
               {stat === null ? (
-                <td colSpan={expanded ? 6 : 3} className="px-3 py-1.5 text-right font-mono text-[10px] text-[var(--color-text-secondary)]">No data</td>
+                <td colSpan={expanded ? 6 : 3} className="p-2 text-right font-mono text-[10px] text-[var(--color-text-secondary)]">No data</td>
               ) : (
                 <>
-                  <td className="px-3 py-1.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{stat.wins}-{stat.losses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{stat.wins}-{stat.losses}</td>
                   {expanded && (
                     <>
-                      <td className="px-3 py-1.5 text-right font-mono tnum">{Math.round(stat.avgKills)}</td>
-                      <td className="px-3 py-1.5 text-right font-mono tnum">{Math.round(stat.avgAssists)}</td>
-                      <td className="px-3 py-1.5 text-right font-mono tnum">{Math.round(stat.avgDeaths)}</td>
+                      <td className="p-2 text-right font-mono tnum">{Math.round(stat.avgKills)}</td>
+                      <td className="p-2 text-right font-mono tnum">{Math.round(stat.avgAssists)}</td>
+                      <td className="p-2 text-right font-mono tnum">{Math.round(stat.avgDeaths)}</td>
                     </>
                   )}
-                  <td className="px-3 py-1.5 text-right font-mono tnum" style={{ color: heatColor(stat.rwr * 100, player.rwr * 100, 3) }} title={heatTitle(stat.rwr * 100, player.rwr * 100, '%', 1)}>
+                  <td className="p-2 text-right font-mono tnum" style={{ color: heatColor(stat.rwr * 100, player.rwr * 100, 3) }} title={heatTitle(stat.rwr * 100, player.rwr * 100, '%', 1)}>
                     {(stat.rwr * 100).toFixed(1)}%
                   </td>
-                  <td className="px-3 py-1.5 text-right font-mono tnum font-semibold" style={{ color: heatColor(stat.adr, player.adr, 5) }} title={heatTitle(stat.adr, player.adr, ' ADR', 1)}>
+                  <td className="p-2 text-right font-mono tnum font-semibold" style={{ color: heatColor(stat.adr, player.adr, 5) }} title={heatTitle(stat.adr, player.adr, ' ADR', 1)}>
                     {stat.adr.toFixed(1)}
                   </td>
                 </>
@@ -151,30 +151,30 @@ function MapCard({
           {avg && (
             <>
               <tr className="border-t border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
-                <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">players</td>
-                <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">—</td>
+                <td className="p-2 tracked text-[9px] text-[var(--color-text-secondary)]">players</td>
+                <td className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">—</td>
                 {expanded && (
                   <>
-                    <td title="Avg of Players K" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgKills.toFixed(1)}</td>
-                    <td title="Avg of Players A" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgAssists.toFixed(1)}</td>
-                    <td title="Avg of Players D" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgDeaths.toFixed(1)}</td>
+                    <td title="Avg of Players K" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgKills.toFixed(1)}</td>
+                    <td title="Avg of Players A" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgAssists.toFixed(1)}</td>
+                    <td title="Avg of Players D" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgDeaths.toFixed(1)}</td>
                   </>
                 )}
-                <td title="Avg of Players RWR%" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{(avg.rwr * 100).toFixed(1)}%</td>
-                <td title="Avg of Players ADR" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.adr.toFixed(1)}</td>
+                <td title="Avg of Players RWR%" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{(avg.rwr * 100).toFixed(1)}%</td>
+                <td title="Avg of Players ADR" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.adr.toFixed(1)}</td>
               </tr>
               <tr className="bg-[var(--color-bg-secondary)]">
-                <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">league</td>
-                <td title={leagueAvg ? `Games played on ${displayName} by the league` : undefined} className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.wins + leagueAvg.losses : '—'}</td>
+                <td className="p-2 tracked text-[9px] text-[var(--color-text-secondary)]">league</td>
+                <td title={leagueAvg ? `Games played on ${displayName} by the league` : undefined} className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.wins + leagueAvg.losses : '—'}</td>
                 {expanded && (
                   <>
-                    <td title="Avg of League K" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgKills.toFixed(1) : '—'}</td>
-                    <td title="Avg of League A" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgAssists.toFixed(1) : '—'}</td>
-                    <td title="Avg of League D" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgDeaths.toFixed(1) : '—'}</td>
+                    <td title="Avg of League K" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgKills.toFixed(1) : '—'}</td>
+                    <td title="Avg of League A" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgAssists.toFixed(1) : '—'}</td>
+                    <td title="Avg of League D" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgDeaths.toFixed(1) : '—'}</td>
                   </>
                 )}
-                <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">—</td>
-                <td title="Avg of League ADR" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.adr.toFixed(1) : '—'}</td>
+                <td className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">—</td>
+                <td title="Avg of League ADR" className="p-2 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.adr.toFixed(1) : '—'}</td>
               </tr>
             </>
           )}
