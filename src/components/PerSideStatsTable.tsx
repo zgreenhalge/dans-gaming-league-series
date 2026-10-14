@@ -17,7 +17,7 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
             <thead>
-              <tr className="bg-[var(--color-bg-secondary)]">
+              <tr>
                 <Th align="left">Side</Th>
                 <Th align="right">Times Picked</Th>
                 <Th align="right">W-L</Th>

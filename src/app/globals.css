@@ -2,6 +2,8 @@
 
 /* Light (default) — Dust2 daylight: tan base, navy ink, CT blue + T orange accents */
 :root {
+  /* Letter-spacing of small labels: `.tracked` and the table header cells (`Th`, `SortableTh`). */
+  --tracking-label: 0.14em;
   --color-bg-primary: #f6f0e0;
   --color-bg-secondary: #efe7d1;
   --color-bg-tertiary: #ece4d2;
@@ -190,7 +192,7 @@ body::before {
 /* Broadcast chrome label: small, uppercase, tracked */
 .tracked {
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-label);
   font-feature-settings: "ss01";
 }
 
@@ -568,8 +570,9 @@ body::before {
    `background: inherit` makes the cell paint whatever color its row is
    currently painting (medal/zone tint, hover, etc.), so the pinned column
    stays opaque and tracks every row highlight automatically — the row just
-   needs an opaque base background. The ::after edge shadow makes the pinned
-   column read as floating above the scrolled content. */
+   needs an opaque base background. A pinned header cell (`th.sticky-col`)
+   has no such row — it paints the header band itself, below. The ::after edge
+   shadow makes the pinned column read as floating above the scrolled content. */
 .sticky-col {
   position: sticky;
   left: 0;
