@@ -7,6 +7,8 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 import { PlayerName } from './PlayerName';
 import { canonicalSort } from '@/lib/util';
 import { ehogColorFor } from './EhogBadge';
+import Th from './Th';
+import SortableTh from './SortableTh';
 import type { SeedPlacement } from '@/lib/gauntlet-bracket';
 
 type SortCol =
@@ -73,36 +75,6 @@ function compare(
   }
 }
 
-function SortableTh({
-  col,
-  active,
-  asc,
-  onClickHeader,
-  onKeyDown,
-}: {
-  col: { key: SortCol; label: string; title?: string };
-  active: boolean;
-  asc: boolean;
-  onClickHeader: (col: SortCol) => void;
-  onKeyDown: (e: React.KeyboardEvent, col: SortCol) => void;
-}) {
-  return (
-    <th
-      title={col.title}
-      tabIndex={0}
-      aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
-      onClick={() => onClickHeader(col.key)}
-      onKeyDown={(e) => onKeyDown(e, col.key)}
-      className={`tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-right ${
-        active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
-      }`}
-    >
-      {col.label}
-      {active && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
-    </th>
-  );
-}
-
 // In 'season' mode: first col shows season name linking to /seasons/[season_id].
 // In 'player' mode: first col shows rank + player name linking to /players/[player_id].
 export default function LeaderboardTable({
@@ -139,19 +111,13 @@ export default function LeaderboardTable({
   const defaultSort: SortCol = trophyCounts ? 'gold' : canonicalRanking ? 'rank' : 'record';
   const [sortCol, setSortCol] = useState<SortCol>(defaultSort);
   const [asc, setAsc] = useState(false);
+  const sortState = { col: sortCol, asc };
 
   function clickHeader(col: SortCol) {
     if (col === sortCol) setAsc(!asc);
     else {
       setSortCol(col);
       setAsc(col === 'name');
-    }
-  }
-
-  function headerKey(e: React.KeyboardEvent, col: SortCol) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      clickHeader(col);
     }
   }
 
@@ -223,27 +189,12 @@ export default function LeaderboardTable({
     <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
       <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
-            {firstColMode === 'player' && showRank && (
-              <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] w-6">
-                #
-              </th>
-            )}
-            <th
-              tabIndex={0}
-              aria-sort={sortCol === 'name' ? (asc ? 'ascending' : 'descending') : 'none'}
-              onClick={() => clickHeader('name')}
-              onKeyDown={(e) => headerKey(e, 'name')}
-              className={`${stickyNameCol ? 'sticky-col ' : ''}tracked text-[10px] font-semibold py-2.5 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-left ${
-                firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'
-              } ${sortCol === 'name' ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}
-            >
-              {firstColLabel}
-              {sortCol === 'name' && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
-            </th>
-            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
-            {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} active={sortCol === 'ehog'} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />}
-            {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
+          <tr>
+            {firstColMode === 'player' && showRank && <Th className="w-6">#</Th>}
+            <SortableTh label={firstColLabel} sortKey="name" state={sortState} onSort={clickHeader} sticky={stickyNameCol} />
+            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
+            {hasEhog && <SortableTh label="EHOG" title="EHOG rating as of most recent match in this view" sortKey="ehog" state={sortState} onSort={clickHeader} align="right" />}
+            {STAT_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
           </tr>
         </thead>
         <tbody>

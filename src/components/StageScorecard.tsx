@@ -87,7 +87,7 @@ export function WeekScorecard({
   const sorted = sortRows(rows, sort, WEEK_SORT);
   return (
     <Frame>
-      <thead className="bg-[var(--color-bg-secondary)]">
+      <thead>
         <tr>
           <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />
           <SortableTh label="W-L" sortKey="record" state={sort} onSort={onSort} align="right" />
@@ -167,7 +167,7 @@ export function GroupScorecard({
   });
   return (
     <Frame bare={bare}>
-      <thead className="bg-[var(--color-bg-secondary)]">
+      <thead>
         <tr>
           <SortableTh label="Seed" sortKey="seed" state={sort} onSort={onSort} align="right" />
           <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />

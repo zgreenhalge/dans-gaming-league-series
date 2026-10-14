@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Th from './Th';
 import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
@@ -62,12 +63,6 @@ function heatColor(val: number, baseline: number, threshold: number): string {
   return 'var(--color-text-primary)';
 }
 
-const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
-  <th className={`tracked text-[9px] font-semibold text-[var(--color-text-secondary)] py-1.5 border-b border-[var(--color-border-tertiary)] ${right ? 'text-right px-3' : 'text-left px-4'}`}>
-    {children}
-  </th>
-);
-
 function MapCard({
   mapName,
   shirts,
@@ -118,11 +113,11 @@ function MapCard({
       <table className="w-full table-fixed text-[12px]">
         <thead>
           <tr>
-            <TH>Player</TH>
-            <TH right>W-L</TH>
-            {expanded && <><TH right>K</TH><TH right>A</TH><TH right>D</TH></>}
-            <TH right>RWR%</TH>
-            <TH right>ADR</TH>
+            <Th>Player</Th>
+            <Th align="right">W-L</Th>
+            {expanded && <><Th align="right">K</Th><Th align="right">A</Th><Th align="right">D</Th></>}
+            <Th align="right">RWR%</Th>
+            <Th align="right">ADR</Th>
           </tr>
         </thead>
         <tbody>

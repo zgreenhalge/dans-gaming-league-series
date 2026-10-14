@@ -6,6 +6,8 @@ import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/queries';
 import EmptyState from './EmptyState';
+import Th from './Th';
+import SortableTh from './SortableTh';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
@@ -19,40 +21,6 @@ function rowBg(rating: number, color: string) {
 }
 function rowHoverBg(rating: number, color: string) {
   return `color-mix(in srgb, ${color} ${Math.round(8 + (rating / 100) * 15)}%, var(--color-bg-primary))`;
-}
-
-function SortableTh({
-  label,
-  col,
-  active,
-  asc,
-  align = 'right',
-  title,
-  onClick,
-}: {
-  label: string;
-  col: string;
-  active: string;
-  asc: boolean;
-  align?: 'left' | 'right' | 'center';
-  title?: string;
-  onClick: (c: string) => void;
-}) {
-  const isActive = active === col;
-  return (
-    <th
-      tabIndex={0}
-      title={title}
-      onClick={() => onClick(col)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(col); } }}
-      className={`tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-${align} ${
-        isActive ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
-      }`}
-    >
-      {label}
-      {isActive && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
-    </th>
-  );
 }
 
 function CalloutCard({
@@ -356,12 +324,10 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
             <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
-                    Opponent
-                  </th>
+                <tr>
+                  <Th sticky className="whitespace-nowrap">Opponent</Th>
                   {H2H_COLS.map(({ col, label, align, title }) => (
-                    <SortableTh key={col} col={col} label={label} active={h2hSort} asc={h2hAsc} align={align} title={title} onClick={clickH2hSort} />
+                    <SortableTh key={col} sortKey={col} label={label} state={{ col: h2hSort, asc: h2hAsc }} align={align ?? 'right'} title={title} onSort={clickH2hSort} />
                   ))}
                 </tr>
               </thead>
@@ -432,12 +398,10 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
             <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
-                    Teammate
-                  </th>
+                <tr>
+                  <Th sticky className="whitespace-nowrap">Teammate</Th>
                   {B2B_COLS.map(({ col, label, align, title }) => (
-                    <SortableTh key={col} col={col} label={label} active={b2bSort} asc={b2bAsc} align={align} title={title} onClick={clickB2bSort} />
+                    <SortableTh key={col} sortKey={col} label={label} state={{ col: b2bSort, asc: b2bAsc }} align={align ?? 'right'} title={title} onSort={clickB2bSort} />
                   ))}
                 </tr>
               </thead>

@@ -25,6 +25,7 @@ import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 import Th from './Th';
+import SortableTh from './SortableTh';
 
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
@@ -86,24 +87,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-10 mb-3">
       {children}
     </div>
-  );
-}
-
-function SortableTh({ label, colKey, activeCol, asc, align = 'right', onClick }: {
-  label: string; colKey: string; activeCol: string; asc: boolean;
-  align?: 'left' | 'right'; onClick: (col: string) => void;
-}) {
-  const active = colKey === activeCol;
-  return (
-    <th
-      tabIndex={0}
-      onClick={() => onClick(colKey)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(colKey); } }}
-      aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
-      className={`tracked text-[10px] font-semibold py-2.5 px-3 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] ${align === 'left' ? 'text-left pl-4' : 'text-right'} ${active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}
-    >
-      {label}<span className={`ml-1 ${active ? 'opacity-100' : 'opacity-30'}`}>{active ? (asc ? '↑' : '↓') : '↕'}</span>
-    </th>
   );
 }
 
@@ -176,6 +159,7 @@ export default function PlayerView({
   const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');
   const [mapSort, setMapSort] = useState<MapSortCol>('record');
   const [mapAsc, setMapAsc] = useState(false);
+  const mapSortState = { col: mapSort, asc: mapAsc };
 
   const activeSeasons = useMemo(
     () => dedupeVisibleSeasons(regularSeasons, gauntletSeasons, includeRegular, includeGauntlet),
@@ -516,7 +500,7 @@ export default function PlayerView({
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
-                      <tr className="bg-[var(--color-bg-secondary)]">
+                      <tr>
                         <Th align="left">Map</Th>
                         <Th align="right">Games</Th>
                         <Th align="right">Wins</Th>
@@ -561,7 +545,7 @@ export default function PlayerView({
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
-                      <tr className="bg-[var(--color-bg-secondary)]">
+                      <tr>
                         <Th align="left">Side</Th>
                         <Th align="right">Played</Th>
                         <Th align="right">Times Picked</Th>
@@ -593,12 +577,12 @@ export default function PlayerView({
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
               <table className="w-full min-w-max border-collapse text-[13px]">
                 <thead>
-                  <tr className="bg-[var(--color-bg-secondary)]">
-                    <SortableTh label="Map" colKey="map"    activeCol={mapSort} asc={mapAsc} align="left" onClick={clickMapSort} />
-                    <SortableTh label="W-L" colKey="record" activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
-                    <SortableTh label="WR%" colKey="wr"     activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
-                    <SortableTh label="RWR%" colKey="rwr"   activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
-                    <SortableTh label="ADR" colKey="adr"    activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
+                  <tr>
+                    <SortableTh label="Map" sortKey="map" state={mapSortState} onSort={clickMapSort} />
+                    <SortableTh label="W-L" sortKey="record" state={mapSortState} onSort={clickMapSort} align="right" />
+                    <SortableTh label="WR%" sortKey="wr" state={mapSortState} onSort={clickMapSort} align="right" />
+                    <SortableTh label="RWR%" sortKey="rwr" state={mapSortState} onSort={clickMapSort} align="right" />
+                    <SortableTh label="ADR" sortKey="adr" state={mapSortState} onSort={clickMapSort} align="right" />
                   </tr>
                 </thead>
                 <tbody>

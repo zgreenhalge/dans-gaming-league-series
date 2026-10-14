@@ -1,4 +1,5 @@
 import type { SabFieldsWithDerived } from '@/lib/types';
+import Th from './Th';
 
 interface PlayerSabRow {
   player_id: number;
@@ -12,8 +13,6 @@ export interface SabremetricsTableProps {
   players: PlayerSabRow[];
 }
 
-const thCls =
-  'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap';
 const tdCls = 'px-3 py-2.5 text-right font-mono tnum text-[13px]';
 
 function pct(num: number, den: number): string {
@@ -80,19 +79,11 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
     <div className="border border-[var(--color-border-primary)] overflow-x-auto">
       <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
+          <tr>
             {cols.map((col) => (
-              <th
-                key={col.key}
-                title={col.title || undefined}
-                className={
-                  col.key === 'name'
-                    ? 'sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]'
-                    : thCls
-                }
-              >
+              <Th key={col.key} title={col.title || undefined} align={col.key === 'name' ? 'left' : 'right'} sticky={col.key === 'name'}>
                 {col.header}
-              </th>
+              </Th>
             ))}
           </tr>
         </thead>

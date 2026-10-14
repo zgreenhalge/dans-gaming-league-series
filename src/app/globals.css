@@ -576,6 +576,10 @@ body::before {
   z-index: 1;
   background: inherit;
 }
+/* A pinned header cell paints the header band itself: its row has no background to inherit. */
+th.sticky-col {
+  background: var(--color-bg-secondary);
+}
 .sticky-col::after {
   content: '';
   position: absolute;

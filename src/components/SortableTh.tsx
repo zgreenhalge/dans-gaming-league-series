@@ -1,40 +1,58 @@
 'use client';
 
 import type { SortState } from './useSortState';
+import { TH_ALIGN_CLS, TH_CLS, type ThAlign } from './Th';
 
-/** Clickable column header in `Th`'s style, with an arrow on the active column. The `button` keeps it
- *  keyboard-reachable; `aria-sort` tells assistive tech which column orders the table. */
-export default function SortableTh({
+/** Clickable column header in `Th`'s style. The `button` keeps it keyboard-reachable (with a focus
+ *  ring), `aria-sort` tells assistive tech which column orders the table, and hovering tints it. The
+ *  sort arrow has its slot reserved on the side away from the cell's alignment edge — before the
+ *  label on a right-aligned column, after it on a left-aligned one (a centered one mirrors the slot
+ *  on both sides) — so sorting never shifts the column's width or the label's alignment with the
+ *  figures below it. */
+export default function SortableTh<K extends string = string>({
   label,
   title,
   sortKey,
   state,
   onSort,
   align = 'left',
+  sticky = false,
+  className = '',
 }: {
-  label: string;
+  label: React.ReactNode;
   title?: string;
-  sortKey: string;
+  sortKey: K;
   state: SortState;
-  onSort: (key: string) => void;
-  align?: 'left' | 'right';
+  onSort: (key: K) => void;
+  align?: ThAlign;
+  /** Pin the cell to the left edge while the table scrolls horizontally (`.sticky-col`). */
+  sticky?: boolean;
+  /** Extra classes merged onto the cell, e.g. a width. */
+  className?: string;
 }) {
   const active = state.col === sortKey;
+  const arrow = (
+    <span aria-hidden className={`inline-block w-[1.2em] text-center ${active ? '' : 'invisible'}`}>
+      {state.asc ? '↑' : '↓'}
+    </span>
+  );
   return (
     <th
       aria-sort={active ? (state.asc ? 'ascending' : 'descending') : 'none'}
-      className={`border-b border-[var(--color-border-primary)] p-0 ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`${TH_CLS} ${TH_ALIGN_CLS[align]} p-0 ${sticky ? 'sticky-col' : ''} ${className}`}
     >
       <button
         type="button"
         title={title}
         onClick={() => onSort(sortKey)}
-        className={`tracked w-full cursor-pointer select-none whitespace-nowrap px-3 py-2 text-[9px] font-semibold hover:bg-[var(--color-bg-hover)] ${
-          align === 'right' ? 'text-right' : 'text-left'
-        } ${active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}
+        className={`w-full cursor-pointer select-none whitespace-nowrap p-2.5 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
+          active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
+        }`}
       >
+        {align === 'right' && arrow}
+        {align === 'center' && <span aria-hidden className="inline-block w-[1.2em]" />}
         {label}
-        {active ? (state.asc ? ' ↑' : ' ↓') : ''}
+        {align !== 'right' && arrow}
       </button>
     </th>
   );

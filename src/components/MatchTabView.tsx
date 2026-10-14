@@ -57,26 +57,22 @@ function Scoreboard({
   const cls = factionClass(faction);
   const hasSab = sabMap && sabMap.size > 0;
   const bothSides = includeCT && includeT;
-  const thStatCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
-
   return (
     <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
       <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
-            <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)] w-[40%]">
-              Player
-            </th>
-            <th className={`${thStatCls}`} title="Kills">K</th>
-            <th className={`${thStatCls}`} title="Assists">A</th>
-            <th className={`${thStatCls}`} title="Deaths">D</th>
-            <th className={`${thStatCls}`} title="Total damage dealt">DMG</th>
-            <th className={`${thStatCls}`} title="Average damage per round">ADR</th>
+          <tr>
+            <Th sticky className="w-[40%]">Player</Th>
+            <Th align="right" title="Kills">K</Th>
+            <Th align="right" title="Assists">A</Th>
+            <Th align="right" title="Deaths">D</Th>
+            <Th align="right" title="Total damage dealt">DMG</Th>
+            <Th align="right" title="Average damage per round">ADR</Th>
             {hasSab && (
               <>
-                <th className={`${thStatCls}`} title="Headshot kill percentage">HS%</th>
-                <th className={`${thStatCls}`} title="Enemy players blinded by flashbangs">EF</th>
-                <th className={`${thStatCls}`} title="Damage dealt with grenades (HE, molotov, incendiary)">UD</th>
+                <Th align="right" title="Headshot kill percentage">HS%</Th>
+                <Th align="right" title="Enemy players blinded by flashbangs">EF</Th>
+                <Th align="right" title="Damage dealt with grenades (HE, molotov, incendiary)">UD</Th>
               </>
             )}
           </tr>
@@ -259,10 +255,8 @@ function RatingProjectionTable({
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
         <table className="w-full min-w-max text-[13px]">
           <thead>
-            <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="sticky-col tracked text-[9px] font-semibold py-2 pl-4 pr-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">
-                Score
-              </th>
+            <tr>
+              <Th sticky>Score</Th>
               {allPlayers.map((p) => (
                 <Th key={p.player_id} align="right">
                   {p.player_name}
