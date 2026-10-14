@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react';
 import EmptyState from './EmptyState';
-import { StageBar } from './StageBar';
+import { CollapsibleSection } from './CollapsibleSection';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
+import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId, weekLabel } from '@/lib/util';
 import { aggregatePlayerRecords } from '@/lib/group-scorecard';
 import { groupName, roundHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
@@ -196,139 +196,129 @@ function GauntletRoundCard({
   }
 
   return (
-    <div id={roundAnchorId(round.round_number)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
-      <StageBar open={isOpen} onToggle={onToggle} href={roundLink ?? undefined} label={`Round ${round.round_number}`}>
-        <div className="flex items-baseline gap-2.5 flex-1 min-w-0">
-          <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
-            Round {round.round_number}
-          </span>
-          {roundStakes && (
-            <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-              {GAUNTLET_POD_STAKES_LABEL[roundStakes]}
-            </span>
-          )}
-        </div>
-      </StageBar>
+    <CollapsibleSection
+      id={roundAnchorId(round.round_number)}
+      title={weekLabel(round.round_number, true)}
+      detail={roundStakes ? GAUNTLET_POD_STAKES_LABEL[roundStakes] : undefined}
+      href={roundLink ?? undefined}
+      open={isOpen}
+      onToggle={onToggle}
+    >
+      {(() => {
+        // Legacy pod-less matches (pod_index null — a gauntlet predating bracket scheduling)
+        // have no per-pod grouping to number games within, so they keep one continuous "Game N"
+        // count across the whole round; a real pod's own two games number Game 1/Game 2 per pod,
+        // declared inside the map below.
+        let soloGameNumber = 0;
+        return podEntries.map((entry, gi) => {
+          // A pod header names its group so consecutive pods in one round read as distinct
+          // matchups rather than one undifferentiated list of games — "Group N" 1-indexed to
+          // match `groupName()` in crumbs.ts, or "Final" for the round
+          // with the bracket's single final pod. `null` only for a legacy pod-less match (no
+          // group concept).
+          const groupLabel = entry.pod_index != null ? groupName(entry.pod_index, isFinalRound) : null;
+          const stakesText = !isFinalRound && !roundStakes && entry.advance_rule ? GAUNTLET_POD_STAKES_LABEL[entry.advance_rule] : null;
+          let podGameNumber = 0; // 1-indexed within this pod, not across the whole round
+          return (
+            <div
+              key={entry.kind === 'pending' ? `pod-${entry.pod.id}` : (entry.pod_index ?? `solo-${gi}`)}
+              className="border-t-2 border-[var(--color-border-primary)] first:border-t-0"
+            >
+              {(groupLabel || stakesText) && (
+                <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)] flex items-baseline gap-2">
+                  {groupLabel && <span className="tracked font-semibold text-[var(--color-text-primary)]">{groupLabel}</span>}
+                  {stakesText && <span>{stakesText}</span>}
+                </div>
+              )}
+              {entry.kind === 'pending' ? (
+                <PendingPodRows
+                  pod={entry.pod}
+                  podsById={podsById}
+                  advanceOrdinals={advanceOrdinals}
+                  seedNames={seedNames}
+                  currentPlayerId={currentPlayerId}
+                />
+              ) : (
+                entry.matches.map((m) => (
+                  <GameMatchCard
+                    key={m.id}
+                    match={m}
+                    gameNumber={entry.pod_index != null ? ++podGameNumber : ++soloGameNumber}
+                    currentPlayerId={currentPlayerId}
+                  />
+                ))
+              )}
+            </div>
+          );
+        });
+      })()}
 
-      {isOpen && (
-        <>
-          {(() => {
-            // Legacy pod-less matches (pod_index null — a gauntlet predating bracket scheduling)
-            // have no per-pod grouping to number games within, so they keep one continuous "Game N"
-            // count across the whole round, same as before this diff — only a real pod's own two
-            // games reset to Game 1/Game 2 per pod, declared inside the map below.
-            let soloGameNumber = 0;
-            return podEntries.map((entry, gi) => {
-              // A pod header names its group so consecutive pods in one round read as distinct
-              // matchups rather than one undifferentiated list of games — "Group N" 1-indexed to
-              // match `groupName()` in crumbs.ts, or "Final" for the round
-              // with the bracket's single final pod. `null` only for a legacy pod-less match (no
-              // group concept).
-              const groupLabel = entry.pod_index != null ? groupName(entry.pod_index, isFinalRound) : null;
-              const stakesText = !isFinalRound && !roundStakes && entry.advance_rule ? GAUNTLET_POD_STAKES_LABEL[entry.advance_rule] : null;
-              let podGameNumber = 0; // 1-indexed within this pod, not across the whole round
+      {records.length > 0 && (
+        <div className="border-t-2 border-[var(--color-border-primary)] px-4 py-3 bg-[var(--color-bg-secondary)]">
+          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-2">
+            Results
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {records.map((r) => {
+              const advanced =
+                !isFinalRound && allPlayed && playerIdsInLaterRounds.has(r.player_id);
+              const eliminated =
+                !isFinalRound && allPlayed && !playerIdsInLaterRounds.has(r.player_id);
+              const isChampion =
+                isFinalRound &&
+                allPlayed &&
+                rankMap.get(r.player_id) === 1;
               return (
-                <div
-                  key={entry.kind === 'pending' ? `pod-${entry.pod.id}` : (entry.pod_index ?? `solo-${gi}`)}
-                  className="border-t-2 border-[var(--color-border-primary)] first:border-t-0"
-                >
-                  {(groupLabel || stakesText) && (
-                    <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)] flex items-baseline gap-2">
-                      {groupLabel && <span className="tracked font-semibold text-[var(--color-text-primary)]">{groupLabel}</span>}
-                      {stakesText && <span>{stakesText}</span>}
-                    </div>
-                  )}
-                  {entry.kind === 'pending' ? (
-                    <PendingPodRows
-                      pod={entry.pod}
-                      podsById={podsById}
-                      advanceOrdinals={advanceOrdinals}
-                      seedNames={seedNames}
-                      currentPlayerId={currentPlayerId}
-                    />
-                  ) : (
-                    entry.matches.map((m) => (
-                      <GameMatchCard
-                        key={m.id}
-                        match={m}
-                        gameNumber={entry.pod_index != null ? ++podGameNumber : ++soloGameNumber}
-                        currentPlayerId={currentPlayerId}
-                      />
-                    ))
-                  )}
+                <div key={r.player_id} className="flex items-center justify-between gap-3">
+                  <span
+                    className="font-display text-[13px] font-semibold inline-flex items-center gap-1"
+                    style={{
+                      color: isChampion
+                        ? 'var(--color-accent-amber-strong)'
+                        : advanced
+                          ? 'var(--color-accent-green-fg)'
+                          : eliminated
+                            ? 'var(--color-text-secondary)'
+                            : 'var(--color-text-primary)',
+                    }}
+                  >
+                    <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-mono text-[12px] tnum font-semibold ${
+                        advanced || isChampion
+                          ? 'text-[var(--color-accent-green-fg)]'
+                          : eliminated
+                            ? 'text-[var(--color-text-secondary)]'
+                            : 'text-[var(--color-text-primary)]'
+                      }`}
+                    >
+                      {r.wins}-{r.losses}
+                    </span>
+                    {advanced && (
+                      <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]">
+                        Advanced
+                      </span>
+                    )}
+                    {eliminated && (
+                      <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-[var(--color-border-primary)]">
+                        Eliminated
+                      </span>
+                    )}
+                    {isChampion && (
+                      <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-accent-amber-strong)] bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)]">
+                        Champion
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
-            });
-          })()}
-
-          {records.length > 0 && (
-            <div className="border-t-2 border-[var(--color-border-primary)] px-4 py-3 bg-[var(--color-bg-secondary)]">
-              <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-2">
-                Results
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {records.map((r) => {
-                  const advanced =
-                    !isFinalRound && allPlayed && playerIdsInLaterRounds.has(r.player_id);
-                  const eliminated =
-                    !isFinalRound && allPlayed && !playerIdsInLaterRounds.has(r.player_id);
-                  const isChampion =
-                    isFinalRound &&
-                    allPlayed &&
-                    rankMap.get(r.player_id) === 1;
-                  return (
-                    <div key={r.player_id} className="flex items-center justify-between gap-3">
-                      <span
-                        className="font-display text-[13px] font-semibold inline-flex items-center gap-1"
-                        style={{
-                          color: isChampion
-                            ? 'var(--color-accent-amber-strong)'
-                            : advanced
-                              ? 'var(--color-accent-green-fg)'
-                              : eliminated
-                                ? 'var(--color-text-secondary)'
-                                : 'var(--color-text-primary)',
-                        }}
-                      >
-                        <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-mono text-[12px] tnum font-semibold ${
-                            advanced || isChampion
-                              ? 'text-[var(--color-accent-green-fg)]'
-                              : eliminated
-                                ? 'text-[var(--color-text-secondary)]'
-                                : 'text-[var(--color-text-primary)]'
-                          }`}
-                        >
-                          {r.wins}-{r.losses}
-                        </span>
-                        {advanced && (
-                          <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]">
-                            Advanced
-                          </span>
-                        )}
-                        {eliminated && (
-                          <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-[var(--color-border-primary)]">
-                            Eliminated
-                          </span>
-                        )}
-                        {isChampion && (
-                          <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-accent-amber-strong)] bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)]">
-                            Champion
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </>
+            })}
+          </div>
+        </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 

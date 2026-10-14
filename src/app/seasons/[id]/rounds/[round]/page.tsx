@@ -9,9 +9,9 @@ import { GroupPanel } from '@/components/GroupPanel';
 import EmptyState from '@/components/EmptyState';
 import { getSeedNames, resolveRoundPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, gauntletHref, roundHref, seasonHref } from '@/lib/crumbs';
+import { buildCrumbs, regularSeasonLink, roundHref, stageHeading } from '@/lib/crumbs';
 import { describeMatchups, roundTitle } from '@/lib/seo/stage-meta';
-import { parseRouteId, seasonTitle, weekLabel } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -51,23 +51,15 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
   const [{ hub, data, view, seedNames }, session] = await Promise.all([loadRound(id, round), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
 
+  const trail = { season: hub, gauntlet: true, round: view.roundNumber };
+
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={buildCrumbs({ season: hub, gauntlet: true, round: view.roundNumber })} />
+      <TopbarShell crumbs={buildCrumbs(trail)} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
-        <StageHeader
-          season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
-          title={weekLabel(view.roundNumber, true)}
-          status={view.status}
-          details={view.isFinal && <span>Final round</span>}
-        />
+        <StageHeader heading={stageHeading(trail)} status={view.status} details={[view.isFinal && 'Final round']} />
         <div className="mb-6">
-          <StageNavStrip
-            items={view.nav}
-            label="Rounds"
-            metaPosition="above"
-            meta={hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id) }}
-          />
+          <StageNavStrip items={view.nav} label="Rounds" meta={regularSeasonLink(hub)} />
         </div>
         {view.groups.length > 0 ? (
           view.groups.map((g, i) => (

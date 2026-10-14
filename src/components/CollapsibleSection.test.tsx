@@ -5,7 +5,7 @@
  * Run: npx vitest run src/components/CollapsibleSection.test.tsx
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CollapsibleSection } from './CollapsibleSection';
@@ -43,5 +43,34 @@ describe('CollapsibleSection', () => {
     expect(screen.queryByRole('link')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: /Group 1/ }));
     expect(screen.queryByText('scorecard')).toBeNull();
+  });
+  test('controlled: the open prop decides, and the caret calls onToggle instead of toggling itself', async () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(
+      <CollapsibleSection title="Week 3" href="/seasons/5/weeks/31" open={false} onToggle={onToggle}>
+        <p>matches</p>
+      </CollapsibleSection>,
+    );
+    expect(screen.queryByText('matches')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Week 3' }));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('matches')).toBeNull();
+    rerender(
+      <CollapsibleSection title="Week 3" href="/seasons/5/weeks/31" open onToggle={onToggle}>
+        <p>matches</p>
+      </CollapsibleSection>,
+    );
+    expect(screen.getByText('matches')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse Week 3' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('renders the anchor id and trailing content in the bar', () => {
+    const { container } = render(
+      <CollapsibleSection title="Week 3" id="week-31" trailing={<span>Bye: Dee</span>}>
+        <p>matches</p>
+      </CollapsibleSection>,
+    );
+    expect(container.querySelector('#week-31')).not.toBeNull();
+    expect(screen.getByText('Bye: Dee')).toBeInTheDocument();
   });
 });

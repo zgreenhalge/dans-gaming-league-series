@@ -5,6 +5,7 @@ import Th from './Th';
 import { PlayerName } from './PlayerName';
 import { useSortState } from './useSortState';
 import { sortRows, type SortValue } from '@/lib/sort-rows';
+import { hasPlayed, type PlayerRecord } from '@/lib/group-scorecard';
 import type { WeekScorecardRow, GroupRow } from '@/lib/stage-views';
 import type { RankMovement } from '@/lib/season-standings';
 
@@ -18,9 +19,9 @@ const ASC_FIRST = ['player', 'seed', 'season', 'result'] as const;
 const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
   player: (r) => r.player_name,
   record: (r) => r.wins * 1000 - r.losses,
-  rwr: (r) => (r.matches_played > 0 ? r.rwr_percentage : null),
-  adr: (r) => (r.matches_played > 0 ? r.adr : null),
-  kd: (r) => (r.matches_played > 0 ? r.kd_ratio : null),
+  rwr: (r) => (hasPlayed(r) ? r.rwr_percentage : null),
+  adr: (r) => (hasPlayed(r) ? r.adr : null),
+  kd: (r) => (hasPlayed(r) ? r.kd_ratio : null),
   season: (r) => r.movement?.after ?? null,
 };
 
@@ -37,6 +38,11 @@ function ordinal(n: number): string {
 
 function pct(n: number): string {
   return `${n.toFixed(1)}%`;
+}
+
+/** A figure for a player with a played match, else a dash. */
+function rateOrDash(record: Pick<PlayerRecord, 'matches_played'>, text: string): string {
+  return hasPlayed(record) ? text : '–';
 }
 
 function Movement({ movement }: { movement: RankMovement | null }) {
@@ -100,9 +106,9 @@ export function WeekScorecard({
             <td className={`${td} text-right font-semibold`}>
               {r.wins}-{r.losses}
             </td>
-            <td className={`${td} text-right`}>{r.matches_played > 0 ? pct(r.rwr_percentage) : '–'}</td>
-            <td className={`${td} text-right`}>{r.matches_played > 0 ? r.adr.toFixed(1) : '–'}</td>
-            <td className={`${td} text-right`}>{r.matches_played > 0 ? r.kd_ratio.toFixed(2) : '–'}</td>
+            <td className={`${td} text-right`}>{rateOrDash(r, pct(r.rwr_percentage))}</td>
+            <td className={`${td} text-right`}>{rateOrDash(r, r.adr.toFixed(1))}</td>
+            <td className={`${td} text-right`}>{rateOrDash(r, r.kd_ratio.toFixed(2))}</td>
             {showMovement && (
               <td className={`${td} text-right`}>
                 <Movement movement={r.movement} />
@@ -151,13 +157,12 @@ export function GroupScorecard({
   currentPlayerId: number | null;
 }) {
   const [sort, onSort] = useSortState('', { ascFirst: ASC_FIRST });
-  const played = (r: GroupRow) => r.matches_played > 0;
   const sorted = sortRows<GroupRow>(rows, sort, {
     seed: (r) => r.seed,
     player: (r) => r.player_name,
-    record: (r) => (played(r) ? r.wins * 1000 - r.losses : null),
-    rwr: (r) => (played(r) ? r.rwr_percentage : null),
-    adr: (r) => (played(r) ? r.adr : null),
+    record: (r) => (hasPlayed(r) ? r.wins * 1000 - r.losses : null),
+    rwr: (r) => (hasPlayed(r) ? r.rwr_percentage : null),
+    adr: (r) => (hasPlayed(r) ? r.adr : null),
     result: (r) => (isFinal ? r.rank : OUTCOME_ORDER[r.outcome]),
   });
   return (
@@ -184,11 +189,9 @@ export function GroupScorecard({
             <td className={nameTd}>
               <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
             </td>
-            <td className={`${td} text-right font-semibold`}>
-              {r.matches_played > 0 ? `${r.wins}-${r.losses}` : '–'}
-            </td>
-            <td className={`${td} text-right`}>{r.matches_played > 0 ? pct(r.rwr_percentage) : '–'}</td>
-            <td className={`${td} text-right`}>{r.matches_played > 0 ? r.adr.toFixed(1) : '–'}</td>
+            <td className={`${td} text-right font-semibold`}>{rateOrDash(r, `${r.wins}-${r.losses}`)}</td>
+            <td className={`${td} text-right`}>{rateOrDash(r, pct(r.rwr_percentage))}</td>
+            <td className={`${td} text-right`}>{rateOrDash(r, r.adr.toFixed(1))}</td>
             <td className={`${td} text-right`}>
               <Outcome row={finished ? r : { ...r, rank: null }} isFinal={isFinal} />
             </td>

@@ -1,13 +1,6 @@
 import { allMatchesPlayed, anyMatchPlayed, weekLabel } from './util';
 import { groupHref, groupName, roundHref, weekHref } from './crumbs';
-import {
-  aggregatePlayerRecords,
-  compareRecords,
-  deriveGroupScorecard,
-  emptyRecord,
-  podAdvances,
-  type PlayerRecord,
-} from './group-scorecard';
+import { compareRecords, deriveGroupScorecard, podAdvances, type PlayerRecord } from './group-scorecard';
 import { rankMovementForWeek, type RankMovement } from './season-standings';
 import { seedByPlayerId } from './gauntlet-draft';
 import type { SeasonWeekNavEntry, WeekWithMatches, BracketPod, GauntletMatch, GauntletRound } from './stage-types';
@@ -71,13 +64,10 @@ export function deriveWeekView(
   if (!week) return null;
 
   const movement = week.week_number > 1 ? rankMovementForWeek(schedule, week.week_number) : new Map<number, RankMovement>();
-  const records = deriveGroupScorecard(week.matches, 'wins');
   // The week's bye player sits on the scorecard too, last and with nothing played: their season rank
   // can still move as everyone else's results land.
-  if (week.bye_player_id != null && !records.some((r) => r.player_id === week.bye_player_id)) {
-    records.push(emptyRecord(week.bye_player_id, week.bye_player_name ?? `#${week.bye_player_id}`));
-  }
-  const scorecard = records.map((r) => ({ ...r, movement: movement.get(r.player_id) ?? null }));
+  const bye = week.bye_player_id != null ? [{ player_id: week.bye_player_id, player_name: week.bye_player_name ?? `#${week.bye_player_id}` }] : [];
+  const scorecard = deriveGroupScorecard(week.matches, 'wins', bye).map((r) => ({ ...r, movement: movement.get(r.player_id) ?? null }));
 
   const items = navWeeks.map<StageNavItem>((w) => ({
     chip: String(w.week_number),
@@ -125,7 +115,6 @@ function buildGroupView(matches: GauntletMatch[], pod: BracketPod | null, seeds:
   const advanceRule = pod?.advance_rule ?? null;
   const ordered = [...matches].sort((a, b) => a.match_number - b.match_number);
   const complete = allMatchesPlayed(ordered);
-  const records = aggregatePlayerRecords(ordered);
 
   // Everyone in the group: the real games' rosters once they exist, else the pod's resolved slots.
   const occupants = new Map<number, string>();
@@ -137,10 +126,11 @@ function buildGroupView(matches: GauntletMatch[], pod: BracketPod | null, seeds:
   const anyPlayed = anyMatchPlayed(ordered);
   const rank = compareRecords('win_rate');
   const seedOf = (id: number) => seeds.get(id) ?? Infinity;
-  const sorted = [...occupants]
-    .map(([id, name]) => records.get(id) ?? emptyRecord(id, name))
-    // Played ranking is the canonical gauntlet order; exact ties (and an unplayed pod) fall back to seed.
-    .sort((a, b) => (anyPlayed ? rank(a, b) : 0) || seedOf(a.player_id) - seedOf(b.player_id));
+  const roster = [...occupants].map(([player_id, player_name]) => ({ player_id, player_name }));
+  // Played ranking is the canonical gauntlet order; exact ties (and an unplayed pod) fall back to seed.
+  const sorted = deriveGroupScorecard(ordered, 'win_rate', roster).sort(
+    (a, b) => (anyPlayed ? rank(a, b) : 0) || seedOf(a.player_id) - seedOf(b.player_id),
+  );
 
   const scorecard = sorted.map<GroupRow>((r, i) => ({
     ...r,

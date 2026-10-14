@@ -4,7 +4,17 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildCrumbs, groupHref, groupName, roundHref, weekHref, gauntletHref } from './crumbs';
+import {
+  buildCrumbs,
+  gauntletHref,
+  gauntletLink,
+  groupHref,
+  groupName,
+  regularSeasonLink,
+  roundHref,
+  stageHeading,
+  weekHref,
+} from './crumbs';
 import { test } from './test-support/miniTest';
 
 const season = { id: 5, name: 'Season 5' };
@@ -67,4 +77,36 @@ test('route helpers assemble the readable paths with real ids', () => {
   assert.equal(roundHref(5, 2), '/seasons/5/rounds/2');
   assert.equal(groupHref(5, 14), '/seasons/5/groups/14');
   assert.equal(gauntletHref(5), '/seasons/5?view=gauntlet');
+});
+
+test('stageHeading: a week names the season, linking to its Schedule tab at that week', () => {
+  assert.deepEqual(stageHeading({ season, week: { id: 31, number: 3 } }), {
+    parent: { label: 'Season 5', href: '/seasons/5?tab=schedule&week=31' },
+    title: [{ label: 'Week 3' }],
+  });
+});
+
+test('stageHeading: a round or group sits under the season gauntlet; a group links its round', () => {
+  const parent = { label: 'Season 5 Gauntlet', href: '/seasons/5?view=gauntlet' };
+  assert.deepEqual(stageHeading({ season, gauntlet: true, round: 2 }), { parent, title: [{ label: 'Round 2' }] });
+  assert.deepEqual(stageHeading({ season, gauntlet: true, round: 2, group: { id: 14, podIndex: 0, isFinal: false } }), {
+    parent,
+    title: [{ label: 'Round 2', href: '/seasons/5/rounds/2' }, { label: 'Group 1' }],
+  });
+});
+
+test('stageHeading: the title levels are the same labels buildCrumbs() ends its trail with', () => {
+  const trail = { season, gauntlet: true, round: 2, group: { id: 14, podIndex: 3, isFinal: true } };
+  const crumbs = buildCrumbs(trail).map((c) => c.label);
+  assert.deepEqual(stageHeading(trail).title.map((c) => c.label), crumbs.slice(-2));
+});
+
+test('regularSeasonLink: a back link from a gauntlet page, none when the hub is itself a gauntlet', () => {
+  assert.deepEqual(regularSeasonLink({ id: 5, is_gauntlet: false }), { label: '← Regular season', href: '/seasons/5', direction: 'back' });
+  assert.equal(regularSeasonLink({ id: 9, is_gauntlet: true }), undefined);
+});
+
+test('gauntletLink: a forward link to the first round, none without one', () => {
+  assert.deepEqual(gauntletLink(5, 1), { label: 'Gauntlet →', href: '/seasons/5/rounds/1', direction: 'forward' });
+  assert.equal(gauntletLink(5, null), undefined);
 });

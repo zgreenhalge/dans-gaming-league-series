@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { aggregatePlayerRecords, deriveGroupScorecard, type ScorecardMatch, type ScorecardStat } from './group-scorecard';
+import { aggregatePlayerRecords, deriveGroupScorecard, hasPlayed, type ScorecardMatch, type ScorecardStat } from './group-scorecard';
 import { canonicalGauntletRankMap } from './gauntlet-ranking';
 import { canonicalSort } from './util';
 import { test } from './test-support/miniTest';
@@ -140,4 +140,79 @@ test("deriveGroupScorecard('win_rate') reproduces canonicalGauntletRankMap's fin
       assert.equal(rankMap.get(row.player_id), i + 1, `seed ${seed}: player ${row.player_id} final place`);
     });
   }
+});
+
+test('aggregatePlayerRecords: a stat with raw totals contributes its own damage and rounds, not adr x match rounds', () => {
+  const exact = (id: number, faction: 'SHIRTS' | 'SKINS', is_win: boolean, over: Partial<ScorecardStat>): ScorecardStat => ({
+    ...stat(id, faction, is_win, 100),
+    ...over,
+  });
+  // 13-9 (22 rounds). Stored adr 100 would imply 2200 damage; the raw total says 2199 over 22 rounds.
+  const records = aggregatePlayerRecords([
+    {
+      final_score: '13-9',
+      shirts_stats: [exact(1, 'SHIRTS', true, { damage: 2199, rounds_won: 13, rounds_played: 22 })],
+      skins_stats: [],
+    },
+  ]);
+  const p1 = records.get(1)!;
+  assert.equal(p1.total_damage, 2199);
+  assert.equal(p1.adr, 2199 / 22);
+});
+
+test('aggregatePlayerRecords: a player who played fewer rounds than the match is weighted by their own rounds', () => {
+  // Joined late: 15 of the match's 22 rounds, 13-9 final, their side won 8 of those.
+  const records = aggregatePlayerRecords([
+    {
+      final_score: '13-9',
+      shirts_stats: [{ ...stat(1, 'SHIRTS', true, 100), damage: 900, rounds_won: 8, rounds_played: 15 }],
+      skins_stats: [],
+    },
+  ]);
+  const p1 = records.get(1)!;
+  assert.equal(p1.rounds_played, 15);
+  assert.equal(p1.rounds_won, 8);
+  assert.equal(p1.adr, 60);
+  assert.equal(p1.rwr_percentage, (8 / 15) * 100);
+});
+
+test('aggregatePlayerRecords: a stat without parsed rounds (rounds_played 0) falls back to the score and adr', () => {
+  const records = aggregatePlayerRecords([
+    {
+      final_score: '13-9',
+      shirts_stats: [{ ...stat(1, 'SHIRTS', true, 80), damage: 0, rounds_won: 0, rounds_played: 0 }],
+      skins_stats: [],
+    },
+  ]);
+  const p1 = records.get(1)!;
+  assert.equal(p1.rounds_played, 22);
+  assert.equal(p1.rounds_won, 13);
+  assert.equal(p1.adr, 80);
+});
+
+test('aggregatePlayerRecords: exact and fallback stats add up across matches for one player', () => {
+  const records = aggregatePlayerRecords([
+    { final_score: '13-9', shirts_stats: [{ ...stat(1, 'SHIRTS', true, 100), damage: 2000, rounds_won: 13, rounds_played: 22 }], skins_stats: [] },
+    { final_score: '13-7', shirts_stats: [stat(1, 'SHIRTS', true, 90)], skins_stats: [] },
+  ]);
+  const p1 = records.get(1)!;
+  assert.equal(p1.total_damage, 2000 + 90 * 20);
+  assert.equal(p1.rounds_played, 22 + 20);
+});
+
+test('deriveGroupScorecard: roster players with no played match follow the ranked rows, in roster order', () => {
+  const rows = deriveGroupScorecard(
+    [match('13-9', [1, 2], [3, 4]), { final_score: '0-0', shirts_stats: [stat(7, 'SHIRTS', false)], skins_stats: [] }],
+    'wins',
+    [
+      { player_id: 9, player_name: 'Bye' },
+      { player_id: 1, player_name: 'P1' },
+      { player_id: 7, player_name: 'Unplayed' },
+    ],
+  );
+  assert.deepEqual(rows.map((r) => r.player_id), [1, 2, 3, 4, 9, 7]);
+  assert.equal(rows[4].matches_played, 0);
+  assert.equal(rows[4].player_name, 'Bye');
+  assert.equal(hasPlayed(rows[0]), true);
+  assert.equal(hasPlayed(rows[4]), false);
 });

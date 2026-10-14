@@ -1,5 +1,4 @@
 import { cache } from 'react';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
@@ -9,9 +8,9 @@ import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
 import { getSeedNames, resolveGroupPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
-import { buildCrumbs, gauntletHref, groupHref, roundHref, seasonHref } from '@/lib/crumbs';
+import { buildCrumbs, groupHref, regularSeasonLink, stageHeading } from '@/lib/crumbs';
 import { describeMatchups, groupTitle } from '@/lib/seo/stage-meta';
-import { parseRouteId, podKindLabel, seasonTitle, weekLabel } from '@/lib/util';
+import { parseRouteId, podKindLabel } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -51,42 +50,24 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
   const { group } = view;
   const { pod } = group;
 
+  const trail = {
+    season: hub,
+    gauntlet: true,
+    round: view.roundNumber,
+    group: { id: pod.id, podIndex: pod.pod_index, isFinal: pod.is_final },
+  };
+
   return (
     <div className="min-h-screen">
-      <TopbarShell
-        crumbs={buildCrumbs({
-          season: hub,
-          gauntlet: true,
-          round: view.roundNumber,
-          group: { id: pod.id, podIndex: pod.pod_index, isFinal: pod.is_final },
-        })}
-      />
+      <TopbarShell crumbs={buildCrumbs(trail)} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
-          season={{ label: `${seasonTitle(hub.name)} Gauntlet`, href: gauntletHref(hub.id) }}
-          title={
-            <>
-              <Link href={roundHref(hub.id, view.roundNumber)} className="block hover:text-[var(--color-site-accent)] transition-colors">
-                {weekLabel(view.roundNumber, true)}
-              </Link>
-              <span className="block">{group.label}</span>
-            </>
-          }
+          heading={stageHeading(trail)}
           status={group.status}
-          details={
-            <>
-              <span>{podKindLabel(group.isFinal, group.advanceRule)}</span>
-              {group.matches.length === 0 && <span>Not yet scheduled</span>}
-            </>
-          }
+          details={[podKindLabel(group.isFinal, group.advanceRule), group.matches.length === 0 && 'Not yet scheduled']}
         />
         <div className="mb-6">
-          <StageNavStrip
-            items={view.nav}
-            label="Groups"
-            metaPosition="above"
-            meta={hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id) }}
-          />
+          <StageNavStrip items={view.nav} label="Groups" meta={regularSeasonLink(hub)} />
         </div>
         <GroupPanel
           group={group}

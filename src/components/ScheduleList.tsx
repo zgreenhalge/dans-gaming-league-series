@@ -1,10 +1,10 @@
 'use client';
 
 import EmptyState from './EmptyState';
-import { StageBar } from './StageBar';
+import { CollapsibleSection } from './CollapsibleSection';
 import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { fmtWindowDate, weekWindow, weekAnchorId } from '@/lib/util';
+import { fmtWindowDate, weekLabel, weekWindow, weekAnchorId } from '@/lib/util';
 import { weekHref } from '@/lib/crumbs';
 import type { MatchWithRoster, WeekWithMatches } from '@/lib/queries';
 
@@ -53,35 +53,26 @@ function WeekBlock({
 }) {
   const win = weekWindow(seasonStartDate, week.week_number);
   return (
-    <div id={weekAnchorId(week.id)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
-      <StageBar
-        open={isOpen}
-        onToggle={onToggle}
-        href={hubSeasonId != null ? weekHref(hubSeasonId, week.id) : undefined}
-        label={`Week ${week.week_number}`}
-      >
-        <div className="flex items-baseline gap-2.5 flex-1 min-w-0">
-          <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
-            Week {week.week_number}
-          </span>
-          {win && (
-            <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-              {fmtWindowDate(win.start)} – {fmtWindowDate(win.end)}
-            </span>
-          )}
-        </div>
-        {week.bye_player_name && (
+    <CollapsibleSection
+      id={weekAnchorId(week.id)}
+      title={weekLabel(week.week_number, false)}
+      detail={win ? `${fmtWindowDate(win.start)} – ${fmtWindowDate(win.end)}` : undefined}
+      trailing={
+        week.bye_player_name && (
           <span className="font-mono text-[10px] text-[var(--color-text-secondary)] inline-flex items-center gap-1 shrink-0">
             <span className="tracked mr-0.5">Bye</span>
             <PlayerName name={week.bye_player_name} isMe={currentPlayerId !== null && week.bye_player_id === currentPlayerId} />
           </span>
-        )}
-      </StageBar>
-      {isOpen &&
-        week.matches.map((m) => (
-          <WeekMatchCard key={m.id} match={m} win={win} currentPlayerId={currentPlayerId} />
-        ))}
-    </div>
+        )
+      }
+      href={hubSeasonId != null ? weekHref(hubSeasonId, week.id) : undefined}
+      open={isOpen}
+      onToggle={onToggle}
+    >
+      {week.matches.map((m) => (
+        <WeekMatchCard key={m.id} match={m} win={win} currentPlayerId={currentPlayerId} />
+      ))}
+    </CollapsibleSection>
   );
 }
 

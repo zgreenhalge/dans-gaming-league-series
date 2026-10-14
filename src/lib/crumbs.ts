@@ -24,6 +24,11 @@ export function weekHref(hubSeasonId: number, weekId: number): string {
   return `/seasons/${hubSeasonId}/weeks/${weekId}`;
 }
 
+/** The season hub's Schedule tab opened at a week — where a week page's heading links back to. */
+export function seasonWeekHref(hubSeasonId: number, weekId: number): string {
+  return `${seasonHref(hubSeasonId)}?tab=schedule&week=${weekId}`;
+}
+
 export function roundHref(hubSeasonId: number, roundNumber: number): string {
   return `/seasons/${hubSeasonId}/rounds/${roundNumber}`;
 }
@@ -78,4 +83,53 @@ export function buildCrumbs(trail: CrumbTrail): Crumb[] {
   const last = crumbs.length - 1;
   crumbs[last] = { label: crumbs[last].label };
   return crumbs;
+}
+
+/** The heading a week, round or group page shows over its content: a link to the season (or its
+ *  gauntlet) above the stage's own name. Built from the same labels and URLs as `buildCrumbs()`, so
+ *  the heading and the breadcrumbs name the stage identically. */
+export interface StageHeading {
+  parent: { label: string; href: string };
+  /** The stage's name, top level first; a level with an `href` links to its own page (a group page
+   *  links its round). */
+  title: Crumb[];
+}
+
+export function stageHeading(trail: CrumbTrail): StageHeading {
+  const hub = trail.season.id;
+  if (trail.week) {
+    return {
+      parent: { label: seasonTitle(trail.season.name), href: seasonWeekHref(hub, trail.week.id) },
+      title: [{ label: weekLabel(trail.week.number, false) }],
+    };
+  }
+  const parent = { label: `${seasonTitle(trail.season.name)} Gauntlet`, href: gauntletHref(hub) };
+  if (trail.round == null) return { parent, title: [] };
+  const round = weekLabel(trail.round, true);
+  if (!trail.group) return { parent, title: [{ label: round }] };
+  return {
+    parent,
+    title: [{ label: round, href: roundHref(hub, trail.round) }, { label: groupName(trail.group.podIndex, trail.group.isFinal) }],
+  };
+}
+
+/** A link from a stage page out of its own set of stages, to the other side of a season: a week page
+ *  into the gauntlet (`forward`), a gauntlet page back to the regular season (`back`). The nav strip
+ *  places a `back` link above its chips and a `forward` link below them. */
+export interface StageNavLink {
+  label: string;
+  href: string;
+  direction: 'back' | 'forward';
+}
+
+/** The gauntlet page's way back to the regular season; none for a gauntlet with no regular season of
+ *  its own to go back to (`hub` is itself the gauntlet). */
+export function regularSeasonLink(hub: { id: number; is_gauntlet: boolean }): StageNavLink | undefined {
+  return hub.is_gauntlet ? undefined : { label: '← Regular season', href: seasonHref(hub.id), direction: 'back' };
+}
+
+/** The week page's way into the gauntlet, at its first round; none while the season has no gauntlet
+ *  round (`firstRound` is `null`). */
+export function gauntletLink(hubSeasonId: number, firstRound: number | null): StageNavLink | undefined {
+  return firstRound == null ? undefined : { label: 'Gauntlet →', href: roundHref(hubSeasonId, firstRound), direction: 'forward' };
 }
