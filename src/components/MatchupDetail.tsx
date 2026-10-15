@@ -7,6 +7,7 @@ import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
+import Th from './Th';
 
 export type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
 
@@ -178,17 +179,17 @@ function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: 
       <table className="w-full text-[11px]">
         <thead>
           <tr className="text-[var(--color-text-secondary)]">
-            <th className="text-left font-normal tracked text-[8px] pb-1">Map</th>
-            <th className="text-right font-normal tracked text-[8px] pb-1">Games</th>
-            <th className="text-right font-normal tracked text-[8px] pb-1">W-L</th>
-            <th className="text-right font-normal tracked text-[8px] pb-1">Rounds</th>
+            <Th compact>Map</Th>
+            <Th compact align="right">Games</Th>
+            <Th compact align="right">W-L</Th>
+            <Th compact align="right">Rounds</Th>
             {aLabel ? (
               <>
-                <th className="text-right font-normal tracked text-[8px] pb-1" title={aLabel}>ADR·A</th>
-                <th className="text-right font-normal tracked text-[8px] pb-1" title={bLabel}>ADR·B</th>
+                <Th compact align="right" title={aLabel}>ADR·A</Th>
+                <Th compact align="right" title={bLabel}>ADR·B</Th>
               </>
             ) : (
-              <th className="text-right font-normal tracked text-[8px] pb-1">ADR</th>
+              <Th compact align="right">ADR</Th>
             )}
           </tr>
         </thead>
