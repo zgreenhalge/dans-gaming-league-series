@@ -98,7 +98,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
                   key={col.key}
                   className={
                     col.key === 'name'
-                      ? 'sticky-col pl-4 pr-3 py-2.5 font-display font-semibold text-[var(--color-text-primary)]'
+                      ? 'sticky-col p-2 font-display font-semibold text-[var(--color-text-primary)]'
                       : i === cols.length - 1
                         ? `${tdCls} font-semibold`
                         : tdCls

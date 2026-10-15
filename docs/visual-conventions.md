@@ -123,9 +123,10 @@ reason reads as two unrelated features, not one drill-down.
 **Table header cells.** A stat table's header row is made of the shared **`Th`**
 (`src/components/Th.tsx`) for plain columns and **`SortableTh`** (`src/components/SortableTh.tsx`) for
 columns that sort — never a re-typed class string. They share one look: 10px semibold, letter-spaced
-but not uppercased, 8px padding on every side, on a tinted header band with a bottom rule. Body
-cells in those tables use the same `p-2` (8px on every side), so a header and the figures under it
-share one inset; a pinned name column, a first column and an "All maps" row get no extra padding.
+but not uppercased, 8px padding on every side, on a tinted header band with a bottom rule. Plain
+data cells in those tables use the same `p-2` (8px on every side), so a header and the figures under
+it share one inset, pinned name column included; expanded-detail (`colSpan`) panels and footer label
+rows are exempt.
 `align="left"|"right"|"center"` aligns the label with the figures below it; `sticky` on the first
 (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also paints the band so
 scrolled cells never show through).

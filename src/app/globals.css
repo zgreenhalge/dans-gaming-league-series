@@ -579,7 +579,8 @@ body::before {
   z-index: 1;
   background: inherit;
 }
-/* A pinned header cell paints the header band itself: its row has no background to inherit. */
+/* A pinned header cell paints the header band itself: its row has no background to inherit.
+   Keep the color in sync with the band in `TH_CLS` (src/components/Th.tsx). */
 th.sticky-col {
   background: var(--color-bg-secondary);
 }
