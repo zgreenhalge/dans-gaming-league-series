@@ -149,6 +149,11 @@ export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+/** `fmtWindowDate()` for a `YYYY-MM-DD` date string. */
+export function fmtWindowDay(dateStr: string): string {
+  return fmtWindowDate(new Date(`${dateStr}T12:00:00Z`));
+}
+
 /** A rate as a whole-number percent (`"43%"`), or `—` when the denominator is zero. */
 export function fmtPct(num: number, den: number): string {
   if (den === 0) return '—';
@@ -450,13 +455,14 @@ export function canonicalSort(
   a: { matches_won: number; rwr_percentage: number; overall_adr: number },
   b: { matches_won: number; rwr_percentage: number; overall_adr: number },
 ): number {
-  return canonicalSortValues(
-    { wins: a.matches_won, rwr: a.rwr_percentage, adr: a.overall_adr },
-    { wins: b.matches_won, rwr: b.rwr_percentage, adr: b.overall_adr },
+  return (
+    b.matches_won - a.matches_won ||
+    b.rwr_percentage - a.rwr_percentage ||
+    b.overall_adr - a.overall_adr
   );
 }
 
-/** `canonicalSort()` for rows that carry the three values as `wins` / `rwr` / `adr` (per-map and
+/** `canonicalSort()`'s ordering for rows that carry the three values as `wins` / `rwr` / `adr` (per-map and
  *  per-player aggregates) rather than the leaderboard view's column names. */
 export function canonicalSortValues(
   a: { wins: number; rwr: number; adr: number },

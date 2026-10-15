@@ -152,13 +152,15 @@ export async function headDemoObject(
   }
 }
 
-/** Whether `key` exists in the bucket. Any HEAD failure — a 404 or an error — reads as `false`. */
+/** Whether `key` exists in the bucket. Only a 404 reads as `false`; any other failure (auth,
+ *  network, throttling) is rethrown rather than collapsed into "missing". */
 export async function objectExists(key: string): Promise<boolean> {
   try {
     await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'NotFound') return false;
+    throw err;
   }
 }
 

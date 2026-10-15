@@ -18,6 +18,7 @@ import {
   canonicalSort,
   canonicalSortValues,
   fmtPct,
+  fmtWindowDay,
   factionClass,
   formatCountdownClock,
   formatCountdownRelative,
@@ -398,9 +399,6 @@ test('finalRoundNumberOf: returns the final pod\'s round_number, or null when no
   assert.equal(finalRoundNumberOf([]), null);
 });
 
-report();
-
-
 // --- canonicalSortValues: the same order for wins/rwr/adr-shaped rows ---
 
 test('canonicalSortValues: Wins → RWR% → ADR, all descending', () => {
@@ -411,6 +409,10 @@ test('canonicalSortValues: Wins → RWR% → ADR, all descending', () => {
     { id: 'd', wins: 8, rwr: 1, adr: 1 },
   ];
   assert.deepEqual(rows.sort(canonicalSortValues).map((r) => r.id), ['d', 'c', 'b', 'a']);
+});
+
+test('fmtWindowDay: formats a YYYY-MM-DD date without shifting the day', () => {
+  assert.equal(fmtWindowDay('2026-10-12'), 'Oct 12');
 });
 
 // --- fmtPct / factionClass / countdowns ---
@@ -441,3 +443,5 @@ test('formatCountdownRelative: future reads "in …", past reads "… ago"', () 
   assert.equal(formatCountdownRelative('2026-01-02T01:02:03Z', now), 'in 1d 1h 2m 3s');
   assert.equal(formatCountdownRelative('2025-12-31T23:58:00Z', now), '2m 0s ago');
 });
+
+report();

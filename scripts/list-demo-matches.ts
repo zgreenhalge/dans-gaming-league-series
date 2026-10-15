@@ -6,20 +6,14 @@
 //
 // Runs in the GitHub Action via `tsx`, reusing the same `src/lib/r2` client as the app.
 
-import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { appendFileSync } from 'node:fs';
-import { r2, R2_BUCKET, replayKey, listDemoMatchIds } from '../src/lib/r2';
+import { objectExists, replayKey, listDemoMatchIds } from '../src/lib/r2';
 import { error } from './gh-actions-log';
 
 const ONLY_MISSING = /^(1|true)$/i.test(process.env.ONLY_MISSING ?? '');
 
 async function hasReplay(matchId: number): Promise<boolean> {
-  try {
-    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: replayKey(matchId) }));
-    return true;
-  } catch {
-    return false; // NoSuchKey (or any read error) → treat as missing
-  }
+  return objectExists(replayKey(matchId));
 }
 
 async function main() {

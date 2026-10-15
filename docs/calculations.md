@@ -591,7 +591,8 @@ all descending. Applying all three keys in sequence avoids overweighting any sin
 produces a stable, consistent ordering across views.
 
 Implemented by `canonicalSort(rows)` in `src/lib/util.ts`; rows that carry the three values as
-`wins` / `rwr` / `adr` (per-map aggregates) use `canonicalSortValues()`, the same ordering. Use it everywhere regular-season or
+`wins` / `rwr` / `adr` (per-map aggregates) use `canonicalSortValues()`, the same ordering.
+Use it everywhere regular-season or
 career player rows are ranked — never sort by ADR alone.
 
 ## Canonical Gauntlet Ranking

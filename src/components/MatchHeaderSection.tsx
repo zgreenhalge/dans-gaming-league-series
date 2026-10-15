@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
-import { formatCountdownRelative, fmtWindowDate } from '@/lib/util';
+import { formatCountdownRelative, fmtWindowDay } from '@/lib/util';
 import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
@@ -86,7 +86,7 @@ export default function MatchHeaderSection({
   } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
   const windowLabel =
-    isClient && weekStart && weekEnd ? `${fmtWindowDate(new Date(`${weekStart}T12:00:00Z`))} – ${fmtWindowDate(new Date(`${weekEnd}T12:00:00Z`))}` : null;
+    isClient && weekStart && weekEnd ? `${fmtWindowDay(weekStart)} – ${fmtWindowDay(weekEnd)}` : null;
 
   const scheduleReadView = !editing && (
     <div className="flex items-center gap-2">

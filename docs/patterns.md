@@ -162,9 +162,9 @@ codebase.
 
 When a source of truth already exists, read it — don't recompute. Aggregates come from
 `player_season_leaderboard`, not client-side math. Ordering comes from the documented canonical sorts
-(`canonicalSort()`, `canonicalSortValues()`, `canonicalGauntletRankMap()`), not a one-off `.sort()`. "Did this match happen?"
-comes from `isPlayedScore()`, not `final_score != null`. Reusing the canonical source keeps every
-view consistent and means a fix lands in one place.
+(`canonicalSort()`, `canonicalSortValues()`, `canonicalGauntletRankMap()`), not a one-off
+`.sort()`. "Did this match happen?" comes from `isPlayedScore()`, not `final_score != null`. Reusing
+the canonical source keeps every view consistent and means a fix lands in one place.
 
 ## Prefer shared primitives over re-rolling
 

@@ -12,7 +12,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
-
 import { factionClass } from '@/lib/util';
 
 type Faction = 'CT' | 'T' | null;

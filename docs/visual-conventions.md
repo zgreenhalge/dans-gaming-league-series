@@ -151,7 +151,8 @@ state passes `state={{ col, asc }}`.
 **Shared formatting helpers** (`src/lib/util.ts`) — use these instead of a local copy: `fmtPct(num, den)`
 for whole-number percentages (`—` on a zero denominator), `factionClass(side)` for the `faction-ct` /
 `faction-t` tint class (the class counterpart of `sideColor()`), `formatCountdownClock(ms)` and
-`formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` for a week-window date.
+`formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` / `fmtWindowDay('YYYY-MM-DD')` for
+a week-window date.
 
 **Tables that keep their own spacing.**
 - Compact tables inside cards (the player page's trophy stat strip, a matchup's per-map breakdown)
