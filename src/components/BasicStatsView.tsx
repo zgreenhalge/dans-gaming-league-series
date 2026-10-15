@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useSortState, type SortState } from './useSortState';
+import { useSortState } from './useSortState';
 import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
@@ -11,29 +11,14 @@ import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
 import Th from './Th';
+import SortableTh from './SortableTh';
 import PerSideStatsTable from './PerSideStatsTable';
 import { CONDITION_LABEL } from './icons/ConditionIcons';
 
-type SortKey = string;
 
 interface RowWithStats {
   row: LeaderboardRowWithId;
   stats: AdvancedStats;
-}
-
-function SortableTh({ label, title, sortKey, state, onClick }: { label: string; title?: string; sortKey: SortKey; state: SortState; onClick: (key: SortKey) => void }) {
-  const isActive = state.col === sortKey;
-  const arrow = isActive ? (state.asc ? ' ↑' : ' ↓') : '';
-  return (
-    <th
-      title={title}
-      onClick={() => onClick(sortKey)}
-      className="cursor-pointer select-none px-3 py-2 text-right text-xs font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)] hover:bg-[var(--color-bg-hover)]"
-    >
-      {label}
-      {arrow}
-    </th>
-  );
 }
 
 function fmtNum(v: number, decimals: number = 0): string {
@@ -74,52 +59,50 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
-                Player
-              </th>
-              <SortableTh label="Kills"            sortKey="k"     state={sort} onClick={toggleSort} />
-              <SortableTh label="Assists"          sortKey="a"     state={sort} onClick={toggleSort} />
-              <SortableTh label="Deaths"           sortKey="d"     state={sort} onClick={toggleSort} />
-              <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} onClick={toggleSort} />
-              <SortableTh label="Damage"           sortKey="dmg"   state={sort} onClick={toggleSort} />
-              <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} onClick={toggleSort} />
+            <tr>
+              <Th sticky>Player</Th>
+              <SortableTh label="Kills"            sortKey="k"     state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Assists"          sortKey="a"     state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Deaths"           sortKey="d"     state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Damage"           sortKey="dmg"   state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
               <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="sticky-col px-3 py-2">
+                <td className="p-2 sticky-col">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_kills}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_assists}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_deaths}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtDiff(stats.killDiff)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_damage.toLocaleString()}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(row.overall_adr, 2)}
                   </Link>
@@ -163,70 +146,68 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
-                Player
-              </th>
-              <SortableTh label="K/D"      title="Kill/Death Ratio"      sortKey="kd"  state={sort} onClick={toggleSort} />
-              <SortableTh label="Dmg/K"    title="Damage per Kill"        sortKey="dpk" state={sort} onClick={toggleSort} />
-              <SortableTh label="K/Round"  title="Kills per Round"        sortKey="kr"  state={sort} onClick={toggleSort} />
-              <SortableTh label="A/Round"  title="Assists per Round"      sortKey="ar"  state={sort} onClick={toggleSort} />
-              <SortableTh label="D/Round"  title="Deaths per Round"       sortKey="dr"  state={sort} onClick={toggleSort} />
-              <SortableTh label="K/Win"    title="Kills per Win"          sortKey="kw"  state={sort} onClick={toggleSort} />
-              <SortableTh label="D/Win"    title="Deaths per Win"         sortKey="dw"  state={sort} onClick={toggleSort} />
-              <SortableTh label="K/Loss"   title="Kills per Loss"         sortKey="kl"  state={sort} onClick={toggleSort} />
-              <SortableTh label="D/Loss"   title="Deaths per Loss"        sortKey="dl"  state={sort} onClick={toggleSort} />
+            <tr>
+              <Th sticky>Player</Th>
+              <SortableTh label="K/D"      title="Kill/Death Ratio"      sortKey="kd"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Dmg/K"    title="Damage per Kill"        sortKey="dpk" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="K/Round"  title="Kills per Round"        sortKey="kr"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="A/Round"  title="Assists per Round"      sortKey="ar"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="D/Round"  title="Deaths per Round"       sortKey="dr"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="K/Win"    title="Kills per Win"          sortKey="kw"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="D/Win"    title="Deaths per Win"         sortKey="dw"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="K/Loss"   title="Kills per Loss"         sortKey="kl"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="D/Loss"   title="Deaths per Loss"        sortKey="dl"  state={sort} align="right" onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
               <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="sticky-col px-3 py-2">
+                <td className="p-2 sticky-col">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(row.kd_ratio, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.dmgPerKill, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.kPerRound, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.aPerRound, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.dPerRound, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.kPerWin, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.dPerWin, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.kPerLoss, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.dPerLoss, 1)}
                   </Link>
@@ -291,58 +272,56 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
-                Player
-              </th>
-              <SortableTh label="Games"    title="Games Played"          sortKey="games" state={sort} onClick={toggleSort} />
-              <SortableTh label="W–L"      title="Wins – Losses"         sortKey="wl"    state={sort} onClick={toggleSort} />
-              <SortableTh label="WR%"      title="Win Rate"              sortKey="wr"    state={sort} onClick={toggleSort} />
-              <SortableTh label="Rounds"   title="Total Rounds Played"   sortKey="rounds" state={sort} onClick={toggleSort} />
-              <SortableTh label="RW–RL"    title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} onClick={toggleSort} />
-              <SortableTh label="Rnd Diff" title="Round Differential"    sortKey="rdiff" state={sort} onClick={toggleSort} />
-              <SortableTh label="RWR%"     title="Round Win Rate"        sortKey="rwr"   state={sort} onClick={toggleSort} />
+            <tr>
+              <Th sticky>Player</Th>
+              <SortableTh label="Games"    title="Games Played"          sortKey="games" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="W–L"      title="Wins – Losses"         sortKey="wl"    state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="WR%"      title="Win Rate"              sortKey="wr"    state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Rounds"   title="Total Rounds Played"   sortKey="rounds" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="RW–RL"    title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Rnd Diff" title="Round Differential"    sortKey="rdiff" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="RWR%"     title="Round Win Rate"        sortKey="rwr"   state={sort} align="right" onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
               <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="sticky-col px-3 py-2">
+                <td className="p-2 sticky-col">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.matches_played}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.matches_won}–{row.matches_lost}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(row.win_rate_percentage, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_rounds_played}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_rounds_won}–{stats.roundsLost}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtDiff(stats.roundDiff)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(row.rwr_percentage, 1)}
                   </Link>
@@ -386,70 +365,68 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
-                Player
-              </th>
-              <SortableTh label="Rounds/Game"     title="Rounds Played per Game"      sortKey="rg"   state={sort} onClick={toggleSort} />
-              <SortableTh label="Round Diff/Game" title="Round Differential per Game"  sortKey="rdg"  state={sort} onClick={toggleSort} />
-              <SortableTh label="Rounds Won/Game" title="Rounds Won per Game"          sortKey="rwg"  state={sort} onClick={toggleSort} />
-              <SortableTh label="Rounds Lost/Game" title="Rounds Lost per Game"        sortKey="rlg"  state={sort} onClick={toggleSort} />
-              <SortableTh label="K Diff/Game"     title="Kill Differential per Game"   sortKey="kdg"  state={sort} onClick={toggleSort} />
-              <SortableTh label="Dmg/Game"        title="Damage per Game"              sortKey="dmgg" state={sort} onClick={toggleSort} />
-              <SortableTh label="K/Game"          title="Kills per Game"               sortKey="kg"   state={sort} onClick={toggleSort} />
-              <SortableTh label="A/Game"          title="Assists per Game"             sortKey="ag"   state={sort} onClick={toggleSort} />
-              <SortableTh label="D/Game"          title="Deaths per Game"              sortKey="dg"   state={sort} onClick={toggleSort} />
+            <tr>
+              <Th sticky>Player</Th>
+              <SortableTh label="Rounds/Game"     title="Rounds Played per Game"      sortKey="rg"   state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Round Diff/Game" title="Round Differential per Game"  sortKey="rdg"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Rounds Won/Game" title="Rounds Won per Game"          sortKey="rwg"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Rounds Lost/Game" title="Rounds Lost per Game"        sortKey="rlg"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="K Diff/Game"     title="Kill Differential per Game"   sortKey="kdg"  state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="Dmg/Game"        title="Damage per Game"              sortKey="dmgg" state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="K/Game"          title="Kills per Game"               sortKey="kg"   state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="A/Game"          title="Assists per Game"             sortKey="ag"   state={sort} align="right" onSort={toggleSort} />
+              <SortableTh label="D/Game"          title="Deaths per Game"              sortKey="dg"   state={sort} align="right" onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
               <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="sticky-col px-3 py-2">
+                <td className="p-2 sticky-col">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.rPerGame, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtDiff(stats.rdPerGame, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.rwPerGame, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.rlPerGame, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtDiff(stats.kdPerGame, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.dmgPerGame, 1)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.kPerGame, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.aPerGame, 2)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">
+                <td className="p-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {fmtNum(stats.dPerGame, 2)}
                   </Link>
@@ -490,7 +467,7 @@ function DistributionTable({ title, emptyMessage, categoryLabel, total, buckets 
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
             <thead>
-              <tr className="bg-[var(--color-bg-secondary)]">
+              <tr>
                 <Th align="left">{categoryLabel}</Th>
                 <Th align="right">Count</Th>
                 <Th align="right">%</Th>
@@ -499,12 +476,12 @@ function DistributionTable({ title, emptyMessage, categoryLabel, total, buckets 
             <tbody>
               {buckets.map(({ label, count, note }) => (
                 <tr key={label} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="pl-4 pr-3 py-2.5">
+                  <td className="p-2">
                     <span className="tracked text-[11px] font-semibold">{label}</span>
                     {note && <span className="ml-2 text-[10px] text-[var(--color-text-secondary)]">{note}</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{count}</td>
-                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{count}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
                     {((count / total) * 100).toFixed(0)}%
                   </td>
                 </tr>
@@ -576,7 +553,7 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
             <thead>
-              <tr className="bg-[var(--color-bg-secondary)]">
+              <tr>
                 <Th align="left">Map</Th>
                 <Th align="right">Picks</Th>
                 <Th align="right">Bans</Th>
@@ -594,33 +571,33 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
             <tbody>
               {mapPickBanStats.map((m) => (
                 <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)]">
-                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
+                  <td className="p-2 tracked text-[11px] font-semibold">
                     <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
                   </td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.ctWins + m.ctLosses}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctWins}-{m.ctLosses}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
-                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.tWins + m.tLosses}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tWins}-{m.tLosses}</td>
-                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.ctWins + m.ctLosses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctWins}-{m.ctLosses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
+                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.tWins + m.tLosses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tWins}-{m.tLosses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
                 </tr>
               ))}
             </tbody>
             {ct && t && (
               <tfoot>
                 <tr className="bg-[var(--color-bg-secondary)]">
-                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold" colSpan={6}>All maps</td>
-                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{ct.numTimesPicked}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{ct.wins}-{ct.losses}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(ct)}</td>
-                  <td className={`px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{t.numTimesPicked}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{t.wins}-{t.losses}</td>
-                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(t)}</td>
+                  <td className="p-2 tracked text-[11px] font-semibold" colSpan={6}>All maps</td>
+                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{ct.numTimesPicked}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{ct.wins}-{ct.losses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(ct)}</td>
+                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{t.numTimesPicked}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{t.wins}-{t.losses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(t)}</td>
                 </tr>
               </tfoot>
             )}

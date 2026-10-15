@@ -57,26 +57,22 @@ function Scoreboard({
   const cls = factionClass(faction);
   const hasSab = sabMap && sabMap.size > 0;
   const bothSides = includeCT && includeT;
-  const thStatCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
-
   return (
     <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
       <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
-            <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)] w-[40%]">
-              Player
-            </th>
-            <th className={`${thStatCls}`} title="Kills">K</th>
-            <th className={`${thStatCls}`} title="Assists">A</th>
-            <th className={`${thStatCls}`} title="Deaths">D</th>
-            <th className={`${thStatCls}`} title="Total damage dealt">DMG</th>
-            <th className={`${thStatCls}`} title="Average damage per round">ADR</th>
+          <tr>
+            <Th sticky className="w-[40%]">Player</Th>
+            <Th align="right" title="Kills">K</Th>
+            <Th align="right" title="Assists">A</Th>
+            <Th align="right" title="Deaths">D</Th>
+            <Th align="right" title="Total damage dealt">DMG</Th>
+            <Th align="right" title="Average damage per round">ADR</Th>
             {hasSab && (
               <>
-                <th className={`${thStatCls}`} title="Headshot kill percentage">HS%</th>
-                <th className={`${thStatCls}`} title="Enemy players blinded by flashbangs">EF</th>
-                <th className={`${thStatCls}`} title="Damage dealt with grenades (HE, molotov, incendiary)">UD</th>
+                <Th align="right" title="Headshot kill percentage">HS%</Th>
+                <Th align="right" title="Enemy players blinded by flashbangs">EF</Th>
+                <Th align="right" title="Damage dealt with grenades (HE, molotov, incendiary)">UD</Th>
               </>
             )}
           </tr>
@@ -117,7 +113,7 @@ function Scoreboard({
                 key={p.player_id}
                 className="lift-row faction-tint-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
               >
-                <td className="sticky-col pl-3 pr-3 py-2 font-display font-semibold faction-fg">
+                <td className="p-2 sticky-col font-display font-semibold faction-fg">
                   <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
                     <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
                     <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
@@ -140,18 +136,18 @@ function Scoreboard({
                     )}
                   </Link>
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">{dash(String(k))}</td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">{dash(String(a))}</td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">{dash(String(d))}</td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">{dash(dmg.toLocaleString())}</td>
-                <td className={`px-3 py-2.5 text-right font-mono tnum ${hasSab ? '' : 'pr-4'} font-semibold`}>
+                <td className="p-2 text-right font-mono tnum">{dash(String(k))}</td>
+                <td className="p-2 text-right font-mono tnum">{dash(String(a))}</td>
+                <td className="p-2 text-right font-mono tnum">{dash(String(d))}</td>
+                <td className="p-2 text-right font-mono tnum">{dash(dmg.toLocaleString())}</td>
+                <td className="p-2 text-right font-mono tnum font-semibold">
                   {dash(String(adr))}
                 </td>
                 {hasSab && (
                   <>
-                    <td className="px-3 py-2.5 text-right font-mono tnum">{dash(hsPct)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tnum">{dash(String(ef))}</td>
-                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum">{dash(String(ud))}</td>
+                    <td className="p-2 text-right font-mono tnum">{dash(hsPct)}</td>
+                    <td className="p-2 text-right font-mono tnum">{dash(String(ef))}</td>
+                    <td className="p-2 text-right font-mono tnum">{dash(String(ud))}</td>
                   </>
                 )}
               </tr>
@@ -229,7 +225,7 @@ function RatingProjectionTable({
     const shirtsWin = proj.scoreA > proj.scoreB;
     return (
       <tr key={proj.label} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
-        <td className="sticky-col pl-4 pr-3 py-2.5 font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
+        <td className="p-2 sticky-col font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
           <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
             {proj.label}
           </span>
@@ -237,7 +233,7 @@ function RatingProjectionTable({
         {allPlayers.map((p) => {
           const delta = proj.deltas[p.player_id] ?? 0;
           return (
-            <td key={p.player_id} className="px-3 py-2.5 text-right font-mono tnum font-semibold" style={{ color: deltaColor(delta, maxAbsDelta) }}>
+            <td key={p.player_id} className="p-2 text-right font-mono tnum font-semibold" style={{ color: deltaColor(delta, maxAbsDelta) }}>
               {delta > 0 ? '+' : ''}{delta.toFixed(2)}
             </td>
           );
@@ -259,10 +255,8 @@ function RatingProjectionTable({
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
         <table className="w-full min-w-max text-[13px]">
           <thead>
-            <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="sticky-col tracked text-[9px] font-semibold py-2 pl-4 pr-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">
-                Score
-              </th>
+            <tr>
+              <Th sticky>Score</Th>
               {allPlayers.map((p) => (
                 <Th key={p.player_id} align="right">
                   {p.player_name}
@@ -280,13 +274,13 @@ function RatingProjectionTable({
                 }}
               >
                 <td
-                  className="sticky-col pl-4 pr-3 py-2.5 tracked text-[9px] font-semibold text-[var(--color-text-primary)] whitespace-nowrap"
+                  className="p-2 sticky-col tracked text-[9px] font-semibold text-[var(--color-text-primary)] whitespace-nowrap"
                   style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
                 >
                   Current
                 </td>
                 {allPlayers.map((p) => (
-                  <td key={p.player_id} className="px-3 py-2.5 text-right font-mono tnum font-semibold text-[var(--color-text-primary)]">
+                  <td key={p.player_id} className="p-2 text-right font-mono tnum font-semibold text-[var(--color-text-primary)]">
                     {(current[p.player_id] ?? 0).toFixed(2)}
                   </td>
                 ))}

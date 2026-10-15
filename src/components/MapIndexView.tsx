@@ -9,6 +9,7 @@ import { aggregateMapIndexStats } from '@/lib/mapSideStats';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
 import EmptyState from './EmptyState';
+import SortableTh from './SortableTh';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists' | 'avgRounds';
@@ -82,16 +83,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
     return sortDir === 'asc' ? av - bv : bv - av;
   }), [maps, sortKey, sortDir, displayStats]);
 
-  const colCls = (key: SortKey, align: 'left' | 'right' = 'right') =>
-    [
-      'pb-2 font-semibold tracked text-[10px] uppercase cursor-pointer select-none whitespace-nowrap',
-      'hover:text-[var(--color-text-primary)] transition-colors',
-      align === 'right' ? 'px-4 text-right' : 'pr-4 text-left',
-      key === sortKey ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]',
-    ].join(' ');
-
-  const arrow = (key: SortKey) => key !== sortKey ? '' : sortDir === 'asc' ? ' ↑' : ' ↓';
-
+  const sortState = { col: sortKey, asc: sortDir === 'asc' };
 
   return (
     <>
@@ -166,16 +158,16 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
           <div className="overflow-x-auto">
           <table className="w-full min-w-max border-collapse font-mono text-[12px]">
             <thead>
-              <tr className="border-b border-[var(--color-border-primary)]">
-                <th className={colCls('name', 'left')} onClick={() => handleSort('name')}>Map{arrow('name')}</th>
-                <th className={colCls('seasonsPlayed')} onClick={() => handleSort('seasonsPlayed')}>Seasons{arrow('seasonsPlayed')}</th>
-                <th className={colCls('pickCount')} onClick={() => handleSort('pickCount')}>Picks{arrow('pickCount')}</th>
-                <th className={colCls('banCount')} onClick={() => handleSort('banCount')}>Bans{arrow('banCount')}</th>
-                <th className={colCls('noPickCount')} onClick={() => handleSort('noPickCount')}>No-picks{arrow('noPickCount')}</th>
-                <th className={colCls('pickAndWon')} onClick={() => handleSort('pickAndWon')}>Pick &amp; won{arrow('pickAndWon')}</th>
-                <th className={colCls('totalKills')} onClick={() => handleSort('totalKills')}>Total kills{arrow('totalKills')}</th>
-                <th className={colCls('totalAssists')} onClick={() => handleSort('totalAssists')}>Total assists{arrow('totalAssists')}</th>
-                <th className={colCls('avgRounds')} onClick={() => handleSort('avgRounds')}>Avg rounds{arrow('avgRounds')}</th>
+              <tr>
+                <SortableTh label="Map" sortKey="name" state={sortState} onSort={handleSort} />
+                <SortableTh label="Seasons" sortKey="seasonsPlayed" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="Picks" sortKey="pickCount" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="Bans" sortKey="banCount" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="No-picks" sortKey="noPickCount" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="Pick &amp; won" sortKey="pickAndWon" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="Total kills" sortKey="totalKills" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="Total assists" sortKey="totalAssists" state={sortState} onSort={handleSort} align="right" />
+                <SortableTh label="Avg rounds" sortKey="avgRounds" state={sortState} onSort={handleSort} align="right" />
               </tr>
             </thead>
             <tbody>
@@ -183,19 +175,19 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                 const stats = displayStats.get(map.slug);
                 return (
                   <tr key={map.slug} className="lift-row border-b border-[var(--color-border-primary)]">
-                    <td className="py-2 pr-4">
+                    <td className="p-2">
                       <Link href={`/maps/${map.slug}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
                         {toSentenceCase(map.name)}
                       </Link>
                     </td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.seasonsPlayed || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.pickCount || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.banCount || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.noPickCount || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.pickAndWon || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.totalKills || '—'}</td>
-                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
-                    <td className="py-2 pl-4 text-right text-[var(--color-text-secondary)]">{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.seasonsPlayed || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickCount || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.banCount || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.noPickCount || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickAndWon || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.totalKills || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
+                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</td>
                   </tr>
                 );
               })}

@@ -75,7 +75,8 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 
 - **`.font-display`** / **`.font-mono`** — the two custom font families
 - **`.tracked`** / **`.tracked-wide`** — uppercase, letter-spaced "broadcast label" styling for
-  small section headers/eyebrows
+  small section headers/eyebrows. Table header cells use the same letter-spacing (`--tracking-label`)
+  without the uppercase, through `Th`/`SortableTh` (see Table header cells)
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for
@@ -119,10 +120,28 @@ card's own sub-view switch should all render as `TabBar`/`tabCls()`, sized or sp
 rather than a second, differently-styled tab control. Two tab components that look different for no
 reason reads as two unrelated features, not one drill-down.
 
-**Table header cells.** Use the shared **`Th`** (`src/components/Th.tsx`, `align="left"|"right"`)
-for a stat table's static (non-sortable) header cells instead of repeating the tracked/bordered class
-string per column. A column whose header is itself clickable to sort keeps its own `SortableTh`-style
-component — that's a different, interactive shape, not a `Th` variant. The scorecards on the week, round and group pages use the shared `SortableTh` (`src/components/SortableTh.tsx`, `Th`'s tracked style plus an arrow and `aria-sort`) with `useSortState()` (`src/components/useSortState.ts`, also behind `BasicStatsView` and `SabremetricsLeaderboardView`'s sorting).
+**Table header cells.** A stat table's header row is made of the shared **`Th`**
+(`src/components/Th.tsx`) for plain columns and **`SortableTh`** (`src/components/SortableTh.tsx`) for
+columns that sort — never a re-typed class string. They share one look: 10px semibold, letter-spaced
+but not uppercased, 8px padding on every side, on a tinted header band with a bottom rule. Plain
+data cells in those tables use the same `p-2` (8px on every side), so a header and the figures under
+it share one inset, pinned name column included; expanded-detail (`colSpan`) panels and footer label
+rows are exempt.
+`align="left"|"right"|"center"` aligns the label with the figures below it; `sticky` on the first
+(name) cell pins it while the table scrolls sideways (`.sticky-col`, which also paints the band so
+scrolled cells never show through).
+
+`SortableTh` is a `<button>` inside the `<th>`, so Tab reaches it and Enter or Space sorts, with a
+focus ring and a hover tint, and `aria-sort` announces the sorted column and direction. Its sort
+arrow has a reserved slot on the side away from the alignment edge (before the label when
+right-aligned, after it when left-aligned), hidden until the column is sorted, so sorting never
+shifts the column's width or the label's alignment. It reads its state from `useSortState()`
+(`src/components/useSortState.ts`) or any `{ col, asc }` pair, so a table that keeps its own sort
+state passes `state={{ col, asc }}`.
+
+Three kinds of table keep their own small headers: the compact tables inside cards (the player
+page's trophy stat strip, a matchup's per-map breakdown), the stat-entry table in the demo upload
+modal, and the admin tables.
 
 **Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
 `size="sm"|"lg"`) for a "nothing here" message — `sm` for an inline one-liner inside an existing

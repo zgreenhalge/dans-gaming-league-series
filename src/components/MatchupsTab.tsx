@@ -6,6 +6,9 @@ import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/queries';
 import EmptyState from './EmptyState';
+import Th from './Th';
+import SortableTh from './SortableTh';
+import { useSortState } from './useSortState';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
@@ -19,40 +22,6 @@ function rowBg(rating: number, color: string) {
 }
 function rowHoverBg(rating: number, color: string) {
   return `color-mix(in srgb, ${color} ${Math.round(8 + (rating / 100) * 15)}%, var(--color-bg-primary))`;
-}
-
-function SortableTh({
-  label,
-  col,
-  active,
-  asc,
-  align = 'right',
-  title,
-  onClick,
-}: {
-  label: string;
-  col: string;
-  active: string;
-  asc: boolean;
-  align?: 'left' | 'right' | 'center';
-  title?: string;
-  onClick: (c: string) => void;
-}) {
-  const isActive = active === col;
-  return (
-    <th
-      tabIndex={0}
-      title={title}
-      onClick={() => onClick(col)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(col); } }}
-      className={`tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-${align} ${
-        isActive ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
-      }`}
-    >
-      {label}
-      {isActive && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
-    </th>
-  );
 }
 
 function CalloutCard({
@@ -88,10 +57,8 @@ function CalloutCard({
 
 export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h2hData: H2HData }) {
   const [subTab, setSubTab] = useState<MatchupsSubTab>('h2h');
-  const [h2hSort, setH2hSort] = useState<H2HSortCol>('rating');
-  const [h2hAsc, setH2hAsc] = useState(false);
-  const [b2bSort, setB2bSort] = useState<B2BSortCol>('rating');
-  const [b2bAsc, setB2bAsc] = useState(false);
+  const [h2hSort, onH2hSort] = useSortState('rating');
+  const [b2bSort, onB2bSort] = useSortState('rating');
   const [expandedOpponent, setExpandedOpponent] = useState<number | null>(null);
   const [expandedTeammate, setExpandedTeammate] = useState<number | null>(null);
 
@@ -212,7 +179,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
   // ── Sorting ───────────────────────────────────────────────────────────────
   const sortedH2h = useMemo(() => {
     const cmp = (a: (typeof h2hRows)[number], b: (typeof h2hRows)[number]): number => {
-      switch (h2hSort) {
+      switch (h2hSort.col as H2HSortCol) {
         case 'name':    return (playersById.get(a.other)?.name ?? '').localeCompare(playersById.get(b.other)?.name ?? '');
         case 'rating':  return rivalScore(b._raw) - rivalScore(a._raw);
         case 'wl':      return b.myWins - a.myWins || a.myLosses - b.myLosses;
@@ -226,12 +193,12 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
         case 'adr':     return b.adr - a.adr;
       }
     };
-    return [...h2hRows].sort((a, b) => h2hAsc ? -cmp(a, b) : cmp(a, b));
-  }, [h2hRows, h2hSort, h2hAsc, playersById, rivalScore]);
+    return [...h2hRows].sort((a, b) => h2hSort.asc ? -cmp(a, b) : cmp(a, b));
+  }, [h2hRows, h2hSort, playersById, rivalScore]);
 
   const sortedB2b = useMemo(() => {
     const cmp = (a: (typeof b2bRows)[number], b: (typeof b2bRows)[number]): number => {
-      switch (b2bSort) {
+      switch (b2bSort.col as B2BSortCol) {
         case 'name':    return (playersById.get(a.other)?.name ?? '').localeCompare(playersById.get(b.other)?.name ?? '');
         case 'rating':  return duoScore(b._raw) - duoScore(a._raw);
         case 'wl':      return b.wins - a.wins || a.losses - b.losses;
@@ -245,20 +212,8 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
         case 'adr':     return b.adr - a.adr;
       }
     };
-    return [...b2bRows].sort((a, b) => b2bAsc ? -cmp(a, b) : cmp(a, b));
-  }, [b2bRows, b2bSort, b2bAsc, playersById, duoScore]);
-
-  function clickH2hSort(col: string) {
-    const c = col as H2HSortCol;
-    if (c === h2hSort) setH2hAsc(!h2hAsc);
-    else { setH2hSort(c); setH2hAsc(c === 'name'); }
-  }
-
-  function clickB2bSort(col: string) {
-    const c = col as B2BSortCol;
-    if (c === b2bSort) setB2bAsc(!b2bAsc);
-    else { setB2bSort(c); setB2bAsc(c === 'name'); }
-  }
+    return [...b2bRows].sort((a, b) => b2bSort.asc ? -cmp(a, b) : cmp(a, b));
+  }, [b2bRows, b2bSort, playersById, duoScore]);
 
   const GREEN = 'var(--color-accent-green-fg)';
   const RED   = 'var(--color-accent-red-fg)';
@@ -356,12 +311,10 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
             <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
-                    Opponent
-                  </th>
+                <tr>
+                  <Th sticky>Opponent</Th>
                   {H2H_COLS.map(({ col, label, align, title }) => (
-                    <SortableTh key={col} col={col} label={label} active={h2hSort} asc={h2hAsc} align={align} title={title} onClick={clickH2hSort} />
+                    <SortableTh key={col} sortKey={col} label={label} state={h2hSort} align={align ?? 'right'} title={title} onSort={onH2hSort} />
                   ))}
                 </tr>
               </thead>
@@ -382,26 +335,26 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
                         onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
                       >
-                        <td className="sticky-col pl-4 pr-2 py-2.5">
+                        <td className="p-2 sticky-col">
                           <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
                             <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
                             <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
                           </Link>
                         </td>
-                        <td className="py-2.5 px-2 text-center">
+                        <td className="p-2 text-center">
                           <div className="flex justify-center">
                             <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
                           </div>
                         </td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.myWins}–{row.myLosses}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.games}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.kills}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.assists}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.deaths}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.kd.toFixed(2)}</td>
-                        <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">{row.adr.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.myWins}–{row.myLosses}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.games}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum">{row.kills}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.assists}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.deaths}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.kd.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{row.adr.toFixed(2)}</td>
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
@@ -432,12 +385,10 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
             <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
-                    Teammate
-                  </th>
+                <tr>
+                  <Th sticky>Teammate</Th>
                   {B2B_COLS.map(({ col, label, align, title }) => (
-                    <SortableTh key={col} col={col} label={label} active={b2bSort} asc={b2bAsc} align={align} title={title} onClick={clickB2bSort} />
+                    <SortableTh key={col} sortKey={col} label={label} state={b2bSort} align={align ?? 'right'} title={title} onSort={onB2bSort} />
                   ))}
                 </tr>
               </thead>
@@ -461,26 +412,26 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
                         onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
                       >
-                        <td className="sticky-col pl-4 pr-2 py-2.5">
+                        <td className="p-2 sticky-col">
                           <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
                             <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
                             <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
                           </Link>
                         </td>
-                        <td className="py-2.5 px-2 text-center">
+                        <td className="p-2 text-center">
                           <div className="flex justify-center">
                             <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
                           </div>
                         </td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.wins}–{row.losses}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.games}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</td>
-                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</td>
-                        <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.wins}–{row.losses}</td>
+                        <td className="p-2 text-right font-mono tnum">{row.games}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</td>
+                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</td>
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">

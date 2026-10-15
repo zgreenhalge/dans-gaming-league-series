@@ -17,7 +17,7 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
             <thead>
-              <tr className="bg-[var(--color-bg-secondary)]">
+              <tr>
                 <Th align="left">Side</Th>
                 <Th align="right">Times Picked</Th>
                 <Th align="right">W-L</Th>
@@ -27,10 +27,10 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
             <tbody>
               {perSideStats.map((s) => (
                 <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                  <td className="p-2 tracked text-[11px] font-semibold">{s.side}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
                     {formatRoundWinPct(s)}
                   </td>
                 </tr>

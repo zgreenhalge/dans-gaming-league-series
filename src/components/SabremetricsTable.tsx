@@ -1,4 +1,5 @@
 import type { SabFieldsWithDerived } from '@/lib/types';
+import Th from './Th';
 
 interface PlayerSabRow {
   player_id: number;
@@ -12,9 +13,7 @@ export interface SabremetricsTableProps {
   players: PlayerSabRow[];
 }
 
-const thCls =
-  'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap';
-const tdCls = 'px-3 py-2.5 text-right font-mono tnum text-[13px]';
+const tdCls = 'p-2 text-right font-mono tnum text-[13px]';
 
 function pct(num: number, den: number): string {
   if (den === 0) return '—';
@@ -80,19 +79,11 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
     <div className="border border-[var(--color-border-primary)] overflow-x-auto">
       <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
+          <tr>
             {cols.map((col) => (
-              <th
-                key={col.key}
-                title={col.title || undefined}
-                className={
-                  col.key === 'name'
-                    ? 'sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]'
-                    : thCls
-                }
-              >
+              <Th key={col.key} title={col.title || undefined} align={col.key === 'name' ? 'left' : 'right'} sticky={col.key === 'name'}>
                 {col.header}
-              </th>
+              </Th>
             ))}
           </tr>
         </thead>
@@ -107,9 +98,9 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
                   key={col.key}
                   className={
                     col.key === 'name'
-                      ? 'sticky-col pl-4 pr-3 py-2.5 font-display font-semibold text-[var(--color-text-primary)]'
+                      ? 'sticky-col p-2 font-display font-semibold text-[var(--color-text-primary)]'
                       : i === cols.length - 1
-                        ? `${tdCls} pr-4 font-semibold`
+                        ? `${tdCls} font-semibold`
                         : tdCls
                   }
                 >
