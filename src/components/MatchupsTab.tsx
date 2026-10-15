@@ -8,6 +8,7 @@ import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdow
 import EmptyState from './EmptyState';
 import Th from './Th';
 import SortableTh from './SortableTh';
+import { StatTable, Tr, Td, PlayerCell } from './StatTable';
 import { useSortState } from './useSortState';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
@@ -308,72 +309,65 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
         h2hRows.length === 0 ? (
           <EmptyState message="No opponent data yet." />
         ) : (
-          <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-            <table className="w-full min-w-max border-collapse text-[13px]">
-              <thead>
-                <tr>
-                  <Th sticky>Opponent</Th>
-                  {H2H_COLS.map(({ col, label, align, title }) => (
-                    <SortableTh key={col} sortKey={col} label={label} state={h2hSort} align={align ?? 'right'} title={title} onSort={onH2hSort} />
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedH2h.map((row) => {
-                  const p = playersById.get(row.other);
-                  if (!p) return null;
-                  const rating = Math.round(rivalScore(row._raw) * 100);
-                  const bg = rowBg(rating, RED);
-                  const hoverBg = rowHoverBg(rating, RED);
-                  const isExpanded = expandedOpponent === row.other;
-                  return (
-                    <Fragment key={row.other}>
-                      <tr
-                        className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                        style={{ background: isExpanded ? hoverBg : bg }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
-                        onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
-                      >
-                        <td className="p-2 sticky-col">
-                          <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
-                            <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
-                            <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
-                          </Link>
+          <StatTable>
+            <thead>
+              <tr>
+                <Th sticky>Opponent</Th>
+                {H2H_COLS.map(({ col, label, align, title }) => (
+                  <SortableTh key={col} sortKey={col} label={label} state={h2hSort} align={align ?? 'right'} title={title} onSort={onH2hSort} />
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedH2h.map((row) => {
+                const p = playersById.get(row.other);
+                if (!p) return null;
+                const rating = Math.round(rivalScore(row._raw) * 100);
+                const bg = rowBg(rating, RED);
+                const hoverBg = rowHoverBg(rating, RED);
+                const isExpanded = expandedOpponent === row.other;
+                return (
+                  <Fragment key={row.other}>
+                    <Tr
+                      className="cursor-pointer transition-colors"
+                      style={{ background: isExpanded ? hoverBg : bg }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
+                      onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
+                    >
+                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} />
+                      <Td align="center">
+                        <div className="flex justify-center">
+                          <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
+                        </div>
+                      </Td>
+                      <Td>{row.myWins}–{row.myLosses}</Td>
+                      <Td>{row.games}</Td>
+                      <Td bold>{row.wr.toFixed(1)}%</Td>
+                      <Td>{row.rwr.toFixed(1)}%</Td>
+                      <Td>{row.kills}</Td>
+                      <Td>{row.assists}</Td>
+                      <Td>{row.deaths}</Td>
+                      <Td>{row.kd.toFixed(2)}</Td>
+                      <Td bold>{row.adr.toFixed(2)}</Td>
+                    </Tr>
+                    {isExpanded && (
+                      <Tr>
+                        <td colSpan={H2H_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                          <RivalDetail
+                            rival={row._raw}
+                            players={playersById}
+                            rivalryRating={rating}
+                            ratingBreakdown={rivalBreakdown(row._raw)}
+                          />
                         </td>
-                        <td className="p-2 text-center">
-                          <div className="flex justify-center">
-                            <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
-                          </div>
-                        </td>
-                        <td className="p-2 text-right font-mono tnum">{row.myWins}–{row.myLosses}</td>
-                        <td className="p-2 text-right font-mono tnum">{row.games}</td>
-                        <td className="p-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
-                        <td className="p-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
-                        <td className="p-2 text-right font-mono tnum">{row.kills}</td>
-                        <td className="p-2 text-right font-mono tnum">{row.assists}</td>
-                        <td className="p-2 text-right font-mono tnum">{row.deaths}</td>
-                        <td className="p-2 text-right font-mono tnum">{row.kd.toFixed(2)}</td>
-                        <td className="p-2 text-right font-mono tnum font-semibold">{row.adr.toFixed(2)}</td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td colSpan={H2H_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
-                            <RivalDetail
-                              rival={row._raw}
-                              players={playersById}
-                              rivalryRating={rating}
-                              ratingBreakdown={rivalBreakdown(row._raw)}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </Tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </StatTable>
         )
       )}
 
@@ -382,75 +376,68 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
         b2bRows.length === 0 ? (
           <EmptyState message="No teammate data yet." />
         ) : (
-          <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-            <table className="w-full min-w-max border-collapse text-[13px]">
-              <thead>
-                <tr>
-                  <Th sticky>Teammate</Th>
-                  {B2B_COLS.map(({ col, label, align, title }) => (
-                    <SortableTh key={col} sortKey={col} label={label} state={b2bSort} align={align ?? 'right'} title={title} onSort={onB2bSort} />
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedB2b.map((row) => {
-                  const p = playersById.get(row.other);
-                  if (!p) return null;
-                  const myName = playersById.get(playerId)?.name ?? 'Me';
-                  const rating = Math.round(duoScore(row._raw) * 100);
-                  const bg = rowBg(rating, GREEN);
-                  const hoverBg = rowHoverBg(rating, GREEN);
-                  const myKd = row.myStats.deaths > 0 ? row.myStats.kills / row.myStats.deaths : row.myStats.kills;
-                  const theirKd = row.theirStats.deaths > 0 ? row.theirStats.kills / row.theirStats.deaths : row.theirStats.kills;
-                  const isExpanded = expandedTeammate === row.other;
-                  return (
-                    <Fragment key={row.other}>
-                      <tr
-                        className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                        style={{ background: isExpanded ? hoverBg : bg }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
-                        onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
-                      >
-                        <td className="p-2 sticky-col">
-                          <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
-                            <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
-                            <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
-                          </Link>
+          <StatTable>
+            <thead>
+              <tr>
+                <Th sticky>Teammate</Th>
+                {B2B_COLS.map(({ col, label, align, title }) => (
+                  <SortableTh key={col} sortKey={col} label={label} state={b2bSort} align={align ?? 'right'} title={title} onSort={onB2bSort} />
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedB2b.map((row) => {
+                const p = playersById.get(row.other);
+                if (!p) return null;
+                const myName = playersById.get(playerId)?.name ?? 'Me';
+                const rating = Math.round(duoScore(row._raw) * 100);
+                const bg = rowBg(rating, GREEN);
+                const hoverBg = rowHoverBg(rating, GREEN);
+                const myKd = row.myStats.deaths > 0 ? row.myStats.kills / row.myStats.deaths : row.myStats.kills;
+                const theirKd = row.theirStats.deaths > 0 ? row.theirStats.kills / row.theirStats.deaths : row.theirStats.kills;
+                const isExpanded = expandedTeammate === row.other;
+                return (
+                  <Fragment key={row.other}>
+                    <Tr
+                      className="cursor-pointer transition-colors"
+                      style={{ background: isExpanded ? hoverBg : bg }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
+                      onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
+                    >
+                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} />
+                      <Td align="center">
+                        <div className="flex justify-center">
+                          <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
+                        </div>
+                      </Td>
+                      <Td>{row.wins}–{row.losses}</Td>
+                      <Td>{row.games}</Td>
+                      <Td bold>{row.wr.toFixed(1)}%</Td>
+                      <Td>{row.rwr.toFixed(1)}%</Td>
+                      <Td title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</Td>
+                      <Td title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</Td>
+                      <Td title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</Td>
+                      <Td title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</Td>
+                      <Td bold title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</Td>
+                    </Tr>
+                    {isExpanded && (
+                      <Tr>
+                        <td colSpan={B2B_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                          <DuoDetail
+                            duo={row._raw}
+                            players={playersById}
+                            friendshipRating={rating}
+                            ratingBreakdown={duoBreakdown(row._raw)}
+                          />
                         </td>
-                        <td className="p-2 text-center">
-                          <div className="flex justify-center">
-                            <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
-                          </div>
-                        </td>
-                        <td className="p-2 text-right font-mono tnum">{row.wins}–{row.losses}</td>
-                        <td className="p-2 text-right font-mono tnum">{row.games}</td>
-                        <td className="p-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
-                        <td className="p-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
-                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</td>
-                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</td>
-                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</td>
-                        <td className="p-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</td>
-                        <td className="p-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td colSpan={B2B_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
-                            <DuoDetail
-                              duo={row._raw}
-                              players={playersById}
-                              friendshipRating={rating}
-                              ratingBreakdown={duoBreakdown(row._raw)}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </Tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </StatTable>
         )
       )}
     </div>

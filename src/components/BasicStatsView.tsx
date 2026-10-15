@@ -6,12 +6,12 @@ import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
-import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
 import Th from './Th';
 import SortableTh from './SortableTh';
+import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell } from './StatTable';
 import PerSideStatsTable from './PerSideStatsTable';
 import { CONDITION_LABEL } from './icons/ConditionIcons';
 
@@ -56,62 +56,56 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
   return (
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Basic Stats</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
-          <thead>
-            <tr>
-              <Th sticky>Player</Th>
-              <SortableTh label="Kills"            sortKey="k"     state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Assists"          sortKey="a"     state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Deaths"           sortKey="d"     state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Damage"           sortKey="dmg"   state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="p-2 sticky-col">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.player_name}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.total_kills}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.total_assists}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.total_deaths}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtDiff(stats.killDiff)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.total_damage.toLocaleString()}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(row.overall_adr, 2)}
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Player</Th>
+            <SortableTh label="Kills"            sortKey="k"     state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Assists"          sortKey="a"     state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Deaths"           sortKey="d"     state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Damage"           sortKey="dmg"   state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(({ row, stats }) => (
+            <Tr key={row.player_id} clickable>
+              <PlayerCell id={row.player_id} name={row.player_name} />
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.total_kills}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.total_assists}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.total_deaths}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtDiff(stats.killDiff)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.total_damage.toLocaleString()}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(row.overall_adr, 2)}
+                </Link>
+              </Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -143,80 +137,74 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
   return (
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Kill Stats</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
-          <thead>
-            <tr>
-              <Th sticky>Player</Th>
-              <SortableTh label="K/D"      title="Kill/Death Ratio"      sortKey="kd"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Dmg/K"    title="Damage per Kill"        sortKey="dpk" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="K/Round"  title="Kills per Round"        sortKey="kr"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="A/Round"  title="Assists per Round"      sortKey="ar"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="D/Round"  title="Deaths per Round"       sortKey="dr"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="K/Win"    title="Kills per Win"          sortKey="kw"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="D/Win"    title="Deaths per Win"         sortKey="dw"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="K/Loss"   title="Kills per Loss"         sortKey="kl"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="D/Loss"   title="Deaths per Loss"        sortKey="dl"  state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="p-2 sticky-col">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.player_name}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(row.kd_ratio, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.dmgPerKill, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.kPerRound, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.aPerRound, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.dPerRound, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.kPerWin, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.dPerWin, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.kPerLoss, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.dPerLoss, 1)}
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Player</Th>
+            <SortableTh label="K/D"      title="Kill/Death Ratio"      sortKey="kd"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Dmg/K"    title="Damage per Kill"        sortKey="dpk" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="K/Round"  title="Kills per Round"        sortKey="kr"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="A/Round"  title="Assists per Round"      sortKey="ar"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="D/Round"  title="Deaths per Round"       sortKey="dr"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="K/Win"    title="Kills per Win"          sortKey="kw"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="D/Win"    title="Deaths per Win"         sortKey="dw"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="K/Loss"   title="Kills per Loss"         sortKey="kl"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="D/Loss"   title="Deaths per Loss"        sortKey="dl"  state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(({ row, stats }) => (
+            <Tr key={row.player_id} clickable>
+              <PlayerCell id={row.player_id} name={row.player_name} />
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(row.kd_ratio, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.dmgPerKill, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.kPerRound, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.aPerRound, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.dPerRound, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.kPerWin, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.dPerWin, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.kPerLoss, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.dPerLoss, 1)}
+                </Link>
+              </Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -269,68 +257,62 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
   return (
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Game Stats</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
-          <thead>
-            <tr>
-              <Th sticky>Player</Th>
-              <SortableTh label="Games"    title="Games Played"          sortKey="games" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="W–L"      title="Wins – Losses"         sortKey="wl"    state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="WR%"      title="Win Rate"              sortKey="wr"    state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Rounds"   title="Total Rounds Played"   sortKey="rounds" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="RW–RL"    title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Rnd Diff" title="Round Differential"    sortKey="rdiff" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="RWR%"     title="Round Win Rate"        sortKey="rwr"   state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="p-2 sticky-col">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.player_name}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.matches_played}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.matches_won}–{row.matches_lost}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(row.win_rate_percentage, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.total_rounds_played}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.total_rounds_won}–{stats.roundsLost}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtDiff(stats.roundDiff)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(row.rwr_percentage, 1)}
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Player</Th>
+            <SortableTh label="Games"    title="Games Played"          sortKey="games" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="W–L"      title="Wins – Losses"         sortKey="wl"    state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="WR%"      title="Win Rate"              sortKey="wr"    state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rounds"   title="Total Rounds Played"   sortKey="rounds" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="RW–RL"    title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rnd Diff" title="Round Differential"    sortKey="rdiff" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="RWR%"     title="Round Win Rate"        sortKey="rwr"   state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(({ row, stats }) => (
+            <Tr key={row.player_id} clickable>
+              <PlayerCell id={row.player_id} name={row.player_name} />
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.matches_played}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.matches_won}–{row.matches_lost}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(row.win_rate_percentage, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.total_rounds_played}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {row.total_rounds_won}–{stats.roundsLost}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtDiff(stats.roundDiff)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(row.rwr_percentage, 1)}
+                </Link>
+              </Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -362,80 +344,74 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
   return (
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Average Game Stats</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
-          <thead>
-            <tr>
-              <Th sticky>Player</Th>
-              <SortableTh label="Rounds/Game"     title="Rounds Played per Game"      sortKey="rg"   state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Round Diff/Game" title="Round Differential per Game"  sortKey="rdg"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Rounds Won/Game" title="Rounds Won per Game"          sortKey="rwg"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Rounds Lost/Game" title="Rounds Lost per Game"        sortKey="rlg"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="K Diff/Game"     title="Kill Differential per Game"   sortKey="kdg"  state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Dmg/Game"        title="Damage per Game"              sortKey="dmgg" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="K/Game"          title="Kills per Game"               sortKey="kg"   state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="A/Game"          title="Assists per Game"             sortKey="ag"   state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="D/Game"          title="Deaths per Game"              sortKey="dg"   state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                <td className="p-2 sticky-col">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {row.player_name}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.rPerGame, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtDiff(stats.rdPerGame, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.rwPerGame, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.rlPerGame, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtDiff(stats.kdPerGame, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.dmgPerGame, 1)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.kPerGame, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.aPerGame, 2)}
-                  </Link>
-                </td>
-                <td className="p-2 text-right tnum">
-                  <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtNum(stats.dPerGame, 2)}
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Player</Th>
+            <SortableTh label="Rounds/Game"     title="Rounds Played per Game"      sortKey="rg"   state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Round Diff/Game" title="Round Differential per Game"  sortKey="rdg"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rounds Won/Game" title="Rounds Won per Game"          sortKey="rwg"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rounds Lost/Game" title="Rounds Lost per Game"        sortKey="rlg"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="K Diff/Game"     title="Kill Differential per Game"   sortKey="kdg"  state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Dmg/Game"        title="Damage per Game"              sortKey="dmgg" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="K/Game"          title="Kills per Game"               sortKey="kg"   state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="A/Game"          title="Assists per Game"             sortKey="ag"   state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="D/Game"          title="Deaths per Game"              sortKey="dg"   state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(({ row, stats }) => (
+            <Tr key={row.player_id} clickable>
+              <PlayerCell id={row.player_id} name={row.player_name} />
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.rPerGame, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtDiff(stats.rdPerGame, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.rwPerGame, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.rlPerGame, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtDiff(stats.kdPerGame, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.dmgPerGame, 1)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.kPerGame, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.aPerGame, 2)}
+                </Link>
+              </Td>
+              <Td>
+                <Link href={`/players/${row.player_id}`} className="block">
+                  {fmtNum(stats.dPerGame, 2)}
+                </Link>
+              </Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -464,31 +440,29 @@ function DistributionTable({ title, emptyMessage, categoryLabel, total, buckets 
       {total === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-[12px]">
-            <thead>
-              <tr>
-                <Th align="left">{categoryLabel}</Th>
-                <Th align="right">Count</Th>
-                <Th align="right">%</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {buckets.map(({ label, count, note }) => (
-                <tr key={label} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="p-2">
-                    <span className="tracked text-[11px] font-semibold">{label}</span>
-                    {note && <span className="ml-2 text-[10px] text-[var(--color-text-secondary)]">{note}</span>}
-                  </td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{count}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                    {((count / total) * 100).toFixed(0)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <StatTable>
+          <thead>
+            <tr>
+              <Th align="left">{categoryLabel}</Th>
+              <Th align="right">Count</Th>
+              <Th align="right">%</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {buckets.map(({ label, count, note }) => (
+              <Tr key={label}>
+                <NameTd>
+                  {label}
+                  {note && <span className="ml-2 font-mono text-[10px] font-normal text-[var(--color-text-secondary)]">{note}</span>}
+                </NameTd>
+                <Td>{count}</Td>
+                <Td muted>
+                  {((count / total) * 100).toFixed(0)}%
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </StatTable>
       )}
     </div>
   );
@@ -550,59 +524,55 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
       {mapPickBanStats.length === 0 ? (
         <EmptyState message="No map data." />
       ) : (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-[12px]">
-            <thead>
-              <tr>
-                <Th align="left">Map</Th>
-                <Th align="right">Picks</Th>
-                <Th align="right">Bans</Th>
-                <Th align="right">No-picks</Th>
-                <Th align="right">Avg rounds</Th>
-                <Th align="right">Pick &amp; won</Th>
-                <Th align="right" className={SIDE_DIVIDER}>CT picked</Th>
-                <Th align="right">CT W-L</Th>
-                <Th align="right">CT RWR%</Th>
-                <Th align="right" className={SIDE_DIVIDER}>T picked</Th>
-                <Th align="right">T W-L</Th>
-                <Th align="right">T RWR%</Th>
+        <StatTable>
+          <thead>
+            <tr>
+              <Th align="left">Map</Th>
+              <Th align="right">Picks</Th>
+              <Th align="right">Bans</Th>
+              <Th align="right">No-picks</Th>
+              <Th align="right">Avg rounds</Th>
+              <Th align="right">Pick &amp; won</Th>
+              <Th align="right" className={SIDE_DIVIDER}>CT picked</Th>
+              <Th align="right">CT W-L</Th>
+              <Th align="right">CT RWR%</Th>
+              <Th align="right" className={SIDE_DIVIDER}>T picked</Th>
+              <Th align="right">T W-L</Th>
+              <Th align="right">T RWR%</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {mapPickBanStats.map((m) => (
+              <Tr key={m.map} clickable>
+                <MapCell map={m.map} />
+                <Td>{m.picked}</Td>
+                <Td muted>{m.banned}</Td>
+                <Td muted>{m.noPicked}</Td>
+                <Td muted>{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</Td>
+                <Td>{m.pickedAndWon}</Td>
+                <Td muted className={SIDE_DIVIDER}>{m.ctWins + m.ctLosses}</Td>
+                <Td>{m.ctWins}-{m.ctLosses}</Td>
+                <Td muted>—</Td>
+                <Td muted className={SIDE_DIVIDER}>{m.tWins + m.tLosses}</Td>
+                <Td>{m.tWins}-{m.tLosses}</Td>
+                <Td muted>—</Td>
+              </Tr>
+            ))}
+          </tbody>
+          {ct && t && (
+            <tfoot>
+              <tr className="bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]">
+                <NameTd colSpan={6}>All maps</NameTd>
+                <Td muted className={SIDE_DIVIDER}>{ct.numTimesPicked}</Td>
+                <Td>{ct.wins}-{ct.losses}</Td>
+                <Td muted>{formatRoundWinPct(ct)}</Td>
+                <Td muted className={SIDE_DIVIDER}>{t.numTimesPicked}</Td>
+                <Td>{t.wins}-{t.losses}</Td>
+                <Td muted>{formatRoundWinPct(t)}</Td>
               </tr>
-            </thead>
-            <tbody>
-              {mapPickBanStats.map((m) => (
-                <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)]">
-                  <td className="p-2 tracked text-[11px] font-semibold">
-                    <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
-                  </td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.ctWins + m.ctLosses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctWins}-{m.ctLosses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
-                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{m.tWins + m.tLosses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tWins}-{m.tLosses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">—</td>
-                </tr>
-              ))}
-            </tbody>
-            {ct && t && (
-              <tfoot>
-                <tr className="bg-[var(--color-bg-secondary)]">
-                  <td className="p-2 tracked text-[11px] font-semibold" colSpan={6}>All maps</td>
-                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{ct.numTimesPicked}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{ct.wins}-{ct.losses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(ct)}</td>
-                  <td className={`p-2 text-right font-mono tnum text-[var(--color-text-secondary)] ${SIDE_DIVIDER}`}>{t.numTimesPicked}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{t.wins}-{t.losses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{formatRoundWinPct(t)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+            </tfoot>
+          )}
+        </StatTable>
       )}
     </div>
   );

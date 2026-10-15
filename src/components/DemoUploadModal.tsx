@@ -15,6 +15,7 @@ import {
   type KillCreditFlags, type UtilityThrowRow,
 } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
+import Th from '@/components/Th';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -587,17 +588,10 @@ export default function DemoUploadModal({
                       <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
                         <table className="w-full min-w-max border-collapse text-[12px]">
                           <thead>
-                            <tr className="bg-[var(--color-bg-secondary)]">
-                              <th className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-left pl-3 pr-2 py-2 border-b border-[var(--color-border-primary)]">
-                                Player
-                              </th>
+                            <tr>
+                              <Th>Player</Th>
                               {(['K', 'A', 'D', 'DMG', 'ADR'] as const).map((h) => (
-                                <th
-                                  key={h}
-                                  className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right px-2 py-2 border-b border-[var(--color-border-primary)] w-14"
-                                >
-                                  {h}
-                                </th>
+                                <Th key={h} align="right" className="w-14">{h}</Th>
                               ))}
                             </tr>
                           </thead>
@@ -617,7 +611,7 @@ export default function DemoUploadModal({
                                   key={p.player_id}
                                   className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
                                 >
-                                  <td className="pl-3 pr-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
+                                  <td className="px-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
                                     {p.player_name}
                                   </td>
                                   <td className="px-2 py-1.5 text-right">

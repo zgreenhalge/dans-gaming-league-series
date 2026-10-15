@@ -1,14 +1,15 @@
 'use client';
 
 import type { SortState } from './useSortState';
-import { TH_ALIGN_CLS, TH_CLS, type ThAlign } from './Th';
+import { TH_ALIGN_CLS, TH_CLS, labelWords, type ThAlign } from './Th';
+
+/** Where the label and its arrow sit in the button's flex row; the label's own wrapped lines align
+ *  through the button's `text-align`. */
+const JUSTIFY: Record<ThAlign, string> = { left: 'justify-start', right: 'justify-end', center: 'justify-center' };
 
 /** Clickable column header in `Th`'s style. The `button` keeps it keyboard-reachable (with a focus
  *  ring), `aria-sort` tells assistive tech which column orders the table, and hovering tints it. The
- *  sort arrow has its slot reserved on the side away from the cell's alignment edge — before the
- *  label on a right-aligned column, after it on a left-aligned one (a centered one mirrors the slot
- *  on both sides) — so sorting never shifts the column's width or the label's alignment with the
- *  figures below it. */
+ *  sort arrow appears after the label of the sorted column only, nudging the label aside. */
 export default function SortableTh<K extends string = string>({
   label,
   title,
@@ -31,8 +32,8 @@ export default function SortableTh<K extends string = string>({
   className?: string;
 }) {
   const active = state.col === sortKey;
-  const arrow = (
-    <span aria-hidden className={`inline-block w-[1.2em] text-center ${active ? '' : 'invisible'}`}>
+  const arrow = active && (
+    <span aria-hidden className="ml-[0.4em] shrink-0">
       {state.asc ? '↑' : '↓'}
     </span>
   );
@@ -45,14 +46,12 @@ export default function SortableTh<K extends string = string>({
         type="button"
         title={title}
         onClick={() => onSort(sortKey)}
-        className={`w-full cursor-pointer select-none whitespace-nowrap p-2 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
+        className={`flex w-full items-baseline ${JUSTIFY[align]} cursor-pointer select-none p-2 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
           active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
         }`}
       >
-        {align === 'right' && arrow}
-        {align === 'center' && <span aria-hidden className="inline-block w-[1.2em]" />}
-        {label}
-        {align !== 'right' && arrow}
+        <span>{labelWords(label)}</span>
+        {arrow}
       </button>
     </th>
   );

@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
+import { StatTable, Tr, Td, NameTd } from '@/components/StatTable';
 import { useTabState, resolveTab } from './useTabState';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow, MatchRoundEconomyRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
@@ -58,104 +59,99 @@ function Scoreboard({
   const hasSab = sabMap && sabMap.size > 0;
   const bothSides = includeCT && includeT;
   return (
-    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
-      <table className="w-full min-w-max border-collapse text-[13px]">
-        <thead>
-          <tr>
-            <Th sticky className="w-[40%]">Player</Th>
-            <Th align="right" title="Kills">K</Th>
-            <Th align="right" title="Assists">A</Th>
-            <Th align="right" title="Deaths">D</Th>
-            <Th align="right" title="Total damage dealt">DMG</Th>
-            <Th align="right" title="Average damage per round">ADR</Th>
-            {hasSab && (
-              <>
-                <Th align="right" title="Headshot kill percentage">HS%</Th>
-                <Th align="right" title="Enemy players blinded by flashbangs">EF</Th>
-                <Th align="right" title="Damage dealt with grenades (HE, molotov, incendiary)">UD</Th>
-              </>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {players.map((p) => {
-            const playedRow = p.rounds_played > 0;
-            const sab = sabMap?.get(p.player_id);
-            const dash = (v: string) =>
-              playedRow ? v : <span className="text-[var(--color-text-secondary)]">—</span>;
+    <StatTable tinted className={`faction-tint ${cls}`}>
+      <thead>
+        <tr>
+          <Th sticky className="w-[40%]">Player</Th>
+          <Th align="right" title="Kills">K</Th>
+          <Th align="right" title="Assists">A</Th>
+          <Th align="right" title="Deaths">D</Th>
+          <Th align="right" title="Total damage dealt">DMG</Th>
+          <Th align="right" title="Average damage per round">ADR</Th>
+          {hasSab && (
+            <>
+              <Th align="right" title="Headshot kill percentage">HS%</Th>
+              <Th align="right" title="Enemy players blinded by flashbangs">EF</Th>
+              <Th align="right" title="Damage dealt with grenades (HE, molotov, incendiary)">UD</Th>
+            </>
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {players.map((p) => {
+          const playedRow = p.rounds_played > 0;
+          const sab = sabMap?.get(p.player_id);
+          const dash = (v: string) =>
+            playedRow ? v : <span className="text-[var(--color-text-secondary)]">—</span>;
 
-            const k = sab && !bothSides ? splitStat(sab, 'kills_ct', 'kills_t', includeCT, includeT) : p.kills;
-            const a = sab && !bothSides ? splitStat(sab, 'assists_ct', 'assists_t', includeCT, includeT) : p.assists;
-            const d = sab && !bothSides ? splitStat(sab, 'deaths_ct', 'deaths_t', includeCT, includeT) : p.deaths;
-            const dmg = sab && !bothSides ? splitStat(sab, 'damage_ct', 'damage_t', includeCT, includeT) : p.damage;
-            // A side filter narrows the numerator to that side's damage, so the
-            // denominator must narrow to that side's rounds too — not the player's
-            // total rounds played, which would understate ADR for the filtered side.
-            let adrRounds = p.rounds_played;
-            if (sab && !bothSides) {
-              const bySide = roundsPlayedBySide(faction, p.rounds_played, targetWinRounds);
-              adrRounds = (includeCT ? bySide.ct : 0) + (includeT ? bySide.t : 0);
-            }
-            const adr = adrRounds > 0 ? Math.round(dmg / adrRounds) : 0;
+          const k = sab && !bothSides ? splitStat(sab, 'kills_ct', 'kills_t', includeCT, includeT) : p.kills;
+          const a = sab && !bothSides ? splitStat(sab, 'assists_ct', 'assists_t', includeCT, includeT) : p.assists;
+          const d = sab && !bothSides ? splitStat(sab, 'deaths_ct', 'deaths_t', includeCT, includeT) : p.deaths;
+          const dmg = sab && !bothSides ? splitStat(sab, 'damage_ct', 'damage_t', includeCT, includeT) : p.damage;
+          // A side filter narrows the numerator to that side's damage, so the
+          // denominator must narrow to that side's rounds too — not the player's
+          // total rounds played, which would understate ADR for the filtered side.
+          let adrRounds = p.rounds_played;
+          if (sab && !bothSides) {
+            const bySide = roundsPlayedBySide(faction, p.rounds_played, targetWinRounds);
+            adrRounds = (includeCT ? bySide.ct : 0) + (includeT ? bySide.t : 0);
+          }
+          const adr = adrRounds > 0 ? Math.round(dmg / adrRounds) : 0;
 
-            let hsPct = '—';
-            let ef = 0;
-            let ud = 0;
-            if (sab) {
-              const hs = splitStat(sab, 'headshot_kills_ct', 'headshot_kills_t', includeCT, includeT);
-              hsPct = k > 0 ? `${Math.round((hs / k) * 100)}%` : '—';
-              ef = sab.enemies_flashed;
-              ud = sab.utility_damage;
-            }
+          let hsPct = '—';
+          let ef = 0;
+          let ud = 0;
+          if (sab) {
+            const hs = splitStat(sab, 'headshot_kills_ct', 'headshot_kills_t', includeCT, includeT);
+            hsPct = k > 0 ? `${Math.round((hs / k) * 100)}%` : '—';
+            ef = sab.enemies_flashed;
+            ud = sab.utility_damage;
+          }
 
-            return (
-              <tr
-                key={p.player_id}
-                className="lift-row faction-tint-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
-              >
-                <td className="p-2 sticky-col font-display font-semibold faction-fg">
-                  <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
-                    <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
-                    <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
-                    {p.player_id === mvpPlayerId && (
-                      <span
-                        className="ml-0.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"
-                        style={{
-                          color: 'var(--color-accent-amber-pickborder)',
-                          background: 'color-mix(in srgb, var(--color-accent-amber-pickborder) 12%, transparent)',
-                          borderColor: 'var(--color-accent-amber-pickborder)',
-                        }}
-                      >
-                        MVP
-                      </span>
-                    )}
-                    {ratingDeltas[p.player_id] != null && (
-                      <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
-                        ({formatEhogDelta(ratingDeltas[p.player_id])})
-                      </span>
-                    )}
-                  </Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum">{dash(String(k))}</td>
-                <td className="p-2 text-right font-mono tnum">{dash(String(a))}</td>
-                <td className="p-2 text-right font-mono tnum">{dash(String(d))}</td>
-                <td className="p-2 text-right font-mono tnum">{dash(dmg.toLocaleString())}</td>
-                <td className="p-2 text-right font-mono tnum font-semibold">
-                  {dash(String(adr))}
-                </td>
-                {hasSab && (
-                  <>
-                    <td className="p-2 text-right font-mono tnum">{dash(hsPct)}</td>
-                    <td className="p-2 text-right font-mono tnum">{dash(String(ef))}</td>
-                    <td className="p-2 text-right font-mono tnum">{dash(String(ud))}</td>
-                  </>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+          return (
+            <Tr key={p.player_id} clickable tinted className="faction-tint-row cursor-pointer">
+              <NameTd sticky className="faction-fg">
+                <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
+                  <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
+                  <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
+                  {p.player_id === mvpPlayerId && (
+                    <span
+                      className="ml-0.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"
+                      style={{
+                        color: 'var(--color-accent-amber-pickborder)',
+                        background: 'color-mix(in srgb, var(--color-accent-amber-pickborder) 12%, transparent)',
+                        borderColor: 'var(--color-accent-amber-pickborder)',
+                      }}
+                    >
+                      MVP
+                    </span>
+                  )}
+                  {ratingDeltas[p.player_id] != null && (
+                    <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
+                      ({formatEhogDelta(ratingDeltas[p.player_id])})
+                    </span>
+                  )}
+                </Link>
+              </NameTd>
+              <Td>{dash(String(k))}</Td>
+              <Td>{dash(String(a))}</Td>
+              <Td>{dash(String(d))}</Td>
+              <Td>{dash(dmg.toLocaleString())}</Td>
+              <Td bold>
+                {dash(String(adr))}
+              </Td>
+              {hasSab && (
+                <>
+                  <Td>{dash(hsPct)}</Td>
+                  <Td>{dash(String(ef))}</Td>
+                  <Td>{dash(String(ud))}</Td>
+                </>
+              )}
+            </Tr>
+          );
+        })}
+      </tbody>
+    </StatTable>
   );
 }
 
@@ -224,21 +220,21 @@ function RatingProjectionTable({
   const renderProjRow = (proj: RatingProjection) => {
     const shirtsWin = proj.scoreA > proj.scoreB;
     return (
-      <tr key={proj.label} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
-        <td className="p-2 sticky-col font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
+      <Tr key={proj.label}>
+        <NameTd sticky>
           <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
             {proj.label}
           </span>
-        </td>
+        </NameTd>
         {allPlayers.map((p) => {
           const delta = proj.deltas[p.player_id] ?? 0;
           return (
-            <td key={p.player_id} className="p-2 text-right font-mono tnum font-semibold" style={{ color: deltaColor(delta, maxAbsDelta) }}>
+            <Td key={p.player_id} bold style={{ color: deltaColor(delta, maxAbsDelta) }}>
               {delta > 0 ? '+' : ''}{delta.toFixed(2)}
-            </td>
+            </Td>
           );
         })}
-      </tr>
+      </Tr>
     );
   };
   // The Current rating sits between the winning scenarios (rating ↑) and the losing
@@ -252,44 +248,42 @@ function RatingProjectionTable({
       <div className="mb-3">
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG rating projections</span>
       </div>
-      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-        <table className="w-full min-w-max text-[13px]">
-          <thead>
-            <tr>
-              <Th sticky>Score</Th>
+      <StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Score</Th>
+            {allPlayers.map((p) => (
+              <Th key={p.player_id} align="right">
+                {p.player_name}
+              </Th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {wins.map(renderProjRow)}
+          {current && (
+            <tr
+              style={{
+                background: 'color-mix(in srgb, #ffffff 16%, var(--color-bg-secondary))',
+                boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff',
+              }}
+            >
+              <NameTd
+                sticky
+                style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
+              >
+                Current
+              </NameTd>
               {allPlayers.map((p) => (
-                <Th key={p.player_id} align="right">
-                  {p.player_name}
-                </Th>
+                <Td key={p.player_id} bold>
+                  {(current[p.player_id] ?? 0).toFixed(2)}
+                </Td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {wins.map(renderProjRow)}
-            {current && (
-              <tr
-                style={{
-                  background: 'color-mix(in srgb, #ffffff 16%, var(--color-bg-secondary))',
-                  boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff',
-                }}
-              >
-                <td
-                  className="p-2 sticky-col tracked text-[9px] font-semibold text-[var(--color-text-primary)] whitespace-nowrap"
-                  style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
-                >
-                  Current
-                </td>
-                {allPlayers.map((p) => (
-                  <td key={p.player_id} className="p-2 text-right font-mono tnum font-semibold text-[var(--color-text-primary)]">
-                    {(current[p.player_id] ?? 0).toFixed(2)}
-                  </td>
-                ))}
-              </tr>
-            )}
-            {losses.map(renderProjRow)}
-          </tbody>
-        </table>
-      </div>
+          )}
+          {losses.map(renderProjRow)}
+        </tbody>
+      </StatTable>
     </div>
   );
 }

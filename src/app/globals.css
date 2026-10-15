@@ -2,7 +2,7 @@
 
 /* Light (default) — Dust2 daylight: tan base, navy ink, CT blue + T orange accents */
 :root {
-  /* Letter-spacing of small labels: `.tracked` and the table header cells (`Th`, `SortableTh`). */
+  /* Letter-spacing of small uppercase labels (`.tracked`). */
   --tracking-label: 0.14em;
   --color-bg-primary: #f6f0e0;
   --color-bg-secondary: #efe7d1;
