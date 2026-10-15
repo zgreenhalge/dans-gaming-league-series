@@ -6,13 +6,12 @@ import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
-import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
 import Th from './Th';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, NameTd, PlayerCell } from './StatTable';
+import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell } from './StatTable';
 import PerSideStatsTable from './PerSideStatsTable';
 import { CONDITION_LABEL } from './icons/ConditionIcons';
 
@@ -545,9 +544,7 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
           <tbody>
             {mapPickBanStats.map((m) => (
               <Tr key={m.map} clickable>
-                <NameTd>
-                  <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
-                </NameTd>
+                <MapCell map={m.map} />
                 <Td>{m.picked}</Td>
                 <Td muted>{m.banned}</Td>
                 <Td muted>{m.noPicked}</Td>

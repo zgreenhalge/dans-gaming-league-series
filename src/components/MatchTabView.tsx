@@ -221,7 +221,7 @@ function RatingProjectionTable({
     const shirtsWin = proj.scoreA > proj.scoreB;
     return (
       <Tr key={proj.label}>
-        <NameTd sticky className="whitespace-nowrap">
+        <NameTd sticky>
           <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
             {proj.label}
           </span>

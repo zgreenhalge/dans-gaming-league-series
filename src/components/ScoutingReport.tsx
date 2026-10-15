@@ -111,7 +111,7 @@ function MapCard({
         <span className="map-text-scrim font-display font-bold text-[16px] text-[var(--color-text-primary)]">{displayName}</span>
         {expanded && <span className="map-text-scrim tracked text-[9px] text-[var(--color-ct)]">PICKED</span>}
       </Link>
-      <table className="w-full table-fixed text-[12px]">
+      <table className="w-full table-fixed">
         <thead>
           <tr>
             <Th>Player</Th>

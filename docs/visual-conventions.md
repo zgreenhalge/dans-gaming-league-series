@@ -136,8 +136,9 @@ statistics pages, and the week/round/group scorecards:
 **Table header cells.** `Th` (plain columns) and `SortableTh` (columns that sort) share one look:
 10px semibold plain sans (no letter-spacing, not uppercased), 8px padding on every side, on a tinted
 header band with a bottom rule. A long label wraps onto a second line at its spaces only (never inside a
-hyphenated or slashed word) rather than widening its column; body cells never wrap, so a column is as wide as its widest figure or name. `align="left"|"right"|"center"` aligns the label with the figures below it;
-`sticky` on the first (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also
+hyphenated or slashed word) rather than widening its column; body cells never wrap, so a column is as
+wide as its widest figure or name. `align="left"|"right"|"center"` aligns the label with the figures
+below it; `sticky` on the first (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also
 paints the band so scrolled cells never show through).
 
 `SortableTh` is a `<button>` inside the `<th>`, so Tab reaches it and Enter or Space sorts, with a
@@ -151,6 +152,8 @@ state passes `state={{ col, asc }}`.
 - Compact tables inside cards (the player page's trophy stat strip, a matchup's per-map breakdown)
   take their headers from `Th compact` — the small uppercase label with no band or rule — and keep
   their own compact body cells.
+- The scouting report's per-map cards (`ScoutingReport`) keep their own fixed-layout table inside
+  the card, with summary rows for the players' and the league's averages.
 - The stat-entry table in the demo upload modal uses `Th` for its headers and keeps its own 4–6px
   body padding, since its cells hold inputs.
 - The admin tables (`PlayerManager`, `AdminActivityFeed`, `PlayerRow`) are intentionally different and

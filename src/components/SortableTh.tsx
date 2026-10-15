@@ -7,7 +7,6 @@ import { TH_ALIGN_CLS, TH_CLS, labelWords, type ThAlign } from './Th';
  *  through the button's `text-align`. */
 const JUSTIFY: Record<ThAlign, string> = { left: 'justify-start', right: 'justify-end', center: 'justify-center' };
 
-
 /** Clickable column header in `Th`'s style. The `button` keeps it keyboard-reachable (with a focus
  *  ring), `aria-sort` tells assistive tech which column orders the table, and hovering tints it. The
  *  sort arrow appears after the label of the sorted column only, nudging the label aside. */

@@ -55,7 +55,7 @@ export default function Th({
       title={title}
       className={`${compact ? TH_COMPACT_CLS : `${TH_CLS} p-2`} ${TH_ALIGN_CLS[align]} text-[var(--color-text-secondary)] ${sticky ? 'sticky-col' : ''} ${className}`}
     >
-      {labelWords(children)}
+      {compact ? children : labelWords(children)}
     </th>
   );
 }

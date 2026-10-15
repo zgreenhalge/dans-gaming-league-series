@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { mapSlug } from '@/lib/maps';
 import PlayerAvatar from './PlayerAvatar';
 import type { ThAlign } from './Th';
 import { TH_ALIGN_CLS } from './Th';
@@ -94,6 +95,18 @@ export function PlayerCell({ id, name, avatarUrl }: { id: number; name: string; 
       >
         {avatarUrl !== undefined && <PlayerAvatar name={name} imageUrl={avatarUrl} size="sm" />}
         <span className="truncate">{name}</span>
+      </Link>
+    </NameTd>
+  );
+}
+
+/** A name cell for a map, linking to the map's page. `label` overrides the text shown (default: the
+ *  map name as stored). */
+export function MapCell({ map, label }: { map: string; label?: string }) {
+  return (
+    <NameTd>
+      <Link href={`/maps/${mapSlug(map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
+        {label ?? map}
       </Link>
     </NameTd>
   );

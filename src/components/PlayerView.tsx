@@ -9,7 +9,6 @@ import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
-import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
 import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
@@ -26,7 +25,7 @@ import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 import Th from './Th';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, NameTd } from './StatTable';
+import { StatTable, Tr, Td, NameTd, MapCell } from './StatTable';
 
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
@@ -516,7 +515,7 @@ export default function PlayerView({
                   <tbody>
                     {playerMapStats.map((m) => (
                       <Tr key={m.map} clickable>
-                        <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
+                        <MapCell map={m.map} />
                         <Td>{m.games}</Td>
                         <Td>{m.wins}</Td>
                         <Td>{m.picked}</Td>
@@ -596,7 +595,7 @@ export default function PlayerView({
                   })
                   .map((m) => (
                     <Tr key={m.map} clickable>
-                      <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
+                      <MapCell map={m.map} />
                       <Td>{m.wins}-{m.losses}</Td>
                       <Td>
                         {m.wr.toFixed(1)}%
@@ -762,7 +761,7 @@ export default function PlayerView({
                           </div>
                         </div>
                       </div>
-                      <table className="border-collapse table-fixed text-[11px] shrink-0">
+                      <table className="border-collapse table-fixed shrink-0">
                         <thead>
                           <tr>
                             <Th compact align="right" className="w-9">K</Th>

@@ -10,7 +10,7 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
 import EmptyState from './EmptyState';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, NameTd } from './StatTable';
+import { StatTable, Tr, Td, MapCell } from './StatTable';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists' | 'avgRounds';
@@ -175,11 +175,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                 const stats = displayStats.get(map.slug);
                 return (
                   <Tr key={map.slug} clickable>
-                    <NameTd>
-                      <Link href={`/maps/${map.slug}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
-                        {toSentenceCase(map.name)}
-                      </Link>
-                    </NameTd>
+                    <MapCell map={map.name} label={toSentenceCase(map.name)} />
                     <Td muted>{stats?.seasonsPlayed || '—'}</Td>
                     <Td muted>{stats?.pickCount || '—'}</Td>
                     <Td muted>{stats?.banCount || '—'}</Td>
