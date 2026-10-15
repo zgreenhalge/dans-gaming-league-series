@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
+import { formatCountdownRelative, fmtWindowDate } from '@/lib/util';
 import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
@@ -24,22 +25,6 @@ interface Props {
   otherScheduled?: ScheduledMatchRef[];
 }
 
-function formatCountdown(iso: string): string {
-  const diff = new Date(iso).getTime() - Date.now();
-  const abs = Math.abs(diff);
-  const past = diff < 0;
-  const s = Math.floor(abs / 1000) % 60;
-  const m = Math.floor(abs / 60_000) % 60;
-  const h = Math.floor(abs / 3_600_000) % 24;
-  const d = Math.floor(abs / 86_400_000);
-  const parts = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0 || d > 0) parts.push(`${h}h`);
-  if (m > 0 || h > 0 || d > 0) parts.push(`${m}m`);
-  parts.push(`${s}s`);
-  return past ? `${parts.join(' ')} ago` : `in ${parts.join(' ')}`;
-}
-
 function useCountdown(iso: string | null): string {
   const [label, setLabel] = useState('');
 
@@ -52,7 +37,7 @@ function useCountdown(iso: string | null): string {
         setLabel('');
         return false;
       }
-      setLabel(formatCountdown(iso));
+      setLabel(formatCountdownRelative(iso));
       return true;
     };
 
@@ -61,13 +46,6 @@ function useCountdown(iso: string | null): string {
     return () => clearInterval(id);
   }, [iso]);
   return label;
-}
-
-function fmtWindowDate(dateStr: string): string {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function fmtScheduled(iso: string): string {
@@ -108,7 +86,7 @@ export default function MatchHeaderSection({
   } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
   const windowLabel =
-    isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
+    isClient && weekStart && weekEnd ? `${fmtWindowDate(new Date(`${weekStart}T12:00:00Z`))} – ${fmtWindowDate(new Date(`${weekEnd}T12:00:00Z`))}` : null;
 
   const scheduleReadView = !editing && (
     <div className="flex items-center gap-2">

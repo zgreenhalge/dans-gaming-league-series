@@ -148,6 +148,11 @@ reserving space; a label that wraps keeps the arrow beside it. It reads its stat
 (`src/components/useSortState.ts`) or any `{ col, asc }` pair, so a table that keeps its own sort
 state passes `state={{ col, asc }}`.
 
+**Shared formatting helpers** (`src/lib/util.ts`) — use these instead of a local copy: `fmtPct(num, den)`
+for whole-number percentages (`—` on a zero denominator), `factionClass(side)` for the `faction-ct` /
+`faction-t` tint class (the class counterpart of `sideColor()`), `formatCountdownClock(ms)` and
+`formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` for a week-window date.
+
 **Tables that keep their own spacing.**
 - Compact tables inside cards (the player page's trophy stat strip, a matchup's per-map breakdown)
   take their headers from `Th compact` — the small uppercase label with no band or rule — and keep

@@ -16,6 +16,11 @@ import {
   parseScore,
   extractSeasonNumber,
   canonicalSort,
+  canonicalSortValues,
+  fmtPct,
+  factionClass,
+  formatCountdownClock,
+  formatCountdownRelative,
   deriveRates,
   deriveRwr,
   deriveAdr,
@@ -395,3 +400,44 @@ test('finalRoundNumberOf: returns the final pod\'s round_number, or null when no
 
 report();
 
+
+// --- canonicalSortValues: the same order for wins/rwr/adr-shaped rows ---
+
+test('canonicalSortValues: Wins → RWR% → ADR, all descending', () => {
+  const rows = [
+    { id: 'a', wins: 5, rwr: 50, adr: 70 },
+    { id: 'b', wins: 5, rwr: 50, adr: 90 },
+    { id: 'c', wins: 5, rwr: 60, adr: 1 },
+    { id: 'd', wins: 8, rwr: 1, adr: 1 },
+  ];
+  assert.deepEqual(rows.sort(canonicalSortValues).map((r) => r.id), ['d', 'c', 'b', 'a']);
+});
+
+// --- fmtPct / factionClass / countdowns ---
+
+test('fmtPct: rounds to a whole percent, dash on a zero denominator', () => {
+  assert.equal(fmtPct(1, 3), '33%');
+  assert.equal(fmtPct(2, 3), '67%');
+  assert.equal(fmtPct(0, 0), '—');
+});
+
+test('factionClass: side tint class, empty for no side', () => {
+  assert.equal(factionClass('CT'), 'faction-ct');
+  assert.equal(factionClass('T'), 'faction-t');
+  assert.equal(factionClass(null), '');
+  assert.equal(factionClass(undefined), '');
+});
+
+test('formatCountdownClock: HH:MM:SS with a day prefix once it spans a day', () => {
+  assert.equal(formatCountdownClock(0), 'starting now');
+  assert.equal(formatCountdownClock(3_661_000), '01:01:01');
+  assert.equal(formatCountdownClock(86_400_000 + 5_000), '1 day 00:00:05');
+  assert.equal(formatCountdownClock(2 * 86_400_000), '2 days 00:00:00');
+});
+
+test('formatCountdownRelative: future reads "in …", past reads "… ago"', () => {
+  const now = Date.parse('2026-01-01T00:00:00Z');
+  assert.equal(formatCountdownRelative('2026-01-01T00:00:05Z', now), 'in 5s');
+  assert.equal(formatCountdownRelative('2026-01-02T01:02:03Z', now), 'in 1d 1h 2m 3s');
+  assert.equal(formatCountdownRelative('2025-12-31T23:58:00Z', now), '2m 0s ago');
+});

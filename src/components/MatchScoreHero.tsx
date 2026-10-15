@@ -13,13 +13,9 @@ import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
 
-type Faction = 'CT' | 'T' | null;
+import { factionClass } from '@/lib/util';
 
-function factionClass(f: Faction): string {
-  if (f === 'CT') return 'faction-ct';
-  if (f === 'T') return 'faction-t';
-  return '';
-}
+type Faction = 'CT' | 'T' | null;
 
 function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skins: number; shirtsF: Faction; skinsF: Faction }) {
   return (
