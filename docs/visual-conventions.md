@@ -120,16 +120,27 @@ card's own sub-view switch should all render as `TabBar`/`tabCls()`, sized or sp
 rather than a second, differently-styled tab control. Two tab components that look different for no
 reason reads as two unrelated features, not one drill-down.
 
-**Table header cells.** A stat table's header row is made of the shared **`Th`**
-(`src/components/Th.tsx`) for plain columns and **`SortableTh`** (`src/components/SortableTh.tsx`) for
-columns that sort — never a re-typed class string. They share one look: 10px semibold, letter-spaced
-but not uppercased, 8px padding on every side, on a tinted header band with a bottom rule. Plain
-data cells in those tables use the same `p-2` (8px on every side), so a header and the figures under
-it share one inset, pinned name column included; expanded-detail (`colSpan`) panels and footer label
-rows are exempt.
-`align="left"|"right"|"center"` aligns the label with the figures below it; `sticky` on the first
-(name) cell pins it while the table scrolls sideways (`.sticky-col`, which also paints the band so
-scrolled cells never show through).
+**Stat tables.** A stat table is built from the shared pieces in `src/components/StatTable.tsx` and
+the headers in `Th` / `SortableTh` — never a re-typed class string. One standard covers the
+leaderboard, the season and career Stats and Advanced Stats tables, the player, match, map and
+statistics pages, and the week/round/group scorecards:
+
+| Piece | Standard |
+|---|---|
+| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class. |
+| **`Tr`** (row) | `--color-border-tertiary` divider, none under the last row (the card's border closes the table), on an opaque page background (a pinned cell inherits it). `clickable` adds the `lift-row` highlight; rows that aren't clickable don't highlight. |
+| **`NameTd`** (name cell) | Display font, 14px semibold. `sticky` pins it. |
+| **`PlayerCell`** (pinned player name) | A `NameTd sticky` linking to `/players/<id>`; `avatarUrl` adds the avatar. Use it wherever a stat table pins a player name. |
+| **`Td`** (figure cell) | Mono 12px with tabular digits, right-aligned (`align` overrides). `muted` greys a secondary figure, `bold` emphasises a headline one, `mono={false}` is the escape hatch for a column of text. |
+| **Padding** | 8px on every side, headers and body cells alike, pinned name column included. Expanded-detail (`colSpan`) panels and footer label rows are exempt. |
+
+Rows come out at roughly 37–38px in every table.
+
+**Table header cells.** `Th` (plain columns) and `SortableTh` (columns that sort) share one look:
+10px semibold, letter-spaced but not uppercased, 8px padding on every side, on a tinted header band
+with a bottom rule. `align="left"|"right"|"center"` aligns the label with the figures below it;
+`sticky` on the first (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also
+paints the band so scrolled cells never show through).
 
 `SortableTh` is a `<button>` inside the `<th>`, so Tab reaches it and Enter or Space sorts, with a
 focus ring and a hover tint, and `aria-sort` announces the sorted column and direction. Its sort
@@ -139,9 +150,17 @@ shifts the column's width or the label's alignment. It reads its state from `use
 (`src/components/useSortState.ts`) or any `{ col, asc }` pair, so a table that keeps its own sort
 state passes `state={{ col, asc }}`.
 
-Three kinds of table keep their own small headers: the compact tables inside cards (the player
-page's trophy stat strip, a matchup's per-map breakdown), the stat-entry table in the demo upload
-modal, and the admin tables.
+**Tables that keep their own spacing.**
+- Compact tables inside cards (the player page's trophy stat strip, a matchup's per-map breakdown)
+  take their headers from `Th compact` — the small uppercase label with no band or rule — and keep
+  their own compact body cells.
+- The stat-entry table in the demo upload modal uses `Th` for its headers and keeps its own 4–6px
+  body padding, since its cells hold inputs.
+- The admin tables (`PlayerManager`, `AdminActivityFeed`, `PlayerRow`) are intentionally different and
+  stay on their own markup.
+- List-style rows (cards with images, avatars and two-line content — `MatchCard`,
+  `UpcomingGamesPanel`, the seasons list, `SeasonRosterPanel`, `MapPoolPicker`, H2H rows,
+  `MatchManager`) are not tables and have their own spacing.
 
 **Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
 `size="sm"|"lg"`) for a "nothing here" message — `sm` for an inline one-liner inside an existing
