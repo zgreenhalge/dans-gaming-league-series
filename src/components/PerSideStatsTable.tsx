@@ -1,6 +1,7 @@
 import { formatRoundWinPct, type PerSideStat } from '@/lib/mapSideStats';
 import EmptyState from './EmptyState';
 import Th from './Th';
+import { StatTable, Tr, Td, NameTd } from './StatTable';
 
 /** The Side / Times Picked / W-L / Round Win% panel driven by `aggregatePerSideStats()` — shared
  *  by Basic Stats' Maps & Sides sub-tab (`BasicStatsView.tsx`) and Advanced Stats' Sides sub-tab
@@ -14,8 +15,7 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
       {perSideStats.length === 0 ? (
         <EmptyState message="No side data." />
       ) : (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-[12px]">
+        <StatTable>
             <thead>
               <tr>
                 <Th align="left">Side</Th>
@@ -26,18 +26,15 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
             </thead>
             <tbody>
               {perSideStats.map((s) => (
-                <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="p-2 tracked text-[11px] font-semibold">{s.side}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                  <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                    {formatRoundWinPct(s)}
-                  </td>
-                </tr>
+                <Tr key={s.side}>
+                  <NameTd>{s.side}</NameTd>
+                  <Td>{s.numTimesPicked}</Td>
+                  <Td>{s.wins}-{s.losses}</Td>
+                  <Td muted>{formatRoundWinPct(s)}</Td>
+                </Tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </StatTable>
       )}
     </div>
   );

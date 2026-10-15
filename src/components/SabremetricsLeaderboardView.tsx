@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { useSortState } from './useSortState';
-import Link from 'next/link';
 import Th from './Th';
 import SortableTh from './SortableTh';
+import { StatTable, Tr, Td, NameTd, PlayerCell } from './StatTable';
 import {
   aggregateRows,
   computeLeagueAverages,
@@ -122,15 +122,6 @@ function OpeningDuels({ wins, losses }: { wins: number; losses: number }) {
   );
 }
 
-function PlayerCell({ id, name }: { id: number; name: string }) {
-  return (
-    <td className="p-2 sticky-col">
-      <Link href={`/players/${id}`} className="block">{name}</Link>
-    </td>
-  );
-}
-
-const tdRight = 'p-2 text-right tnum';
 
 // --- Impact Stats ---
 
@@ -170,8 +161,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Impact</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -189,21 +179,20 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
               const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
               const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
               return (
-                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <Tr key={a.player_id} clickable>
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
-                  <td className={tdRight}>{a.two_k_rounds}</td>
-                  <td className={tdRight}>{a.teamkills}</td>
-                  <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
-                  <td className={tdRight}>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</td>
-                  <td className={tdRight}>{a.clutch_2v1_attempts - a.clutch_2v1_wins}/{a.clutch_2v1_attempts}</td>
-                  <td className={tdRight}>{pct(clutchWins, clutchAttempts)}</td>
-                </tr>
+                  <Td>{pct(a.kast_rounds, a.rounds_played)}</Td>
+                  <Td>{a.two_k_rounds}</Td>
+                  <Td>{a.teamkills}</Td>
+                  <Td>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</Td>
+                  <Td>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</Td>
+                  <Td>{a.clutch_2v1_attempts - a.clutch_2v1_wins}/{a.clutch_2v1_attempts}</Td>
+                  <Td>{pct(clutchWins, clutchAttempts)}</Td>
+                </Tr>
               );
             })}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -233,8 +222,7 @@ function OpeningDuelsTable({ aggregated, singlePlayer, showHeading = true }: { a
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Opening Duels</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -247,17 +235,16 @@ function OpeningDuelsTable({ aggregated, singlePlayer, showHeading = true }: { a
             {sorted.map((a) => {
               const totalDuels = a.opening_kills + a.opening_deaths;
               return (
-                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <Tr key={a.player_id} clickable>
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <td className={tdRight}><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></td>
-                  <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
-                  <td className={tdRight}>{pct(a.opening_kills, totalDuels)}</td>
-                </tr>
+                  <Td><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></Td>
+                  <Td>{pct(totalDuels, a.rounds_played)}</Td>
+                  <Td>{pct(a.opening_kills, totalDuels)}</Td>
+                </Tr>
               );
             })}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -297,8 +284,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Mechanics</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -312,19 +298,18 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
           </thead>
           <tbody>
             {sorted.map((a) => (
-              <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={a.player_id} clickable>
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                <td className={tdRight}>{a.shots_fired}</td>
-                <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
-                <td className={tdRight}>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</td>
-                <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
-                <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
-                <td className={tdRight}>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</td>
-              </tr>
+                <Td>{a.shots_fired}</Td>
+                <Td>{pct(a.shots_hit, a.shots_fired)}</Td>
+                <Td>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</Td>
+                <Td>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</Td>
+                <Td>{pct(a.spray_shots_hit, a.spray_shots_fired)}</Td>
+                <Td>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -532,8 +517,7 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Weapons</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -554,26 +538,25 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
           </thead>
           <tbody>
             {sorted.map((r) => (
-              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={r.player_id} clickable>
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className="p-2 text-left"><WeaponLabel weapon={r.weapon} label={r.label} /></td>
-                <td className={tdRight}>{r.kills}</td>
-                <td className={tdRight}>{pct(r.headshotKills, r.kills)}</td>
-                <td className={tdRight}>{r.noscopeKills}</td>
-                <td className={tdRight}>{r.wallbangKills}</td>
-                <td className={tdRight}>{r.blindKills}</td>
-                <td className={tdRight}>{r.midairKills}</td>
-                <td className={tdRight}>{r.deaths}</td>
-                <td className={tdRight}>{r.accuracy ? r.accuracy.shots_fired : '—'}</td>
-                <td className={tdRight}>{r.accuracy ? pct(r.accuracy.shots_hit, r.accuracy.shots_fired) : '—'}</td>
-                <td className={tdRight}>{r.accuracy ? pct(r.accuracy.headshot_hits, r.accuracy.shots_hit) : '—'}</td>
-                <td className={tdRight}>{r.accuracy ? fmtNum(r.accuracy.rounds_played > 0 ? r.accuracy.damage_dealt / r.accuracy.rounds_played : 0, 1) : '—'}</td>
-                <td className={tdRight}>{r.accuracy ? r.accuracy.rounds_played : '—'}</td>
-              </tr>
+                <NameTd><WeaponLabel weapon={r.weapon} label={r.label} /></NameTd>
+                <Td>{r.kills}</Td>
+                <Td>{pct(r.headshotKills, r.kills)}</Td>
+                <Td>{r.noscopeKills}</Td>
+                <Td>{r.wallbangKills}</Td>
+                <Td>{r.blindKills}</Td>
+                <Td>{r.midairKills}</Td>
+                <Td>{r.deaths}</Td>
+                <Td>{r.accuracy ? r.accuracy.shots_fired : '—'}</Td>
+                <Td>{r.accuracy ? pct(r.accuracy.shots_hit, r.accuracy.shots_fired) : '—'}</Td>
+                <Td>{r.accuracy ? pct(r.accuracy.headshot_hits, r.accuracy.shots_hit) : '—'}</Td>
+                <Td>{r.accuracy ? fmtNum(r.accuracy.rounds_played > 0 ? r.accuracy.damage_dealt / r.accuracy.rounds_played : 0, 1) : '—'}</Td>
+                <Td>{r.accuracy ? r.accuracy.rounds_played : '—'}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -709,8 +692,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Economy</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -724,19 +706,18 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
           </thead>
           <tbody>
             {sorted.map((r) => (
-              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={r.player_id} clickable>
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className={tdRight}>{r.rounds_played}</td>
-                <td className={tdRight}>{r.rounds_won}-{r.rounds_played - r.rounds_won}</td>
-                <td className={tdRight}>{r.shots_fired}</td>
-                <td className={tdRight}>{pct(r.shots_hit, r.shots_fired)}</td>
-                <td className={tdRight}>{pct(r.headshot_hits, r.shots_hit)}</td>
-                <td className={tdRight}>{fmtNum(r.damage_dealt / (r.rounds_played || 1), 1)}</td>
-              </tr>
+                <Td>{r.rounds_played}</Td>
+                <Td>{r.rounds_won}-{r.rounds_played - r.rounds_won}</Td>
+                <Td>{r.shots_fired}</Td>
+                <Td>{pct(r.shots_hit, r.shots_fired)}</Td>
+                <Td>{pct(r.headshot_hits, r.shots_hit)}</Td>
+                <Td>{fmtNum(r.damage_dealt / (r.rounds_played || 1), 1)}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -794,8 +775,7 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Flair</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -810,20 +790,19 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
           </thead>
           <tbody>
             {sorted.map((r) => (
-              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={r.player_id} clickable>
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className={tdRight}>{r.flair.noscopeKills}</td>
-                <td className={tdRight}>{r.flair.wallbangKills}</td>
-                <td className={tdRight}>{r.flair.blindKills}</td>
-                <td className={tdRight}>{r.flair.midairKills}</td>
-                <td className={tdRight}>{r.flair.knifeKills}</td>
-                <td className={tdRight}>{r.flair.fallDamageDeaths}</td>
-                <td className={tdRight}>{r.flair.c4Deaths}</td>
-              </tr>
+                <Td>{r.flair.noscopeKills}</Td>
+                <Td>{r.flair.wallbangKills}</Td>
+                <Td>{r.flair.blindKills}</Td>
+                <Td>{r.flair.midairKills}</Td>
+                <Td>{r.flair.knifeKills}</Td>
+                <Td>{r.flair.fallDamageDeaths}</Td>
+                <Td>{r.flair.c4Deaths}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -878,8 +857,7 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Trades</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -895,21 +873,20 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
           </thead>
           <tbody>
             {sorted.map((a) => (
-              <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={a.player_id} clickable>
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                <td className={tdRight}>{a.trade_kill_opportunities}</td>
-                <td className={tdRight}>{a.trade_kill_attempts}</td>
-                <td className={tdRight}>{a.trade_kill_successes}</td>
-                <td className={tdRight}>{pct(a.trade_kill_successes, a.trade_kill_attempts)}</td>
-                <td className={tdRight}>{a.traded_death_opportunities}</td>
-                <td className={tdRight}>{a.traded_death_attempts}</td>
-                <td className={tdRight}>{a.traded_death_successes}</td>
-                <td className={tdRight}>{pct(a.traded_death_successes, a.traded_death_attempts)}</td>
-              </tr>
+                <Td>{a.trade_kill_opportunities}</Td>
+                <Td>{a.trade_kill_attempts}</Td>
+                <Td>{a.trade_kill_successes}</Td>
+                <Td>{pct(a.trade_kill_successes, a.trade_kill_attempts)}</Td>
+                <Td>{a.traded_death_opportunities}</Td>
+                <Td>{a.traded_death_attempts}</Td>
+                <Td>{a.traded_death_successes}</Td>
+                <Td>{pct(a.traded_death_successes, a.traded_death_attempts)}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -964,8 +941,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
   return (
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Utility</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               {!singlePlayer && <Th sticky>Player</Th>}
@@ -989,29 +965,28 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           <tbody>
             {sorted.map((a) => {
               return (
-                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <Tr key={a.player_id} clickable>
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <td className={tdRight}>{a.utility_damage}</td>
-                  <td className={tdRight}>{fmtNum(a.teamflash_duration, 1)}</td>
-                  <td className={tdRight}>{a.flash_assists}</td>
-                  <td className={tdRight}>{a.flashes_leading_to_kill}</td>
-                  <td className={tdRight}>{a.enemies_flashed}</td>
-                  <td className={tdRight}>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</td>
-                  <td className={tdRight}>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</td>
-                  <td className={tdRight}>{fmtNum(a.blind_duration_dealt, 1)}</td>
-                  <td className={tdRight}>{a.plants}</td>
-                  <td className={tdRight}>{a.defuses}</td>
-                  <td className={tdRight}>{a.he_thrown}</td>
-                  <td className={tdRight}>{a.he_damage}</td>
-                  <td className={tdRight}>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</td>
-                  <td className={tdRight}>{pct(a.smokes_blocking_push, a.ct_smokes_thrown)}</td>
-                  <td className={tdRight}>{fmtNum(a.unused_util_value_on_death_total / (a.deaths || 1), 0)}</td>
-                </tr>
+                  <Td>{a.utility_damage}</Td>
+                  <Td>{fmtNum(a.teamflash_duration, 1)}</Td>
+                  <Td>{a.flash_assists}</Td>
+                  <Td>{a.flashes_leading_to_kill}</Td>
+                  <Td>{a.enemies_flashed}</Td>
+                  <Td>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</Td>
+                  <Td>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</Td>
+                  <Td>{fmtNum(a.blind_duration_dealt, 1)}</Td>
+                  <Td>{a.plants}</Td>
+                  <Td>{a.defuses}</Td>
+                  <Td>{a.he_thrown}</Td>
+                  <Td>{a.he_damage}</Td>
+                  <Td>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</Td>
+                  <Td>{pct(a.smokes_blocking_push, a.ct_smokes_thrown)}</Td>
+                  <Td>{fmtNum(a.unused_util_value_on_death_total / (a.deaths || 1), 0)}</Td>
+                </Tr>
               );
             })}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -1088,8 +1063,7 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
   return (
     <div>
       {showHeading && <h3 className="text-sm font-semibold mb-3">Side Splits</h3>}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               <Th sticky>Player</Th>
@@ -1105,21 +1079,20 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
           </thead>
           <tbody>
             {sorted.map((r) => (
-              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={r.player_id} clickable>
                 <PlayerCell id={r.player_id} name={r.player_name} />
-                <td className={tdRight}>{r.kills}</td>
-                <td className={tdRight}>{r.assists}</td>
-                <td className={tdRight}>{r.deaths}</td>
-                <td className={tdRight}>{fmtDiff(r.killDiff)}</td>
-                <td className={tdRight}>{r.damage.toLocaleString()}</td>
-                <td className={tdRight}>{fmtNum(r.adr, 2)}</td>
-                <td className={tdRight}>{r.roundsWon}–{r.roundsLost}</td>
-                <td className={tdRight}>{fmtNum(r.roundWinRate, 1)}</td>
-              </tr>
+                <Td>{r.kills}</Td>
+                <Td>{r.assists}</Td>
+                <Td>{r.deaths}</Td>
+                <Td>{fmtDiff(r.killDiff)}</Td>
+                <Td>{r.damage.toLocaleString()}</Td>
+                <Td>{fmtNum(r.adr, 2)}</Td>
+                <Td>{r.roundsWon}–{r.roundsLost}</Td>
+                <Td>{fmtNum(r.roundWinRate, 1)}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }
@@ -1163,8 +1136,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
   return (
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3" title="1.00 = league average. Values above 1 are better than average, below 1 are worse.">Stats Plus</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-xs">
+      <StatTable>
           <thead>
             <tr>
               <Th sticky>Player</Th>
@@ -1186,27 +1158,26 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
           </thead>
           <tbody>
             {sorted.map(({ agg, plus }) => (
-              <tr key={agg.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+              <Tr key={agg.player_id} clickable>
                 <PlayerCell id={agg.player_id} name={agg.player_name} />
-                <td className={tdRight} style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</td>
-                <td className={tdRight} style={plusStyle(2 - plus.dpr)}>{fmtNum(plus.dpr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</td>
-                <td className={tdRight} style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</td>
-              </tr>
+                <Td style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</Td>
+                <Td style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</Td>
+                <Td style={plusStyle(2 - plus.dpr)}>{fmtNum(plus.dpr, 2)}</Td>
+                <Td style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</Td>
+                <Td style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</Td>
+                <Td style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</Td>
+                <Td style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</Td>
+                <Td style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</Td>
+                <Td style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</Td>
+                <Td style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</Td>
+                <Td style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</Td>
+                <Td style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</Td>
+                <Td style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</Td>
+                <Td style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </StatTable>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
 import EmptyState from './EmptyState';
 import SortableTh from './SortableTh';
+import { StatTable, Tr, Td, NameTd } from './StatTable';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists' | 'avgRounds';
@@ -155,8 +156,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
         sorted.length === 0 ? (
           <EmptyState message="No maps for this selection." />
         ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-max border-collapse font-mono text-[12px]">
+          <StatTable>
             <thead>
               <tr>
                 <SortableTh label="Map" sortKey="name" state={sortState} onSort={handleSort} />
@@ -174,26 +174,25 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
               {sorted.map((map) => {
                 const stats = displayStats.get(map.slug);
                 return (
-                  <tr key={map.slug} className="lift-row border-b border-[var(--color-border-primary)]">
-                    <td className="p-2">
+                  <Tr key={map.slug} clickable>
+                    <NameTd>
                       <Link href={`/maps/${map.slug}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
                         {toSentenceCase(map.name)}
                       </Link>
-                    </td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.seasonsPlayed || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickCount || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.banCount || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.noPickCount || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickAndWon || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.totalKills || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
-                    <td className="p-2 text-right text-[var(--color-text-secondary)]">{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</td>
-                  </tr>
+                    </NameTd>
+                    <Td muted>{stats?.seasonsPlayed || '—'}</Td>
+                    <Td muted>{stats?.pickCount || '—'}</Td>
+                    <Td muted>{stats?.banCount || '—'}</Td>
+                    <Td muted>{stats?.noPickCount || '—'}</Td>
+                    <Td muted>{stats?.pickAndWon || '—'}</Td>
+                    <Td muted>{stats?.totalKills || '—'}</Td>
+                    <Td muted>{stats?.totalAssists || '—'}</Td>
+                    <Td muted>{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</Td>
+                  </Tr>
                 );
               })}
             </tbody>
-          </table>
-          </div>
+          </StatTable>
         )
       )}
     </>

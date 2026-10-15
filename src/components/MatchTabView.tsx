@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
+import { StatTable, Tr, Td, NameTd } from '@/components/StatTable';
 import { useTabState, resolveTab } from './useTabState';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow, MatchRoundEconomyRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
@@ -58,8 +59,7 @@ function Scoreboard({
   const hasSab = sabMap && sabMap.size > 0;
   const bothSides = includeCT && includeT;
   return (
-    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
-      <table className="w-full min-w-max border-collapse text-[13px]">
+    <StatTable tinted className={`faction-tint ${cls}`}>
         <thead>
           <tr>
             <Th sticky className="w-[40%]">Player</Th>
@@ -109,11 +109,8 @@ function Scoreboard({
             }
 
             return (
-              <tr
-                key={p.player_id}
-                className="lift-row faction-tint-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
-              >
-                <td className="p-2 sticky-col font-display font-semibold faction-fg">
+              <Tr key={p.player_id} clickable tinted className="faction-tint-row cursor-pointer">
+                <NameTd sticky className="faction-fg">
                   <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
                     <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
                     <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
@@ -135,27 +132,26 @@ function Scoreboard({
                       </span>
                     )}
                   </Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum">{dash(String(k))}</td>
-                <td className="p-2 text-right font-mono tnum">{dash(String(a))}</td>
-                <td className="p-2 text-right font-mono tnum">{dash(String(d))}</td>
-                <td className="p-2 text-right font-mono tnum">{dash(dmg.toLocaleString())}</td>
-                <td className="p-2 text-right font-mono tnum font-semibold">
+                </NameTd>
+                <Td>{dash(String(k))}</Td>
+                <Td>{dash(String(a))}</Td>
+                <Td>{dash(String(d))}</Td>
+                <Td>{dash(dmg.toLocaleString())}</Td>
+                <Td bold>
                   {dash(String(adr))}
-                </td>
+                </Td>
                 {hasSab && (
                   <>
-                    <td className="p-2 text-right font-mono tnum">{dash(hsPct)}</td>
-                    <td className="p-2 text-right font-mono tnum">{dash(String(ef))}</td>
-                    <td className="p-2 text-right font-mono tnum">{dash(String(ud))}</td>
+                    <Td>{dash(hsPct)}</Td>
+                    <Td>{dash(String(ef))}</Td>
+                    <Td>{dash(String(ud))}</Td>
                   </>
                 )}
-              </tr>
+              </Tr>
             );
           })}
         </tbody>
-      </table>
-    </div>
+    </StatTable>
   );
 }
 
@@ -224,21 +220,21 @@ function RatingProjectionTable({
   const renderProjRow = (proj: RatingProjection) => {
     const shirtsWin = proj.scoreA > proj.scoreB;
     return (
-      <tr key={proj.label} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
-        <td className="p-2 sticky-col font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
+      <Tr key={proj.label}>
+        <NameTd sticky className="whitespace-nowrap">
           <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
             {proj.label}
           </span>
-        </td>
+        </NameTd>
         {allPlayers.map((p) => {
           const delta = proj.deltas[p.player_id] ?? 0;
           return (
-            <td key={p.player_id} className="p-2 text-right font-mono tnum font-semibold" style={{ color: deltaColor(delta, maxAbsDelta) }}>
+            <Td key={p.player_id} bold style={{ color: deltaColor(delta, maxAbsDelta) }}>
               {delta > 0 ? '+' : ''}{delta.toFixed(2)}
-            </td>
+            </Td>
           );
         })}
-      </tr>
+      </Tr>
     );
   };
   // The Current rating sits between the winning scenarios (rating ↑) and the losing
@@ -252,8 +248,7 @@ function RatingProjectionTable({
       <div className="mb-3">
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG rating projections</span>
       </div>
-      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-        <table className="w-full min-w-max text-[13px]">
+      <StatTable>
           <thead>
             <tr>
               <Th sticky>Score</Th>
@@ -273,23 +268,23 @@ function RatingProjectionTable({
                   boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff',
                 }}
               >
-                <td
-                  className="p-2 sticky-col tracked text-[9px] font-semibold text-[var(--color-text-primary)] whitespace-nowrap"
+                <NameTd
+                  sticky
+                  className="whitespace-nowrap"
                   style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
                 >
                   Current
-                </td>
+                </NameTd>
                 {allPlayers.map((p) => (
-                  <td key={p.player_id} className="p-2 text-right font-mono tnum font-semibold text-[var(--color-text-primary)]">
+                  <Td key={p.player_id} bold>
                     {(current[p.player_id] ?? 0).toFixed(2)}
-                  </td>
+                  </Td>
                 ))}
               </tr>
             )}
             {losses.map(renderProjRow)}
           </tbody>
-        </table>
-      </div>
+      </StatTable>
     </div>
   );
 }

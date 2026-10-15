@@ -2,6 +2,7 @@
 
 import SortableTh from './SortableTh';
 import Th from './Th';
+import { StatTable, Tr, Td, NameTd } from './StatTable';
 import { PlayerName } from './PlayerName';
 import { useSortState } from './useSortState';
 import { sortRows, type SortValue } from '@/lib/sort-rows';
@@ -26,9 +27,6 @@ const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
 };
 
 const OUTCOME_ORDER = { advances: 0, eliminated: 1, pending: 2 } as const;
-
-const td = 'p-2 font-mono text-[12px] tnum';
-const nameTd = 'p-2 font-display text-[14px] font-semibold';
 
 function ordinal(n: number): string {
   const v = n % 100;
@@ -63,14 +61,6 @@ function Movement({ movement }: { movement: RankMovement | null }) {
   );
 }
 
-function Frame({ bare = false, children }: { bare?: boolean; children: React.ReactNode }) {
-  return (
-    <section className={`bg-[var(--color-bg-primary)] overflow-x-auto ${bare ? '' : 'border border-[var(--color-border-primary)]'}`}>
-      <table className="w-full border-collapse min-w-max">{children}</table>
-    </section>
-  );
-}
-
 /** A regular-season week: who won what, ranked Wins → RWR% → ADR (the season-standings order), and
  *  how each player moved in the season standings across the week. */
 export function WeekScorecard({
@@ -86,7 +76,7 @@ export function WeekScorecard({
   const [sort, onSort] = useSortState('', { ascFirst: ASC_FIRST });
   const sorted = sortRows(rows, sort, WEEK_SORT);
   return (
-    <Frame>
+    <StatTable>
       <thead>
         <tr>
           <SortableTh label="Player" sortKey="player" state={sort} onSort={onSort} />
@@ -99,25 +89,25 @@ export function WeekScorecard({
       </thead>
       <tbody>
         {sorted.map((r) => (
-          <tr key={r.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
-            <td className={nameTd}>
+          <Tr key={r.player_id}>
+            <NameTd>
               <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
-            </td>
-            <td className={`${td} text-right font-semibold`}>
+            </NameTd>
+            <Td bold>
               {r.wins}-{r.losses}
-            </td>
-            <td className={`${td} text-right`}>{rateOrDash(r, pct(r.rwr_percentage))}</td>
-            <td className={`${td} text-right`}>{rateOrDash(r, r.adr.toFixed(1))}</td>
-            <td className={`${td} text-right`}>{rateOrDash(r, r.kd_ratio.toFixed(2))}</td>
+            </Td>
+            <Td>{rateOrDash(r, pct(r.rwr_percentage))}</Td>
+            <Td>{rateOrDash(r, r.adr.toFixed(1))}</Td>
+            <Td>{rateOrDash(r, r.kd_ratio.toFixed(2))}</Td>
             {showMovement && (
-              <td className={`${td} text-right`}>
+              <Td>
                 <Movement movement={r.movement} />
-              </td>
+              </Td>
             )}
-          </tr>
+          </Tr>
         ))}
       </tbody>
-    </Frame>
+    </StatTable>
   );
 }
 
@@ -166,7 +156,7 @@ export function GroupScorecard({
     result: (r) => (isFinal ? r.rank : OUTCOME_ORDER[r.outcome]),
   });
   return (
-    <Frame bare={bare}>
+    <StatTable bare={bare}>
       <thead>
         <tr>
           <SortableTh label="Seed" sortKey="seed" state={sort} onSort={onSort} align="right" />
@@ -184,20 +174,20 @@ export function GroupScorecard({
       </thead>
       <tbody>
         {sorted.map((r) => (
-          <tr key={r.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
-            <td className={`${td} text-right text-[var(--color-text-secondary)]`}>{r.seed ?? '–'}</td>
-            <td className={nameTd}>
+          <Tr key={r.player_id}>
+            <Td muted>{r.seed ?? '–'}</Td>
+            <NameTd>
               <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
-            </td>
-            <td className={`${td} text-right font-semibold`}>{rateOrDash(r, `${r.wins}-${r.losses}`)}</td>
-            <td className={`${td} text-right`}>{rateOrDash(r, pct(r.rwr_percentage))}</td>
-            <td className={`${td} text-right`}>{rateOrDash(r, r.adr.toFixed(1))}</td>
-            <td className={`${td} text-right`}>
+            </NameTd>
+            <Td bold>{rateOrDash(r, `${r.wins}-${r.losses}`)}</Td>
+            <Td>{rateOrDash(r, pct(r.rwr_percentage))}</Td>
+            <Td>{rateOrDash(r, r.adr.toFixed(1))}</Td>
+            <Td>
               <Outcome row={finished ? r : { ...r, rank: null }} isFinal={isFinal} />
-            </td>
-          </tr>
+            </Td>
+          </Tr>
         ))}
       </tbody>
-    </Frame>
+    </StatTable>
   );
 }

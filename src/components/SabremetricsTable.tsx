@@ -1,5 +1,6 @@
 import type { SabFieldsWithDerived } from '@/lib/types';
 import Th from './Th';
+import { StatTable, Tr, Td, NameTd } from './StatTable';
 
 interface PlayerSabRow {
   player_id: number;
@@ -12,8 +13,6 @@ interface PlayerSabRow {
 export interface SabremetricsTableProps {
   players: PlayerSabRow[];
 }
-
-const tdCls = 'p-2 text-right font-mono tnum text-[13px]';
 
 function pct(num: number, den: number): string {
   if (den === 0) return '—';
@@ -76,8 +75,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
   }
 
   return (
-    <div className="border border-[var(--color-border-primary)] overflow-x-auto">
-      <table className="w-full min-w-max border-collapse text-[13px]">
+    <StatTable>
         <thead>
           <tr>
             {cols.map((col) => (
@@ -89,28 +87,17 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
         </thead>
         <tbody>
           {players.map((p) => (
-            <tr
-              key={p.player_id}
-              className="bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0"
-            >
-              {cols.map((col, i) => (
-                <td
-                  key={col.key}
-                  className={
-                    col.key === 'name'
-                      ? 'sticky-col p-2 font-display font-semibold text-[var(--color-text-primary)]'
-                      : i === cols.length - 1
-                        ? `${tdCls} font-semibold`
-                        : tdCls
-                  }
-                >
-                  {cellValue(p, col.key)}
-                </td>
-              ))}
-            </tr>
+            <Tr key={p.player_id}>
+              {cols.map((col, i) =>
+                col.key === 'name' ? (
+                  <NameTd key={col.key} sticky>{cellValue(p, col.key)}</NameTd>
+                ) : (
+                  <Td key={col.key} bold={i === cols.length - 1}>{cellValue(p, col.key)}</Td>
+                ),
+              )}
+            </Tr>
           ))}
         </tbody>
-      </table>
-    </div>
+    </StatTable>
   );
 }

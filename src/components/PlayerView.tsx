@@ -26,6 +26,7 @@ import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 import Th from './Th';
 import SortableTh from './SortableTh';
+import { StatTable, Tr, Td, NameTd } from './StatTable';
 
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
@@ -497,8 +498,7 @@ export default function PlayerView({
               {playerMapStats.length === 0 ? (
                 <EmptyState message="No map data." />
               ) : (
-                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-                  <table className="w-full min-w-max border-collapse text-[12px]">
+                <StatTable>
                     <thead>
                       <tr>
                         <Th align="left">Map</Th>
@@ -515,22 +515,21 @@ export default function PlayerView({
                     </thead>
                     <tbody>
                       {playerMapStats.map((m) => (
-                        <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td className="p-2 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.wins}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctPlayed}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tPlayed}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
-                        </tr>
+                        <Tr key={m.map} clickable>
+                          <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
+                          <Td>{m.games}</Td>
+                          <Td>{m.wins}</Td>
+                          <Td>{m.picked}</Td>
+                          <Td muted>{m.banned}</Td>
+                          <Td muted>{m.noPicked}</Td>
+                          <Td>{m.pickedAndWon}</Td>
+                          <Td>{m.ctPlayed}</Td>
+                          <Td>{m.tPlayed}</Td>
+                          <Td muted>{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</Td>
+                        </Tr>
                       ))}
                     </tbody>
-                  </table>
-                </div>
+                  </StatTable>
               )}
             </div>
 
@@ -542,8 +541,7 @@ export default function PlayerView({
               {playerSideStats.every((s) => s.played === 0) ? (
                 <EmptyState message="No side data." />
               ) : (
-                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-                  <table className="w-full min-w-max border-collapse text-[12px]">
+                <StatTable>
                     <thead>
                       <tr>
                         <Th align="left">Side</Th>
@@ -555,17 +553,16 @@ export default function PlayerView({
                     </thead>
                     <tbody>
                       {playerSideStats.map((s) => (
-                        <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td className="p-2 tracked text-[11px] font-semibold">{s.side}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                          <td className="p-2 text-right font-mono tnum text-[var(--color-text-primary)]">{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</td>
-                        </tr>
+                        <Tr key={s.side}>
+                          <NameTd>{s.side}</NameTd>
+                          <Td>{s.played}</Td>
+                          <Td>{s.numTimesPicked}</Td>
+                          <Td>{s.wins}-{s.losses}</Td>
+                          <Td>{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</Td>
+                        </Tr>
                       ))}
                     </tbody>
-                  </table>
-                </div>
+                  </StatTable>
               )}
             </div>
           </div>
@@ -574,8 +571,7 @@ export default function PlayerView({
           {maps.length === 0 ? (
             <EmptyState message="No map data." />
           ) : (
-            <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-              <table className="w-full min-w-max border-collapse text-[13px]">
+            <StatTable>
                 <thead>
                   <tr>
                     <SortableTh label="Map" sortKey="map" state={mapSortState} onSort={clickMapSort} />
@@ -599,22 +595,21 @@ export default function PlayerView({
                       return mapAsc ? -v : v;
                     })
                     .map((m) => (
-                      <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                        <td className="p-2 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
-                        <td className="p-2 text-right font-mono tnum">{m.wins}-{m.losses}</td>
-                        <td className="p-2 text-right font-mono tnum">
+                      <Tr key={m.map} clickable>
+                        <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
+                        <Td>{m.wins}-{m.losses}</Td>
+                        <Td>
                           {m.wr.toFixed(1)}%
                           <span className="inline-block w-[60px] h-[4px] bg-[var(--color-bg-secondary)] ml-2 align-middle">
                             <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
                           </span>
-                        </td>
-                        <td className="p-2 text-right font-mono tnum">{m.rwr.toFixed(1)}%</td>
-                        <td className="p-2 text-right font-mono tnum font-semibold">{m.adr.toFixed(2)}</td>
-                      </tr>
+                        </Td>
+                        <Td>{m.rwr.toFixed(1)}%</Td>
+                        <Td bold>{m.adr.toFixed(2)}</Td>
+                      </Tr>
                     ))}
                 </tbody>
-              </table>
-            </div>
+              </StatTable>
           )}
 
           {adrSeries.length > 1 && (
@@ -770,22 +765,22 @@ export default function PlayerView({
                       <table className="border-collapse table-fixed text-[11px] shrink-0">
                         <thead>
                           <tr>
-                            <th className="w-9 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">K</th>
-                            <th className="w-9 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">A</th>
-                            <th className="w-9 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">D</th>
-                            <th className="w-12 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">WR%</th>
-                            <th className="w-14 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">Rounds</th>
+                            <Th compact align="right" className="w-9">K</Th>
+                            <Th compact align="right" className="w-9">A</Th>
+                            <Th compact align="right" className="w-9">D</Th>
+                            <Th compact align="right" className="w-12">WR%</Th>
+                            <Th compact align="right" className="w-14">Rounds</Th>
                             <th className="w-12 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pb-1">ADR</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr>
-                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.kills}</td>
-                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.assists}</td>
-                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.deaths}</td>
-                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.win_rate_percentage.toFixed(1)}%</td>
-                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.rounds_won}-{t.stats.rounds_lost}</td>
-                            <td className="p-2 font-mono tnum font-semibold text-right">{t.stats.overall_adr.toFixed(2)}</td>
+                            <Td bold>{t.stats.kills}</Td>
+                            <Td bold>{t.stats.assists}</Td>
+                            <Td bold>{t.stats.deaths}</Td>
+                            <Td bold>{t.stats.win_rate_percentage.toFixed(1)}%</Td>
+                            <Td bold>{t.stats.rounds_won}-{t.stats.rounds_lost}</Td>
+                            <Td bold>{t.stats.overall_adr.toFixed(2)}</Td>
                           </tr>
                         </tbody>
                       </table>
