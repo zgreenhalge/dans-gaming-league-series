@@ -3,14 +3,14 @@
 import type { SortState } from './useSortState';
 import { TH_ALIGN_CLS, TH_CLS, type ThAlign } from './Th';
 
-/** Clickable column header in `Th`'s style. The `button` keeps it keyboard-reachable (with a focus
- *  ring), `aria-sort` tells assistive tech which column orders the table, and hovering tints it. The
- *  sort arrow has its slot reserved after the label (a centered column mirrors the slot before it),
- *  so sorting never shifts the column's width or the label's position. */
 /** Where the label and its arrow sit in the button's flex row; the label's own wrapped lines align
  *  through the button's `text-align`. */
 const JUSTIFY: Record<ThAlign, string> = { left: 'justify-start', right: 'justify-end', center: 'justify-center' };
 
+
+/** Clickable column header in `Th`'s style. The `button` keeps it keyboard-reachable (with a focus
+ *  ring), `aria-sort` tells assistive tech which column orders the table, and hovering tints it. The
+ *  sort arrow appears after the label of the sorted column only, nudging the label aside. */
 export default function SortableTh<K extends string = string>({
   label,
   title,
@@ -33,8 +33,8 @@ export default function SortableTh<K extends string = string>({
   className?: string;
 }) {
   const active = state.col === sortKey;
-  const arrow = (
-    <span aria-hidden className={`inline-block w-[1.2em] shrink-0 text-center ${active ? '' : 'invisible'}`}>
+  const arrow = active && (
+    <span aria-hidden className="ml-[0.4em] shrink-0">
       {state.asc ? '↑' : '↓'}
     </span>
   );
@@ -51,7 +51,6 @@ export default function SortableTh<K extends string = string>({
           active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
         }`}
       >
-        {align === 'center' && <span aria-hidden className="inline-block w-[1.2em] shrink-0" />}
         <span>{label}</span>
         {arrow}
       </button>

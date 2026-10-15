@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * Component tests for the shared stat-table headers: `SortableTh` (button, aria-sort, reserved arrow
- * slot, sticky) and `Th` (the plain sibling in the same style).
+ * Component tests for the shared stat-table headers: `SortableTh` (button, aria-sort, sort arrow,
+ * sticky) and `Th` (the plain sibling in the same style).
  * Run: npx vitest run src/components/SortableTh.test.tsx
  */
 
@@ -44,24 +44,15 @@ describe('SortableTh', () => {
     expect(screen.getByRole('columnheader')).toHaveAttribute('aria-sort', 'none');
   });
 
-  test('the arrow slot is always rendered, hidden until the column is sorted, so sorting never changes the width', () => {
+  test('the arrow appears after the label of the sorted column only', () => {
     const { container, rerender } = inRow(<SortableTh label="ADR" sortKey="adr" state={{ col: 'k', asc: false }} onSort={() => {}} />);
-    const slot = () => container.querySelector('button span[aria-hidden]') as HTMLElement;
-    expect(slot()).toHaveClass('invisible');
+    const arrow = () => container.querySelector('button span[aria-hidden]');
+    expect(arrow()).toBeNull();
     rerender(
-      <table><thead><tr><SortableTh label="ADR" sortKey="adr" state={{ col: 'adr', asc: false }} onSort={() => {}} /></tr></thead></table>,
+      <table><thead><tr><SortableTh label="ADR" sortKey="adr" state={{ col: 'adr', asc: false }} onSort={() => {}} align="right" /></tr></thead></table>,
     );
-    expect(slot()).not.toHaveClass('invisible');
-    expect(slot()).toHaveTextContent('↓');
-  });
-
-  test('the slot sits after the label whatever the alignment', () => {
-    const order = (container: HTMLElement) => Array.from(container.querySelector('button')!.childNodes).map((n) => n.textContent);
-    const right = inRow(<SortableTh label="ADR" sortKey="adr" state={{ col: 'adr', asc: true }} onSort={() => {}} align="right" />);
-    expect(order(right.container)).toEqual(['ADR', '↑']);
-    right.unmount();
-    const left = inRow(<SortableTh label="Player" sortKey="name" state={{ col: 'name', asc: true }} onSort={() => {}} />);
-    expect(order(left.container)).toEqual(['Player', '↑']);
+    expect(arrow()).toHaveTextContent('↓');
+    expect(Array.from(container.querySelector('button')!.childNodes).map((n) => n.textContent)).toEqual(['ADR', '↓']);
   });
 
   test('sticky pins the cell with the shared class', () => {

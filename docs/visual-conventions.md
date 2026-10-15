@@ -142,8 +142,8 @@ paints the band so scrolled cells never show through).
 
 `SortableTh` is a `<button>` inside the `<th>`, so Tab reaches it and Enter or Space sorts, with a
 focus ring and a hover tint, and `aria-sort` announces the sorted column and direction. Its sort
-arrow has a reserved slot after the label, hidden until the column is sorted, so sorting never
-shifts the column's width or the label's position; a label that wraps keeps the arrow beside it. It reads its state from `useSortState()`
+arrow appears after the label of the sorted column only and nudges the label aside rather than
+reserving space; a label that wraps keeps the arrow beside it. It reads its state from `useSortState()`
 (`src/components/useSortState.ts`) or any `{ col, asc }` pair, so a table that keeps its own sort
 state passes `state={{ col, asc }}`.
 
