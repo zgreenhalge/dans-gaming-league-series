@@ -76,28 +76,28 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
 
   return (
     <StatTable>
-        <thead>
-          <tr>
-            {cols.map((col) => (
-              <Th key={col.key} title={col.title || undefined} align={col.key === 'name' ? 'left' : 'right'} sticky={col.key === 'name'}>
-                {col.header}
-              </Th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {players.map((p) => (
-            <Tr key={p.player_id}>
-              {cols.map((col, i) =>
-                col.key === 'name' ? (
-                  <NameTd key={col.key} sticky>{cellValue(p, col.key)}</NameTd>
-                ) : (
-                  <Td key={col.key} bold={i === cols.length - 1}>{cellValue(p, col.key)}</Td>
-                ),
-              )}
-            </Tr>
+      <thead>
+        <tr>
+          {cols.map((col) => (
+            <Th key={col.key} title={col.title || undefined} align={col.key === 'name' ? 'left' : 'right'} sticky={col.key === 'name'}>
+              {col.header}
+            </Th>
           ))}
-        </tbody>
+        </tr>
+      </thead>
+      <tbody>
+        {players.map((p) => (
+          <Tr key={p.player_id}>
+            {cols.map((col, i) =>
+              col.key === 'name' ? (
+                <NameTd key={col.key} sticky>{cellValue(p, col.key)}</NameTd>
+              ) : (
+                <Td key={col.key} bold={i === cols.length - 1}>{cellValue(p, col.key)}</Td>
+              ),
+            )}
+          </Tr>
+        ))}
+      </tbody>
     </StatTable>
   );
 }

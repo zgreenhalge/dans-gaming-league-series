@@ -499,37 +499,37 @@ export default function PlayerView({
                 <EmptyState message="No map data." />
               ) : (
                 <StatTable>
-                    <thead>
-                      <tr>
-                        <Th align="left">Map</Th>
-                        <Th align="right">Games</Th>
-                        <Th align="right">Wins</Th>
-                        <Th align="right">Picks</Th>
-                        <Th align="right">Bans</Th>
-                        <Th align="right">No-picks</Th>
-                        <Th align="right">Pick &amp; won</Th>
-                        <Th align="right">CT</Th>
-                        <Th align="right">T</Th>
-                        <Th align="right">Avg rounds</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {playerMapStats.map((m) => (
-                        <Tr key={m.map} clickable>
-                          <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
-                          <Td>{m.games}</Td>
-                          <Td>{m.wins}</Td>
-                          <Td>{m.picked}</Td>
-                          <Td muted>{m.banned}</Td>
-                          <Td muted>{m.noPicked}</Td>
-                          <Td>{m.pickedAndWon}</Td>
-                          <Td>{m.ctPlayed}</Td>
-                          <Td>{m.tPlayed}</Td>
-                          <Td muted>{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</Td>
-                        </Tr>
-                      ))}
-                    </tbody>
-                  </StatTable>
+                  <thead>
+                    <tr>
+                      <Th align="left">Map</Th>
+                      <Th align="right">Games</Th>
+                      <Th align="right">Wins</Th>
+                      <Th align="right">Picks</Th>
+                      <Th align="right">Bans</Th>
+                      <Th align="right">No-picks</Th>
+                      <Th align="right">Pick &amp; won</Th>
+                      <Th align="right">CT</Th>
+                      <Th align="right">T</Th>
+                      <Th align="right">Avg rounds</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {playerMapStats.map((m) => (
+                      <Tr key={m.map} clickable>
+                        <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
+                        <Td>{m.games}</Td>
+                        <Td>{m.wins}</Td>
+                        <Td>{m.picked}</Td>
+                        <Td muted>{m.banned}</Td>
+                        <Td muted>{m.noPicked}</Td>
+                        <Td>{m.pickedAndWon}</Td>
+                        <Td>{m.ctPlayed}</Td>
+                        <Td>{m.tPlayed}</Td>
+                        <Td muted>{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </StatTable>
               )}
             </div>
 
@@ -542,27 +542,27 @@ export default function PlayerView({
                 <EmptyState message="No side data." />
               ) : (
                 <StatTable>
-                    <thead>
-                      <tr>
-                        <Th align="left">Side</Th>
-                        <Th align="right">Played</Th>
-                        <Th align="right">Times Picked</Th>
-                        <Th align="right">W-L</Th>
-                        <Th align="right">RWR%</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {playerSideStats.map((s) => (
-                        <Tr key={s.side}>
-                          <NameTd>{s.side}</NameTd>
-                          <Td>{s.played}</Td>
-                          <Td>{s.numTimesPicked}</Td>
-                          <Td>{s.wins}-{s.losses}</Td>
-                          <Td>{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</Td>
-                        </Tr>
-                      ))}
-                    </tbody>
-                  </StatTable>
+                  <thead>
+                    <tr>
+                      <Th align="left">Side</Th>
+                      <Th align="right">Played</Th>
+                      <Th align="right">Times Picked</Th>
+                      <Th align="right">W-L</Th>
+                      <Th align="right">RWR%</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {playerSideStats.map((s) => (
+                      <Tr key={s.side}>
+                        <NameTd>{s.side}</NameTd>
+                        <Td>{s.played}</Td>
+                        <Td>{s.numTimesPicked}</Td>
+                        <Td>{s.wins}-{s.losses}</Td>
+                        <Td>{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </StatTable>
               )}
             </div>
           </div>
@@ -572,44 +572,44 @@ export default function PlayerView({
             <EmptyState message="No map data." />
           ) : (
             <StatTable>
-                <thead>
-                  <tr>
-                    <SortableTh label="Map" sortKey="map" state={mapSortState} onSort={clickMapSort} />
-                    <SortableTh label="W-L" sortKey="record" state={mapSortState} onSort={clickMapSort} align="right" />
-                    <SortableTh label="WR%" sortKey="wr" state={mapSortState} onSort={clickMapSort} align="right" />
-                    <SortableTh label="RWR%" sortKey="rwr" state={mapSortState} onSort={clickMapSort} align="right" />
-                    <SortableTh label="ADR" sortKey="adr" state={mapSortState} onSort={clickMapSort} align="right" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...maps]
-                    .sort((a, b) => {
-                      let v = 0;
-                      switch (mapSort) {
-                        case 'map':    v = a.map.localeCompare(b.map); break;
-                        case 'record': v = b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr; break;
-                        case 'wr':     v = b.wr - a.wr; break;
-                        case 'rwr':    v = b.rwr - a.rwr; break;
-                        case 'adr':    v = b.adr - a.adr; break;
-                      }
-                      return mapAsc ? -v : v;
-                    })
-                    .map((m) => (
-                      <Tr key={m.map} clickable>
-                        <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
-                        <Td>{m.wins}-{m.losses}</Td>
-                        <Td>
-                          {m.wr.toFixed(1)}%
-                          <span className="inline-block w-[60px] h-[4px] bg-[var(--color-bg-secondary)] ml-2 align-middle">
-                            <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
-                          </span>
-                        </Td>
-                        <Td>{m.rwr.toFixed(1)}%</Td>
-                        <Td bold>{m.adr.toFixed(2)}</Td>
-                      </Tr>
-                    ))}
-                </tbody>
-              </StatTable>
+              <thead>
+                <tr>
+                  <SortableTh label="Map" sortKey="map" state={mapSortState} onSort={clickMapSort} />
+                  <SortableTh label="W-L" sortKey="record" state={mapSortState} onSort={clickMapSort} align="right" />
+                  <SortableTh label="WR%" sortKey="wr" state={mapSortState} onSort={clickMapSort} align="right" />
+                  <SortableTh label="RWR%" sortKey="rwr" state={mapSortState} onSort={clickMapSort} align="right" />
+                  <SortableTh label="ADR" sortKey="adr" state={mapSortState} onSort={clickMapSort} align="right" />
+                </tr>
+              </thead>
+              <tbody>
+                {[...maps]
+                  .sort((a, b) => {
+                    let v = 0;
+                    switch (mapSort) {
+                      case 'map':    v = a.map.localeCompare(b.map); break;
+                      case 'record': v = b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr; break;
+                      case 'wr':     v = b.wr - a.wr; break;
+                      case 'rwr':    v = b.rwr - a.rwr; break;
+                      case 'adr':    v = b.adr - a.adr; break;
+                    }
+                    return mapAsc ? -v : v;
+                  })
+                  .map((m) => (
+                    <Tr key={m.map} clickable>
+                      <NameTd><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></NameTd>
+                      <Td>{m.wins}-{m.losses}</Td>
+                      <Td>
+                        {m.wr.toFixed(1)}%
+                        <span className="inline-block w-[60px] h-[4px] bg-[var(--color-bg-secondary)] ml-2 align-middle">
+                          <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
+                        </span>
+                      </Td>
+                      <Td>{m.rwr.toFixed(1)}%</Td>
+                      <Td bold>{m.adr.toFixed(2)}</Td>
+                    </Tr>
+                  ))}
+              </tbody>
+            </StatTable>
           )}
 
           {adrSeries.length > 1 && (
@@ -770,7 +770,7 @@ export default function PlayerView({
                             <Th compact align="right" className="w-9">D</Th>
                             <Th compact align="right" className="w-12">WR%</Th>
                             <Th compact align="right" className="w-14">Rounds</Th>
-                            <th className="w-12 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pb-1">ADR</th>
+                            <Th compact align="right" className="w-12">ADR</Th>
                           </tr>
                         </thead>
                         <tbody>

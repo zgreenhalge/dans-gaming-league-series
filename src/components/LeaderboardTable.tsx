@@ -188,92 +188,92 @@ export default function LeaderboardTable({
 
   return (
     <StatTable>
-        <thead>
-          <tr>
-            {firstColMode === 'player' && showRank && <Th className="w-6">#</Th>}
-            <SortableTh label={firstColLabel} sortKey="name" state={sortState} onSort={clickHeader} sticky={stickyNameCol} />
-            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
-            {hasEhog && <SortableTh label="EHOG" title="EHOG rating as of most recent match in this view" sortKey="ehog" state={sortState} onSort={clickHeader} align="right" />}
-            {STAT_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((p) => {
-            const played = p.total_rounds_played > 0;
-            const medal = medalRank.get(p.player_id);
-            const zone = zoneColor.get(p.player_id);
-            const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
-            const textColor = elimZone.has(p.player_id)
-              ? 'var(--color-text-secondary)'
-              : rowColor;
-            const href = firstColMode === 'season'
-              ? `/seasons/${p.season_id}`
-              : `/players/${p.player_id}`;
-            return (
-              <Tr
-                key={firstColMode === 'season' ? p.season_id : p.player_id}
-                className="cursor-pointer transition-colors"
-                style={{ background: rowColor
-                  ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))`
-                  : 'var(--color-bg-primary)'
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; onPlayerHover?.(p.player_id); }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : 'var(--color-bg-primary)'; onPlayerHover?.(null); }}
-              >
-                {firstColMode === 'player' && showRank && (
-                  <Td align="left"
-                    style={{ color: textColor ?? 'var(--color-text-secondary)' }}
-                  >
-                    <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
-                  </Td>
-                )}
-                <NameTd sticky={stickyNameCol}
-                  style={{ color: textColor ?? undefined }}
+      <thead>
+        <tr>
+          {firstColMode === 'player' && showRank && <Th className="w-6">#</Th>}
+          <SortableTh label={firstColLabel} sortKey="name" state={sortState} onSort={clickHeader} sticky={stickyNameCol} />
+          {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
+          {hasEhog && <SortableTh label="EHOG" title="EHOG rating as of most recent match in this view" sortKey="ehog" state={sortState} onSort={clickHeader} align="right" />}
+          {STAT_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((p) => {
+          const played = p.total_rounds_played > 0;
+          const medal = medalRank.get(p.player_id);
+          const zone = zoneColor.get(p.player_id);
+          const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
+          const textColor = elimZone.has(p.player_id)
+            ? 'var(--color-text-secondary)'
+            : rowColor;
+          const href = firstColMode === 'season'
+            ? `/seasons/${p.season_id}`
+            : `/players/${p.player_id}`;
+          return (
+            <Tr
+              key={firstColMode === 'season' ? p.season_id : p.player_id}
+              className="cursor-pointer transition-colors"
+              style={{ background: rowColor
+                ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))`
+                : 'var(--color-bg-primary)'
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; onPlayerHover?.(p.player_id); }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : 'var(--color-bg-primary)'; onPlayerHover?.(null); }}
+            >
+              {firstColMode === 'player' && showRank && (
+                <Td align="left"
+                  style={{ color: textColor ?? 'var(--color-text-secondary)' }}
                 >
-                  <Link href={href} className="flex items-center w-full h-full">
-                    <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
+                  <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
+                </Td>
+              )}
+              <NameTd sticky={stickyNameCol}
+                style={{ color: textColor ?? undefined }}
+              >
+                <Link href={href} className="flex items-center w-full h-full">
+                  <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
+                </Link>
+              </NameTd>
+              {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
+                <Td key={c.key}>
+                  <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
+                </Td>
+              ))}
+              {hasEhog && (
+                <Td
+                  bold
+                  title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
+                  style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
+                >
+                  <Link href={href} className="block w-full h-full">
+                    {ehogRatings[p.player_id] != null
+                      ? ehogRatings[p.player_id].toFixed(1)
+                      : <span className="text-[var(--color-text-secondary)]">—</span>}
                   </Link>
-                </NameTd>
-                {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
-                  <Td key={c.key}>
-                    <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
-                  </Td>
-                ))}
-                {hasEhog && (
-                  <Td
-                    bold
-                    title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
-                    style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
-                  >
-                    <Link href={href} className="block w-full h-full">
-                      {ehogRatings[p.player_id] != null
-                        ? ehogRatings[p.player_id].toFixed(1)
-                        : <span className="text-[var(--color-text-secondary)]">—</span>}
-                    </Link>
-                  </Td>
-                )}
-                <Td muted>
-                  <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
                 </Td>
-                <Td muted>
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
-                </Td>
-                <Td>
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
-                </Td>
-                <Td muted>
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Link>
-                </Td>
-                <Td>
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
-                </Td>
-                <Td bold>
-                  <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
-                </Td>
-              </Tr>
-            );
-          })}
-        </tbody>
+              )}
+              <Td muted>
+                <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
+              </Td>
+              <Td muted>
+                <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
+              </Td>
+              <Td>
+                <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
+              </Td>
+              <Td muted>
+                <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Link>
+              </Td>
+              <Td>
+                <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
+              </Td>
+              <Td bold>
+                <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
+              </Td>
+            </Tr>
+          );
+        })}
+      </tbody>
     </StatTable>
   );
 }

@@ -134,8 +134,6 @@ statistics pages, and the week/round/group scorecards:
 | **`Td`** (figure cell) | Mono 12px with tabular digits, right-aligned (`align` overrides). `muted` greys a secondary figure, `bold` emphasises a headline one, `mono={false}` is the escape hatch for a column of text. |
 | **Padding** | 8px on every side, headers and body cells alike, pinned name column included. Expanded-detail (`colSpan`) panels and footer label rows are exempt. |
 
-Rows come out at roughly 37–38px in every table.
-
 **Table header cells.** `Th` (plain columns) and `SortableTh` (columns that sort) share one look:
 10px semibold, letter-spaced but not uppercased, 8px padding on every side, on a tinted header band
 with a bottom rule. `align="left"|"right"|"center"` aligns the label with the figures below it;

@@ -16,24 +16,24 @@ export default function PerSideStatsTable({ perSideStats }: { perSideStats: PerS
         <EmptyState message="No side data." />
       ) : (
         <StatTable>
-            <thead>
-              <tr>
-                <Th align="left">Side</Th>
-                <Th align="right">Times Picked</Th>
-                <Th align="right">W-L</Th>
-                <Th align="right">Round Win%</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {perSideStats.map((s) => (
-                <Tr key={s.side}>
-                  <NameTd>{s.side}</NameTd>
-                  <Td>{s.numTimesPicked}</Td>
-                  <Td>{s.wins}-{s.losses}</Td>
-                  <Td muted>{formatRoundWinPct(s)}</Td>
-                </Tr>
-              ))}
-            </tbody>
+          <thead>
+            <tr>
+              <Th align="left">Side</Th>
+              <Th align="right">Times Picked</Th>
+              <Th align="right">W-L</Th>
+              <Th align="right">Round Win%</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {perSideStats.map((s) => (
+              <Tr key={s.side}>
+                <NameTd>{s.side}</NameTd>
+                <Td>{s.numTimesPicked}</Td>
+                <Td>{s.wins}-{s.losses}</Td>
+                <Td muted>{formatRoundWinPct(s)}</Td>
+              </Tr>
+            ))}
+          </tbody>
         </StatTable>
       )}
     </div>

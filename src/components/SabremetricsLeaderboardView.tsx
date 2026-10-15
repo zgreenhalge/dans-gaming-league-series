@@ -162,37 +162,37 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Impact</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Teamkills" title="Teammates killed" sortKey="tk" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="1v2" title="1v2 clutch wins / attempts" sortKey="1v2" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="2v1 Losses" title="Rounds this player's side had a 2-vs-1 numbers advantage and still lost, out of all 2v1 advantages (the natural stat behind Choke Score)" sortKey="2v1_losses" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Clutch %" title="Overall clutch success rate (1v1 + 1v2 wins / attempts)" sortKey="clutch_pct" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((a) => {
-              const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
-              const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
-              return (
-                <Tr key={a.player_id} clickable>
-                  {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <Td>{pct(a.kast_rounds, a.rounds_played)}</Td>
-                  <Td>{a.two_k_rounds}</Td>
-                  <Td>{a.teamkills}</Td>
-                  <Td>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</Td>
-                  <Td>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</Td>
-                  <Td>{a.clutch_2v1_attempts - a.clutch_2v1_wins}/{a.clutch_2v1_attempts}</Td>
-                  <Td>{pct(clutchWins, clutchAttempts)}</Td>
-                </Tr>
-              );
-            })}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Teamkills" title="Teammates killed" sortKey="tk" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="1v2" title="1v2 clutch wins / attempts" sortKey="1v2" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="2v1 Losses" title="Rounds this player's side had a 2-vs-1 numbers advantage and still lost, out of all 2v1 advantages (the natural stat behind Choke Score)" sortKey="2v1_losses" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Clutch %" title="Overall clutch success rate (1v1 + 1v2 wins / attempts)" sortKey="clutch_pct" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((a) => {
+            const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
+            const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
+            return (
+              <Tr key={a.player_id} clickable>
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <Td>{pct(a.kast_rounds, a.rounds_played)}</Td>
+                <Td>{a.two_k_rounds}</Td>
+                <Td>{a.teamkills}</Td>
+                <Td>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</Td>
+                <Td>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</Td>
+                <Td>{a.clutch_2v1_attempts - a.clutch_2v1_wins}/{a.clutch_2v1_attempts}</Td>
+                <Td>{pct(clutchWins, clutchAttempts)}</Td>
+              </Tr>
+            );
+          })}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -223,28 +223,28 @@ function OpeningDuelsTable({ aggregated, singlePlayer, showHeading = true }: { a
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Opening Duels</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="Opening Duels" title="First kill and first death of each round (wins-losses)" sortKey="duels" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Opening Success" title="Opening kills / (opening kills + opening deaths)" sortKey="opening_success" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((a) => {
-              const totalDuels = a.opening_kills + a.opening_deaths;
-              return (
-                <Tr key={a.player_id} clickable>
-                  {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <Td><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></Td>
-                  <Td>{pct(totalDuels, a.rounds_played)}</Td>
-                  <Td>{pct(a.opening_kills, totalDuels)}</Td>
-                </Tr>
-              );
-            })}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="Opening Duels" title="First kill and first death of each round (wins-losses)" sortKey="duels" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Opening Success" title="Opening kills / (opening kills + opening deaths)" sortKey="opening_success" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((a) => {
+            const totalDuels = a.opening_kills + a.opening_deaths;
+            return (
+              <Tr key={a.player_id} clickable>
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <Td><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></Td>
+                <Td>{pct(totalDuels, a.rounds_played)}</Td>
+                <Td>{pct(a.opening_kills, totalDuels)}</Td>
+              </Tr>
+            );
+          })}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -285,31 +285,31 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Mechanics</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="Shots Fired" title="Shots fired (guns only, not gated on enemy visibility)" sortKey="shots_fired" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits, excluding AWP shots (matches Leetify's Headshot Accuracy)" sortKey="head_acc" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Rounds Dropped/Reload" title="Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones" sortKey="dropped_reload" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((a) => (
-              <Tr key={a.player_id} clickable>
-                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                <Td>{a.shots_fired}</Td>
-                <Td>{pct(a.shots_hit, a.shots_fired)}</Td>
-                <Td>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</Td>
-                <Td>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</Td>
-                <Td>{pct(a.spray_shots_hit, a.spray_shots_fired)}</Td>
-                <Td>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="Shots Fired" title="Shots fired (guns only, not gated on enemy visibility)" sortKey="shots_fired" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits, excluding AWP shots (matches Leetify's Headshot Accuracy)" sortKey="head_acc" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rounds Dropped/Reload" title="Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones" sortKey="dropped_reload" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((a) => (
+            <Tr key={a.player_id} clickable>
+              {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+              <Td>{a.shots_fired}</Td>
+              <Td>{pct(a.shots_hit, a.shots_fired)}</Td>
+              <Td>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</Td>
+              <Td>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</Td>
+              <Td>{pct(a.spray_shots_hit, a.spray_shots_fired)}</Td>
+              <Td>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -518,45 +518,45 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Weapons</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <Th title={weaponColTitle}>Weapon</Th>
-              <SortableTh label="Kills With" title="Credited kills with this weapon (excludes self-kills and teamkills)" sortKey="kills" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="HS% With" title="Headshot kills / kills with this weapon" sortKey="hs" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="NS With" title="No-scope kills with this weapon" sortKey="ns" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="WB With" title="Wallbang kills with this weapon" sortKey="wb" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Blind With" title="Kills scored while the attacker was flashed, with this weapon" sortKey="blind" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Midair With" title="Mid-air kills (attacker was airborne) with this weapon" sortKey="midair" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Deaths To" title="Deaths to this weapon" sortKey="deaths" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Shots Fired" title="Shots fired with this weapon/category (guns only — '—' for a knife, grenade, etc.)" sortKey="shots_fired" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired" sortKey="acc" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Damage/Round" title="Damage dealt / rounds played with this weapon/category" sortKey="dmg_round" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Rounds" title="Rounds this player used this weapon/category in at least once" sortKey="rounds" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((r) => (
-              <Tr key={r.player_id} clickable>
-                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <NameTd><WeaponLabel weapon={r.weapon} label={r.label} /></NameTd>
-                <Td>{r.kills}</Td>
-                <Td>{pct(r.headshotKills, r.kills)}</Td>
-                <Td>{r.noscopeKills}</Td>
-                <Td>{r.wallbangKills}</Td>
-                <Td>{r.blindKills}</Td>
-                <Td>{r.midairKills}</Td>
-                <Td>{r.deaths}</Td>
-                <Td>{r.accuracy ? r.accuracy.shots_fired : '—'}</Td>
-                <Td>{r.accuracy ? pct(r.accuracy.shots_hit, r.accuracy.shots_fired) : '—'}</Td>
-                <Td>{r.accuracy ? pct(r.accuracy.headshot_hits, r.accuracy.shots_hit) : '—'}</Td>
-                <Td>{r.accuracy ? fmtNum(r.accuracy.rounds_played > 0 ? r.accuracy.damage_dealt / r.accuracy.rounds_played : 0, 1) : '—'}</Td>
-                <Td>{r.accuracy ? r.accuracy.rounds_played : '—'}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <Th title={weaponColTitle}>Weapon</Th>
+            <SortableTh label="Kills With" title="Credited kills with this weapon (excludes self-kills and teamkills)" sortKey="kills" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="HS% With" title="Headshot kills / kills with this weapon" sortKey="hs" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="NS With" title="No-scope kills with this weapon" sortKey="ns" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="WB With" title="Wallbang kills with this weapon" sortKey="wb" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Blind With" title="Kills scored while the attacker was flashed, with this weapon" sortKey="blind" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Midair With" title="Mid-air kills (attacker was airborne) with this weapon" sortKey="midair" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Deaths To" title="Deaths to this weapon" sortKey="deaths" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Shots Fired" title="Shots fired with this weapon/category (guns only — '—' for a knife, grenade, etc.)" sortKey="shots_fired" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired" sortKey="acc" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Damage/Round" title="Damage dealt / rounds played with this weapon/category" sortKey="dmg_round" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rounds" title="Rounds this player used this weapon/category in at least once" sortKey="rounds" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <Tr key={r.player_id} clickable>
+              {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
+              <NameTd><WeaponLabel weapon={r.weapon} label={r.label} /></NameTd>
+              <Td>{r.kills}</Td>
+              <Td>{pct(r.headshotKills, r.kills)}</Td>
+              <Td>{r.noscopeKills}</Td>
+              <Td>{r.wallbangKills}</Td>
+              <Td>{r.blindKills}</Td>
+              <Td>{r.midairKills}</Td>
+              <Td>{r.deaths}</Td>
+              <Td>{r.accuracy ? r.accuracy.shots_fired : '—'}</Td>
+              <Td>{r.accuracy ? pct(r.accuracy.shots_hit, r.accuracy.shots_fired) : '—'}</Td>
+              <Td>{r.accuracy ? pct(r.accuracy.headshot_hits, r.accuracy.shots_hit) : '—'}</Td>
+              <Td>{r.accuracy ? fmtNum(r.accuracy.rounds_played > 0 ? r.accuracy.damage_dealt / r.accuracy.rounds_played : 0, 1) : '—'}</Td>
+              <Td>{r.accuracy ? r.accuracy.rounds_played : '—'}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -693,31 +693,31 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Economy</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="Rounds Played" title={`Rounds played ${tierPhrase} — seeded from the round's own tier classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="W-L" title={`Rounds won vs. lost ${tierPhrase}`} sortKey="rounds_won" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds ${tierPhrase}`} sortKey="shots_fired" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds ${tierPhrase}`} sortKey="acc" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Headshot %" title={`Headshot hits / hits, in rounds ${tierPhrase}`} sortKey="hs" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Damage/Round" title={`Damage dealt per round played ${tierPhrase}`} sortKey="dpr" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((r) => (
-              <Tr key={r.player_id} clickable>
-                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <Td>{r.rounds_played}</Td>
-                <Td>{r.rounds_won}-{r.rounds_played - r.rounds_won}</Td>
-                <Td>{r.shots_fired}</Td>
-                <Td>{pct(r.shots_hit, r.shots_fired)}</Td>
-                <Td>{pct(r.headshot_hits, r.shots_hit)}</Td>
-                <Td>{fmtNum(r.damage_dealt / (r.rounds_played || 1), 1)}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="Rounds Played" title={`Rounds played ${tierPhrase} — seeded from the round's own tier classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="W-L" title={`Rounds won vs. lost ${tierPhrase}`} sortKey="rounds_won" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds ${tierPhrase}`} sortKey="shots_fired" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds ${tierPhrase}`} sortKey="acc" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Headshot %" title={`Headshot hits / hits, in rounds ${tierPhrase}`} sortKey="hs" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Damage/Round" title={`Damage dealt per round played ${tierPhrase}`} sortKey="dpr" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <Tr key={r.player_id} clickable>
+              {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
+              <Td>{r.rounds_played}</Td>
+              <Td>{r.rounds_won}-{r.rounds_played - r.rounds_won}</Td>
+              <Td>{r.shots_fired}</Td>
+              <Td>{pct(r.shots_hit, r.shots_fired)}</Td>
+              <Td>{pct(r.headshot_hits, r.shots_hit)}</Td>
+              <Td>{fmtNum(r.damage_dealt / (r.rounds_played || 1), 1)}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -776,33 +776,33 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Flair</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="No-scope" title="No-scope kills, across every weapon" sortKey="noscope" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Wallbang" title="Wallbang kills (bullet penetrated a surface), across every weapon" sortKey="wallbang" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Blind" title="Kills scored while the attacker was flashed, across every weapon" sortKey="blind" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Midair" title="Mid-air kills (attacker was airborne), across every weapon" sortKey="midair" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Knife" title="Knife kills" sortKey="knife" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Fall Deaths" title="Deaths to fall damage or other environmental causes — never has a real attacker, so this is a death count, not a kill count" sortKey="fall_deaths" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="C4 Deaths" title="Deaths to bomb detonation — never has a real attacker, so this is a death count, not a kill count" sortKey="c4_deaths" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((r) => (
-              <Tr key={r.player_id} clickable>
-                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <Td>{r.flair.noscopeKills}</Td>
-                <Td>{r.flair.wallbangKills}</Td>
-                <Td>{r.flair.blindKills}</Td>
-                <Td>{r.flair.midairKills}</Td>
-                <Td>{r.flair.knifeKills}</Td>
-                <Td>{r.flair.fallDamageDeaths}</Td>
-                <Td>{r.flair.c4Deaths}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="No-scope" title="No-scope kills, across every weapon" sortKey="noscope" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Wallbang" title="Wallbang kills (bullet penetrated a surface), across every weapon" sortKey="wallbang" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Blind" title="Kills scored while the attacker was flashed, across every weapon" sortKey="blind" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Midair" title="Mid-air kills (attacker was airborne), across every weapon" sortKey="midair" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Knife" title="Knife kills" sortKey="knife" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Fall Deaths" title="Deaths to fall damage or other environmental causes — never has a real attacker, so this is a death count, not a kill count" sortKey="fall_deaths" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="C4 Deaths" title="Deaths to bomb detonation — never has a real attacker, so this is a death count, not a kill count" sortKey="c4_deaths" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <Tr key={r.player_id} clickable>
+              {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
+              <Td>{r.flair.noscopeKills}</Td>
+              <Td>{r.flair.wallbangKills}</Td>
+              <Td>{r.flair.blindKills}</Td>
+              <Td>{r.flair.midairKills}</Td>
+              <Td>{r.flair.knifeKills}</Td>
+              <Td>{r.flair.fallDamageDeaths}</Td>
+              <Td>{r.flair.c4Deaths}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -858,35 +858,35 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Trades</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="Trade Kill Opps" title="Trade kill opportunities: times a teammate died while this player was still alive (the chance to trade existed)" sortKey="trade_kill_opp" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Trade Kill Attempts" title="Trade kill attempts: opportunities where this player damaged the killer within the trade window" sortKey="trade_kill_att" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Trade Kills" title="Trade kill successes: opportunities where this player killed the killer within the trade window" sortKey="trade_kill_succ" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Trade Kill %" title="Trade kill successes / attempts" sortKey="trade_kill_pct" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Traded Death Opps" title="Traded death opportunities: times this player died while at least one teammate was still alive (someone had the chance to trade them)" sortKey="traded_death_opp" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Traded Death Attempts" title="Traded death attempts: opportunities where a teammate damaged the killer within the trade window" sortKey="traded_death_att" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Traded Deaths" title="Traded death successes: opportunities where a teammate killed the killer within the trade window" sortKey="traded_death_succ" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Traded Death %" title="Traded death successes / attempts" sortKey="traded_death_pct" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((a) => (
-              <Tr key={a.player_id} clickable>
-                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                <Td>{a.trade_kill_opportunities}</Td>
-                <Td>{a.trade_kill_attempts}</Td>
-                <Td>{a.trade_kill_successes}</Td>
-                <Td>{pct(a.trade_kill_successes, a.trade_kill_attempts)}</Td>
-                <Td>{a.traded_death_opportunities}</Td>
-                <Td>{a.traded_death_attempts}</Td>
-                <Td>{a.traded_death_successes}</Td>
-                <Td>{pct(a.traded_death_successes, a.traded_death_attempts)}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="Trade Kill Opps" title="Trade kill opportunities: times a teammate died while this player was still alive (the chance to trade existed)" sortKey="trade_kill_opp" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Trade Kill Attempts" title="Trade kill attempts: opportunities where this player damaged the killer within the trade window" sortKey="trade_kill_att" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Trade Kills" title="Trade kill successes: opportunities where this player killed the killer within the trade window" sortKey="trade_kill_succ" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Trade Kill %" title="Trade kill successes / attempts" sortKey="trade_kill_pct" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Traded Death Opps" title="Traded death opportunities: times this player died while at least one teammate was still alive (someone had the chance to trade them)" sortKey="traded_death_opp" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Traded Death Attempts" title="Traded death attempts: opportunities where a teammate damaged the killer within the trade window" sortKey="traded_death_att" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Traded Deaths" title="Traded death successes: opportunities where a teammate killed the killer within the trade window" sortKey="traded_death_succ" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Traded Death %" title="Traded death successes / attempts" sortKey="traded_death_pct" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((a) => (
+            <Tr key={a.player_id} clickable>
+              {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+              <Td>{a.trade_kill_opportunities}</Td>
+              <Td>{a.trade_kill_attempts}</Td>
+              <Td>{a.trade_kill_successes}</Td>
+              <Td>{pct(a.trade_kill_successes, a.trade_kill_attempts)}</Td>
+              <Td>{a.traded_death_opportunities}</Td>
+              <Td>{a.traded_death_attempts}</Td>
+              <Td>{a.traded_death_successes}</Td>
+              <Td>{pct(a.traded_death_successes, a.traded_death_attempts)}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -942,51 +942,51 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
     <div className="my-6">
       {showHeading && <h3 className="text-sm font-semibold mb-3">Utility</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              {!singlePlayer && <Th sticky>Player</Th>}
-              <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both" sortKey="ud" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Teamflash Duration" title="Total seconds spent blinding teammates — subtracted from Utility Score" sortKey="tf" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Flash Assists" title="Kills by a teammate on an enemy you flashbanged" sortKey="fa" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Flashes → Kill" title="Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition" sortKey="fltk" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Avg Blind/Flash" title="Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+" sortKey="blind_flash" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Blind Duration Dealt" title="Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+" sortKey="bdd" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Defuses" title="Bomb defuses" sortKey="df" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="CT Smokes Blocking %" title="CT-side smokes that had an enemy within the cloud's radius at some point during its life, out of all CT smokes thrown" sortKey="smoke_block" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Unused Util/Death" title="Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better" sortKey="unused_util" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((a) => {
-              return (
-                <Tr key={a.player_id} clickable>
-                  {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <Td>{a.utility_damage}</Td>
-                  <Td>{fmtNum(a.teamflash_duration, 1)}</Td>
-                  <Td>{a.flash_assists}</Td>
-                  <Td>{a.flashes_leading_to_kill}</Td>
-                  <Td>{a.enemies_flashed}</Td>
-                  <Td>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</Td>
-                  <Td>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</Td>
-                  <Td>{fmtNum(a.blind_duration_dealt, 1)}</Td>
-                  <Td>{a.plants}</Td>
-                  <Td>{a.defuses}</Td>
-                  <Td>{a.he_thrown}</Td>
-                  <Td>{a.he_damage}</Td>
-                  <Td>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</Td>
-                  <Td>{pct(a.smokes_blocking_push, a.ct_smokes_thrown)}</Td>
-                  <Td>{fmtNum(a.unused_util_value_on_death_total / (a.deaths || 1), 0)}</Td>
-                </Tr>
-              );
-            })}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            {!singlePlayer && <Th sticky>Player</Th>}
+            <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both" sortKey="ud" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Teamflash Duration" title="Total seconds spent blinding teammates — subtracted from Utility Score" sortKey="tf" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Flash Assists" title="Kills by a teammate on an enemy you flashbanged" sortKey="fa" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Flashes → Kill" title="Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition" sortKey="fltk" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Avg Blind/Flash" title="Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+" sortKey="blind_flash" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Blind Duration Dealt" title="Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+" sortKey="bdd" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Defuses" title="Bomb defuses" sortKey="df" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="CT Smokes Blocking %" title="CT-side smokes that had an enemy within the cloud's radius at some point during its life, out of all CT smokes thrown" sortKey="smoke_block" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Unused Util/Death" title="Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better" sortKey="unused_util" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((a) => {
+            return (
+              <Tr key={a.player_id} clickable>
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <Td>{a.utility_damage}</Td>
+                <Td>{fmtNum(a.teamflash_duration, 1)}</Td>
+                <Td>{a.flash_assists}</Td>
+                <Td>{a.flashes_leading_to_kill}</Td>
+                <Td>{a.enemies_flashed}</Td>
+                <Td>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</Td>
+                <Td>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</Td>
+                <Td>{fmtNum(a.blind_duration_dealt, 1)}</Td>
+                <Td>{a.plants}</Td>
+                <Td>{a.defuses}</Td>
+                <Td>{a.he_thrown}</Td>
+                <Td>{a.he_damage}</Td>
+                <Td>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</Td>
+                <Td>{pct(a.smokes_blocking_push, a.ct_smokes_thrown)}</Td>
+                <Td>{fmtNum(a.unused_util_value_on_death_total / (a.deaths || 1), 0)}</Td>
+              </Tr>
+            );
+          })}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -1064,35 +1064,35 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
     <div>
       {showHeading && <h3 className="text-sm font-semibold mb-3">Side Splits</h3>}
       <StatTable>
-          <thead>
-            <tr>
-              <Th sticky>Player</Th>
-              <SortableTh label="Kills" sortKey="k" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Assists" sortKey="a" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Deaths" sortKey="d" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Damage" sortKey="dmg" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="RW–RL" title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="RWR%" title="Round Win Rate" sortKey="rwr" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((r) => (
-              <Tr key={r.player_id} clickable>
-                <PlayerCell id={r.player_id} name={r.player_name} />
-                <Td>{r.kills}</Td>
-                <Td>{r.assists}</Td>
-                <Td>{r.deaths}</Td>
-                <Td>{fmtDiff(r.killDiff)}</Td>
-                <Td>{r.damage.toLocaleString()}</Td>
-                <Td>{fmtNum(r.adr, 2)}</Td>
-                <Td>{r.roundsWon}–{r.roundsLost}</Td>
-                <Td>{fmtNum(r.roundWinRate, 1)}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Player</Th>
+            <SortableTh label="Kills" sortKey="k" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Assists" sortKey="a" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Deaths" sortKey="d" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Damage" sortKey="dmg" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="RW–RL" title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="RWR%" title="Round Win Rate" sortKey="rwr" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <Tr key={r.player_id} clickable>
+              <PlayerCell id={r.player_id} name={r.player_name} />
+              <Td>{r.kills}</Td>
+              <Td>{r.assists}</Td>
+              <Td>{r.deaths}</Td>
+              <Td>{fmtDiff(r.killDiff)}</Td>
+              <Td>{r.damage.toLocaleString()}</Td>
+              <Td>{fmtNum(r.adr, 2)}</Td>
+              <Td>{r.roundsWon}–{r.roundsLost}</Td>
+              <Td>{fmtNum(r.roundWinRate, 1)}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
@@ -1137,47 +1137,47 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3" title="1.00 = league average. Values above 1 are better than average, below 1 are worse.">Stats Plus</h3>
       <StatTable>
-          <thead>
-            <tr>
-              <Th sticky>Player</Th>
-              <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Deaths/Round+" title="Deaths per round vs league avg (1.00 = avg, lower is better)" sortKey="dpr" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="ADR+" title="Damage per round vs league avg (1.00 = avg)" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="K/D+" title="K/D ratio vs league avg (1.00 = avg)" sortKey="kdr" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)" sortKey="entry" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="kast" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)" sortKey="trade" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)" sortKey="objective" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)" sortKey="utility" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)" sortKey="aim" state={sort} align="right" onSort={toggleSort} />
-              <SortableTh label="Spray+" title="Spray Accuracy vs league avg (1.00 = avg)" sortKey="spray" state={sort} align="right" onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ agg, plus }) => (
-              <Tr key={agg.player_id} clickable>
-                <PlayerCell id={agg.player_id} name={agg.player_name} />
-                <Td style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</Td>
-                <Td style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</Td>
-                <Td style={plusStyle(2 - plus.dpr)}>{fmtNum(plus.dpr, 2)}</Td>
-                <Td style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</Td>
-                <Td style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</Td>
-                <Td style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</Td>
-                <Td style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</Td>
-                <Td style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</Td>
-                <Td style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</Td>
-                <Td style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</Td>
-                <Td style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</Td>
-                <Td style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</Td>
-                <Td style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</Td>
-                <Td style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </StatTable>
+        <thead>
+          <tr>
+            <Th sticky>Player</Th>
+            <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Deaths/Round+" title="Deaths per round vs league avg (1.00 = avg, lower is better)" sortKey="dpr" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="ADR+" title="Damage per round vs league avg (1.00 = avg)" sortKey="adr" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="K/D+" title="K/D ratio vs league avg (1.00 = avg)" sortKey="kdr" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)" sortKey="entry" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="kast" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)" sortKey="trade" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)" sortKey="objective" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)" sortKey="utility" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)" sortKey="aim" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Spray+" title="Spray Accuracy vs league avg (1.00 = avg)" sortKey="spray" state={sort} align="right" onSort={toggleSort} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(({ agg, plus }) => (
+            <Tr key={agg.player_id} clickable>
+              <PlayerCell id={agg.player_id} name={agg.player_name} />
+              <Td style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</Td>
+              <Td style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</Td>
+              <Td style={plusStyle(2 - plus.dpr)}>{fmtNum(plus.dpr, 2)}</Td>
+              <Td style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</Td>
+              <Td style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</Td>
+              <Td style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</Td>
+              <Td style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</Td>
+              <Td style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</Td>
+              <Td style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</Td>
+              <Td style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</Td>
+              <Td style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</Td>
+              <Td style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</Td>
+              <Td style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</Td>
+              <Td style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </StatTable>
     </div>
   );
 }
