@@ -9,6 +9,10 @@ import { TH_ALIGN_CLS, TH_CLS, type ThAlign } from './Th';
  *  label on a right-aligned column, after it on a left-aligned one (a centered one mirrors the slot
  *  on both sides) — so sorting never shifts the column's width or the label's alignment with the
  *  figures below it. */
+/** Where the label and its arrow sit in the button's flex row; the label's own wrapped lines align
+ *  through the button's `text-align`. */
+const JUSTIFY: Record<ThAlign, string> = { left: 'justify-start', right: 'justify-end', center: 'justify-center' };
+
 export default function SortableTh<K extends string = string>({
   label,
   title,
@@ -32,7 +36,7 @@ export default function SortableTh<K extends string = string>({
 }) {
   const active = state.col === sortKey;
   const arrow = (
-    <span aria-hidden className={`inline-block w-[1.2em] text-center ${active ? '' : 'invisible'}`}>
+    <span aria-hidden className={`inline-block w-[1.2em] shrink-0 text-center ${active ? '' : 'invisible'}`}>
       {state.asc ? '↑' : '↓'}
     </span>
   );
@@ -45,13 +49,13 @@ export default function SortableTh<K extends string = string>({
         type="button"
         title={title}
         onClick={() => onSort(sortKey)}
-        className={`w-full cursor-pointer select-none p-2 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
+        className={`flex w-full items-baseline ${JUSTIFY[align]} cursor-pointer select-none p-2 outline-none hover:bg-[var(--color-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] ${TH_ALIGN_CLS[align]} ${
           active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
         }`}
       >
         {align === 'right' && arrow}
-        {align === 'center' && <span aria-hidden className="inline-block w-[1.2em]" />}
-        {label}
+        {align === 'center' && <span aria-hidden className="inline-block w-[1.2em] shrink-0" />}
+        <span>{label}</span>
         {align !== 'right' && arrow}
       </button>
     </th>
