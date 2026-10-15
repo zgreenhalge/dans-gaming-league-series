@@ -75,8 +75,7 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 
 - **`.font-display`** / **`.font-mono`** — the two custom font families
 - **`.tracked`** / **`.tracked-wide`** — uppercase, letter-spaced "broadcast label" styling for
-  small section headers/eyebrows. Table header cells use the same letter-spacing (`--tracking-label`)
-  without the uppercase, through `Th`/`SortableTh` (see Table header cells)
+  small section headers/eyebrows. Table header cells are plain sans instead (see Table header cells)
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for
@@ -135,8 +134,9 @@ statistics pages, and the week/round/group scorecards:
 | **Padding** | 8px on every side, headers and body cells alike, pinned name column included. Expanded-detail (`colSpan`) panels and footer label rows are exempt. |
 
 **Table header cells.** `Th` (plain columns) and `SortableTh` (columns that sort) share one look:
-10px semibold, letter-spaced but not uppercased, 8px padding on every side, on a tinted header band
-with a bottom rule. `align="left"|"right"|"center"` aligns the label with the figures below it;
+10px semibold plain sans (no letter-spacing, not uppercased), 8px padding on every side, on a tinted
+header band with a bottom rule. A long label wraps onto a second line rather than widening its
+column; body cells never wrap, so a column is as wide as its widest figure or name. `align="left"|"right"|"center"` aligns the label with the figures below it;
 `sticky` on the first (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also
 paints the band so scrolled cells never show through).
 

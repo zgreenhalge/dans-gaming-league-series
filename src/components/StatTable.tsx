@@ -25,7 +25,7 @@ export function StatTable({
 }) {
   return (
     <div className={`${tinted ? '' : 'bg-[var(--color-bg-primary)]'} overflow-x-auto ${bare ? '' : 'border border-[var(--color-border-primary)]'} ${className}`}>
-      <table className="w-full min-w-max border-collapse">{children}</table>
+      <table className="w-full border-collapse">{children}</table>
     </div>
   );
 }
@@ -63,7 +63,7 @@ export function Td({
   return (
     <td
       {...rest}
-      className={`p-2 ${mono ? 'font-mono' : ''} text-[12px] tnum ${TH_ALIGN_CLS[align]} ${muted ? 'text-[var(--color-text-secondary)]' : ''} ${bold ? 'font-semibold' : ''} ${className}`}
+      className={`p-2 whitespace-nowrap ${mono ? 'font-mono' : ''} text-[12px] tnum ${TH_ALIGN_CLS[align]} ${muted ? 'text-[var(--color-text-secondary)]' : ''} ${bold ? 'font-semibold' : ''} ${className}`}
     />
   );
 }
@@ -77,7 +77,7 @@ export function NameTd({
   return (
     <td
       {...rest}
-      className={`p-2 font-display text-[14px] font-semibold ${sticky ? 'sticky-col' : ''} ${className}`}
+      className={`p-2 whitespace-nowrap font-display text-[14px] font-semibold ${sticky ? 'sticky-col' : ''} ${className}`}
     />
   );
 }
