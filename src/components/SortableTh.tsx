@@ -5,10 +5,8 @@ import { TH_ALIGN_CLS, TH_CLS, type ThAlign } from './Th';
 
 /** Clickable column header in `Th`'s style. The `button` keeps it keyboard-reachable (with a focus
  *  ring), `aria-sort` tells assistive tech which column orders the table, and hovering tints it. The
- *  sort arrow has its slot reserved on the side away from the cell's alignment edge — before the
- *  label on a right-aligned column, after it on a left-aligned one (a centered one mirrors the slot
- *  on both sides) — so sorting never shifts the column's width or the label's alignment with the
- *  figures below it. */
+ *  sort arrow has its slot reserved after the label (a centered column mirrors the slot before it),
+ *  so sorting never shifts the column's width or the label's position. */
 /** Where the label and its arrow sit in the button's flex row; the label's own wrapped lines align
  *  through the button's `text-align`. */
 const JUSTIFY: Record<ThAlign, string> = { left: 'justify-start', right: 'justify-end', center: 'justify-center' };
@@ -53,10 +51,9 @@ export default function SortableTh<K extends string = string>({
           active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
         }`}
       >
-        {align === 'right' && arrow}
         {align === 'center' && <span aria-hidden className="inline-block w-[1.2em] shrink-0" />}
         <span>{label}</span>
-        {align !== 'right' && arrow}
+        {arrow}
       </button>
     </th>
   );

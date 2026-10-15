@@ -55,10 +55,10 @@ describe('SortableTh', () => {
     expect(slot()).toHaveTextContent('↓');
   });
 
-  test('the slot sits away from the alignment edge: before the label when right-aligned, after when left-aligned', () => {
+  test('the slot sits after the label whatever the alignment', () => {
     const order = (container: HTMLElement) => Array.from(container.querySelector('button')!.childNodes).map((n) => n.textContent);
     const right = inRow(<SortableTh label="ADR" sortKey="adr" state={{ col: 'adr', asc: true }} onSort={() => {}} align="right" />);
-    expect(order(right.container)).toEqual(['↑', 'ADR']);
+    expect(order(right.container)).toEqual(['ADR', '↑']);
     right.unmount();
     const left = inRow(<SortableTh label="Player" sortKey="name" state={{ col: 'name', asc: true }} onSort={() => {}} />);
     expect(order(left.container)).toEqual(['Player', '↑']);
