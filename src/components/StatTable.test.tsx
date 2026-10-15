@@ -56,7 +56,7 @@ describe('StatTable pieces', () => {
 
   test('a compact Th is the unbanded small label', () => {
     render(<table><thead><tr><Th compact align="right">K</Th></tr></thead></table>);
-    const cell = screen.getByText('K');
+    const cell = screen.getByRole('columnheader');
     expect(cell.className).toContain('text-[9px]');
     expect(cell.className).not.toContain('bg-[var(--color-bg-secondary)]');
   });

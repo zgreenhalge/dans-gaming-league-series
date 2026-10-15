@@ -135,8 +135,8 @@ statistics pages, and the week/round/group scorecards:
 
 **Table header cells.** `Th` (plain columns) and `SortableTh` (columns that sort) share one look:
 10px semibold plain sans (no letter-spacing, not uppercased), 8px padding on every side, on a tinted
-header band with a bottom rule. A long label wraps onto a second line rather than widening its
-column; body cells never wrap, so a column is as wide as its widest figure or name. `align="left"|"right"|"center"` aligns the label with the figures below it;
+header band with a bottom rule. A long label wraps onto a second line at its spaces only (never inside a
+hyphenated or slashed word) rather than widening its column; body cells never wrap, so a column is as wide as its widest figure or name. `align="left"|"right"|"center"` aligns the label with the figures below it;
 `sticky` on the first (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also
 paints the band so scrolled cells never show through).
 

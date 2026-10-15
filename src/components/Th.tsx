@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+
 // The shared stat-table header cell. `Th` is the plain (non-sortable) one; `SortableTh` (its own
 // file) is the clickable one, and the two read identically side by side: 10px semibold plain sans
 // (no letter-spacing, not uppercased), 8px padding on every side, on a tinted header band with a
@@ -17,6 +19,18 @@ export type ThAlign = 'left' | 'right' | 'center';
 const TH_COMPACT_CLS = 'tracked text-[9px] font-semibold leading-normal px-2 pb-1 whitespace-nowrap';
 
 export const TH_ALIGN_CLS: Record<ThAlign, string> = { left: 'text-left', right: 'text-right', center: 'text-center' };
+
+/** A text label that wraps only at its spaces: each word is unbreakable, so "Counter-Strafe %" or
+ *  "Dmg/K" never splits at a hyphen or slash. Non-text labels pass through. */
+export function labelWords(label: React.ReactNode): React.ReactNode {
+  if (typeof label !== 'string') return label;
+  return label.split(' ').map((word, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' '}
+      <span className="whitespace-nowrap">{word}</span>
+    </Fragment>
+  ));
+}
 
 export default function Th({
   children,
@@ -41,7 +55,7 @@ export default function Th({
       title={title}
       className={`${compact ? TH_COMPACT_CLS : `${TH_CLS} p-2`} ${TH_ALIGN_CLS[align]} text-[var(--color-text-secondary)] ${sticky ? 'sticky-col' : ''} ${className}`}
     >
-      {children}
+      {labelWords(children)}
     </th>
   );
 }

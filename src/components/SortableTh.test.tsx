@@ -70,3 +70,14 @@ describe('Th', () => {
     expect(cell).not.toHaveClass('uppercase');
   });
 });
+
+describe('header labels wrap only at spaces', () => {
+  test('each word is unbreakable, with a plain space between words', () => {
+    inRow(<Th>Counter-Strafe %</Th>);
+    const cell = screen.getByRole('columnheader');
+    const words = Array.from(cell.querySelectorAll('span'));
+    expect(words.map((w) => w.textContent)).toEqual(['Counter-Strafe', '%']);
+    words.forEach((w) => expect(w).toHaveClass('whitespace-nowrap'));
+    expect(cell.textContent).toBe('Counter-Strafe %');
+  });
+});

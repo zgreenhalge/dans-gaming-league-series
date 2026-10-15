@@ -1,7 +1,7 @@
 'use client';
 
 import type { SortState } from './useSortState';
-import { TH_ALIGN_CLS, TH_CLS, type ThAlign } from './Th';
+import { TH_ALIGN_CLS, TH_CLS, labelWords, type ThAlign } from './Th';
 
 /** Where the label and its arrow sit in the button's flex row; the label's own wrapped lines align
  *  through the button's `text-align`. */
@@ -51,7 +51,7 @@ export default function SortableTh<K extends string = string>({
           active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
         }`}
       >
-        <span>{label}</span>
+        <span>{labelWords(label)}</span>
         {arrow}
       </button>
     </th>
