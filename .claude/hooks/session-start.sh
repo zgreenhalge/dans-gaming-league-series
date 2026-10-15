@@ -140,6 +140,20 @@ export_local_env() {
   return 0
 }
 
+# --- 6. Clear connection values that no running stack backs ------------------------------------
+
+# $CLAUDE_ENV_FILE can already hold the exports from an earlier session on this checkout. When this
+# session has no confirmed-up stack, those values would point at a port nothing listens on, and
+# `src/lib/dev-fallback-supabase.ts` only serves fixture data when the variables are unset. Appending
+# `unset` lines makes the later lines win over any earlier export.
+clear_local_env() {
+  if [ -z "${CLAUDE_ENV_FILE:-}" ]; then
+    return 0
+  fi
+  echo "unset NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY" >> "$CLAUDE_ENV_FILE"
+  log "Cleared any stale Supabase connection env vars so build/dev use fixture data."
+}
+
 # --- Run ---------------------------------------------------------------------------------------
 
 NO_LOCAL_STACK_MSG="No local Supabase stack this session — npm run build/dev/test will use src/lib/dev-fallback-supabase.ts's in-memory fixture data instead. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) for a real connection."
@@ -152,11 +166,13 @@ if has_real_env_local; then
 fi
 
 if ! docker_available; then
+  clear_local_env
   log "$NO_LOCAL_STACK_MSG"
   exit 0
 fi
 
 if ! start_local_supabase; then
+  clear_local_env
   log "$NO_LOCAL_STACK_MSG"
   exit 0
 fi
