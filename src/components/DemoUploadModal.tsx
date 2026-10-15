@@ -611,7 +611,7 @@ export default function DemoUploadModal({
                                   key={p.player_id}
                                   className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
                                 >
-                                  <td className="pl-3 pr-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
+                                  <td className="px-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
                                     {p.player_name}
                                   </td>
                                   <td className="px-2 py-1.5 text-right">

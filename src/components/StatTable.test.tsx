@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { StatTable, Tr, Td, NameTd, PlayerCell } from './StatTable';
+import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell } from './StatTable';
 import Th from './Th';
 
 describe('StatTable pieces', () => {
@@ -59,5 +59,28 @@ describe('StatTable pieces', () => {
     const cell = screen.getByRole('columnheader');
     expect(cell.className).toContain('text-[9px]');
     expect(cell.className).not.toContain('bg-[var(--color-bg-secondary)]');
+  });
+
+  test('the frame is a bordered page-background card; bare drops the border and tinted leaves the background to className', () => {
+    const frameOf = (node: React.ReactElement) => {
+      const { container, unmount } = render(node);
+      const cls = (container.firstElementChild as HTMLElement).className;
+      unmount();
+      return cls;
+    };
+    const rows = <tbody><tr><td>x</td></tr></tbody>;
+    const framed = frameOf(<StatTable>{rows}</StatTable>);
+    expect(framed).toContain('border-[var(--color-border-primary)]');
+    expect(framed).toContain('bg-[var(--color-bg-primary)]');
+    expect(frameOf(<StatTable bare>{rows}</StatTable>)).not.toContain('border-[var(--color-border-primary)]');
+    const tinted = frameOf(<StatTable tinted className="faction-tint">{rows}</StatTable>);
+    expect(tinted).not.toContain('bg-[var(--color-bg-primary)]');
+    expect(tinted).toContain('faction-tint');
+  });
+
+  test('MapCell links to the map page and shows the stored name in sentence case', () => {
+    render(<table><tbody><tr><MapCell map="dust2" /></tr></tbody></table>);
+    const link = screen.getByRole('link', { name: 'Dust2' });
+    expect(link).toHaveAttribute('href', '/maps/dust2');
   });
 });

@@ -10,7 +10,7 @@ import { Fragment } from 'react';
 
 /** Typography, tint and rule shared by `Th` and `SortableTh`. */
 export const TH_CLS =
-  'bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-primary)] text-[10px] font-semibold leading-normal';
+  'bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-primary)] text-[10px] font-semibold leading-normal align-bottom';
 
 /** Text alignment — left for a row's label column, right for numeric columns, center for a badge. */
 export type ThAlign = 'left' | 'right' | 'center';

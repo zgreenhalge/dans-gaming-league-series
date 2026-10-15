@@ -1,5 +1,7 @@
+'use client';
+
 import Link from 'next/link';
-import { mapSlug } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
 import PlayerAvatar from './PlayerAvatar';
 import type { ThAlign } from './Th';
 import { TH_ALIGN_CLS } from './Th';
@@ -100,13 +102,13 @@ export function PlayerCell({ id, name, avatarUrl }: { id: number; name: string; 
   );
 }
 
-/** A name cell for a map, linking to the map's page. `label` overrides the text shown (default: the
- *  map name as stored). */
-export function MapCell({ map, label }: { map: string; label?: string }) {
+/** A name cell for a map, linking to the map's page. The stored name is user-typed, so it shows in
+ *  sentence case. */
+export function MapCell({ map }: { map: string }) {
   return (
     <NameTd>
       <Link href={`/maps/${mapSlug(map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
-        {label ?? map}
+        {toSentenceCase(map)}
       </Link>
     </NameTd>
   );

@@ -270,7 +270,6 @@ function RatingProjectionTable({
             >
               <NameTd
                 sticky
-                className="whitespace-nowrap"
                 style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
               >
                 Current

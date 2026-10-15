@@ -196,19 +196,19 @@ function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: 
         <tbody>
           {rows.map((r) => (
             <tr key={r.map} className="border-t border-[var(--color-border-tertiary)]">
-              <td className="py-1 font-display font-semibold truncate">
+              <td className="px-2 py-1 font-display font-semibold truncate">
                 <Link href={`/maps/${mapSlug(r.map)}`} className="hover:underline capitalize">{toSentenceCase(r.map)}</Link>
               </td>
-              <td className="py-1 text-right font-mono tnum">{r.games}</td>
-              <td className="py-1 text-right font-mono tnum">{r.wins}–{r.losses}</td>
-              <td className="py-1 text-right font-mono tnum">{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</td>
+              <td className="px-2 py-1 text-right font-mono tnum">{r.games}</td>
+              <td className="px-2 py-1 text-right font-mono tnum">{r.wins}–{r.losses}</td>
+              <td className="px-2 py-1 text-right font-mono tnum">{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</td>
               {aLabel ? (
                 <>
-                  <td className="py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
-                  <td className="py-1 text-right font-mono tnum">{r.bAdr.toFixed(1)}</td>
+                  <td className="px-2 py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+                  <td className="px-2 py-1 text-right font-mono tnum">{r.bAdr.toFixed(1)}</td>
                 </>
               ) : (
-                <td className="py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+                <td className="px-2 py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
               )}
             </tr>
           ))}

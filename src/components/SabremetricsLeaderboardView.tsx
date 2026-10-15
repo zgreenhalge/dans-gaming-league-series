@@ -179,7 +179,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
             const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
             const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
             return (
-              <Tr key={a.player_id} clickable>
+              <Tr key={a.player_id} clickable={!singlePlayer}>
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                 <Td>{pct(a.kast_rounds, a.rounds_played)}</Td>
                 <Td>{a.two_k_rounds}</Td>
@@ -235,7 +235,7 @@ function OpeningDuelsTable({ aggregated, singlePlayer, showHeading = true }: { a
           {sorted.map((a) => {
             const totalDuels = a.opening_kills + a.opening_deaths;
             return (
-              <Tr key={a.player_id} clickable>
+              <Tr key={a.player_id} clickable={!singlePlayer}>
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                 <Td><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></Td>
                 <Td>{pct(totalDuels, a.rounds_played)}</Td>
@@ -298,7 +298,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
         </thead>
         <tbody>
           {sorted.map((a) => (
-            <Tr key={a.player_id} clickable>
+            <Tr key={a.player_id} clickable={!singlePlayer}>
               {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
               <Td>{a.shots_fired}</Td>
               <Td>{pct(a.shots_hit, a.shots_fired)}</Td>
@@ -538,7 +538,7 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <Tr key={r.player_id} clickable>
+            <Tr key={r.player_id} clickable={!singlePlayer}>
               {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
               <NameTd><WeaponLabel weapon={r.weapon} label={r.label} /></NameTd>
               <Td>{r.kills}</Td>
@@ -706,7 +706,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <Tr key={r.player_id} clickable>
+            <Tr key={r.player_id} clickable={!singlePlayer}>
               {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
               <Td>{r.rounds_played}</Td>
               <Td>{r.rounds_won}-{r.rounds_played - r.rounds_won}</Td>
@@ -790,7 +790,7 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <Tr key={r.player_id} clickable>
+            <Tr key={r.player_id} clickable={!singlePlayer}>
               {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
               <Td>{r.flair.noscopeKills}</Td>
               <Td>{r.flair.wallbangKills}</Td>
@@ -873,7 +873,7 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
         </thead>
         <tbody>
           {sorted.map((a) => (
-            <Tr key={a.player_id} clickable>
+            <Tr key={a.player_id} clickable={!singlePlayer}>
               {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
               <Td>{a.trade_kill_opportunities}</Td>
               <Td>{a.trade_kill_attempts}</Td>
@@ -965,7 +965,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
         <tbody>
           {sorted.map((a) => {
             return (
-              <Tr key={a.player_id} clickable>
+              <Tr key={a.player_id} clickable={!singlePlayer}>
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                 <Td>{a.utility_damage}</Td>
                 <Td>{fmtNum(a.teamflash_duration, 1)}</Td>

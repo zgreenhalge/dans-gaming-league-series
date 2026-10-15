@@ -175,7 +175,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                 const stats = displayStats.get(map.slug);
                 return (
                   <Tr key={map.slug} clickable>
-                    <MapCell map={map.name} label={toSentenceCase(map.name)} />
+                    <MapCell map={map.name} />
                     <Td muted>{stats?.seasonsPlayed || '—'}</Td>
                     <Td muted>{stats?.pickCount || '—'}</Td>
                     <Td muted>{stats?.banCount || '—'}</Td>

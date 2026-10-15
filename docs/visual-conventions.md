@@ -129,7 +129,7 @@ statistics pages, and the week/round/group scorecards:
 | **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class. |
 | **`Tr`** (row) | `--color-border-tertiary` divider, none under the last row (the card's border closes the table), on an opaque page background (a pinned cell inherits it). `clickable` adds the `lift-row` highlight; rows that aren't clickable don't highlight. |
 | **`NameTd`** (name cell) | Display font, 14px semibold. `sticky` pins it. |
-| **`PlayerCell`** (pinned player name) | A `NameTd sticky` linking to `/players/<id>`; `avatarUrl` adds the avatar. Use it wherever a stat table pins a player name. |
+| **`PlayerCell`** (pinned player name) | A `NameTd sticky` linking to `/players/<id>`; `avatarUrl` adds the avatar. Use it for a plain pinned player name; a row that adds a badge or the "me" highlight (`PlayerName`) builds its own `NameTd sticky` cell. `MapCell` is the map-name equivalent. |
 | **`Td`** (figure cell) | Mono 12px with tabular digits, right-aligned (`align` overrides). `muted` greys a secondary figure, `bold` emphasises a headline one, `mono={false}` is the escape hatch for a column of text. |
 | **Padding** | 8px on every side, headers and body cells alike, pinned name column included. Expanded-detail (`colSpan`) panels and footer label rows are exempt. |
 
@@ -151,7 +151,8 @@ state passes `state={{ col, asc }}`.
 **Tables that keep their own spacing.**
 - Compact tables inside cards (the player page's trophy stat strip, a matchup's per-map breakdown)
   take their headers from `Th compact` — the small uppercase label with no band or rule — and keep
-  their own compact body cells.
+  their own compact body padding (the trophy strip's cells are `Td`; the per-map breakdown's are
+  hand-written).
 - The scouting report's per-map cards (`ScoutingReport`) keep their own fixed-layout table inside
   the card, with summary rows for the players' and the league's averages.
 - The stat-entry table in the demo upload modal uses `Th` for its headers and keeps its own 4–6px
