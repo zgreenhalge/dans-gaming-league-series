@@ -271,11 +271,11 @@ export async function resolveMapWorkshopId(
 ): Promise<string | null> {
   const { data: match } = await supabaseAdmin
     .from('matches')
-    .select('shirts_pick, picked_map')
+    .select('shirts_pick, skins_pick')
     .eq('id', matchId)
     .maybeSingle();
-  const name = (match as { shirts_pick: string | null; picked_map: string | null } | null);
-  const mapName = name?.shirts_pick ?? name?.picked_map;
+  const name = (match as { shirts_pick: string | null; skins_pick: string | null } | null);
+  const mapName = name?.shirts_pick ?? name?.skins_pick;
   if (!mapName) return null;
   const { data: mapRow } = await supabaseAdmin
     .from('maps')

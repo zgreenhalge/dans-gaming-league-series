@@ -29,7 +29,7 @@ function mapFor(m: AdminMatchRow): string | null {
  * is token-AND (every whitespace-separated term must appear), so partial shorthand narrows the list.
  */
 function searchText(m: AdminMatchRow): string {
-  const parts = [m.label, mapFor(m), m.match.picked_map, m.match.shirts_pick, m.match.final_score];
+  const parts = [m.label, mapFor(m), m.match.skins_pick, m.match.shirts_pick, m.match.final_score];
   if (m.seasonNumber != null) parts.push(`s${m.seasonNumber}${m.isGauntlet ? 'g' : ''}`);
   if (m.weekNumber != null) {
     parts.push(`w${m.weekNumber}`);

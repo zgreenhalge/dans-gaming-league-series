@@ -22,7 +22,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   skins: { player_id: number; player_name: string }[];
   shirts_stats: RosterStat[];
   skins_stats: RosterStat[];
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   shirts_ban: string | null;
@@ -240,7 +240,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         skins: roster.skins,
         shirts_stats: roster.shirts_stats ?? [],
         skins_stats: roster.skins_stats ?? [],
-        picked_map: m.picked_map,
+        skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
         shirts_ban: m.shirts_ban,

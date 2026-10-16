@@ -88,7 +88,7 @@
           "is_win": false
         }
       ],
-      "picked_map": "Foroglio",
+      "skins_pick": "Foroglio",
       "shirts_pick": "Foroglio",
       "skins_starting_side": "T",
       "shirts_ban": null,
@@ -163,7 +163,7 @@
           "is_win": false
         }
       ],
-      "picked_map": "Foroglio",
+      "skins_pick": "Foroglio",
       "shirts_pick": "Foroglio",
       "skins_starting_side": "CT",
       "shirts_ban": "Vertigo",

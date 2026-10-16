@@ -40,7 +40,7 @@ export interface MapMatchRow {
   final_score: string | null;
   shirts_stats: MapPlayerStat[];
   skins_stats: MapPlayerStat[];
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   shirts_ban: string | null;
@@ -75,7 +75,7 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
   for (const s of seasons) seasonById.set(s.id, s);
 
   const playedMatches = matches.filter(
-    (m) => isPlayedScore(m.final_score) && (m.shirts_pick != null || m.picked_map != null),
+    (m) => isPlayedScore(m.final_score) && (m.shirts_pick != null || m.skins_pick != null),
   );
   if (playedMatches.length === 0) return [];
 
@@ -126,7 +126,7 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
         final_score: m.final_score,
         shirts_stats: roster.shirts,
         skins_stats: roster.skins,
-        picked_map: m.picked_map,
+        skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
         shirts_ban: m.shirts_ban,
@@ -145,7 +145,7 @@ type RawMatch = {
   match_number: number;
   final_score: string | null;
   shirts_pick: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_ban: string | null;
   shirts_ban2: string | null;
   skins_ban1: string | null;
@@ -168,7 +168,7 @@ const fetchMapRawData = cache(async (): Promise<{
   const [matches, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
-        asPage(getAdminClient().from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
+        asPage(getAdminClient().from('matches').select('id, week_id, match_number, final_score, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
       ),
       getWeekLookup(),
       getAdminClient().from('seasons').select('id, name, is_gauntlet, map_pool'),
@@ -184,7 +184,7 @@ const fetchMapRawData = cache(async (): Promise<{
 function buildCanonicalNames(matches: RawMatch[], seasons: RawSeason[]): Map<string, string> {
   const canonical = new Map<string, string>();
   for (const m of matches) {
-    for (const v of [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]) {
+    for (const v of [m.shirts_pick, m.skins_pick, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]) {
       if (!v) continue;
       const t = v.trim();
       if (t && !canonical.has(t.toLowerCase())) canonical.set(t.toLowerCase(), t);
@@ -233,7 +233,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
     const season = weekToSeason.get(m.week_id);
     const { picked, banned, noPicked } = classifyMatchVeto({
       final_score: m.final_score,
-      picked_map: m.picked_map,
+      skins_pick: m.skins_pick,
       shirts_pick: m.shirts_pick,
       shirts_ban: m.shirts_ban,
       shirts_ban2: m.shirts_ban2,
@@ -392,7 +392,7 @@ export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null
     const season = sid != null ? seasonById.get(sid) : undefined;
     const { banned, noPicked } = classifyMatchVeto({
       final_score: m.final_score,
-      picked_map: m.picked_map,
+      skins_pick: m.skins_pick,
       shirts_pick: m.shirts_pick,
       shirts_ban: m.shirts_ban,
       shirts_ban2: m.shirts_ban2,
@@ -415,7 +415,7 @@ export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null
   for (const m of matches) {
     const sid = weekToSeasonId.get(m.week_id);
     if (sid == null) continue;
-    const vetoFields = [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
+    const vetoFields = [m.shirts_pick, m.skins_pick, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
     if (vetoFields.some((v) => v && v.trim().toLowerCase() === nameLower)) {
       seasonIdsSeen.add(sid);
     }
@@ -481,7 +481,7 @@ export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null
         final_score: m.final_score,
         shirts_stats: roster.shirts,
         skins_stats: roster.skins,
-        picked_map: m.picked_map,
+        skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
         shirts_ban: m.shirts_ban,
@@ -733,7 +733,7 @@ export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Pro
 /**
  * Match ids played on a given map (case-insensitive), for the match-page scouting
  * report's Map Intel heatmap. The played map is the pick (`shirts_pick`) falling back
- * to `picked_map` — the same rule `getMapDetail` uses. Only played matches qualify;
+ * to `skins_pick` — the same rule `getMapDetail` uses. Only played matches qualify;
  * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
  *
  * Optional `client` per docs/recipes.md's query-helper recipe.
@@ -742,9 +742,9 @@ export async function getMatchIdsForMap(mapName: string, client?: SupabaseClient
   const db = client ?? getAdminClient();
   const nameLower = mapName.trim().toLowerCase();
   if (!nameLower) return [];
-  type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
+  type Row = { id: number; shirts_pick: string | null; skins_pick: string | null; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    db.from('matches').select('id, shirts_pick, picked_map, final_score').range(from, to),
+    db.from('matches').select('id, shirts_pick, skins_pick, final_score').range(from, to),
   );
   return rows
     .filter(

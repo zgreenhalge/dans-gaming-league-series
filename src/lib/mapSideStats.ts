@@ -11,7 +11,7 @@ import { resolveSide } from './parsers/roundSides';
  */
 export interface VetoFields {
   final_score: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   shirts_ban?: string | null;
   shirts_ban2?: string | null;
@@ -23,7 +23,7 @@ export interface VetoFields {
 }
 
 export interface MapVetoOutcome {
-  /** The effective played map(s) — `shirts_pick ?? picked_map`, trimmed, original casing. */
+  /** The effective played map(s) — `shirts_pick ?? skins_pick`, trimmed, original casing. */
   picked: string[];
   /** Every map banned in this match's veto, trimmed, original casing. */
   banned: string[];
@@ -37,7 +37,7 @@ export function classifyMatchVeto(m: VetoFields): MapVetoOutcome {
   if (!isPlayedScore(m.final_score)) return { picked: [], banned: [], noPicked: [] };
 
   const picked = Array.from(
-    new Set([m.shirts_pick, m.picked_map].filter((v): v is string => !!v).map((v) => v.trim())),
+    new Set([m.shirts_pick, m.skins_pick].filter((v): v is string => !!v).map((v) => v.trim())),
   );
   const banned = [m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]
     .filter((v): v is string => !!v)
@@ -199,7 +199,7 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
         else b.tLosses++;
       }
 
-      // shirts picked when shirts_pick is set; otherwise skins picked via picked_map
+      // shirts picked when shirts_pick is set; otherwise skins picked via skins_pick
       const shirtsPicked = m.shirts_pick != null;
       const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
       if (getWinningFaction(m) === teamThatPicked) b.pickedAndWon++;
@@ -388,7 +388,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
       if (m.is_win) b.wins++;
       b.totalRounds += m.rounds_played;
 
-      const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.picked_map != null;
+      const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.skins_pick != null;
       if (playerPicked) b.picked++;
 
       if (m.skins_starting_side) {
@@ -456,7 +456,7 @@ export function aggregatePlayerSideStats(
       bucket.roundsPlayed += m.rounds_played;
     }
 
-    const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.picked_map != null : m.shirts_pick != null;
+    const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.skins_pick != null : m.shirts_pick != null;
     if (playerTeamChoseSide) bucket.numTimesPicked++;
   }
 

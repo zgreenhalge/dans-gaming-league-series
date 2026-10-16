@@ -62,7 +62,7 @@ export interface GauntletMatch {
   match_number: number;
   final_score: string | null;
   scheduled_at: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   is_feature_match: boolean;

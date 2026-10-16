@@ -451,7 +451,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
-  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null; week_id: number | null; match_number: number };
+  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; skins_pick: string | null; week_id: number | null; match_number: number };
   type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
 
   const [statRows, players, leagueStatRows, leagueMatchRows, weekLookup] = await Promise.all([
@@ -473,7 +473,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     // redundant `matches` round trip for the same rows (every id in `matchIds` is already present
     // here, since this is every match in the league).
     fetchAllPages<LeagueMatchRow>((from, to) =>
-      getAdminClient().from('matches').select('id, final_score, shirts_pick, picked_map, week_id, match_number').range(from, to),
+      getAdminClient().from('matches').select('id, final_score, shirts_pick, skins_pick, week_id, match_number').range(from, to),
     ),
     getWeekLookup(),
   ]);

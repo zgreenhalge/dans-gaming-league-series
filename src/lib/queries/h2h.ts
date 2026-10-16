@@ -168,7 +168,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
 
   const { data: matches, error: mErr } = await getAdminClient()
     .from('matches')
-    .select('id, week_id, match_number, final_score, shirts_pick, picked_map, skins_starting_side')
+    .select('id, week_id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side')
     .in('week_id', [...weekLookup.keys()]);
   if (mErr) throw mErr;
 
@@ -178,11 +178,11 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     match_number: number;
     final_score: string | null;
     shirts_pick: string | null;
-    picked_map: string | null;
+    skins_pick: string | null;
     skins_starting_side: 'CT' | 'T' | null;
   };
   // Some seasons recorded the played map under `shirts_pick` rather than
-  // `picked_map` — fall back the same way the rest of the codebase does
+  // `skins_pick` — fall back the same way the rest of the codebase does
   // (see `getMatchById`, `getCareerMatchHistory`, etc).
   const mapFor = (m: MatchRow): string | null => effectivePickedMap(m);
   const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
@@ -231,7 +231,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
       seasonNumber: seasonNumberById.get(seasonId) ?? null,
       isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,
       map: mapFor(m),
-      pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
+      pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
       startingSide: m.skins_starting_side,
       finalScore: m.final_score,
       roster: roster.map((r) => ({

@@ -212,7 +212,7 @@ export interface UpcomingGameRow {
   id: number;
   match_number: number;
   scheduled_at: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   is_feature_match: boolean;
   shirts: { player_id: number; player_name: string }[];

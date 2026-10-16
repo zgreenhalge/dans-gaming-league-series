@@ -692,7 +692,7 @@ export type Database = {
           is_feature_match: boolean
           is_playoff_game: boolean | null
           match_number: number
-          picked_map: string | null
+          skins_pick: string | null
           pre_match_win_prob: number | null
           pre_match_win_prob_formula_version: string | null
           recording_url: string | null
@@ -713,7 +713,7 @@ export type Database = {
           is_feature_match?: boolean
           is_playoff_game?: boolean | null
           match_number: number
-          picked_map?: string | null
+          skins_pick?: string | null
           pre_match_win_prob?: number | null
           pre_match_win_prob_formula_version?: string | null
           recording_url?: string | null
@@ -734,7 +734,7 @@ export type Database = {
           is_feature_match?: boolean
           is_playoff_game?: boolean | null
           match_number?: number
-          picked_map?: string | null
+          skins_pick?: string | null
           pre_match_win_prob?: number | null
           pre_match_win_prob_formula_version?: string | null
           recording_url?: string | null

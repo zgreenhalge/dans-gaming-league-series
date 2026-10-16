@@ -36,7 +36,7 @@ const PLAYED_WEEK = {
       week_id: 1,
       match_number: 1,
       final_score: '13-8',
-      picked_map: null,
+      skins_pick: null,
       shirts_ban: null,
       shirts_ban2: null,
       skins_ban1: null,

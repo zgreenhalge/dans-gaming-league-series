@@ -95,13 +95,13 @@ export async function getMatchMeta(matchId: number, client?: SupabaseClient) {
     getMatchTeamNames(matchId, client),
     db
       .from('matches')
-      .select('final_score, picked_map, shirts_pick, scheduled_at')
+      .select('final_score, skins_pick, shirts_pick, scheduled_at')
       .eq('id', matchId)
       .maybeSingle(),
     getMapLookup(client),
   ]);
   if (!teams || !match) return null;
-  const m = match as Pick<Match, 'final_score' | 'picked_map' | 'shirts_pick' | 'scheduled_at'>;
+  const m = match as Pick<Match, 'final_score' | 'skins_pick' | 'shirts_pick' | 'scheduled_at'>;
   const { title, seasonName, weekMatchLabel, shirtNames, skinNames, shirtPlayers, skinPlayers } = teams;
 
   const map = effectivePickedMap(m);

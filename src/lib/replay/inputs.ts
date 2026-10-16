@@ -27,7 +27,7 @@ export async function getReplayInputs(
   const [{ data: matchRow, error: matchErr }, { data: matchStats }] = await Promise.all([
     supabaseAdmin
       .from('matches')
-      .select('id, shirts_pick, picked_map, skins_starting_side, scheduled_at, weeks(seasons(target_win_rounds, is_gauntlet))')
+      .select('id, shirts_pick, skins_pick, skins_starting_side, scheduled_at, weeks(seasons(target_win_rounds, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
     supabaseAdmin
@@ -41,7 +41,7 @@ export async function getReplayInputs(
 
   const match = matchRow as {
     shirts_pick: string | null;
-    picked_map: string | null;
+    skins_pick: string | null;
     skins_starting_side: Side | null;
     scheduled_at: string | null;
     weeks: unknown;
