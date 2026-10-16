@@ -23,13 +23,13 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
     <div className="flex items-baseline justify-center gap-5 flex-wrap">
       <div className={`${factionClass(shirtsF)} flex items-baseline gap-3`}>
         <span className="font-display text-[24px] font-bold faction-fg">Shirts</span>
-        <span className="display-numeral text-[64px] text-white tnum">
+        <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
           {shirts}
         </span>
       </div>
-      <span className="font-mono text-[24px] text-white/60">—</span>
+      <span className="font-mono text-[24px] text-[var(--color-text-secondary)]">—</span>
       <div className={`${factionClass(skinsF)} flex items-baseline gap-3`}>
-        <span className="display-numeral text-[64px] text-white tnum">
+        <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
           {skins}
         </span>
         <span className="font-display text-[24px] font-bold faction-fg">Skins</span>
@@ -38,26 +38,20 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
   );
 }
 
-/** The dark panel the score sits in, so the numerals and faction names stay readable over any map
- *  image. */
-function ScorePlaque({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-5 mx-auto w-fit max-w-full flex flex-col items-center gap-2 rounded-md bg-black/65 px-6 py-3 ring-1 ring-white/10 backdrop-blur-sm">
-      {children}
-    </div>
-  );
-}
-
+/** The score's category (`scoreCategory()`), linking to the map page's score distribution when the
+ *  match has a map — the same bordered link style as the header's other map-backdrop actions. */
 function ScoreCategoryTag({ shirts, skins, mapHref }: { shirts: number; skins: number; mapHref: string | null }) {
   const { label } = SCORE_CATEGORY_INFO[scoreCategory(shirts, skins)];
-  const cls = 'border-t border-white/20 pt-2 w-full text-center font-display text-[15px] font-semibold uppercase tracking-wider';
-  if (!mapHref) return <div className={`${cls} text-white/80`}>{label}</div>;
+  const cls = 'map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)]';
+  if (!mapHref) return <span className={cls}>{label}</span>;
   return (
-    <div className={cls}>
-      <Link href={mapHref} title="See this map's score distribution" className="text-white hover:underline underline-offset-4">
-        {label} <span aria-hidden>↗</span>
-      </Link>
-    </div>
+    <Link
+      href={mapHref}
+      title="See this map's score distribution"
+      className={`${cls} hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors`}
+    >
+      {label} ↗
+    </Link>
   );
 }
 
@@ -125,22 +119,24 @@ export default function MatchScoreHero({
   if (played) {
     if (!finalScore) return null;
     return (
-      <ScorePlaque>
-        <ScoreDisplay shirts={finalScore.shirts} skins={finalScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
+      <div className="mt-5 flex flex-col items-center gap-3">
+        <div className="map-text-scrim">
+          <ScoreDisplay shirts={finalScore.shirts} skins={finalScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
+        </div>
         <ScoreCategoryTag shirts={finalScore.shirts} skins={finalScore.skins} mapHref={mapHref} />
-      </ScorePlaque>
+      </div>
     );
   }
 
   if (!liveScore) return null;
 
   return (
-    <ScorePlaque>
+    <div className="mt-5 flex flex-col items-center gap-2">
       <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-accent-green-fg)]">
         <LiveDot />
         Live
       </div>
       <ScoreDisplay shirts={liveScore.shirts} skins={liveScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
-    </ScorePlaque>
+    </div>
   );
 }

@@ -116,3 +116,21 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     expect(screen.getByRole('tab', { name: 'Sides' })).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+describe('SabremetricsLeaderboardView — Utility tab in a team view', () => {
+  test('each team gets its header once, then a titled, separately tinted table per section', () => {
+    nextNavigationMock.setSearchParams('sub=utility');
+    const { container } = renderWithUrlState(
+      <SabremetricsLeaderboardView
+        rows={[row()]}
+        teamGroups={[{ key: 'shirts', side: 'CT', playerIds: new Set([1]), header: <div>Team header</div> }]}
+      />,
+    );
+    expect(screen.getAllByText('Team header')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Flashes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Grenades & Objectives' })).toBeInTheDocument();
+    // One tint per table, and the titles sit outside them.
+    expect(container.querySelectorAll('.faction-tint')).toHaveLength(2);
+    expect(container.querySelectorAll('.faction-tint h3')).toHaveLength(0);
+  });
+});

@@ -950,17 +950,21 @@ const UTILITY_SECTIONS = [
   { heading: 'Grenades & Objectives', columns: GRENADE_COLUMNS },
 ];
 
-/** One table per `UTILITY_SECTIONS` entry, each titled and (in a match's team view) tinted on its
- *  own so the gap between them stays untinted. */
+/** One titled table per `UTILITY_SECTIONS` entry. */
 function UtilityTable({ aggregated, singlePlayer, teamGroups }: { aggregated: AggregatedSab[]; singlePlayer: boolean; teamGroups?: TeamGroup[] }) {
   return (
-    <div className="my-6 space-y-6">
-      {UTILITY_SECTIONS.map(({ heading, columns }) => (
-        <GroupedOrFlat key={heading} aggregated={aggregated} groups={teamGroups} heading={heading} render={(agg) => (
-          <UtilityColumnsTable columns={columns} aggregated={agg} singlePlayer={singlePlayer} />
-        )} />
-      ))}
-    </div>
+    <GroupedOrFlat aggregated={aggregated} groups={teamGroups} tintSelf render={(agg, side) => (
+      <div className="my-6 space-y-6">
+        {UTILITY_SECTIONS.map(({ heading, columns }) => (
+          <div key={heading}>
+            <h3 className="text-sm font-semibold mb-3">{heading}</h3>
+            <FactionTint side={side}>
+              <UtilityColumnsTable columns={columns} aggregated={agg} singlePlayer={singlePlayer} />
+            </FactionTint>
+          </div>
+        ))}
+      </div>
+    )} />
   );
 }
 
@@ -1370,35 +1374,44 @@ const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'plus', label: 'Stats Plus' },
 ];
 
-/** Renders `render(agg)` once per `groups`, filtered to that group's `playerIds` and wrapped in
- *  its `header` (typically a `<TeamHeader>`, supplied by the caller) and side tint — the
- *  match-page shape. Falls back to a single ungrouped `render(aggregated)` call for the
- *  season/career leaderboard shape, where `groups` is omitted. */
+/** The faction-tinted block a team's tables sit in (the match page's per-team Advanced Stats). With no
+ *  `side` (the season/career shape) it is a no-op. */
+function FactionTint({ side, children }: { side?: Side; children: React.ReactNode }) {
+  if (side === undefined) return <>{children}</>;
+  return (
+    <div className={`faction-tint ${factionClass(side)}`}>
+      <FactionTintContext.Provider value={side !== null}>{children}</FactionTintContext.Provider>
+    </div>
+  );
+}
+
+/** Renders `render(...)` once per team group — each under its `header`, filtered to that team's
+ *  players, and tinted as one block — or once, ungrouped, for the season/career leaderboard shape
+ *  where `groups` is omitted. A `render` that lays out several tables passes `tintSelf` and wraps
+ *  each in `<FactionTint side={side}>` itself, so only the tables are tinted and not the space
+ *  between them. */
 function GroupedOrFlat({
   aggregated,
   groups,
-  heading,
+  tintSelf = false,
   render,
 }: {
   aggregated: AggregatedSab[];
   groups?: TeamGroup[];
-  /** A title above the table (below a group's `header`), outside any faction tint. */
-  heading?: string;
-  render: (agg: AggregatedSab[]) => React.ReactNode;
+  tintSelf?: boolean;
+  render: (agg: AggregatedSab[], side?: Side) => React.ReactNode;
 }) {
-  const title = heading && <h3 className="text-sm font-semibold mb-3">{heading}</h3>;
-  if (!groups) return <div>{title}{render(aggregated)}</div>;
+  if (!groups) return <>{render(aggregated)}</>;
   return (
     <>
       {groups.map((g, i) => (
         <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
           {g.header}
-          {title}
-          <div className={`faction-tint ${factionClass(g.side)}`}>
-            <FactionTintContext.Provider value={g.side !== null}>
-              {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
-            </FactionTintContext.Provider>
-          </div>
+          {tintSelf ? (
+            render(aggregated.filter((a) => g.playerIds.has(a.player_id)), g.side)
+          ) : (
+            <FactionTint side={g.side}>{render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}</FactionTint>
+          )}
         </div>
       ))}
     </>
