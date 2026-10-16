@@ -163,7 +163,7 @@ export async function seedPlayedMatchWithSabremetrics(): Promise<TestMatch> {
       week_id: weekId,
       match_number: 1,
       final_score: `${SHIRTS_ROUNDS_WON}-${SKINS_ROUNDS_WON}`,
-      picked_map: map,
+      skins_pick: map,
       shirts_pick: map,
       skins_starting_side: 'CT',
       is_playoff_game: false,

@@ -55,7 +55,7 @@ function historyRow(overrides: Partial<PlayerHistoryRow> = {}): PlayerHistoryRow
     skins: [{ player_id: 2, player_name: 'Bob' }],
     shirts_stats: [],
     skins_stats: [],
-    picked_map: null,
+    skins_pick: null,
     shirts_pick: null,
     skins_starting_side: null,
     shirts_ban: null,

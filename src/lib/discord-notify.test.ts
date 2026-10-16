@@ -164,7 +164,7 @@ async function main() {
     assert.equal(embed.title, 'Week 1 · Match 1');
     assert.equal(embed.author.name, 'Season 5');
     assert.match(embed.description, /Match complete\*\*\n\*\*Final: 13-9/, '"Final: 13-9" is on its own line — descriptions support \\n, unlike titles');
-    // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
+    // Match 100's shirts_pick ('Foroglio') is the effective played map, not skins_pick alone.
     assert.equal(
       embed.description,
       'on Foroglio\n\n🏁 **Match complete**\n**Final: 13-9**',

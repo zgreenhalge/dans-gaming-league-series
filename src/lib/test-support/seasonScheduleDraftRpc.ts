@@ -159,7 +159,7 @@ function makeConfirm(): RpcHandler {
           match_number: match.match_number,
           is_playoff_game: false,
           final_score: null,
-          picked_map: null,
+          skins_pick: null,
           shirts_ban: null,
           shirts_ban2: null,
           skins_ban1: null,

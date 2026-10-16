@@ -27,7 +27,7 @@ import { getPlayersById } from '@/lib/queries';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
-import { isVetoComplete } from '@/lib/veto';
+import { isVetoComplete, effectivePickedMap } from '@/lib/veto';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
@@ -106,7 +106,7 @@ export default async function MatchPage({
   // season-patch step failed) — the pairing is a convention, not a DB constraint.
   const vetoComplete = isVetoComplete(match, season.is_gauntlet || match.is_playoff_game);
   const score = played ? parseScore(match.final_score) : null;
-  const map = match.shirts_pick ?? match.picked_map;
+  const map = effectivePickedMap(match);
   const mapImg = mapImageFor(map, mapLookup);
 
   const shirts = stats.filter((s) => s.faction === 'SHIRTS');

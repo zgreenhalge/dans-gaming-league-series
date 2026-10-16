@@ -3,16 +3,18 @@ import { getAdminClient } from '../supabase-admin';
 import { getWeekLookup } from './_shared';
 import { getSeasonSchedule, getSeasonWeekNav } from './schedule';
 import { getSeason, getSeasons, getSeasonScope, hubIdsBySeason, type SeasonScope } from './seasons';
-import { getSeasonLeaderboard } from './leaderboard';
+import { getSeasonStandingNames } from './leaderboard';
 import { getGauntletBracketShape, getGauntletRounds } from './gauntlet';
 import { roundHref, groupHref, weekHref } from '../crumbs';
 import {
   deriveGroupPageView,
   deriveRoundView,
+  deriveWeekSummary,
   deriveWeekView,
   type GauntletStageData,
   type GroupPageView,
   type RoundView,
+  type WeekSummary,
   type WeekView,
 } from '../stage-views';
 import type { Season } from '../types';
@@ -40,6 +42,16 @@ export async function getWeekView(hubSeasonId: number, weekId: number): Promise<
   return deriveWeekView(hubSeasonId, schedule, navWeeks, weekId);
 }
 
+/** A regular season's week on its own — the week and its scorecard, with no standings movement or
+ *  navigation, so it reads only this week's matches. Enough for the week's Open Graph image. `null`
+ *  if `weekId` isn't one of the season's weeks. */
+export async function getWeekSummary(hubSeasonId: number, weekId: number): Promise<WeekSummary | null> {
+  const row = await getWeekRow(weekId);
+  if (!row || row.season_id !== hubSeasonId) return null;
+  const [week] = await getSeasonSchedule(hubSeasonId, undefined, { onlyWeek: row.week_number });
+  return week ? deriveWeekSummary(week) : null;
+}
+
 /** Everything the gauntlet round and group pages derive from: real rounds and the full bracket shape
  *  (pending pods included). */
 export async function getGauntletStageData(gauntletSeasonId: number): Promise<GauntletStageData> {
@@ -53,8 +65,8 @@ export async function getGauntletStageData(gauntletSeasonId: number): Promise<Ga
 /** Seed number → the player currently holding it, from the regular season's standings — names an
  *  undecided "Seed 3" slot on a group that hasn't been scheduled yet. */
 export const getSeedNames = cache(async (hubSeasonId: number): Promise<Map<number, string>> => {
-  const leaderboard = await getSeasonLeaderboard(hubSeasonId);
-  return new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
+  const names = await getSeasonStandingNames(hubSeasonId);
+  return new Map(names.map((name, i) => [i + 1, name]));
 });
 
 /** The number of a gauntlet's first round (the lowest in its bracket), or `null` while it has no
@@ -113,19 +125,38 @@ export async function getStagePagePaths(): Promise<string[]> {
 // against the season id in its URL and redirects to the canonical one; an Open Graph image just
 // renders what it's given.
 
+/** A week id → its `weeks` row and the season that owns it. `null` if either is missing. */
+async function resolveWeekOwner(weekId: number): Promise<{ row: { id: number; week_number: number }; owner: Season } | null> {
+  const row = await getWeekRow(weekId);
+  const owner = row ? await getSeason(row.season_id) : null;
+  return row && owner ? { row, owner } : null;
+}
+
 /** A week id → its owning season, scope and (for a regular week) view. A gauntlet round's `weeks` row
  *  resolves too, with no view, so the page can send it to the round page. */
 export async function resolveWeekPage(
   weekId: number,
 ): Promise<{ week: { id: number; week_number: number }; owner: Season; scope: SeasonScope; view: WeekView | null } | null> {
-  const row = await getWeekRow(weekId);
-  const owner = row ? await getSeason(row.season_id) : null;
-  if (!row || !owner) return null;
+  const found = await resolveWeekOwner(weekId);
+  if (!found) return null;
+  const { row, owner } = found;
   const [scope, view] = await Promise.all([
     getSeasonScope(owner),
     owner.is_gauntlet ? Promise.resolve(null) : getWeekView(owner.id, weekId),
   ]);
   return { week: row, owner, scope, view };
+}
+
+/** A week id → what the week's Open Graph image renders: the owning season's name and the week's own
+ *  summary. `null` for an unknown week or a gauntlet round's `weeks` row (it has no week page). */
+export async function resolveWeekOgData(
+  weekId: number,
+): Promise<{ owner: Season; summary: WeekSummary } | null> {
+  const found = await resolveWeekOwner(weekId);
+  if (!found || found.owner.is_gauntlet) return null;
+  const { owner } = found;
+  const summary = await getWeekSummary(owner.id, weekId);
+  return summary ? { owner, summary } : null;
 }
 
 /** A season id and round number → the gauntlet round's view (`null` if the season has no gauntlet). */

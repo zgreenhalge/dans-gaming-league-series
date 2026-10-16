@@ -1,4 +1,5 @@
 import { parseScore, compareMatchRefDesc, isPlayedScore } from './util';
+import { effectivePickedMap } from './veto';
 
 // ─── H2H aggregation ─────────────────────────────────────────────────────────
 //
@@ -513,7 +514,7 @@ interface _H2HSourceMatch {
   season_number: number | null;
   is_gauntlet: boolean;
   final_score: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   shirts_stats: _H2HSourceStat[];
@@ -522,7 +523,7 @@ interface _H2HSourceMatch {
 
 /**
  * Who picked the played map — see "Who picked" in docs/glossary.md. `shirts_pick`
- * set means shirts picked; otherwise `picked_map` set means skins picked; neither
+ * set means shirts picked; otherwise `skins_pick` set means skins picked; neither
  * set (e.g. gauntlet matches, which have no veto data) means unknown.
  */
 export function resolveH2HPickedBy(shirtsPick: string | null, pickedMap: string | null): 'SHIRTS' | 'SKINS' | null {
@@ -544,11 +545,8 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
     matchNumber: m.match_number,
     seasonNumber: m.season_number,
     isGauntlet: m.is_gauntlet,
-    // Some seasons recorded the played map under `shirts_pick` rather than
-    // `picked_map` — same fallback used throughout the codebase (see
-    // `getMatchById`, `getCareerMatchHistory`, `getH2HData`).
-    map: m.shirts_pick ?? m.picked_map,
-    pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
+    map: effectivePickedMap(m),
+    pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
     startingSide: m.skins_starting_side,
     finalScore: m.final_score,
     roster: [...m.shirts_stats, ...m.skins_stats],
@@ -562,7 +560,7 @@ interface _SeasonSourceMatch {
   id: number;
   match_number: number;
   final_score: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   shirts_stats: _H2HSourceStat[];
@@ -584,8 +582,8 @@ function seasonMatchToH2HInput(
     matchNumber: m.match_number,
     seasonNumber,
     isGauntlet,
-    map: m.shirts_pick ?? m.picked_map,
-    pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
+    map: effectivePickedMap(m),
+    pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
     startingSide: m.skins_starting_side,
     finalScore: m.final_score,
     roster: [...m.shirts_stats, ...m.skins_stats],

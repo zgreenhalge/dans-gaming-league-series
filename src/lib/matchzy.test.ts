@@ -23,7 +23,7 @@ function buildDb(overrides: Partial<{ match: FakeDb['matches'][number] }> = {}):
       {
         id: 500,
         shirts_pick: null,
-        picked_map: 'de_such',
+        skins_pick: 'de_such',
         skins_starting_side: 'CT',
         scheduled_at: '2026-08-04T23:00:00+00:00',
         week_id: 1,
@@ -89,32 +89,32 @@ async function main() {
     assert.ok(warnings.some((w) => /skins_starting_side not set/.test(w)), warnings.join('; '));
   });
 
-  await test('maplist prefers shirts_pick over picked_map, falling back when unset', async () => {
+  await test('maplist prefers shirts_pick over skins_pick, falling back when unset', async () => {
     const cases: Array<[string | null, string | null, string]> = [
       ['de_picked_by_shirts', 'de_such', 'de_picked_by_shirts'], // shirts_pick wins
-      [null, 'de_such', 'de_such'], // falls back to picked_map
+      [null, 'de_such', 'de_such'], // falls back to skins_pick
     ];
     for (const [shirtsPick, pickedMap, expected] of cases) {
       const client = createFakeSupabaseClient(
-        buildDb({ match: { shirts_pick: shirtsPick, picked_map: pickedMap } }),
+        buildDb({ match: { shirts_pick: shirtsPick, skins_pick: pickedMap } }),
       );
       const { config } = await buildMatchzyConfig(client, 500);
-      assert.deepEqual(config.maplist, [expected], `shirts_pick=${shirtsPick}, picked_map=${pickedMap}`);
+      assert.deepEqual(config.maplist, [expected], `shirts_pick=${shirtsPick}, skins_pick=${pickedMap}`);
     }
   });
 
   await test('no picked map at all -> empty maplist and a warning', async () => {
     const client = createFakeSupabaseClient(
-      buildDb({ match: { shirts_pick: null, picked_map: null } }),
+      buildDb({ match: { shirts_pick: null, skins_pick: null } }),
     );
     const { config, warnings } = await buildMatchzyConfig(client, 500);
     assert.deepEqual(config.maplist, []);
     assert.ok(warnings.some((w) => /no picked map/.test(w)), warnings.join('; '));
   });
 
-  await test('maplistOverride wins over both shirts_pick and picked_map', async () => {
+  await test('maplistOverride wins over both shirts_pick and skins_pick', async () => {
     const client = createFakeSupabaseClient(
-      buildDb({ match: { shirts_pick: 'de_picked_by_shirts', picked_map: 'de_such' } }),
+      buildDb({ match: { shirts_pick: 'de_picked_by_shirts', skins_pick: 'de_such' } }),
     );
     const { config } = await buildMatchzyConfig(client, 500, { maplistOverride: 'workshop/123/de_override' });
     assert.deepEqual(config.maplist, ['workshop/123/de_override']);
@@ -150,9 +150,9 @@ async function main() {
     });
   });
 
-  await test('matchzy_demo_name_format uses shirts_pick over picked_map, matching maplist precedence', async () => {
+  await test('matchzy_demo_name_format uses shirts_pick over skins_pick, matching maplist precedence', async () => {
     const client = createFakeSupabaseClient(
-      buildDb({ match: { shirts_pick: 'de_picked_by_shirts', picked_map: 'de_such' } }),
+      buildDb({ match: { shirts_pick: 'de_picked_by_shirts', skins_pick: 'de_such' } }),
     );
     const { config } = await buildMatchzyConfig(client, 500);
     assert.equal(config.cvars.matchzy_demo_name_format, '2026-08-04_500_de-picked-by-shirts');

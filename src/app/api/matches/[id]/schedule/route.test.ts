@@ -40,7 +40,7 @@ function installPodFixture(rpcHandlers: Record<string, RpcHandler> = {}) {
   const db = installFixture(rpcHandlers);
   db.matches.push({
     id: GAUNTLET_MATCH_ID_2, week_id: 12, match_number: 2, final_score: null,
-    picked_map: null, shirts_ban: null, shirts_ban2: null, skins_ban1: null, skins_ban2: null,
+    skins_pick: null, shirts_ban: null, shirts_ban2: null, skins_ban1: null, skins_ban2: null,
     shirts_pick: null, skins_starting_side: null, is_playoff_game: true, is_feature_match: false,
     pre_match_win_prob: null, pre_match_win_prob_formula_version: null, scheduled_at: null,
     round_history: null, recording_url: null, replay_status: 'none',

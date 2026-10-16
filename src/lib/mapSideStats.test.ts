@@ -1,7 +1,7 @@
 /**
  * Unit tests for the map/pick-ban aggregators. `aggregateMapPickBanStats` is the one flagged as a
  * domain-edge-case magnet: map names are user-typed (case/whitespace bucketing), the "effective map"
- * falls back between shirts_pick and picked_map depending on who picked, and unplayed ("0-0"
+ * falls back between shirts_pick and skins_pick depending on who picked, and unplayed ("0-0"
  * pre-staged) matches must be excluded. `aggregateScoreDistribution`'s margin buckets are also
  * boundary-prone, so those get a couple of cases too.
  *
@@ -30,7 +30,7 @@ function round(opts: Partial<RoundOutcome>): RoundOutcome {
 function match(opts: Partial<MatchPickBanInput>): MatchPickBanInput {
   return {
     final_score: '13-9',
-    picked_map: null,
+    skins_pick: null,
     shirts_pick: null,
     skins_starting_side: null,
     shirts_stats: [],
@@ -50,15 +50,15 @@ test('aggregateMapPickBanStats: map names bucket case-insensitively and trim whi
   assert.equal(out[0].picked, 3);
 });
 
-test('aggregateMapPickBanStats: effective map falls back to picked_map when shirts_pick is unset', () => {
-  const matches = [match({ shirts_pick: null, picked_map: 'Nuke' })];
+test('aggregateMapPickBanStats: effective map falls back to skins_pick when shirts_pick is unset', () => {
+  const matches = [match({ shirts_pick: null, skins_pick: 'Nuke' })];
   const out = aggregateMapPickBanStats(matches);
   assert.equal(out[0].map, 'Nuke');
 });
 
-test('aggregateMapPickBanStats: shirts_pick wins over picked_map when both are present', () => {
-  // shirts_pick is the effective map even if picked_map (skins' pick, e.g. for a different map/round) differs
-  const matches = [match({ shirts_pick: 'Train Yard', picked_map: 'Nuke' })];
+test('aggregateMapPickBanStats: shirts_pick wins over skins_pick when both are present', () => {
+  // shirts_pick is the effective map even if skins_pick (skins' pick, e.g. for a different map/round) differs
+  const matches = [match({ shirts_pick: 'Train Yard', skins_pick: 'Nuke' })];
   const out = aggregateMapPickBanStats(matches);
   assert.equal(out[0].map, 'Train Yard');
 });
@@ -70,7 +70,7 @@ test('aggregateMapPickBanStats: per-map CT/T W-L follows the side chosen by the 
     // shirts picked Palais, skins chose CT and won -> CT win
     match({ shirts_pick: 'Palais', skins_starting_side: 'CT', skins_stats: win, shirts_stats: loss }),
     // skins picked Palais, shirts chose the side opposite skins' T start (CT) and lost -> CT loss
-    match({ picked_map: 'Palais', skins_starting_side: 'T', skins_stats: win, shirts_stats: loss }),
+    match({ skins_pick: 'Palais', skins_starting_side: 'T', skins_stats: win, shirts_stats: loss }),
     // no resolvable winner -> not counted
     match({ shirts_pick: 'Palais', skins_starting_side: 'T' }),
   ];
@@ -90,7 +90,7 @@ test('aggregateMapPickBanStats: unplayed ("0-0" pre-staged) matches are excluded
 });
 
 test('aggregateMapPickBanStats: a match with no effective map at all is excluded', () => {
-  const matches = [match({ shirts_pick: null, picked_map: null })];
+  const matches = [match({ shirts_pick: null, skins_pick: null })];
   assert.equal(aggregateMapPickBanStats(matches).length, 0);
 });
 
@@ -157,13 +157,13 @@ test('aggregateMapPickBanStats: no-pick — a pool map untouched by veto in a pl
 
 test('classifyMatchVeto: no-pick is suppressed for playoff matches and matches without a map_pool', () => {
   const playoff = classifyMatchVeto({
-    final_score: '13-9', picked_map: 'Palais', shirts_pick: null,
+    final_score: '13-9', skins_pick: 'Palais', shirts_pick: null,
     is_playoff_game: true, map_pool: ['Palais', 'Nuke'],
   });
   assert.deepEqual(playoff.noPicked, []);
 
   const noPool = classifyMatchVeto({
-    final_score: '13-9', picked_map: 'Palais', shirts_pick: null,
+    final_score: '13-9', skins_pick: 'Palais', shirts_pick: null,
     is_playoff_game: false, map_pool: null,
   });
   assert.deepEqual(noPool.noPicked, []);
@@ -171,7 +171,7 @@ test('classifyMatchVeto: no-pick is suppressed for playoff matches and matches w
 
 test('classifyMatchVeto: an unplayed match classifies as empty even with bans/pool set', () => {
   const out = classifyMatchVeto({
-    final_score: null, picked_map: 'Palais', shirts_pick: null,
+    final_score: null, skins_pick: 'Palais', shirts_pick: null,
     shirts_ban: 'Vertigo', is_playoff_game: false, map_pool: ['Palais', 'Vertigo', 'Nuke'],
   });
   assert.deepEqual(out, { picked: [], banned: [], noPicked: [] });
@@ -185,7 +185,7 @@ function playerMatch(opts: Partial<PlayerMatchInput>): PlayerMatchInput {
     faction: 'SHIRTS',
     skins_starting_side: null,
     shirts_pick: null,
-    picked_map: null,
+    skins_pick: null,
     is_win: false,
     rounds_won: 0,
     rounds_played: 0,

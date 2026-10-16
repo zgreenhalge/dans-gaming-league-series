@@ -39,7 +39,7 @@ function matchRow(overrides: Partial<MapMatchRow> = {}): MapMatchRow {
     final_score: '13-9',
     shirts_stats: [],
     skins_stats: [],
-    picked_map: null,
+    skins_pick: null,
     shirts_pick: null,
     skins_starting_side: null,
     shirts_ban: null,
