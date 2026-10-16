@@ -45,7 +45,11 @@ so you don't have to reverse-engineer them from scratch each time.
   `VetoSequence.tsx`. Gauntlet seasons use a *different* veto flow — see below.
   - **Effective played map** is `shirts_pick ?? picked_map`, not `picked_map` alone. When shirts
     made the pick, `shirts_pick` is set and `picked_map` is `null`; when skins made the pick,
-    `shirts_pick` is `null` and `picked_map` is set. Always resolve with `shirts_pick ?? picked_map`.
+    `shirts_pick` is `null` and `picked_map` is set. Always resolve with `effectivePickedMap()`
+    (`src/lib/veto.ts`) rather than an inline `shirts_pick ?? picked_map`. Despite its name,
+    `picked_map` is the *skins* pick: it is never written for a gauntlet match (the auto-pick always
+    lands in `shirts_pick`), so `picked_map IS NULL` is neither a "gauntlet" nor a "pick/bans
+    incomplete" signal — use `season.is_gauntlet || match.is_playoff_game` and `isVetoComplete()`.
   - **Who picked** is determined by `shirts_pick != null` (shirts picked) vs `shirts_pick == null`
     (skins picked). Do **not** compare `shirts_pick === picked_map` — they are never equal because
     only one is populated per match.
