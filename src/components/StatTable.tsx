@@ -1,5 +1,6 @@
 'use client';
 
+import { createContext, useContext } from 'react';
 import Link from 'next/link';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import PlayerAvatar from './PlayerAvatar';
@@ -10,11 +11,16 @@ import { TH_ALIGN_CLS } from './Th';
 // its rows from these (headers come from `Th` / `SortableTh`) so frame, dividers, type scale and
 // padding are never re-typed per table. See "Tables & data display" in docs/visual-conventions.md.
 
+/** Set by a container that tints its tables with a faction (`faction-tint` + a side class): every
+ *  `StatTable` and `Tr` inside leaves its background to the tint instead of painting the page
+ *  background over it, and rows mirror the tint opaquely (`faction-tint-row`) for pinned cells. */
+export const FactionTintContext = createContext(false);
+
 /** The bordered card (page background) around a table, scrolling sideways when the columns overflow.
  *  `bare` drops the border for a table sitting flush inside a bordered container. */
 export function StatTable({
   bare = false,
-  tinted = false,
+  tinted: tintedProp = false,
   className = '',
   children,
 }: {
@@ -26,6 +32,8 @@ export function StatTable({
   /** The `<thead>` and `<tbody>`. */
   children: React.ReactNode;
 }) {
+  const inFactionTint = useContext(FactionTintContext);
+  const tinted = tintedProp || inFactionTint;
   return (
     <div className={`${tinted ? '' : 'bg-[var(--color-bg-primary)]'} overflow-x-auto ${bare ? '' : 'border border-[var(--color-border-primary)]'} ${className}`}>
       <table className="w-full border-collapse">{children}</table>
@@ -43,10 +51,12 @@ export function Tr({
   className = '',
   ...rest
 }: { clickable?: boolean; tinted?: boolean } & React.ComponentPropsWithoutRef<'tr'>) {
+  const inFactionTint = useContext(FactionTintContext);
+  const bg = tinted ? '' : inFactionTint ? 'faction-tint-row' : 'bg-[var(--color-bg-primary)]';
   return (
     <tr
       {...rest}
-      className={`${tinted ? '' : 'bg-[var(--color-bg-primary)]'} border-b border-[var(--color-border-tertiary)] last:border-b-0 ${clickable ? 'lift-row' : ''} ${className}`}
+      className={`${bg} border-b border-[var(--color-border-tertiary)] last:border-b-0 ${clickable ? 'lift-row' : ''} ${className}`}
     />
   );
 }

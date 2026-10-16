@@ -126,7 +126,7 @@ statistics pages, and the week/round/group scorecards:
 
 | Piece | Standard |
 |---|---|
-| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class. |
+| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class; inside a `FactionTintContext.Provider` (a faction-tinted container such as the match page's per-team Advanced Stats blocks) every `StatTable` and `Tr` does this on its own. |
 | **`Tr`** (row) | `--color-border-tertiary` divider, none under the last row (the card's border closes the table), on an opaque page background (a pinned cell inherits it). `clickable` adds the `lift-row` highlight; rows that aren't clickable don't highlight. |
 | **`NameTd`** (name cell) | Display font, 14px semibold. `sticky` pins it. |
 | **`PlayerCell`** (pinned player name) | A `NameTd sticky` linking to `/players/<id>`; `avatarUrl` adds the avatar. Use it for a plain pinned player name; a row that adds a badge or the "me" highlight (`PlayerName`) builds its own `NameTd sticky` cell. `MapCell` is the map-name equivalent. |
