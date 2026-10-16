@@ -43,9 +43,8 @@
 
 import { api } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
+import { objectExists, demoKey } from '../src/lib/r2';
 import { getDemoManifest } from '../src/lib/demo/segmentManifest';
-import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { notice, warning, error } from './gh-actions-log';
 import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, isDemoPath, type RemoteFile } from '../src/lib/dathost-retention';
 import { getServer, listFiles } from '../src/lib/dathost';
@@ -174,15 +173,6 @@ async function trackedMatches(
       return [r.id, { scheduledAt: r.scheduled_at, finalScore: r.final_score }];
     }),
   );
-}
-
-async function objectExists(key: string): Promise<boolean> {
-  try {
-    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** A match's demo is safe in R2 either as the canonical single-file demoKey(), or — for a match

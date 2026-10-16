@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { groupRoundsByMatch, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import DevGate from './DevGate';
@@ -587,7 +587,7 @@ export default function PlayerView({
                     let v = 0;
                     switch (mapSort) {
                       case 'map':    v = a.map.localeCompare(b.map); break;
-                      case 'record': v = b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr; break;
+                      case 'record': v = canonicalSortValues(a, b); break;
                       case 'wr':     v = b.wr - a.wr; break;
                       case 'rwr':    v = b.rwr - a.rwr; break;
                       case 'adr':    v = b.adr - a.adr; break;

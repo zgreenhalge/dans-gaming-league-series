@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { createContext, useCallback, useContext, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
@@ -12,11 +12,16 @@ import { TH_ALIGN_CLS } from './Th';
 // its rows from these (headers come from `Th` / `SortableTh`) so frame, dividers, type scale and
 // padding are never re-typed per table. See "Tables & data display" in docs/visual-conventions.md.
 
+/** Set by a container that tints its tables with a faction (`faction-tint` + a side class): every
+ *  `StatTable` and `Tr` inside leaves its background to the tint instead of painting the page
+ *  background over it, and rows mirror the tint opaquely (`faction-tint-row`) for pinned cells. */
+export const FactionTintContext = createContext(false);
+
 /** The bordered card (page background) around a table, scrolling sideways when the columns overflow.
  *  `bare` drops the border for a table sitting flush inside a bordered container. */
 export function StatTable({
   bare = false,
-  tinted = false,
+  tinted: tintedProp = false,
   fixed = false,
   header,
   className = '',
@@ -35,6 +40,8 @@ export function StatTable({
   /** The `<thead>` and `<tbody>`. */
   children: React.ReactNode;
 }) {
+  const inFactionTint = useContext(FactionTintContext);
+  const tinted = tintedProp || inFactionTint;
   return (
     <div className={`${tinted ? '' : 'bg-[var(--color-bg-primary)]'} overflow-x-auto ${bare ? '' : 'border border-[var(--color-border-primary)]'} ${className}`}>
       {header}
@@ -83,12 +90,14 @@ function PlainTr({
   style,
   ...rest
 }: Omit<TrProps, 'href'>) {
+  const inFactionTint = useContext(FactionTintContext);
   const tint = tinted || accent !== undefined;
+  const bg = tint ? '' : variant === 'body' && inFactionTint ? 'faction-tint-row' : TR_BG[variant];
   return (
     <tr
       {...rest}
       style={accent ? ({ '--lift-accent': accent, ...style } as React.CSSProperties) : style}
-      className={`${tint ? '' : TR_BG[variant]} ${accent ? 'row-tint' : ''} ${TR_BASE} ${variant === 'summary' ? 'border-t' : ''} ${clickable ? 'lift-row' : ''} ${className}`}
+      className={`${bg} ${accent ? 'row-tint' : ''} ${TR_BASE} ${variant === 'summary' ? 'border-t' : ''} ${clickable ? 'lift-row' : ''} ${className}`}
     />
   );
 }

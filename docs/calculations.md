@@ -590,7 +590,9 @@ The default sort order for every regular-season and career leaderboard: **Wins â
 all descending. Applying all three keys in sequence avoids overweighting any single metric and
 produces a stable, consistent ordering across views.
 
-Implemented by `canonicalSort(rows)` in `src/lib/util.ts`. Use it everywhere regular-season or
+Implemented by `canonicalSort(rows)` in `src/lib/util.ts`; rows that carry the three values as
+`wins` / `rwr` / `adr` (per-map aggregates) use `canonicalSortValues()`, the same ordering.
+Use it everywhere regular-season or
 career player rows are ranked â€” never sort by ADR alone.
 
 ## Canonical Gauntlet Ranking

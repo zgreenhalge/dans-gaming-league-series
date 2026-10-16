@@ -1,4 +1,5 @@
 import type { SabFieldsWithDerived } from '@/lib/types';
+import { fmtPct as pct } from '@/lib/util';
 import Th from './Th';
 import { StatTable, Tr, Td, NameTd } from './StatTable';
 
@@ -12,11 +13,6 @@ interface PlayerSabRow {
 
 export interface SabremetricsTableProps {
   players: PlayerSabRow[];
-}
-
-function pct(num: number, den: number): string {
-  if (den === 0) return '—';
-  return `${Math.round((num / den) * 100)}%`;
 }
 
 export default function SabremetricsTable({ players }: SabremetricsTableProps) {

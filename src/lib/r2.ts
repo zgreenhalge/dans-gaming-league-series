@@ -152,6 +152,18 @@ export async function headDemoObject(
   }
 }
 
+/** Whether `key` exists in the bucket. Only a 404 reads as `false`; any other failure (auth,
+ *  network, throttling) is rethrown rather than collapsed into "missing". */
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    return true;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'NotFound') return false;
+    throw err;
+  }
+}
+
 /** The match id embedded in a demo object key (`demoKey()`'s own `<id>/game.dem` shape), or `null`
  *  if `key` isn't a demo key at all — e.g. `replay.json`/`heatmap.json` siblings under the same
  *  match prefix, or an unrelated object in the bucket. */

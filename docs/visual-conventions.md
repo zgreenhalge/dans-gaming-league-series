@@ -126,7 +126,7 @@ statistics pages, and the week/round/group scorecards:
 
 | Piece | Standard |
 |---|---|
-| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class; `fixed` lays the columns out equally (the name cell adds `truncate`); `header` puts a banner inside the frame above the table (the scouting report's map image). |
+| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class (inside a `FactionTintContext.Provider`, a faction-tinted container such as the match page's per-team Advanced Stats blocks, every `StatTable` and `Tr` does this on its own); `fixed` lays the columns out equally (the name cell adds `truncate`); `header` puts a banner inside the frame above the table (the scouting report's map image). |
 | **`Tr`** (row) | `--color-border-tertiary` divider, none under the last row (the card's border closes the table), on an opaque page background (a pinned cell inherits it). `clickable` adds the `lift-row` highlight; rows that aren't clickable don't highlight. `href` makes the row a link, `accent` tints it, `variant` sets a summary or marker row (below), `tinted` leaves the background to a faction-tint class. `accent`, `tinted` and a non-body `variant` each own the row's background, so use one. |
 | **`NameTd`** (name cell) | Display font, 14px semibold. `sticky` pins it. |
 | **`PlayerCell`** (player name) | A `NameTd` linking to `/players/<id>`, pinned unless `sticky={false}` (a fixed-layout table that fits its frame); `avatarUrl` adds the avatar. Use it for a plain player name; a row that adds a badge or the "me" highlight (`PlayerName`) builds its own `NameTd sticky` cell. `MapCell` is the map-name equivalent. |
@@ -173,6 +173,12 @@ no header band: a small uppercase label (wrapping at spaces only, like `Th`) abo
 row divided by a tertiary rule. `CompactTable` fills its container; give it `widths` (one Tailwind width
 class per column) for a fixed layout that shrinks to those widths. `CompactTd` takes `align` and `bold`;
 `CompactNameTd` is the truncating, linked name cell.
+
+**Shared formatting helpers** (`src/lib/util.ts`) — use these instead of a local copy: `fmtPct(num, den)`
+for whole-number percentages (`—` on a zero denominator), `factionClass(side)` for the `faction-ct` /
+`faction-t` tint class (the class counterpart of `sideColor()`), `formatCountdownClock(ms)` and
+`formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` / `fmtWindowDay('YYYY-MM-DD')` for
+a week-window date.
 
 **Tables that keep their own spacing.**
 - The stat-entry table in the demo upload modal uses `Th` for its headers and keeps its own 4–6px

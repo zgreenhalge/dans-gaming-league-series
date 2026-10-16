@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useSortState } from './useSortState';
 import Th from './Th';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, NameTd, PlayerCell } from './StatTable';
+import { StatTable, Tr, Td, NameTd, PlayerCell, FactionTintContext } from './StatTable';
 import {
   aggregateRows,
   computeLeagueAverages,
@@ -44,7 +44,7 @@ import { ECONOMY_TYPE_LABEL, FULL_BUY_MIN_T, FULL_BUY_MIN_CT, BANK_MIN, ECO_EQUI
 import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
-import { tabCls } from '@/lib/util';
+import { tabCls, factionClass, fmtPct as pct } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 import { WeaponIcon } from './icons/WeaponIcon';
@@ -53,15 +53,7 @@ import { Checkbox } from './SeasonFilter';
 import PerSideStatsTable from './PerSideStatsTable';
 import RoundEconomyChart from './RoundEconomyChart';
 
-// Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
-// duplicated locally per this codebase's existing pattern of small per-file copies (also
-// independently defined in DemoUploadModal.tsx and app/matches/[id]/page.tsx).
 type Side = 'CT' | 'T' | null;
-function factionClass(side: Side): string {
-  if (side === 'CT') return 'faction-ct';
-  if (side === 'T') return 'faction-t';
-  return '';
-}
 
 /** One team's slice of a match-page sabremetrics view — filters the aggregate to its
  *  `playerIds` and wraps it in `header` (typically a `<TeamHeader>`) and side tinting. */
@@ -87,11 +79,6 @@ const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [] };
 
 
 // --- Formatting ---
-
-function pct(num: number, den: number): string {
-  if (den === 0) return '—';
-  return `${Math.round((num / den) * 100)}%`;
-}
 
 function fmtNum(v: number, d: number = 0): string {
   if (!Number.isFinite(v)) return '—';
@@ -1417,7 +1404,9 @@ function GroupedOrFlat({
         <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
           {g.header}
           <div className={`faction-tint ${factionClass(g.side)}`}>
-            {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
+            <FactionTintContext.Provider value={g.side !== null}>
+              {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
+            </FactionTintContext.Provider>
           </div>
         </div>
       ))}
