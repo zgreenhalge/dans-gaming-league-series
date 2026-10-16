@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell } from './StatTable';
+import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell, FactionTintContext } from './StatTable';
 import Th from './Th';
 
 describe('StatTable pieces', () => {
@@ -76,6 +76,18 @@ describe('StatTable pieces', () => {
     const tinted = frameOf(<StatTable tinted className="faction-tint">{rows}</StatTable>);
     expect(tinted).not.toContain('bg-[var(--color-bg-primary)]');
     expect(tinted).toContain('faction-tint');
+  });
+
+  test('inside a FactionTintContext the frame and rows leave the background to the faction tint', () => {
+    const { container } = render(
+      <FactionTintContext.Provider value>
+        <StatTable><tbody><Tr><td>x</td></Tr></tbody></StatTable>
+      </FactionTintContext.Provider>,
+    );
+    expect((container.firstElementChild as HTMLElement).className).not.toContain('bg-[var(--color-bg-primary)]');
+    const row = container.querySelector('tr') as HTMLElement;
+    expect(row.className).toContain('faction-tint-row');
+    expect(row.className).not.toContain('bg-[var(--color-bg-primary)]');
   });
 
   test('MapCell links to the map page and shows the stored name in sentence case', () => {
