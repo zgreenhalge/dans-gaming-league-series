@@ -204,7 +204,7 @@ export async function getSeasonLeaderboard(
  * The names of a season's players who have played, in standings order — `getSeasonLeaderboard()`'s
  * ranking without its all-seasons stats scan: rounds won are read only for this season's played
  * non-playoff matches, which is all `canonicalSort()` needs beyond the view's own columns. Rostered
- * players who haven't played yet aren't listed, so only ranked players hold a seed.
+ * players who haven't played yet aren't listed.
  */
 export async function getSeasonStandingNames(seasonId: number): Promise<string[]> {
   const rowsQuery = getAdminClient().from('player_season_leaderboard').select('*').eq('season_id', seasonId);
