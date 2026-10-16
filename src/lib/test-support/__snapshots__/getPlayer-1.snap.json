@@ -111,7 +111,7 @@
           "rounds_played": 0
         }
       ],
-      "picked_map": null,
+      "skins_pick": null,
       "shirts_pick": null,
       "skins_starting_side": null,
       "shirts_ban": null,
@@ -222,7 +222,7 @@
           "rounds_played": 24
         }
       ],
-      "picked_map": "Foroglio",
+      "skins_pick": "Foroglio",
       "shirts_pick": "Foroglio",
       "skins_starting_side": "T",
       "shirts_ban": null,
@@ -331,7 +331,7 @@
           "rounds_played": 0
         }
       ],
-      "picked_map": "Cobblestone",
+      "skins_pick": "Cobblestone",
       "shirts_pick": "Cobblestone",
       "skins_starting_side": null,
       "shirts_ban": null,
@@ -444,7 +444,7 @@
           "rounds_played": 22
         }
       ],
-      "picked_map": "Foroglio",
+      "skins_pick": "Foroglio",
       "shirts_pick": "Foroglio",
       "skins_starting_side": "CT",
       "shirts_ban": "Vertigo",

@@ -40,13 +40,13 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
   const [{ data: matchRows }, weekLookup] = await Promise.all([
     getAdminClient()
       .from('matches')
-      .select('id, match_number, picked_map, final_score, week_id')
+      .select('id, match_number, skins_pick, final_score, week_id')
       .in('id', matchIds),
     getWeekLookup(),
   ]);
   const matches = (matchRows ?? []) as Pick<
     Match,
-    'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
+    'id' | 'match_number' | 'skins_pick' | 'final_score' | 'week_id'
   >[];
 
   const seasonIds = Array.from(
@@ -75,7 +75,7 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
       seasonNumber: s?.name ? extractSeasonNumber(s.name) : null,
       weekNumber: w?.week_number ?? null,
       matchNumber: m.match_number ?? null,
-      pickedMap: m.picked_map ?? null,
+      pickedMap: m.skins_pick ?? null,
       finalScore: m.final_score ?? null,
       isGauntlet: s?.is_gauntlet ?? false,
     });

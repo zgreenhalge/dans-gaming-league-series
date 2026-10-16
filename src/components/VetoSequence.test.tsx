@@ -44,7 +44,7 @@ function baseMatch(overrides: Partial<Match> = {}): Match {
     week_id: 1,
     match_number: 1,
     final_score: null,
-    picked_map: null,
+    skins_pick: null,
     shirts_ban: null,
     shirts_ban2: null,
     skins_ban1: null,

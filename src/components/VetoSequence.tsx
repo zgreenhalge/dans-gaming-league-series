@@ -9,6 +9,7 @@ import { useMapLookup } from './MapContext';
 import { SIDE_ICON } from './icons/SideIcons';
 import type { Match } from '@/lib/types';
 import ErrorText from '@/components/ErrorText';
+import { effectivePickedMap } from '@/lib/veto';
 
 const REGULAR_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -162,7 +163,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   }
 
   // Gauntlet-shaped: show auto-picked map tile
-  const autoPickedMap = gauntletShaped ? (match.shirts_pick ?? match.picked_map) : null;
+  const autoPickedMap = gauntletShaped ? effectivePickedMap(match) : null;
 
   async function submitVeto(field: StepField, value: string | null) {
     setError(null);

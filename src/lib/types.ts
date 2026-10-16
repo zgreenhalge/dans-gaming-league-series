@@ -45,7 +45,7 @@ export interface Match {
   week_id: number;
   match_number: number;
   final_score: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_ban: string | null;
   shirts_ban2: string | null;
   skins_ban1: string | null;

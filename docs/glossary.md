@@ -41,16 +41,20 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Faction: SHIRTS / SKINS** — the two ad-hoc teams for a given match (CS2 Wingman is 2v2).
   Rosters are reshuffled weekly, hence "rotating mixer."
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,
-  `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side` on `Match`). Rendered by
+  `skins_ban2`, `shirts_pick`, `skins_pick`, `skins_starting_side` on `Match`). Rendered by
   `VetoSequence.tsx`. Gauntlet seasons use a *different* veto flow — see below.
-  - **Effective played map** is `shirts_pick ?? picked_map`, not `picked_map` alone. When shirts
-    made the pick, `shirts_pick` is set and `picked_map` is `null`; when skins made the pick,
-    `shirts_pick` is `null` and `picked_map` is set. Always resolve with `shirts_pick ?? picked_map`.
+  - **Effective played map** is `shirts_pick ?? skins_pick`, not `skins_pick` alone. When shirts
+    made the pick, `shirts_pick` is set and `skins_pick` is `null`; when skins made the pick,
+    `shirts_pick` is `null` and `skins_pick` is set. Always resolve with `effectivePickedMap()`
+    (`src/lib/veto.ts`) rather than an inline `shirts_pick ?? skins_pick`. `skins_pick` is
+    written only when skins picked: it is never written for a gauntlet match (the auto-pick always
+    lands in `shirts_pick`), so `skins_pick IS NULL` is neither a "gauntlet" nor a "pick/bans
+    incomplete" signal — use `season.is_gauntlet || match.is_playoff_game` and `isVetoComplete()`.
   - **Who picked** is determined by `shirts_pick != null` (shirts picked) vs `shirts_pick == null`
-    (skins picked). Do **not** compare `shirts_pick === picked_map` — they are never equal because
+    (skins picked). Do **not** compare `shirts_pick === skins_pick` — they are never equal because
     only one is populated per match.
   - **`GauntletMatch`** (`src/lib/stage-types.ts`, the bracket-display read shape) surfaces only
-    `picked_map`/`shirts_pick`/`skins_starting_side` — never the four ban fields. It is not the same
+    `skins_pick`/`shirts_pick`/`skins_starting_side` — never the four ban fields. It is not the same
     struct as the underlying `matches` row, which stores the full gauntlet ban history like any other
     match (see below). Veto aggregations over ban data must be guarded with `is_gauntlet` checks or
     operate on structures that carry all veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).

@@ -2,7 +2,7 @@
  * Unit tests for `getReplayInputs()` — resolves `buildReplay()`'s DB inputs (map, starting side,
  * target rounds, roster, gauntlet flag, scheduled date) for a match, shared by the in-app dispatch
  * path and the `replay-extract` Action. Against `fakeSupabase.ts`, exercising the
- * `matches -> weeks -> seasons` embed chain and the `shirts_pick`/`picked_map` map fallback.
+ * `matches -> weeks -> seasons` embed chain and the `shirts_pick`/`skins_pick` map fallback.
  *
  * Run:  npx vitest run src/lib/replay/inputs.test.ts
  */
@@ -24,16 +24,16 @@ function buildDb(): FakeDb {
     ],
     matches: [
       {
-        id: 100, week_id: 10, shirts_pick: 'Foroglio', picked_map: 'Foroglio',
+        id: 100, week_id: 10, shirts_pick: 'Foroglio', skins_pick: 'Foroglio',
         skins_starting_side: 'CT', scheduled_at: '2026-01-15T19:00:00.000Z',
       },
       {
-        // No shirts_pick yet (unveto'd) — falls back to picked_map.
-        id: 101, week_id: 10, shirts_pick: null, picked_map: 'Vertigo',
+        // No shirts_pick yet (unveto'd) — falls back to skins_pick.
+        id: 101, week_id: 10, shirts_pick: null, skins_pick: 'Vertigo',
         skins_starting_side: null, scheduled_at: null,
       },
       {
-        id: 200, week_id: 11, shirts_pick: 'Cobblestone', picked_map: 'Cobblestone',
+        id: 200, week_id: 11, shirts_pick: 'Cobblestone', skins_pick: 'Cobblestone',
         skins_starting_side: 'T', scheduled_at: '2026-03-01T00:00:00.000Z',
       },
     ],
@@ -68,7 +68,7 @@ async function main() {
     assert.equal(alice.name, 'Alice');
   });
 
-  await test('getReplayInputs: falls back to picked_map when shirts_pick is not yet set', async () => {
+  await test('getReplayInputs: falls back to skins_pick when shirts_pick is not yet set', async () => {
     const inputs = await getReplayInputs(supabase, 101);
     assert.equal(inputs.map, 'Vertigo');
   });

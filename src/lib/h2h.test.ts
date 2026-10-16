@@ -184,7 +184,7 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
       season_number: 3,
       is_gauntlet: false,
       final_score: '13-7',
-      picked_map: null,
+      skins_pick: null,
       shirts_pick: 'de_overpass',
       skins_starting_side: 'CT' as const,
       shirts_stats: [
@@ -199,7 +199,7 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
   ];
   const inputs = mapMatchRowsToH2HInput(source);
   assert.equal(inputs.length, 1);
-  assert.equal(inputs[0].map, 'de_overpass', 'falls back to shirts_pick when picked_map is null');
+  assert.equal(inputs[0].map, 'de_overpass', 'falls back to shirts_pick when skins_pick is null');
   assert.equal(inputs[0].pickedBy, 'SHIRTS', 'shirts_pick set means shirts picked');
   assert.equal(inputs[0].startingSide, 'CT');
   assert.equal(inputs[0].roster.length, 4);
@@ -384,7 +384,7 @@ function seasonSourceMatch(overrides: {
     id: overrides.id,
     match_number: overrides.match_number ?? 1,
     final_score: overrides.final_score !== undefined ? overrides.final_score : '13-9',
-    picked_map: null,
+    skins_pick: null,
     shirts_pick: 'de_test',
     skins_starting_side: null as 'CT' | 'T' | null,
     shirts_stats: overrides.shirts_stats ?? [],

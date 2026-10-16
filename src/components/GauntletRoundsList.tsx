@@ -10,6 +10,7 @@ import { aggregatePlayerRecords } from '@/lib/group-scorecard';
 import { groupName, roundHref } from '@/lib/crumbs';
 import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
+import { effectivePickedMap } from '@/lib/veto';
 
 // A stable reference for rounds with no pending pods — `pendingPodsByRound.get(...) ?? EMPTY_PODS`
 // keeps GauntletRoundCard's `useMemo` dependency stable across renders instead of a fresh `[]`
@@ -130,7 +131,7 @@ export function GameMatchCard({
   return (
     <MatchCard
       href={`/matches/${m.id}`}
-      map={m.shirts_pick ?? m.picked_map}
+      map={effectivePickedMap(m)}
       label={{ type: 'game', gameNumber, isFeatureMatch: m.is_feature_match }}
       right={matchCardRight(m.final_score, m.scheduled_at, { type: 'pending' })}
       shirtsStats={m.shirts_stats}
