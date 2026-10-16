@@ -133,7 +133,9 @@ container), brings up the local Supabase stack (`npm run db:start`), and exports
 `supabase/local.env`'s three fixed values into the session's environment. This still depends on
 outbound network access to pull the Postgres/PostgREST/Realtime images, which isn't guaranteed — in
 this repo's own sandbox, the outbound proxy blocks Docker Hub/CloudFront pulls, so the local stack
-never actually comes up there. Every step is independent and best-effort: a Docker daemon that won't
+never actually comes up there. When the stack isn't confirmed up, the hook also appends an `unset` of
+the three connection variables to `$CLAUDE_ENV_FILE`, so values exported by an earlier session on the
+same checkout can't point `build`/`dev` at a port nothing listens on. Every step is independent and best-effort: a Docker daemon that won't
 start, a sandbox whose network policy blocks the image pulls, or an already-configured `.env.local`
 are all handled by skipping the remaining steps (with a bounded timeout on the image-pull attempt)
 rather than hanging or failing the session start — worst case, `build`/`dev` still work against
