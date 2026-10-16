@@ -48,6 +48,25 @@ export interface WeekView {
   nav: StageNavItem[];
 }
 
+/** A week's own records, best first. The week's bye player sits on it too, last and with nothing
+ *  played: their season rank can still move as everyone else's results land. */
+function deriveWeekScorecard(week: WeekWithMatches): PlayerRecord[] {
+  const bye = week.bye_player_id != null ? [{ player_id: week.bye_player_id, player_name: week.bye_player_name ?? `#${week.bye_player_id}` }] : [];
+  return deriveGroupScorecard(week.matches, 'wins', bye);
+}
+
+/** What a week's Open Graph image shows: the week itself, with no standings movement or navigation,
+ *  so it needs no other week's data. */
+export interface WeekSummary {
+  week: WeekWithMatches;
+  status: StageStatus;
+  scorecard: PlayerRecord[];
+}
+
+export function deriveWeekSummary(week: WeekWithMatches): WeekSummary {
+  return { week, status: stageStatus(week.matches), scorecard: deriveWeekScorecard(week) };
+}
+
 /**
  * `schedule` is the season's weeks up to and including the one being viewed, with full rosters
  * (everything the scorecard and standings need); `navWeeks` is every week of the season, light, for
@@ -64,10 +83,7 @@ export function deriveWeekView(
   if (!week) return null;
 
   const movement = week.week_number > 1 ? rankMovementForWeek(schedule, week.week_number) : new Map<number, RankMovement>();
-  // The week's bye player sits on the scorecard too, last and with nothing played: their season rank
-  // can still move as everyone else's results land.
-  const bye = week.bye_player_id != null ? [{ player_id: week.bye_player_id, player_name: week.bye_player_name ?? `#${week.bye_player_id}` }] : [];
-  const scorecard = deriveGroupScorecard(week.matches, 'wins', bye).map((r) => ({ ...r, movement: movement.get(r.player_id) ?? null }));
+  const scorecard = deriveWeekScorecard(week).map((r) => ({ ...r, movement: movement.get(r.player_id) ?? null }));
 
   const items = navWeeks.map<StageNavItem>((w) => ({
     chip: String(w.week_number),

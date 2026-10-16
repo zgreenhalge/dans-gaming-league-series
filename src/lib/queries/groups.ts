@@ -9,10 +9,12 @@ import { roundHref, groupHref, weekHref } from '../crumbs';
 import {
   deriveGroupPageView,
   deriveRoundView,
+  deriveWeekSummary,
   deriveWeekView,
   type GauntletStageData,
   type GroupPageView,
   type RoundView,
+  type WeekSummary,
   type WeekView,
 } from '../stage-views';
 import type { Season } from '../types';
@@ -38,6 +40,16 @@ export async function getWeekView(hubSeasonId: number, weekId: number): Promise<
     getSeasonWeekNav(hubSeasonId),
   ]);
   return deriveWeekView(hubSeasonId, schedule, navWeeks, weekId);
+}
+
+/** A regular season's week on its own — the week and its scorecard, with no standings movement or
+ *  navigation, so it reads only this week's matches. Enough for the week's Open Graph image. `null`
+ *  if `weekId` isn't one of the season's weeks. */
+export async function getWeekSummary(hubSeasonId: number, weekId: number): Promise<WeekSummary | null> {
+  const row = await getWeekRow(weekId);
+  if (!row || row.season_id !== hubSeasonId) return null;
+  const [week] = await getSeasonSchedule(hubSeasonId, undefined, { onlyWeek: row.week_number });
+  return week ? deriveWeekSummary(week) : null;
 }
 
 /** Everything the gauntlet round and group pages derive from: real rounds and the full bracket shape
@@ -126,6 +138,18 @@ export async function resolveWeekPage(
     owner.is_gauntlet ? Promise.resolve(null) : getWeekView(owner.id, weekId),
   ]);
   return { week: row, owner, scope, view };
+}
+
+/** A week id → what the week's Open Graph image renders: the owning season's name and the week's own
+ *  summary. `null` for an unknown week or a gauntlet round's `weeks` row (it has no week page). */
+export async function resolveWeekOgData(
+  weekId: number,
+): Promise<{ owner: Season; summary: WeekSummary } | null> {
+  const row = await getWeekRow(weekId);
+  const owner = row ? await getSeason(row.season_id) : null;
+  if (!owner || owner.is_gauntlet) return null;
+  const summary = await getWeekSummary(owner.id, weekId);
+  return summary ? { owner, summary } : null;
 }
 
 /** A season id and round number → the gauntlet round's view (`null` if the season has no gauntlet). */

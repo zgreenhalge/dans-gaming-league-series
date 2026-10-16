@@ -38,7 +38,7 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
 export async function getSeasonSchedule(
   seasonId: number,
   client?: SupabaseClient,
-  opts?: { throughWeek?: number },
+  opts?: { throughWeek?: number; onlyWeek?: number },
 ): Promise<WeekWithMatches[]> {
   const db = client ?? getAdminClient();
   let weeksQuery = db
@@ -48,6 +48,8 @@ export async function getSeasonSchedule(
   // Only the weeks up to `throughWeek` — a page that needs everything *so far* (a week's standings
   // movement) skips the rest.
   if (opts?.throughWeek != null) weeksQuery = weeksQuery.lte('week_number', opts.throughWeek);
+  // Just the one week — a page that needs only that week's own matches (its Open Graph image).
+  if (opts?.onlyWeek != null) weeksQuery = weeksQuery.eq('week_number', opts.onlyWeek);
   const [{ data: weeks, error: wErr }, players] = await Promise.all([
     weeksQuery.order('week_number').order('match_number', { referencedTable: 'matches' }),
     getPlayersById(client),
