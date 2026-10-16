@@ -5,6 +5,7 @@ import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriv
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup, getMatchTeamNames, getGauntletSeasonLeaderboard } from '../queries';
 import type { Player, Match } from '@/lib/types';
+import { effectivePickedMap } from '../veto';
 
 type LeaderboardAgg = {
   matches_played: number;
@@ -103,7 +104,7 @@ export async function getMatchMeta(matchId: number, client?: SupabaseClient) {
   const m = match as Pick<Match, 'final_score' | 'picked_map' | 'shirts_pick' | 'scheduled_at'>;
   const { title, seasonName, weekMatchLabel, shirtNames, skinNames, shirtPlayers, skinPlayers } = teams;
 
-  const map = m.shirts_pick ?? m.picked_map;
+  const map = effectivePickedMap(m);
   const mapName = map ? toSentenceCase(map) : null;
   const played = isPlayedScore(m.final_score);
 

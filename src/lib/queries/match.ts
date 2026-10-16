@@ -16,6 +16,7 @@ import {
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
+import { effectivePickedMap } from '../veto';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -541,7 +542,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
 
     const mapGroups = new Map<string, typeof rows>();
     for (const r of rows) {
-      const slug = mapSlug((r.match.shirts_pick ?? r.match.picked_map) ?? '');
+      const slug = mapSlug(effectivePickedMap(r.match) ?? '');
       if (!slug) continue;
       if (!mapGroups.has(slug)) mapGroups.set(slug, []);
       mapGroups.get(slug)!.push(r);
@@ -580,7 +581,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   for (const s of leagueStatRows) {
     const mm = leagueMatchById.get(s.match_id);
     if (!mm || !isPlayedScore(mm.final_score)) continue;
-    const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
+    const slug = mapSlug(effectivePickedMap(mm) ?? '');
     if (!slug) continue;
     if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], matches: new Set() });
     const g = leagueMapGroups.get(slug)!;

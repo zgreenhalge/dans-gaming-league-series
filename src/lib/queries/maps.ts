@@ -11,6 +11,7 @@ import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } fr
 import { getPlayersById } from './player';
 import { getSeasons } from './seasons';
 import { cacheQuery, fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
+import { effectivePickedMap } from '../veto';
 
 
 export interface MapPlayerStat {
@@ -377,7 +378,7 @@ export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null
   for (const s of seasons) seasonById.set(s.id, s);
 
   const playedMatches = matches.filter((m) => {
-    const played = (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase();
+    const played = (effectivePickedMap(m) ?? '').trim().toLowerCase();
     return played === nameLower && isPlayedScore(m.final_score);
   });
 
@@ -748,7 +749,7 @@ export async function getMatchIdsForMap(mapName: string, client?: SupabaseClient
   return rows
     .filter(
       (m) =>
-        (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase() === nameLower &&
+        (effectivePickedMap(m) ?? '').trim().toLowerCase() === nameLower &&
         isPlayedScore(m.final_score),
     )
     .map((m) => m.id);

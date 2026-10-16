@@ -23,3 +23,13 @@ export function isVetoComplete(m: VetoFields, isGauntlet: boolean): boolean {
     ? !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2)
     : !!(m.shirts_ban && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
 }
+
+/**
+ * The map a match is played on. The two pick columns are mutually exclusive: `shirts_pick` holds the
+ * map when SHIRTS picked (and the gauntlet auto-pick, always), `picked_map` holds it only when SKINS
+ * picked in the regular veto flow — so neither alone is "the picked map". See docs/glossary.md's Veto
+ * entry.
+ */
+export function effectivePickedMap(m: { shirts_pick: string | null; picked_map: string | null }): string | null {
+  return m.shirts_pick ?? m.picked_map;
+}

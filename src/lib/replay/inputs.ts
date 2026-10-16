@@ -7,6 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RosterEntry } from '../demoParser';
 import type { Side } from './types';
+import { effectivePickedMap } from '../veto';
 
 export interface ReplayInputs {
   map: string;
@@ -81,7 +82,7 @@ export async function getReplayInputs(
   });
 
   return {
-    map: match.shirts_pick ?? match.picked_map ?? '',
+    map: effectivePickedMap(match) ?? '',
     skinsSide: match.skins_starting_side,
     targetWinRounds,
     roster,

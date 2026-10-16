@@ -7,6 +7,7 @@ import { PlayerName } from './PlayerName';
 import { toSentenceCase } from '@/lib/maps';
 import { FeatureMatchIcon } from './FeatureMatch';
 import type { UpcomingGameRow } from '@/lib/queries';
+import { effectivePickedMap } from '@/lib/veto';
 
 function TeamNames({ players, dimmed, currentPlayerId }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean; currentPlayerId?: number | null }) {
   if (players.length === 0) return <span className="opacity-50">TBD</span>;
@@ -30,7 +31,7 @@ function GameRow({
   game: UpcomingGameRow;
   currentPlayerId: number | null;
 }) {
-  const map = game.shirts_pick ?? game.picked_map;
+  const map = effectivePickedMap(game);
 
   return (
     <Link

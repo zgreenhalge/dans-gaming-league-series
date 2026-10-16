@@ -5,6 +5,7 @@ import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
 import { asPage, cacheQuery, fetchAllPages, getWeekLookup } from './_shared';
+import { effectivePickedMap } from '../veto';
 
 
 export interface PlayerHistoryRow extends PlayerMatchStat {
@@ -232,7 +233,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         season_number: extractSeasonNumber(se.name),
         season_name: se.name,
         is_gauntlet: se.is_gauntlet,
-        map: m.shirts_pick ?? m.picked_map,
+        map: effectivePickedMap(m),
         final_score: m.final_score,
         scheduled_at: m.scheduled_at,
         shirts: roster.shirts,

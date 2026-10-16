@@ -12,6 +12,7 @@ import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
 import { getWeekLookup } from './_shared';
+import { effectivePickedMap } from '../veto';
 
 
 // ─── H2H data layer ──────────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   // Some seasons recorded the played map under `shirts_pick` rather than
   // `picked_map` — fall back the same way the rest of the codebase does
   // (see `getMatchById`, `getCareerMatchHistory`, etc).
-  const mapFor = (m: MatchRow): string | null => m.shirts_pick ?? m.picked_map;
+  const mapFor = (m: MatchRow): string | null => effectivePickedMap(m);
   const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
   if (playedMatches.length === 0) return { duos: [], rivals: [], players: [] };
 

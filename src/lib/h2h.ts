@@ -1,4 +1,5 @@
 import { parseScore, compareMatchRefDesc, isPlayedScore } from './util';
+import { effectivePickedMap } from './veto';
 
 // ─── H2H aggregation ─────────────────────────────────────────────────────────
 //
@@ -547,7 +548,7 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
     // Some seasons recorded the played map under `shirts_pick` rather than
     // `picked_map` — same fallback used throughout the codebase (see
     // `getMatchById`, `getCareerMatchHistory`, `getH2HData`).
-    map: m.shirts_pick ?? m.picked_map,
+    map: effectivePickedMap(m),
     pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
     startingSide: m.skins_starting_side,
     finalScore: m.final_score,
@@ -584,7 +585,7 @@ function seasonMatchToH2HInput(
     matchNumber: m.match_number,
     seasonNumber,
     isGauntlet,
-    map: m.shirts_pick ?? m.picked_map,
+    map: effectivePickedMap(m),
     pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
     startingSide: m.skins_starting_side,
     finalScore: m.final_score,

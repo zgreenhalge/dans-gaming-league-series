@@ -7,6 +7,7 @@ import { PlayerName } from './PlayerName';
 import { fmtWindowDate, weekLabel, weekWindow, weekAnchorId } from '@/lib/util';
 import { weekHref } from '@/lib/crumbs';
 import type { MatchWithRoster, WeekWithMatches } from '@/lib/queries';
+import { effectivePickedMap } from '@/lib/veto';
 
 
 /** One regular-season match as a schedule row — shared by the season hub's week list and the week
@@ -24,7 +25,7 @@ export function WeekMatchCard({
   return (
     <MatchCard
       href={`/matches/${m.id}`}
-      map={m.shirts_pick ?? m.picked_map}
+      map={effectivePickedMap(m)}
       label={{ type: 'match', matchNumber: m.match_number, isFeatureMatch: m.is_feature_match }}
       right={right}
       shirtsStats={m.shirts_stats}

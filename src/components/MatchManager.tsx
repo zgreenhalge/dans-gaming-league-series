@@ -16,10 +16,11 @@ import VetoSequence from './VetoSequence';
 import { ScheduleEditor } from './ScheduleEditor';
 import { FeatureMatchToggle } from './FeatureMatchToggle';
 import { ReparseDemoButton } from './ReparseDemoButton';
+import { effectivePickedMap } from '@/lib/veto';
 
-/** The map a match was played on — the pick lives in `shirts_pick`, falling back to `picked_map`. */
+/** The map a match was played on (see `effectivePickedMap()`). */
 function mapFor(m: AdminMatchRow): string | null {
-  return m.match.shirts_pick ?? m.match.picked_map;
+  return effectivePickedMap(m.match);
 }
 
 /**
