@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Th from './Th';
-import { Tr, Td, NameTd } from './StatTable';
+import { StatTable, Tr, Td, PlayerCell } from './StatTable';
 import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
@@ -102,86 +102,86 @@ function MapCard({
     : null;
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <Link
-        href={`/maps/${slug}`}
-        className="map-card-bg flex items-end justify-between gap-3 px-4 py-5 border-b border-[var(--color-border-tertiary)]"
-        style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
-      >
-        <span className="map-text-scrim font-display font-bold text-[16px] text-[var(--color-text-primary)]">{displayName}</span>
-        {expanded && <span className="map-text-scrim tracked text-[9px] text-[var(--color-ct)]">PICKED</span>}
-      </Link>
-      <table className="w-full table-fixed">
-        <thead>
-          <tr>
-            <Th>Player</Th>
-            <Th align="right">W-L</Th>
-            {expanded && <><Th align="right">K</Th><Th align="right">A</Th><Th align="right">D</Th></>}
-            <Th align="right">RWR%</Th>
-            <Th align="right">ADR</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ player, stat }) => (
-            <Tr key={player.id} clickable className="cursor-pointer">
-              <NameTd className="truncate">
-                <Link href={`/players/${player.id}`}>{player.name}</Link>
-              </NameTd>
-              {stat === null ? (
-                <Td colSpan={expanded ? 6 : 3} muted>No data</Td>
-              ) : (
+    <StatTable
+      fixed
+      header={
+        <Link
+          href={`/maps/${slug}`}
+          className="map-card-bg flex items-end justify-between gap-3 px-4 py-5 border-b border-[var(--color-border-tertiary)]"
+          style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
+        >
+          <span className="map-text-scrim font-display font-bold text-[16px] text-[var(--color-text-primary)]">{displayName}</span>
+          {expanded && <span className="map-text-scrim tracked text-[9px] text-[var(--color-ct)]">PICKED</span>}
+        </Link>
+      }
+    >
+      <thead>
+        <tr>
+          <Th>Player</Th>
+          <Th align="right">W-L</Th>
+          {expanded && <><Th align="right">K</Th><Th align="right">A</Th><Th align="right">D</Th></>}
+          <Th align="right">RWR%</Th>
+          <Th align="right">ADR</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ player, stat }) => (
+          <Tr key={player.id} href={`/players/${player.id}`}>
+            <PlayerCell id={player.id} name={player.name} sticky={false} className="truncate" />
+            {stat === null ? (
+              <Td colSpan={expanded ? 6 : 3} muted>No data</Td>
+            ) : (
+              <>
+                <Td muted>{stat.wins}-{stat.losses}</Td>
+                {expanded && (
+                  <>
+                    <Td>{Math.round(stat.avgKills)}</Td>
+                    <Td>{Math.round(stat.avgAssists)}</Td>
+                    <Td>{Math.round(stat.avgDeaths)}</Td>
+                  </>
+                )}
+                <Td style={{ color: heatColor(stat.rwr * 100, player.rwr * 100, 3) }} title={heatTitle(stat.rwr * 100, player.rwr * 100, '%', 1)}>
+                  {(stat.rwr * 100).toFixed(1)}%
+                </Td>
+                <Td bold style={{ color: heatColor(stat.adr, player.adr, 5) }} title={heatTitle(stat.adr, player.adr, ' ADR', 1)}>
+                  {stat.adr.toFixed(1)}
+                </Td>
+              </>
+            )}
+          </Tr>
+        ))}
+        {avg && (
+          <>
+            <Tr variant="summary">
+              <Td align="left" mono={false} muted className="tracked">players</Td>
+              <Td muted>—</Td>
+              {expanded && (
                 <>
-                  <Td muted>{stat.wins}-{stat.losses}</Td>
-                  {expanded && (
-                    <>
-                      <Td>{Math.round(stat.avgKills)}</Td>
-                      <Td>{Math.round(stat.avgAssists)}</Td>
-                      <Td>{Math.round(stat.avgDeaths)}</Td>
-                    </>
-                  )}
-                  <Td style={{ color: heatColor(stat.rwr * 100, player.rwr * 100, 3) }} title={heatTitle(stat.rwr * 100, player.rwr * 100, '%', 1)}>
-                    {(stat.rwr * 100).toFixed(1)}%
-                  </Td>
-                  <Td bold style={{ color: heatColor(stat.adr, player.adr, 5) }} title={heatTitle(stat.adr, player.adr, ' ADR', 1)}>
-                    {stat.adr.toFixed(1)}
-                  </Td>
+                  <Td muted title="Avg of Players K">{avg.avgKills.toFixed(1)}</Td>
+                  <Td muted title="Avg of Players A">{avg.avgAssists.toFixed(1)}</Td>
+                  <Td muted title="Avg of Players D">{avg.avgDeaths.toFixed(1)}</Td>
                 </>
               )}
+              <Td muted title="Avg of Players RWR%">{(avg.rwr * 100).toFixed(1)}%</Td>
+              <Td muted title="Avg of Players ADR">{avg.adr.toFixed(1)}</Td>
             </Tr>
-          ))}
-          {avg && (
-            <>
-              <tr className="border-t border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
-                <Td align="left" mono={false} muted className="tracked">players</Td>
-                <Td muted>—</Td>
-                {expanded && (
-                  <>
-                    <Td muted title="Avg of Players K">{avg.avgKills.toFixed(1)}</Td>
-                    <Td muted title="Avg of Players A">{avg.avgAssists.toFixed(1)}</Td>
-                    <Td muted title="Avg of Players D">{avg.avgDeaths.toFixed(1)}</Td>
-                  </>
-                )}
-                <Td muted title="Avg of Players RWR%">{(avg.rwr * 100).toFixed(1)}%</Td>
-                <Td muted title="Avg of Players ADR">{avg.adr.toFixed(1)}</Td>
-              </tr>
-              <tr className="bg-[var(--color-bg-secondary)]">
-                <Td align="left" mono={false} muted className="tracked">league</Td>
-                <Td muted title={leagueAvg ? `Games played on ${displayName} by the league` : undefined}>{leagueAvg ? leagueAvg.wins + leagueAvg.losses : '—'}</Td>
-                {expanded && (
-                  <>
-                    <Td muted title="Avg of League K">{leagueAvg ? leagueAvg.avgKills.toFixed(1) : '—'}</Td>
-                    <Td muted title="Avg of League A">{leagueAvg ? leagueAvg.avgAssists.toFixed(1) : '—'}</Td>
-                    <Td muted title="Avg of League D">{leagueAvg ? leagueAvg.avgDeaths.toFixed(1) : '—'}</Td>
-                  </>
-                )}
-                <Td muted>—</Td>
-                <Td muted title="Avg of League ADR">{leagueAvg ? leagueAvg.adr.toFixed(1) : '—'}</Td>
-              </tr>
-            </>
-          )}
-        </tbody>
-      </table>
-    </div>
+            <Tr variant="summary">
+              <Td align="left" mono={false} muted className="tracked">league</Td>
+              <Td muted title={leagueAvg ? `Games played on ${displayName} by the league` : undefined}>{leagueAvg ? leagueAvg.wins + leagueAvg.losses : '—'}</Td>
+              {expanded && (
+                <>
+                  <Td muted title="Avg of League K">{leagueAvg ? leagueAvg.avgKills.toFixed(1) : '—'}</Td>
+                  <Td muted title="Avg of League A">{leagueAvg ? leagueAvg.avgAssists.toFixed(1) : '—'}</Td>
+                  <Td muted title="Avg of League D">{leagueAvg ? leagueAvg.avgDeaths.toFixed(1) : '—'}</Td>
+                </>
+              )}
+              <Td muted>—</Td>
+              <Td muted title="Avg of League ADR">{leagueAvg ? leagueAvg.adr.toFixed(1) : '—'}</Td>
+            </Tr>
+          </>
+        )}
+      </tbody>
+    </StatTable>
   );
 }
 
