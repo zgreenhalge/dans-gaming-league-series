@@ -10,7 +10,8 @@ import { vi } from 'vitest';
  * `pushState`/`replaceState` spy on the real `window.history` methods, not `useRouter().push`/
  * `.replace()` — `useSetUrlParams` (`src/components/useUrlState.ts`) writes the URL via the native
  * History API directly (Next's "shallow routing" pattern, so a query-only change doesn't trigger a
- * full server round-trip), so `useRouter` isn't part of this mock at all.
+ * full server round-trip). `useRouter()` is only there for components that navigate on a row click
+ * (`Tr href` in `src/components/StatTable.tsx`); its `push` is `nextNavigationMock.routerPush`.
  */
 let searchParams = new URLSearchParams('');
 let pathname = '/example';
@@ -18,6 +19,7 @@ let pathname = '/example';
 export const nextNavigationMock = {
   pushState: vi.spyOn(window.history, 'pushState').mockImplementation(() => {}),
   replaceState: vi.spyOn(window.history, 'replaceState').mockImplementation(() => {}),
+  routerPush: vi.fn(),
   getSearchParams: () => searchParams,
   setSearchParams: (qs: string) => { searchParams = new URLSearchParams(qs); },
   getPathname: () => pathname,
@@ -28,6 +30,7 @@ export function createNextNavigationMock() {
   return {
     usePathname: () => nextNavigationMock.getPathname(),
     useSearchParams: () => nextNavigationMock.getSearchParams(),
+    useRouter: () => ({ push: nextNavigationMock.routerPush }),
   };
 }
 
@@ -35,6 +38,7 @@ export function createNextNavigationMock() {
 export function resetNextNavigationMock(): void {
   nextNavigationMock.pushState.mockClear();
   nextNavigationMock.replaceState.mockClear();
+  nextNavigationMock.routerPush.mockClear();
   nextNavigationMock.setSearchParams('');
   nextNavigationMock.setPathname('/example');
 }

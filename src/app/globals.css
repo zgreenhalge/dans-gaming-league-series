@@ -550,6 +550,18 @@ body::before {
 .lift-row {
   transition: background-color 0.15s, box-shadow 0.15s;
 }
+/* A row tinted by its `--lift-accent` (a medal or zone color); hover then washes in the same accent. */
+.row-tint {
+  background: color-mix(in srgb, var(--lift-accent) 8%, var(--color-bg-primary));
+}
+/* A marker row sets one row apart inside a table body: a light fill between white rules. The rules
+   sit on the cells because table rows don't paint `box-shadow`. */
+.row-marker {
+  background: color-mix(in srgb, #ffffff 16%, var(--color-bg-secondary));
+}
+.row-marker > td {
+  box-shadow: inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff;
+}
 .lift-row:hover {
   background: color-mix(in srgb, var(--lift-accent, var(--color-site-accent)) 6%, var(--color-bg-secondary));
   box-shadow: inset 3px 0 0 0 var(--lift-accent, var(--color-site-accent));

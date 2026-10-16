@@ -8,7 +8,7 @@ import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdow
 import EmptyState from './EmptyState';
 import Th from './Th';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, PlayerCell } from './StatTable';
+import { StatTable, Tr, Td, PlayerCell, ExpandedTd } from './StatTable';
 import { useSortState } from './useSortState';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
@@ -326,6 +326,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                 const bg = rowBg(rating, RED);
                 const hoverBg = rowHoverBg(rating, RED);
                 const isExpanded = expandedOpponent === row.other;
+                const toggle = () => setExpandedOpponent(isExpanded ? null : row.other);
                 return (
                   <Fragment key={row.other}>
                     <Tr
@@ -333,9 +334,9 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       style={{ background: isExpanded ? hoverBg : bg }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
-                      onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
+                      onClick={toggle}
                     >
-                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} />
+                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} expanded={isExpanded} onToggle={toggle} />
                       <Td align="center">
                         <div className="flex justify-center">
                           <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
@@ -353,14 +354,14 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                     </Tr>
                     {isExpanded && (
                       <Tr>
-                        <td colSpan={H2H_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                        <ExpandedTd>
                           <RivalDetail
                             rival={row._raw}
                             players={playersById}
                             rivalryRating={rating}
                             ratingBreakdown={rivalBreakdown(row._raw)}
                           />
-                        </td>
+                        </ExpandedTd>
                       </Tr>
                     )}
                   </Fragment>
@@ -396,6 +397,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                 const myKd = row.myStats.deaths > 0 ? row.myStats.kills / row.myStats.deaths : row.myStats.kills;
                 const theirKd = row.theirStats.deaths > 0 ? row.theirStats.kills / row.theirStats.deaths : row.theirStats.kills;
                 const isExpanded = expandedTeammate === row.other;
+                const toggle = () => setExpandedTeammate(isExpanded ? null : row.other);
                 return (
                   <Fragment key={row.other}>
                     <Tr
@@ -403,9 +405,9 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       style={{ background: isExpanded ? hoverBg : bg }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
-                      onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
+                      onClick={toggle}
                     >
-                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} />
+                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} expanded={isExpanded} onToggle={toggle} />
                       <Td align="center">
                         <div className="flex justify-center">
                           <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
@@ -423,14 +425,14 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                     </Tr>
                     {isExpanded && (
                       <Tr>
-                        <td colSpan={B2B_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                        <ExpandedTd>
                           <DuoDetail
                             duo={row._raw}
                             players={playersById}
                             friendshipRating={rating}
                             ratingBreakdown={duoBreakdown(row._raw)}
                           />
-                        </td>
+                        </ExpandedTd>
                       </Tr>
                     )}
                   </Fragment>
