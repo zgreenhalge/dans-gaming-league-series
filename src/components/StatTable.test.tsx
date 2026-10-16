@@ -126,7 +126,7 @@ describe('StatTable pieces', () => {
         <Tr variant="marker" data-testid="marker"><Td>2</Td></Tr>
       </tbody></table>,
     );
-    expect(screen.getByTestId('summary').className).toContain('bg-[var(--color-bg-secondary)]');
+    expect(screen.getByTestId('summary').className).toContain('bg-[var(--color-bg-tertiary)]');
     expect(screen.getByTestId('summary').className).toContain('border-t');
     expect(screen.getByTestId('summary').className).not.toContain('bg-[var(--color-bg-primary)]');
     expect(screen.getByTestId('marker').className).toContain('row-marker');

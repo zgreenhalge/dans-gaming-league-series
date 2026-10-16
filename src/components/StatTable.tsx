@@ -46,7 +46,7 @@ export function StatTable({
 const TR_BASE = 'border-b border-[var(--color-border-tertiary)] last:border-b-0';
 const TR_BG = {
   body: 'bg-[var(--color-bg-primary)]',
-  summary: 'bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]',
+  summary: 'bg-[var(--color-bg-tertiary)] border-t border-[var(--color-border-tertiary)]',
   marker: 'row-marker',
 };
 
@@ -55,7 +55,7 @@ type TrProps = {
   clickable?: boolean;
   /** Leave the background to `className` (a faction tint) instead of the page background. */
   tinted?: boolean;
-  /** `summary` is an averages or totals row: secondary background under a top rule. `marker` sets a
+  /** `summary` is an averages or totals row: tertiary background (apart from the header band) under a top rule. `marker` sets a
    *  row apart inside the body (the current value among scenarios) with a light fill and white rules. */
   variant?: 'body' | 'summary' | 'marker';
   /** Tint the row with this color (a medal or zone) and use it for the hover accent. */

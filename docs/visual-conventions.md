@@ -144,8 +144,8 @@ for a ▸/▾ button before the name, so the row reads as expandable and keyboar
 and gauntlet-zone colors) and sets the `--lift-accent` the hover wash and bar then use, so a tinted row
 needs no hover handlers.
 
-**Summary, marker and expanded rows.** `Tr variant="summary"` is an averages or totals row: secondary
-background under a tertiary top rule (the players and league averages in the scouting report, the "All
+**Summary, marker and expanded rows.** `Tr variant="summary"` is an averages or totals row: tertiary
+background (distinct from the secondary header band) under a tertiary top rule (the players and league averages in the scouting report, the "All
 maps" footer). `Tr variant="marker"` sets one row apart inside a body: a light fill between white rules
 (the "Current" rating among the EHOG projection scenarios). `ExpandedTd` is the full-width panel under
 an expanded row: 12px padding on the secondary background, spanning every column of the header row so the
