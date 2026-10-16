@@ -8,7 +8,7 @@ import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdow
 import EmptyState from './EmptyState';
 import Th from './Th';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, PlayerCell } from './StatTable';
+import { StatTable, Tr, Td, PlayerCell, ExpandedTd } from './StatTable';
 import { useSortState } from './useSortState';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
@@ -353,14 +353,14 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                     </Tr>
                     {isExpanded && (
                       <Tr>
-                        <td colSpan={H2H_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                        <ExpandedTd>
                           <RivalDetail
                             rival={row._raw}
                             players={playersById}
                             rivalryRating={rating}
                             ratingBreakdown={rivalBreakdown(row._raw)}
                           />
-                        </td>
+                        </ExpandedTd>
                       </Tr>
                     )}
                   </Fragment>
@@ -423,14 +423,14 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                     </Tr>
                     {isExpanded && (
                       <Tr>
-                        <td colSpan={B2B_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                        <ExpandedTd>
                           <DuoDetail
                             duo={row._raw}
                             players={playersById}
                             friendshipRating={rating}
                             ratingBreakdown={duoBreakdown(row._raw)}
                           />
-                        </td>
+                        </ExpandedTd>
                       </Tr>
                     )}
                   </Fragment>

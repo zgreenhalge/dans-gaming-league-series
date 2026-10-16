@@ -262,24 +262,14 @@ function RatingProjectionTable({
         <tbody>
           {wins.map(renderProjRow)}
           {current && (
-            <tr
-              style={{
-                background: 'color-mix(in srgb, #ffffff 16%, var(--color-bg-secondary))',
-                boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff',
-              }}
-            >
-              <NameTd
-                sticky
-                style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
-              >
-                Current
-              </NameTd>
+            <Tr variant="marker">
+              <NameTd sticky>Current</NameTd>
               {allPlayers.map((p) => (
                 <Td key={p.player_id} bold>
                   {(current[p.player_id] ?? 0).toFixed(2)}
                 </Td>
               ))}
-            </tr>
+            </Tr>
           )}
           {losses.map(renderProjRow)}
         </tbody>
