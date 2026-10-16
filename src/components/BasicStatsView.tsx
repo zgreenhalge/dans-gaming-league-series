@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import { useSortState } from './useSortState';
-import Link from 'next/link';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
@@ -70,38 +69,14 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} clickable>
+            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
               <PlayerCell id={row.player_id} name={row.player_name} />
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.total_kills}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.total_assists}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.total_deaths}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtDiff(stats.killDiff)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.total_damage.toLocaleString()}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(row.overall_adr, 2)}
-                </Link>
-              </Td>
+              <Td>{row.total_kills}</Td>
+              <Td>{row.total_assists}</Td>
+              <Td>{row.total_deaths}</Td>
+              <Td>{fmtDiff(stats.killDiff)}</Td>
+              <Td>{row.total_damage.toLocaleString()}</Td>
+              <Td>{fmtNum(row.overall_adr, 2)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -154,53 +129,17 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} clickable>
+            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
               <PlayerCell id={row.player_id} name={row.player_name} />
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(row.kd_ratio, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.dmgPerKill, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.kPerRound, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.aPerRound, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.dPerRound, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.kPerWin, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.dPerWin, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.kPerLoss, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.dPerLoss, 1)}
-                </Link>
-              </Td>
+              <Td>{fmtNum(row.kd_ratio, 2)}</Td>
+              <Td>{fmtNum(stats.dmgPerKill, 1)}</Td>
+              <Td>{fmtNum(stats.kPerRound, 2)}</Td>
+              <Td>{fmtNum(stats.aPerRound, 2)}</Td>
+              <Td>{fmtNum(stats.dPerRound, 2)}</Td>
+              <Td>{fmtNum(stats.kPerWin, 1)}</Td>
+              <Td>{fmtNum(stats.dPerWin, 1)}</Td>
+              <Td>{fmtNum(stats.kPerLoss, 1)}</Td>
+              <Td>{fmtNum(stats.dPerLoss, 1)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -272,43 +211,15 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} clickable>
+            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
               <PlayerCell id={row.player_id} name={row.player_name} />
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.matches_played}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.matches_won}–{row.matches_lost}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(row.win_rate_percentage, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.total_rounds_played}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {row.total_rounds_won}–{stats.roundsLost}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtDiff(stats.roundDiff)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(row.rwr_percentage, 1)}
-                </Link>
-              </Td>
+              <Td>{row.matches_played}</Td>
+              <Td>{row.matches_won}–{row.matches_lost}</Td>
+              <Td>{fmtNum(row.win_rate_percentage, 1)}</Td>
+              <Td>{row.total_rounds_played}</Td>
+              <Td>{row.total_rounds_won}–{stats.roundsLost}</Td>
+              <Td>{fmtDiff(stats.roundDiff)}</Td>
+              <Td>{fmtNum(row.rwr_percentage, 1)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -361,53 +272,17 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} clickable>
+            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
               <PlayerCell id={row.player_id} name={row.player_name} />
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.rPerGame, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtDiff(stats.rdPerGame, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.rwPerGame, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.rlPerGame, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtDiff(stats.kdPerGame, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.dmgPerGame, 1)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.kPerGame, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.aPerGame, 2)}
-                </Link>
-              </Td>
-              <Td>
-                <Link href={`/players/${row.player_id}`} className="block">
-                  {fmtNum(stats.dPerGame, 2)}
-                </Link>
-              </Td>
+              <Td>{fmtNum(stats.rPerGame, 1)}</Td>
+              <Td>{fmtDiff(stats.rdPerGame, 2)}</Td>
+              <Td>{fmtNum(stats.rwPerGame, 2)}</Td>
+              <Td>{fmtNum(stats.rlPerGame, 2)}</Td>
+              <Td>{fmtDiff(stats.kdPerGame, 2)}</Td>
+              <Td>{fmtNum(stats.dmgPerGame, 1)}</Td>
+              <Td>{fmtNum(stats.kPerGame, 2)}</Td>
+              <Td>{fmtNum(stats.aPerGame, 2)}</Td>
+              <Td>{fmtNum(stats.dPerGame, 2)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -561,7 +436,7 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
           </tbody>
           {ct && t && (
             <tfoot>
-              <tr className="bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]">
+              <Tr variant="summary">
                 <NameTd colSpan={6}>All maps</NameTd>
                 <Td muted className={SIDE_DIVIDER}>{ct.numTimesPicked}</Td>
                 <Td>{ct.wins}-{ct.losses}</Td>
@@ -569,7 +444,7 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
                 <Td muted className={SIDE_DIVIDER}>{t.numTimesPicked}</Td>
                 <Td>{t.wins}-{t.losses}</Td>
                 <Td muted>{formatRoundWinPct(t)}</Td>
-              </tr>
+              </Tr>
             </tfoot>
           )}
         </StatTable>

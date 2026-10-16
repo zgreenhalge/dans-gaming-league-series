@@ -212,32 +212,23 @@ export default function LeaderboardTable({
           return (
             <Tr
               key={firstColMode === 'season' ? p.season_id : p.player_id}
-              className="cursor-pointer transition-colors"
-              style={{ background: rowColor
-                ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))`
-                : 'var(--color-bg-primary)'
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; onPlayerHover?.(p.player_id); }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : 'var(--color-bg-primary)'; onPlayerHover?.(null); }}
+              href={href}
+              accent={rowColor ?? undefined}
+              onMouseEnter={() => onPlayerHover?.(p.player_id)}
+              onMouseLeave={() => onPlayerHover?.(null)}
             >
               {firstColMode === 'player' && showRank && (
-                <Td align="left"
-                  style={{ color: textColor ?? 'var(--color-text-secondary)' }}
-                >
-                  <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
+                <Td align="left" style={{ color: textColor ?? 'var(--color-text-secondary)' }}>
+                  {canonicalRankOf.get(p.player_id) ?? '-'}
                 </Td>
               )}
-              <NameTd sticky={stickyNameCol}
-                style={{ color: textColor ?? undefined }}
-              >
+              <NameTd sticky={stickyNameCol} style={{ color: textColor ?? undefined }}>
                 <Link href={href} className="flex items-center w-full h-full">
                   <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
                 </Link>
               </NameTd>
               {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
-                <Td key={c.key}>
-                  <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
-                </Td>
+                <Td key={c.key}>{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Td>
               ))}
               {hasEhog && (
                 <Td
@@ -245,31 +236,17 @@ export default function LeaderboardTable({
                   title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
                   style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
                 >
-                  <Link href={href} className="block w-full h-full">
-                    {ehogRatings[p.player_id] != null
-                      ? ehogRatings[p.player_id].toFixed(1)
-                      : <span className="text-[var(--color-text-secondary)]">—</span>}
-                  </Link>
+                  {ehogRatings[p.player_id] != null
+                    ? ehogRatings[p.player_id].toFixed(1)
+                    : <span className="text-[var(--color-text-secondary)]">—</span>}
                 </Td>
               )}
-              <Td muted>
-                <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
-              </Td>
-              <Td muted>
-                <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
-              </Td>
-              <Td>
-                <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
-              </Td>
-              <Td muted>
-                <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Link>
-              </Td>
-              <Td>
-                <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
-              </Td>
-              <Td bold>
-                <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
-              </Td>
+              <Td muted>{p.matches_played}</Td>
+              <Td muted>{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Td>
+              <Td>{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Td>
+              <Td muted>{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Td>
+              <Td>{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Td>
+              <Td bold>{dash(played, p.overall_adr.toFixed(2))}</Td>
             </Tr>
           );
         })}
