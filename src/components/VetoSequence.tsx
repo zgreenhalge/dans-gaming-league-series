@@ -5,7 +5,6 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
-import { isPlayedScore } from '@/lib/util';
 import { useMapLookup } from './MapContext';
 import { SIDE_ICON } from './icons/SideIcons';
 import type { Match } from '@/lib/types';
@@ -343,27 +342,6 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           </button>
         </div>
       )}
-
-      {/* Workshop link for picked map (hidden once stats are recorded) */}
-      {(() => {
-        const pickedMap = match.shirts_pick ?? match.picked_map ?? autoPickedMap;
-        if (!pickedMap || isPlayedScore(match.final_score)) return null;
-        const workshopUrl = mapLookup[mapSlug(pickedMap)]?.workshop_url;
-        if (!workshopUrl) return null;
-        return (
-          <div className="mt-1.5 px-1">
-            <a
-              href={workshopUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            >
-              <span>Steam Workshop</span>
-              <span className="text-[9px]">↗</span>
-            </a>
-          </div>
-        );
-      })()}
 
       {/* Map selection panel */}
       {activeField && canVeto && (
