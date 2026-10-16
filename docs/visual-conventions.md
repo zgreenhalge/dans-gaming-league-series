@@ -138,10 +138,10 @@ statistics pages, and the week/round/group scorecards:
 keyboard users Tab to it, a screen reader announces one link per row, and right-click offers the usual
 link menu. A click anywhere else on the row navigates (`router.push`), Cmd/Ctrl/Shift-click or a middle
 click opens a new tab, and a click that lands on a link or control inside the row is left to it. The row
-outlines while its link has focus. A row that expands or selects instead of navigating (the matchups
+outlines while anything in it has focus. A row that expands or selects instead of navigating (the matchups
 tables) uses `clickable` with its own `onClick`, and its `PlayerCell` takes `onToggle` and `expanded`
 for a ▸/▾ button before the name, so the row reads as expandable and keyboard users can open it. `accent="<color>"` tints a row (the leaderboard's medal
-and gauntlet-zone colors) and sets the `--lift-accent` the hover wash and bar then use, so a tinted row
+and gauntlet-zone colors) and sets the `--lift-accent` the hover wash and bar use on a clickable row, so a tinted row
 needs no hover handlers.
 
 **Summary, marker and expanded rows.** `Tr variant="summary"` is an averages or totals row: tertiary

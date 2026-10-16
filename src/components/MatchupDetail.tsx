@@ -177,42 +177,42 @@ function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: 
     <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
       <div className="tracked text-[8px] text-[var(--color-text-secondary)] mb-1.5">Map Intel</div>
       <div className="overflow-x-auto">
-      <CompactTable>
-        <thead>
-          <tr>
-            <CompactTh>Map</CompactTh>
-            <CompactTh align="right">Games</CompactTh>
-            <CompactTh align="right">W-L</CompactTh>
-            <CompactTh align="right">Rounds</CompactTh>
-            {aLabel ? (
-              <>
-                <CompactTh align="right" title={aLabel}>ADR·A</CompactTh>
-                <CompactTh align="right" title={bLabel}>ADR·B</CompactTh>
-              </>
-            ) : (
-              <CompactTh align="right">ADR</CompactTh>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <CompactTr key={r.map}>
-              <CompactNameTd href={`/maps/${mapSlug(r.map)}`}>{toSentenceCase(r.map)}</CompactNameTd>
-              <CompactTd>{r.games}</CompactTd>
-              <CompactTd>{r.wins}–{r.losses}</CompactTd>
-              <CompactTd>{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</CompactTd>
+        <CompactTable>
+          <thead>
+            <tr>
+              <CompactTh>Map</CompactTh>
+              <CompactTh align="right">Games</CompactTh>
+              <CompactTh align="right">W-L</CompactTh>
+              <CompactTh align="right">Rounds</CompactTh>
               {aLabel ? (
                 <>
-                  <CompactTd>{r.aAdr.toFixed(1)}</CompactTd>
-                  <CompactTd>{r.bAdr.toFixed(1)}</CompactTd>
+                  <CompactTh align="right" title={aLabel}>ADR·A</CompactTh>
+                  <CompactTh align="right" title={bLabel}>ADR·B</CompactTh>
                 </>
               ) : (
-                <CompactTd>{r.aAdr.toFixed(1)}</CompactTd>
+                <CompactTh align="right">ADR</CompactTh>
               )}
-            </CompactTr>
-          ))}
-        </tbody>
-      </CompactTable>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <CompactTr key={r.map}>
+                <CompactNameTd href={`/maps/${mapSlug(r.map)}`}>{toSentenceCase(r.map)}</CompactNameTd>
+                <CompactTd>{r.games}</CompactTd>
+                <CompactTd>{r.wins}–{r.losses}</CompactTd>
+                <CompactTd>{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</CompactTd>
+                {aLabel ? (
+                  <>
+                    <CompactTd>{r.aAdr.toFixed(1)}</CompactTd>
+                    <CompactTd>{r.bAdr.toFixed(1)}</CompactTd>
+                  </>
+                ) : (
+                  <CompactTd>{r.aAdr.toFixed(1)}</CompactTd>
+                )}
+              </CompactTr>
+            ))}
+          </tbody>
+        </CompactTable>
       </div>
     </div>
   );

@@ -114,7 +114,7 @@ describe('StatTable pieces', () => {
     render(<table><tbody><Tr accent="#f5c542" data-testid="row"><Td>1</Td></Tr></tbody></table>);
     const row = screen.getByTestId('row');
     expect(row.className).toContain('row-tint');
-    expect(row.className).toContain('lift-row');
+    expect(row.className).not.toContain('lift-row');
     expect(row.className).not.toContain('bg-[var(--color-bg-primary)]');
     expect(row.style.getPropertyValue('--lift-accent')).toBe('#f5c542');
   });

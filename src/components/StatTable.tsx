@@ -46,7 +46,7 @@ export function StatTable({
 const TR_BASE = 'border-b border-[var(--color-border-tertiary)] last:border-b-0';
 const TR_BG = {
   body: 'bg-[var(--color-bg-primary)]',
-  summary: 'bg-[var(--color-bg-tertiary)] border-t border-[var(--color-border-tertiary)]',
+  summary: 'bg-[var(--color-bg-tertiary)]',
   marker: 'row-marker',
 };
 
@@ -88,7 +88,7 @@ function PlainTr({
     <tr
       {...rest}
       style={accent ? ({ '--lift-accent': accent, ...style } as React.CSSProperties) : style}
-      className={`${tint ? '' : TR_BG[variant]} ${accent ? 'row-tint' : ''} ${TR_BASE} ${clickable || accent ? 'lift-row' : ''} ${className}`}
+      className={`${tint ? '' : TR_BG[variant]} ${accent ? 'row-tint' : ''} ${TR_BASE} ${variant === 'summary' ? 'border-t' : ''} ${clickable ? 'lift-row' : ''} ${className}`}
     />
   );
 }
