@@ -913,7 +913,7 @@ const GRENADE_COLUMNS: UtilityColumn[] = [
   { key: 'df', label: 'Defuses', title: 'Bomb defuses', value: (a) => a.defuses },
 ];
 
-function UtilityColumnsTable({ heading, columns, aggregated, singlePlayer }: { heading: string; columns: UtilityColumn[]; aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+function UtilityColumnsTable({ columns, aggregated, singlePlayer }: { columns: UtilityColumn[]; aggregated: AggregatedSab[]; singlePlayer: boolean }) {
   const [sort, toggleSort] = useSortState(columns[0].key);
 
   const sorted = useMemo(
@@ -922,9 +922,7 @@ function UtilityColumnsTable({ heading, columns, aggregated, singlePlayer }: { h
   );
 
   return (
-    <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3">{heading}</h3>
-      <StatTable>
+    <StatTable>
         <thead>
           <tr>
             {!singlePlayer && <Th sticky>Player</Th>}
@@ -944,17 +942,25 @@ function UtilityColumnsTable({ heading, columns, aggregated, singlePlayer }: { h
           ))}
         </tbody>
       </StatTable>
-    </div>
   );
 }
 
-function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
-  const prefix = showHeading ? 'Utility — ' : '';
+const UTILITY_SECTIONS = [
+  { heading: 'Flashes', columns: FLASH_COLUMNS },
+  { heading: 'Grenades & Objectives', columns: GRENADE_COLUMNS },
+];
+
+/** One table per `UTILITY_SECTIONS` entry, each titled and (in a match's team view) tinted on its
+ *  own so the gap between them stays untinted. */
+function UtilityTable({ aggregated, singlePlayer, teamGroups }: { aggregated: AggregatedSab[]; singlePlayer: boolean; teamGroups?: TeamGroup[] }) {
   return (
-    <>
-      <UtilityColumnsTable heading={`${prefix}Flashes`} columns={FLASH_COLUMNS} aggregated={aggregated} singlePlayer={singlePlayer} />
-      <UtilityColumnsTable heading={`${prefix}Grenades & Objectives`} columns={GRENADE_COLUMNS} aggregated={aggregated} singlePlayer={singlePlayer} />
-    </>
+    <div className="my-6 space-y-6">
+      {UTILITY_SECTIONS.map(({ heading, columns }) => (
+        <GroupedOrFlat key={heading} aggregated={aggregated} groups={teamGroups} heading={heading} render={(agg) => (
+          <UtilityColumnsTable columns={columns} aggregated={agg} singlePlayer={singlePlayer} />
+        )} />
+      ))}
+    </div>
   );
 }
 
@@ -1371,18 +1377,23 @@ const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
 function GroupedOrFlat({
   aggregated,
   groups,
+  heading,
   render,
 }: {
   aggregated: AggregatedSab[];
   groups?: TeamGroup[];
+  /** A title above the table (below a group's `header`), outside any faction tint. */
+  heading?: string;
   render: (agg: AggregatedSab[]) => React.ReactNode;
 }) {
-  if (!groups) return <>{render(aggregated)}</>;
+  const title = heading && <h3 className="text-sm font-semibold mb-3">{heading}</h3>;
+  if (!groups) return <div>{title}{render(aggregated)}</div>;
   return (
     <>
       {groups.map((g, i) => (
         <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
           {g.header}
+          {title}
           <div className={`faction-tint ${factionClass(g.side)}`}>
             <FactionTintContext.Provider value={g.side !== null}>
               {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
@@ -1651,9 +1662,7 @@ export default function SabremetricsLeaderboardView({
         )} />
       )}
       {sub === 'utility' && (
-        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
-          <UtilityTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
-        )} />
+        <UtilityTable aggregated={aggregated} singlePlayer={singlePlayer} teamGroups={teamGroups} />
       )}
       {sub === 'sides' && (
         <div className="space-y-6">

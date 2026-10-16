@@ -128,7 +128,7 @@ rather than crediting a whole match to the side a team started on. `aggregatePla
 falls back to the coarser whole-match `rounds_won`/`rounds_played`-on-starting-side approximation for
 a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the player
 page's own Side stats table (`aggregatePlayerSideStats()`), and — via the shared `PerSideStatsTable`
-component (`aggregatePerSideStats()`) — on Basic Stats' season/career/map Maps & Sides tab and
+component (`aggregatePerSideStats()`) — on Basic Stats' season/career Maps & Sides tab and the map page's Sides tab and
 Advanced Stats' Sides sub-tab.
 
 `SideSplitTable` (the Sides sub-tab's own per-player table, as opposed to the team-level
@@ -151,7 +151,7 @@ expired, see `RoundCondition`) is tallied by `aggregateWinConditions()`
 (`src/lib/mapSideStats.ts`) into a count and share per condition across every round in scope. A
 round with no recorded condition (a `match_rounds` row predating this column, or a parser miss) is
 excluded rather than guessed into a bucket. Surfaced as "Round win condition" on the season/career/
-map Maps & Sides tab, next to Score Distribution. This is a separate figure from the per-round icon
+map page's Sides tab, next to Score Distribution. This is a separate figure from the per-round icon
 on the match page's round-history strip (`RoundHistoryEntry.condition`, driven by the denormalized
 `matches.round_history` column populated at demo-parse time): both ultimately classify the same CS2
 `round_end` reason, but `RoundHistoryStrip` shows one match's rounds individually while this

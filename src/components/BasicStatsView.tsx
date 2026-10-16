@@ -465,16 +465,18 @@ function MapsAndSidesSection({
   perSideStats: PerSideStat[];
 }) {
   // Multi-map pages fold the per-side figures into the pick/ban table; a single map has no
-  // pick/ban table, so it keeps the standalone per-side panel.
+  // pick/ban table, so its two distributions sit side by side with the standalone per-side panel
+  // underneath.
   return (
     <div className="space-y-6">
       {!singleMap && <MapPickBanTable mapPickBanStats={mapPickBanStats} perSideStats={perSideStats} />}
 
-      <div className={`grid grid-cols-1 gap-6 ${singleMap ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
-        {singleMap && <PerSideStatsTable perSideStats={perSideStats} />}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
         {winConditions && <WinConditionTable dist={winConditions} />}
       </div>
+
+      {singleMap && <PerSideStatsTable perSideStats={perSideStats} />}
     </div>
   );
 }
@@ -523,7 +525,7 @@ export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { r
     { key: 'kills', label: 'Kill Stats' },
     { key: 'games', label: 'Game Stats' },
     { key: 'averages', label: 'Averages' },
-    ...(matches ? [{ key: 'sides' as const, label: 'Maps & Sides' }] : []),
+    ...(matches ? [{ key: 'sides' as const, label: singleMap ? 'Sides' : 'Maps & Sides' }] : []),
   ];
   // Falls back to the first surviving tab when `stab` names one this call site has hidden (e.g.
   // `stab=sides` on a view with no per-match data).
