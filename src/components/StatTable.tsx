@@ -94,8 +94,9 @@ function PlainTr({
 }
 
 /** A row that opens `href` wherever it is clicked: a plain click navigates, and Cmd/Ctrl/Shift-click
- *  or a middle click opens a new tab. Clicks that land on a link or control inside the row are left
- *  to it. Keyboard users reach the name cell's link, and the row outlines while it has focus. */
+ *  or a middle click opens a new tab. Clicks that land on a link or control inside the row, or that
+ *  end a text selection, are left alone. Keyboard users reach the name cell's link, and the row
+ *  outlines while anything in it has focus. */
 function LinkTr({ href, onClick, onAuxClick, className = '', ...rest }: TrProps & { href: string }) {
   const router = useRouter();
   const fromControl = (e: React.MouseEvent) => (e.target as HTMLElement).closest('a, button, input, select, textarea') !== null;
@@ -106,7 +107,7 @@ function LinkTr({ href, onClick, onAuxClick, className = '', ...rest }: TrProps 
       className={`cursor-pointer focus-within:outline focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-[var(--color-site-accent)] ${className}`}
       onClick={(e) => {
         onClick?.(e);
-        if (e.defaultPrevented || fromControl(e)) return;
+        if (e.defaultPrevented || fromControl(e) || window.getSelection()?.toString()) return;
         if (e.metaKey || e.ctrlKey || e.shiftKey) window.open(href, '_blank');
         else router.push(href);
       }}

@@ -99,6 +99,11 @@ describe('StatTable pieces', () => {
     expect(push).toHaveBeenCalledWith('/players/7');
 
     push.mockClear();
+    const selection = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => '12' } as Selection);
+    fireEvent.click(screen.getByText('12'));
+    expect(push).not.toHaveBeenCalled();
+    selection.mockRestore();
+
     fireEvent.click(screen.getByText('Dan'));
     expect(push).not.toHaveBeenCalled();
 
