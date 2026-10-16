@@ -8,6 +8,7 @@
 // `src/lib/demo/liveScore.ts`'s header comment for why that's the right trigger. Once `played` is
 // true, it renders the final score from the `matches` row instead and the live wiring never mounts.
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
@@ -37,12 +38,15 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
   );
 }
 
-function ScoreCategoryTag({ shirts, skins }: { shirts: number; skins: number }) {
-  const { label, note } = SCORE_CATEGORY_INFO[scoreCategory(shirts, skins)];
+function ScoreCategoryTag({ shirts, skins, mapHref }: { shirts: number; skins: number; mapHref: string | null }) {
+  const { label } = SCORE_CATEGORY_INFO[scoreCategory(shirts, skins)];
+  const cls = 'mt-2 text-center font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]';
+  if (!mapHref) return <div className={cls}>{label}</div>;
   return (
-    <div className="mt-2 text-center font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]">
-      {label}
-      <span className="ml-2 normal-case">{note}</span>
+    <div className={cls}>
+      <Link href={mapHref} title="See this map's score distribution" className="hover:text-[var(--color-text-primary)] hover:underline">
+        {label}
+      </Link>
     </div>
   );
 }
@@ -52,6 +56,7 @@ export default function MatchScoreHero({
   played,
   vetoComplete,
   finalScore,
+  mapHref = null,
   shirtsF,
   skinsF,
 }: {
@@ -62,6 +67,8 @@ export default function MatchScoreHero({
    *  never receive anything (e.g. a match still weeks from its veto window). */
   vetoComplete: boolean;
   finalScore: { shirts: number; skins: number } | null;
+  /** The map page's score-distribution view, which the category label links to. */
+  mapHref?: string | null;
   shirtsF: Faction;
   skinsF: Faction;
 }) {
@@ -110,7 +117,7 @@ export default function MatchScoreHero({
     return (
       <div className="mt-5">
         <ScoreDisplay shirts={finalScore.shirts} skins={finalScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
-        <ScoreCategoryTag shirts={finalScore.shirts} skins={finalScore.skins} />
+        <ScoreCategoryTag shirts={finalScore.shirts} skins={finalScore.skins} mapHref={mapHref} />
       </div>
     );
   }
