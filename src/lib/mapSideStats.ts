@@ -23,7 +23,7 @@ export interface VetoFields {
 }
 
 export interface MapVetoOutcome {
-  /** The effective played map(s) — `effectivePickedMap()`, trimmed, original casing. */
+  /** Every pick recorded (`shirts_pick` and/or `skins_pick`), trimmed, original casing. */
   picked: string[];
   /** Every map banned in this match's veto, trimmed, original casing. */
   banned: string[];
