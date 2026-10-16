@@ -125,14 +125,21 @@ export async function getStagePagePaths(): Promise<string[]> {
 // against the season id in its URL and redirects to the canonical one; an Open Graph image just
 // renders what it's given.
 
+/** A week id → its `weeks` row and the season that owns it. `null` if either is missing. */
+async function resolveWeekOwner(weekId: number): Promise<{ row: { id: number; week_number: number }; owner: Season } | null> {
+  const row = await getWeekRow(weekId);
+  const owner = row ? await getSeason(row.season_id) : null;
+  return row && owner ? { row, owner } : null;
+}
+
 /** A week id → its owning season, scope and (for a regular week) view. A gauntlet round's `weeks` row
  *  resolves too, with no view, so the page can send it to the round page. */
 export async function resolveWeekPage(
   weekId: number,
 ): Promise<{ week: { id: number; week_number: number }; owner: Season; scope: SeasonScope; view: WeekView | null } | null> {
-  const row = await getWeekRow(weekId);
-  const owner = row ? await getSeason(row.season_id) : null;
-  if (!row || !owner) return null;
+  const found = await resolveWeekOwner(weekId);
+  if (!found) return null;
+  const { row, owner } = found;
   const [scope, view] = await Promise.all([
     getSeasonScope(owner),
     owner.is_gauntlet ? Promise.resolve(null) : getWeekView(owner.id, weekId),
@@ -145,9 +152,9 @@ export async function resolveWeekPage(
 export async function resolveWeekOgData(
   weekId: number,
 ): Promise<{ owner: Season; summary: WeekSummary } | null> {
-  const row = await getWeekRow(weekId);
-  const owner = row ? await getSeason(row.season_id) : null;
-  if (!owner || owner.is_gauntlet) return null;
+  const found = await resolveWeekOwner(weekId);
+  if (!found || found.owner.is_gauntlet) return null;
+  const { owner } = found;
   const summary = await getWeekSummary(owner.id, weekId);
   return summary ? { owner, summary } : null;
 }

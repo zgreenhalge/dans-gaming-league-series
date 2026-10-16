@@ -40,9 +40,15 @@ export interface WeekScorecardRow extends PlayerRecord {
   movement: RankMovement | null;
 }
 
-export interface WeekView {
+/** What a week's Open Graph image shows: the week itself, with no standings movement or navigation,
+ *  so it needs no other week's data. */
+export interface WeekSummary {
   week: WeekWithMatches;
   status: StageStatus;
+  scorecard: PlayerRecord[];
+}
+
+export interface WeekView extends WeekSummary {
   scorecard: WeekScorecardRow[];
   /** One chip per week of the season. */
   nav: StageNavItem[];
@@ -53,14 +59,6 @@ export interface WeekView {
 function deriveWeekScorecard(week: WeekWithMatches): PlayerRecord[] {
   const bye = week.bye_player_id != null ? [{ player_id: week.bye_player_id, player_name: week.bye_player_name ?? `#${week.bye_player_id}` }] : [];
   return deriveGroupScorecard(week.matches, 'wins', bye);
-}
-
-/** What a week's Open Graph image shows: the week itself, with no standings movement or navigation,
- *  so it needs no other week's data. */
-export interface WeekSummary {
-  week: WeekWithMatches;
-  status: StageStatus;
-  scorecard: PlayerRecord[];
 }
 
 export function deriveWeekSummary(week: WeekWithMatches): WeekSummary {
