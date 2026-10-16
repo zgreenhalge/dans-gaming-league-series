@@ -15,7 +15,7 @@ import type { LeaderboardRowWithId } from './types';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasonLeaderboard, getCareerLeaderboard, getAllLeaderboards, getSideBalance } from './queries';
+import { getSeasonLeaderboard, getSeasonStandingNames, getCareerLeaderboard, getAllLeaderboards, getSideBalance } from './queries';
 import { test, report } from './test-support/miniTest';
 
 function assertCanonicallySorted(
@@ -50,6 +50,12 @@ async function main() {
     assert.equal(rows.filter((r) => r.matches_played > 0).length, 4);
     assertCanonicallySorted(rows, 'getSeasonLeaderboard(1)');
     matchesSnapshot('getSeasonLeaderboard-1', rows);
+  });
+
+  await test('getSeasonStandingNames(1) — the played rows of getSeasonLeaderboard(1), same order', async () => {
+    const played = (await getSeasonLeaderboard(1)).filter((r) => r.matches_played > 0).map((r) => r.player_name);
+    assert.deepEqual(await getSeasonStandingNames(1), played);
+    assert.deepEqual(await getSeasonStandingNames(9999), []);
   });
 
   await test('getSeasonLeaderboard(3) — active season, only zero-stat rostered players, snapshot', async () => {

@@ -3,7 +3,7 @@ import { getAdminClient } from '../supabase-admin';
 import { getWeekLookup } from './_shared';
 import { getSeasonSchedule, getSeasonWeekNav } from './schedule';
 import { getSeason, getSeasons, getSeasonScope, hubIdsBySeason, type SeasonScope } from './seasons';
-import { getSeasonLeaderboard } from './leaderboard';
+import { getSeasonStandingNames } from './leaderboard';
 import { getGauntletBracketShape, getGauntletRounds } from './gauntlet';
 import { roundHref, groupHref, weekHref } from '../crumbs';
 import {
@@ -53,8 +53,8 @@ export async function getGauntletStageData(gauntletSeasonId: number): Promise<Ga
 /** Seed number → the player currently holding it, from the regular season's standings — names an
  *  undecided "Seed 3" slot on a group that hasn't been scheduled yet. */
 export const getSeedNames = cache(async (hubSeasonId: number): Promise<Map<number, string>> => {
-  const leaderboard = await getSeasonLeaderboard(hubSeasonId);
-  return new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
+  const names = await getSeasonStandingNames(hubSeasonId);
+  return new Map(names.map((name, i) => [i + 1, name]));
 });
 
 /** The number of a gauntlet's first round (the lowest in its bracket), or `null` while it has no
