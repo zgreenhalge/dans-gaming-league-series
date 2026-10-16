@@ -25,6 +25,7 @@ import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 import Th from './Th';
 import SortableTh from './SortableTh';
+import { CompactTable, CompactTh, CompactTr, CompactTd } from './CompactTable';
 import { StatTable, Tr, Td, NameTd, MapCell } from './StatTable';
 
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
@@ -761,28 +762,28 @@ export default function PlayerView({
                           </div>
                         </div>
                       </div>
-                      <table className="border-collapse table-fixed shrink-0">
+                      <CompactTable widths={['w-9', 'w-9', 'w-9', 'w-12', 'w-14', 'w-12']}>
                         <thead>
                           <tr>
-                            <Th compact align="right" className="w-9">K</Th>
-                            <Th compact align="right" className="w-9">A</Th>
-                            <Th compact align="right" className="w-9">D</Th>
-                            <Th compact align="right" className="w-12">WR%</Th>
-                            <Th compact align="right" className="w-14">Rounds</Th>
-                            <Th compact align="right" className="w-12">ADR</Th>
+                            <CompactTh align="right">K</CompactTh>
+                            <CompactTh align="right">A</CompactTh>
+                            <CompactTh align="right">D</CompactTh>
+                            <CompactTh align="right">WR%</CompactTh>
+                            <CompactTh align="right">Rounds</CompactTh>
+                            <CompactTh align="right">ADR</CompactTh>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr>
-                            <Td bold>{t.stats.kills}</Td>
-                            <Td bold>{t.stats.assists}</Td>
-                            <Td bold>{t.stats.deaths}</Td>
-                            <Td bold>{t.stats.win_rate_percentage.toFixed(1)}%</Td>
-                            <Td bold>{t.stats.rounds_won}-{t.stats.rounds_lost}</Td>
-                            <Td bold>{t.stats.overall_adr.toFixed(2)}</Td>
-                          </tr>
+                          <CompactTr>
+                            <CompactTd bold>{t.stats.kills}</CompactTd>
+                            <CompactTd bold>{t.stats.assists}</CompactTd>
+                            <CompactTd bold>{t.stats.deaths}</CompactTd>
+                            <CompactTd bold>{t.stats.win_rate_percentage.toFixed(1)}%</CompactTd>
+                            <CompactTd bold>{t.stats.rounds_won}-{t.stats.rounds_lost}</CompactTd>
+                            <CompactTd bold>{t.stats.overall_adr.toFixed(2)}</CompactTd>
+                          </CompactTr>
                         </tbody>
-                      </table>
+                      </CompactTable>
                     </Link>
                   );
                 })}

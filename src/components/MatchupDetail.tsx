@@ -7,7 +7,7 @@ import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
-import Th from './Th';
+import { CompactTable, CompactTh, CompactTr, CompactTd, CompactNameTd } from './CompactTable';
 
 export type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
 
@@ -176,44 +176,42 @@ function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: 
   return (
     <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
       <div className="tracked text-[8px] text-[var(--color-text-secondary)] mb-1.5">Map Intel</div>
-      <table className="w-full text-[11px]">
+      <CompactTable>
         <thead>
-          <tr className="text-[var(--color-text-secondary)]">
-            <Th compact>Map</Th>
-            <Th compact align="right">Games</Th>
-            <Th compact align="right">W-L</Th>
-            <Th compact align="right">Rounds</Th>
+          <tr>
+            <CompactTh>Map</CompactTh>
+            <CompactTh align="right">Games</CompactTh>
+            <CompactTh align="right">W-L</CompactTh>
+            <CompactTh align="right">Rounds</CompactTh>
             {aLabel ? (
               <>
-                <Th compact align="right" title={aLabel}>ADR·A</Th>
-                <Th compact align="right" title={bLabel}>ADR·B</Th>
+                <CompactTh align="right" title={aLabel}>ADR·A</CompactTh>
+                <CompactTh align="right" title={bLabel}>ADR·B</CompactTh>
               </>
             ) : (
-              <Th compact align="right">ADR</Th>
+              <CompactTh align="right">ADR</CompactTh>
             )}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.map} className="border-t border-[var(--color-border-tertiary)]">
-              <td className="px-2 py-1 font-display font-semibold truncate">
-                <Link href={`/maps/${mapSlug(r.map)}`} className="hover:underline capitalize">{toSentenceCase(r.map)}</Link>
-              </td>
-              <td className="px-2 py-1 text-right font-mono tnum">{r.games}</td>
-              <td className="px-2 py-1 text-right font-mono tnum">{r.wins}–{r.losses}</td>
-              <td className="px-2 py-1 text-right font-mono tnum">{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</td>
+            <CompactTr key={r.map}>
+              <CompactNameTd href={`/maps/${mapSlug(r.map)}`}>{toSentenceCase(r.map)}</CompactNameTd>
+              <CompactTd>{r.games}</CompactTd>
+              <CompactTd>{r.wins}–{r.losses}</CompactTd>
+              <CompactTd>{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</CompactTd>
               {aLabel ? (
                 <>
-                  <td className="px-2 py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
-                  <td className="px-2 py-1 text-right font-mono tnum">{r.bAdr.toFixed(1)}</td>
+                  <CompactTd>{r.aAdr.toFixed(1)}</CompactTd>
+                  <CompactTd>{r.bAdr.toFixed(1)}</CompactTd>
                 </>
               ) : (
-                <td className="px-2 py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+                <CompactTd>{r.aAdr.toFixed(1)}</CompactTd>
               )}
-            </tr>
+            </CompactTr>
           ))}
         </tbody>
-      </table>
+      </CompactTable>
     </div>
   );
 }
