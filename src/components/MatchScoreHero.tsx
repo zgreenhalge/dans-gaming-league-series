@@ -13,6 +13,7 @@ import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
 import { factionClass } from '@/lib/util';
+import { SCORE_CATEGORY_INFO, scoreCategory } from '@/lib/mapSideStats';
 
 type Faction = 'CT' | 'T' | null;
 
@@ -32,6 +33,16 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
         </span>
         <span className="font-display text-[24px] font-bold faction-fg">Skins</span>
       </div>
+    </div>
+  );
+}
+
+function ScoreCategoryTag({ shirts, skins }: { shirts: number; skins: number }) {
+  const { label, note } = SCORE_CATEGORY_INFO[scoreCategory(shirts, skins)];
+  return (
+    <div className="mt-2 text-center font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]">
+      {label}
+      <span className="ml-2 normal-case">{note}</span>
     </div>
   );
 }
@@ -99,6 +110,7 @@ export default function MatchScoreHero({
     return (
       <div className="mt-5">
         <ScoreDisplay shirts={finalScore.shirts} skins={finalScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
+        <ScoreCategoryTag shirts={finalScore.shirts} skins={finalScore.skins} />
       </div>
     );
   }

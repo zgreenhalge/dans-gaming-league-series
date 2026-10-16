@@ -237,23 +237,38 @@ export interface ScoreDistribution {
   total: number;
 }
 
+export type ScoreCategory = 'crazy' | 'close' | 'competitive' | 'convincing' | 'crushed';
+
+/** Display label and score range per `ScoreCategory`, shared by the distribution table and the
+ *  per-match badge. */
+export const SCORE_CATEGORY_INFO: Record<ScoreCategory, { label: string; note: string }> = {
+  crushed: { label: 'Crushing', note: '13–3 or worse' },
+  convincing: { label: 'Convincing', note: '13–4 to 13–6' },
+  competitive: { label: 'Competitive', note: '13–7 to 13–9' },
+  close: { label: 'Close', note: '13–10 or 13–11' },
+  crazy: { label: 'CRAZY', note: 'Overtime' },
+};
+
 // Buckets are keyed on the losing team's round count. Overtime (winner > 13)
 // is its own "crazy" bucket, checked before the loser-round buckets.
+export function scoreCategory(shirts: number, skins: number): ScoreCategory {
+  const winner = Math.max(shirts, skins);
+  const loser = Math.min(shirts, skins);
+  if (winner > 13) return 'crazy';
+  if (loser <= 3) return 'crushed';
+  if (loser <= 6) return 'convincing';
+  if (loser <= 9) return 'competitive';
+  return 'close';
+}
+
 export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreDistribution {
   const out: ScoreDistribution = { crazy: 0, close: 0, competitive: 0, convincing: 0, crushed: 0, total: 0 };
   for (const m of matches) {
     if (!isPlayedScore(m.final_score)) continue;
     const parsed = parseScore(m.final_score);
     if (!parsed) continue;
-    const { shirts, skins } = parsed;
-    const winner = Math.max(shirts, skins);
-    const loser = Math.min(shirts, skins);
     out.total++;
-    if (winner > 13) out.crazy++;
-    else if (loser <= 3) out.crushed++;
-    else if (loser <= 6) out.convincing++;
-    else if (loser <= 9) out.competitive++;
-    else out.close++;
+    out[scoreCategory(parsed.shirts, parsed.skins)]++;
   }
   return out;
 }

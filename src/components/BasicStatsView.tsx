@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useSortState } from './useSortState';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, SCORE_CATEGORY_INFO, type ScoreCategory, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
@@ -350,13 +350,11 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
       emptyMessage="No match data."
       categoryLabel="Category"
       total={dist.total}
-      buckets={[
-        { label: 'Crushing', count: dist.crushed, note: '13–3 or worse' },
-        { label: 'Convincing', count: dist.convincing, note: '13–4 to 13–6' },
-        { label: 'Competitive', count: dist.competitive, note: '13–7 to 13–9' },
-        { label: 'Close', count: dist.close, note: '13–10 or 13–11' },
-        { label: 'CRAZY', count: dist.crazy, note: 'Overtime' },
-      ]}
+      buckets={(Object.keys(SCORE_CATEGORY_INFO) as ScoreCategory[]).map((key) => ({
+        label: SCORE_CATEGORY_INFO[key].label,
+        count: dist[key],
+        note: SCORE_CATEGORY_INFO[key].note,
+      }))}
     />
   );
 }
