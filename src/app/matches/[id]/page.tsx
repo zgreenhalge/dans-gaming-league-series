@@ -8,7 +8,7 @@ import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
-import { mapImageFor, mapSlug } from '@/lib/maps';
+import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
 import { buildCrumbs } from '@/lib/crumbs';
@@ -362,7 +362,7 @@ export default async function MatchPage({
               played={played}
               vetoComplete={vetoComplete}
               finalScore={score}
-              mapHref={map ? `/maps/${mapSlug(map)}?tab=stats&stab=sides` : null}
+              mapHref={map ? mapSidesHref(map) : null}
               shirtsF={shirtsF}
               skinsF={skinsF}
             />

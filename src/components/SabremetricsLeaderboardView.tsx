@@ -44,6 +44,7 @@ import { ECONOMY_TYPE_LABEL, FULL_BUY_MIN_T, FULL_BUY_MIN_CT, BANK_MIN, ECO_EQUI
 import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
+import { sortRows } from '@/lib/sort-rows';
 import { tabCls, factionClass, fmtPct as pct } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
@@ -884,39 +885,41 @@ interface UtilityColumn {
   key: string;
   label: string;
   title: string;
+  /** The number the column sorts by and, unless `format`/`cell` says otherwise, displays. */
   value: (a: AggregatedSab) => number;
-  cell: (a: AggregatedSab) => string | number;
+  format?: (v: number) => string;
+  /** Overrides `value` + `format` where the displayed text needs more than the sort value. */
+  cell?: (a: AggregatedSab) => string;
 }
 
 const FLASH_COLUMNS: UtilityColumn[] = [
-  { key: 'fa', label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: (a) => a.flash_assists, cell: (a) => a.flash_assists },
-  { key: 'fltk', label: 'Flashes → Kill', title: "Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition", value: (a) => a.flashes_leading_to_kill, cell: (a) => a.flashes_leading_to_kill },
-  { key: 'ef', label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: (a) => a.enemies_flashed, cell: (a) => a.enemies_flashed },
-  { key: 'ef_flash', label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: (a) => a.enemies_flashed / (a.flashes_thrown || 1), cell: (a) => fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2) },
-  { key: 'blind_flash', label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: (a) => a.blind_duration_max_sum / (a.effective_flashes || 1), cell: (a) => fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2) },
-  { key: 'bdd', label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: (a) => a.blind_duration_dealt, cell: (a) => fmtNum(a.blind_duration_dealt, 1) },
-  { key: 'tf', label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: (a) => a.teamflash_duration, cell: (a) => fmtNum(a.teamflash_duration, 1) },
+  { key: 'fa', label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: (a) => a.flash_assists },
+  { key: 'fltk', label: 'Flashes → Kill', title: "Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition", value: (a) => a.flashes_leading_to_kill },
+  { key: 'ef', label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: (a) => a.enemies_flashed },
+  { key: 'ef_flash', label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: (a) => a.enemies_flashed / (a.flashes_thrown || 1), format: (v) => fmtNum(v, 2) },
+  { key: 'blind_flash', label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: (a) => a.blind_duration_max_sum / (a.effective_flashes || 1), format: (v) => fmtNum(v, 2) },
+  { key: 'bdd', label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: (a) => a.blind_duration_dealt, format: (v) => fmtNum(v, 1) },
+  { key: 'tf', label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: (a) => a.teamflash_duration, format: (v) => fmtNum(v, 1) },
 ];
 
 const GRENADE_COLUMNS: UtilityColumn[] = [
-  { key: 'ud', label: 'Utility Damage', title: "Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both", value: (a) => a.utility_damage, cell: (a) => a.utility_damage },
-  { key: 'he_thrown', label: 'HE Thrown', title: 'HE grenades thrown', value: (a) => a.he_thrown, cell: (a) => a.he_thrown },
-  { key: 'he_dmg', label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: (a) => a.he_damage, cell: (a) => a.he_damage },
-  { key: 'he_dmg_throw', label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: (a) => a.he_damage / (a.he_thrown || 1), cell: (a) => fmtNum(a.he_damage / (a.he_thrown || 1), 1) },
+  { key: 'ud', label: 'Utility Damage', title: "Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both", value: (a) => a.utility_damage },
+  { key: 'he_thrown', label: 'HE Thrown', title: 'HE grenades thrown', value: (a) => a.he_thrown },
+  { key: 'he_dmg', label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: (a) => a.he_damage },
+  { key: 'he_dmg_throw', label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: (a) => a.he_damage / (a.he_thrown || 1), format: (v) => fmtNum(v, 1) },
   { key: 'smoke_block', label: 'CT Smokes Blocking %', title: "CT-side smokes that had an enemy within the cloud's radius at some point during its life, out of all CT smokes thrown", value: (a) => a.smokes_blocking_push / (a.ct_smokes_thrown || 1), cell: (a) => pct(a.smokes_blocking_push, a.ct_smokes_thrown) },
-  { key: 'unused_util', label: 'Unused Util/Death', title: "Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better", value: (a) => a.unused_util_value_on_death_total / (a.deaths || 1), cell: (a) => fmtNum(a.unused_util_value_on_death_total / (a.deaths || 1), 0) },
-  { key: 'pl', label: 'Plants', title: 'Bomb plants', value: (a) => a.plants, cell: (a) => a.plants },
-  { key: 'df', label: 'Defuses', title: 'Bomb defuses', value: (a) => a.defuses, cell: (a) => a.defuses },
+  { key: 'unused_util', label: 'Unused Util/Death', title: "Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better", value: (a) => a.unused_util_value_on_death_total / (a.deaths || 1), format: (v) => fmtNum(v, 0) },
+  { key: 'pl', label: 'Plants', title: 'Bomb plants', value: (a) => a.plants },
+  { key: 'df', label: 'Defuses', title: 'Bomb defuses', value: (a) => a.defuses },
 ];
 
 function UtilityColumnsTable({ heading, columns, aggregated, singlePlayer }: { heading: string; columns: UtilityColumn[]; aggregated: AggregatedSab[]; singlePlayer: boolean }) {
   const [sort, toggleSort] = useSortState(columns[0].key);
 
-  const sorted = useMemo(() => {
-    const col = columns.find((c) => c.key === sort.col);
-    if (!col) return aggregated;
-    return [...aggregated].sort((a, b) => (sort.asc ? col.value(a) - col.value(b) : col.value(b) - col.value(a)));
-  }, [aggregated, columns, sort]);
+  const sorted = useMemo(
+    () => sortRows(aggregated, sort, Object.fromEntries(columns.map((c) => [c.key, c.value]))),
+    [aggregated, columns, sort],
+  );
 
   return (
     <div className="my-6">
@@ -935,7 +938,7 @@ function UtilityColumnsTable({ heading, columns, aggregated, singlePlayer }: { h
             <Tr key={a.player_id} clickable={!singlePlayer}>
               {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
               {columns.map((c) => (
-                <Td key={c.key}>{c.cell(a)}</Td>
+                <Td key={c.key}>{c.cell ? c.cell(a) : c.format ? c.format(c.value(a)) : c.value(a)}</Td>
               ))}
             </Tr>
           ))}
@@ -946,10 +949,11 @@ function UtilityColumnsTable({ heading, columns, aggregated, singlePlayer }: { h
 }
 
 function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
+  const prefix = showHeading ? 'Utility — ' : '';
   return (
     <>
-      <UtilityColumnsTable heading={showHeading ? 'Utility — Flashes' : 'Flashes'} columns={FLASH_COLUMNS} aggregated={aggregated} singlePlayer={singlePlayer} />
-      <UtilityColumnsTable heading={showHeading ? 'Utility — Grenades & Objectives' : 'Grenades & Objectives'} columns={GRENADE_COLUMNS} aggregated={aggregated} singlePlayer={singlePlayer} />
+      <UtilityColumnsTable heading={`${prefix}Flashes`} columns={FLASH_COLUMNS} aggregated={aggregated} singlePlayer={singlePlayer} />
+      <UtilityColumnsTable heading={`${prefix}Grenades & Objectives`} columns={GRENADE_COLUMNS} aggregated={aggregated} singlePlayer={singlePlayer} />
     </>
   );
 }

@@ -40,13 +40,15 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
 
 function ScoreCategoryTag({ shirts, skins, mapHref }: { shirts: number; skins: number; mapHref: string | null }) {
   const { label } = SCORE_CATEGORY_INFO[scoreCategory(shirts, skins)];
-  const cls = 'mt-2 text-center font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]';
-  if (!mapHref) return <div className={cls}>{label}</div>;
   return (
-    <div className={cls}>
-      <Link href={mapHref} title="See this map's score distribution" className="hover:text-[var(--color-text-primary)] hover:underline">
-        {label}
-      </Link>
+    <div className="mt-2 text-center font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]">
+      {mapHref ? (
+        <Link href={mapHref} title="See this map's score distribution" className="hover:text-[var(--color-text-primary)] hover:underline">
+          {label}
+        </Link>
+      ) : (
+        label
+      )}
     </div>
   );
 }

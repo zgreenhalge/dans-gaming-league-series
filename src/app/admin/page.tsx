@@ -92,7 +92,8 @@ export default async function AdminPage() {
     .filter((s) => !pairedGauntletIds.has(s.id))
     .sort((a, b) => b.id - a.id)
     .map((s) => {
-      const gauntlet = gauntletById.get(paired.get(s.id) ?? -1);
+      const gauntletId = paired.get(s.id);
+      const gauntlet = gauntletId === undefined ? undefined : gauntletById.get(gauntletId);
       return {
         id: s.id,
         name: s.name,

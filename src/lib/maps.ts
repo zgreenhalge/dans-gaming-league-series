@@ -15,6 +15,11 @@ export function mapSlug(raw: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/** The map page's Maps & Sides stats view (score distribution, per-side figures). */
+export function mapSidesHref(raw: string): string {
+  return `/maps/${mapSlug(raw)}?tab=stats&stab=sides`;
+}
+
 type ImageLookup = Record<string, { image_url: string | null }>;
 
 export function mapImageFor(
