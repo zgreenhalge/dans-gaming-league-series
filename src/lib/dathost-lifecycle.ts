@@ -11,6 +11,7 @@
 //
 // Reuse model: teardown stops the persistent server; it never deletes it.
 
+import { effectivePickedMap } from './veto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
 import { workshopIdFromUrl } from './workshop';
@@ -274,8 +275,7 @@ export async function resolveMapWorkshopId(
     .select('shirts_pick, skins_pick')
     .eq('id', matchId)
     .maybeSingle();
-  const name = (match as { shirts_pick: string | null; skins_pick: string | null } | null);
-  const mapName = name?.shirts_pick ?? name?.skins_pick;
+  const mapName = match ? effectivePickedMap(match as { shirts_pick: string | null; skins_pick: string | null }) : null;
   if (!mapName) return null;
   const { data: mapRow } = await supabaseAdmin
     .from('maps')

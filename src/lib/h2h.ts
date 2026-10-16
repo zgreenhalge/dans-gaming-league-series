@@ -545,9 +545,6 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
     matchNumber: m.match_number,
     seasonNumber: m.season_number,
     isGauntlet: m.is_gauntlet,
-    // Some seasons recorded the played map under `shirts_pick` rather than
-    // `skins_pick` — same fallback used throughout the codebase (see
-    // `getMatchById`, `getCareerMatchHistory`, `getH2HData`).
     map: effectivePickedMap(m),
     pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
     startingSide: m.skins_starting_side,

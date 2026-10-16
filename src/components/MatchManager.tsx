@@ -18,18 +18,13 @@ import { FeatureMatchToggle } from './FeatureMatchToggle';
 import { ReparseDemoButton } from './ReparseDemoButton';
 import { effectivePickedMap } from '@/lib/veto';
 
-/** The map a match was played on (see `effectivePickedMap()`). */
-function mapFor(m: AdminMatchRow): string | null {
-  return effectivePickedMap(m.match);
-}
-
 /**
  * Lowercased searchable text for a match: its full label, shorthand tokens (`s1`/`s1g`/`w5`/`r3`/`m2`
  * — so "S1 W5 M2" works, not just the full "Season 1 · Wk 5"), the played map, and the score. Search
  * is token-AND (every whitespace-separated term must appear), so partial shorthand narrows the list.
  */
 function searchText(m: AdminMatchRow): string {
-  const parts = [m.label, mapFor(m), m.match.skins_pick, m.match.shirts_pick, m.match.final_score];
+  const parts = [m.label, effectivePickedMap(m.match), m.match.skins_pick, m.match.shirts_pick, m.match.final_score];
   if (m.seasonNumber != null) parts.push(`s${m.seasonNumber}${m.isGauntlet ? 'g' : ''}`);
   if (m.weekNumber != null) {
     parts.push(`w${m.weekNumber}`);
@@ -117,7 +112,7 @@ export function MatchManager({
                     </div>
                     <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap gap-x-3 gap-y-1 mt-1">
                       <span>#{m.match.id}</span>
-                      {mapFor(m) && <span>{mapFor(m)}</span>}
+                      {effectivePickedMap(m.match) && <span>{effectivePickedMap(m.match)}</span>}
                       {played && m.match.final_score && <span>{m.match.final_score}</span>}
                       {m.isGauntlet && <span className="text-[var(--color-accent-amber-fg)]">gauntlet</span>}
                     </div>

@@ -75,7 +75,7 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
   for (const s of seasons) seasonById.set(s.id, s);
 
   const playedMatches = matches.filter(
-    (m) => isPlayedScore(m.final_score) && (m.shirts_pick != null || m.skins_pick != null),
+    (m) => isPlayedScore(m.final_score) && effectivePickedMap(m) != null,
   );
   if (playedMatches.length === 0) return [];
 
@@ -732,8 +732,8 @@ export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Pro
 
 /**
  * Match ids played on a given map (case-insensitive), for the match-page scouting
- * report's Map Intel heatmap. The played map is the pick (`shirts_pick`) falling back
- * to `skins_pick` — the same rule `getMapDetail` uses. Only played matches qualify;
+ * report's Map Intel heatmap. The played map is `effectivePickedMap()`, the same rule
+ * `getMapDetail` uses. Only played matches qualify;
  * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
  *
  * Optional `client` per docs/recipes.md's query-helper recipe.

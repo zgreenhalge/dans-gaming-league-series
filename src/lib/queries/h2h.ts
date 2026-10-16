@@ -181,16 +181,12 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     skins_pick: string | null;
     skins_starting_side: 'CT' | 'T' | null;
   };
-  // Some seasons recorded the played map under `shirts_pick` rather than
-  // `skins_pick` — fall back the same way the rest of the codebase does
-  // (see `getMatchById`, `getCareerMatchHistory`, etc).
-  const mapFor = (m: MatchRow): string | null => effectivePickedMap(m);
   const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
   if (playedMatches.length === 0) return { duos: [], rivals: [], players: [] };
 
   const mapFilter = selection.map ? mapSlug(selection.map) : null;
   const filteredMatches = mapFilter
-    ? playedMatches.filter((m) => mapSlug(mapFor(m) ?? '') === mapFilter)
+    ? playedMatches.filter((m) => mapSlug(effectivePickedMap(m) ?? '') === mapFilter)
     : playedMatches;
 
   const { data: stats, error: sErr } = await getAdminClient()
@@ -230,7 +226,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
       matchNumber: m.match_number,
       seasonNumber: seasonNumberById.get(seasonId) ?? null,
       isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,
-      map: mapFor(m),
+      map: effectivePickedMap(m),
       pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
       startingSide: m.skins_starting_side,
       finalScore: m.final_score,
