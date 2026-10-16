@@ -200,6 +200,7 @@ export default function LeaderboardTable({
       <tbody>
         {sorted.map((p) => {
           const played = p.total_rounds_played > 0;
+          const ehog = ehogRatings?.[p.player_id];
           const medal = medalRank.get(p.player_id);
           const zone = zoneColor.get(p.player_id);
           const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
@@ -233,12 +234,10 @@ export default function LeaderboardTable({
               {hasEhog && (
                 <Td
                   bold
-                  title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
-                  style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
+                  title={ehog != null ? 'EHOG rating as of most recent match in this view' : undefined}
+                  style={ehog != null ? { color: ehogColorFor(ehog) } : undefined}
                 >
-                  {ehogRatings[p.player_id] != null
-                    ? ehogRatings[p.player_id].toFixed(1)
-                    : <span className="text-[var(--color-text-secondary)]">—</span>}
+                  {ehog != null ? ehog.toFixed(1) : <span className="text-[var(--color-text-secondary)]">—</span>}
                 </Td>
               )}
               <Td muted>{p.matches_played}</Td>
