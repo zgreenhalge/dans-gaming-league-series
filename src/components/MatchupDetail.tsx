@@ -176,6 +176,7 @@ function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: 
   return (
     <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
       <div className="tracked text-[8px] text-[var(--color-text-secondary)] mb-1.5">Map Intel</div>
+      <div className="overflow-x-auto">
       <CompactTable>
         <thead>
           <tr>
@@ -212,6 +213,7 @@ function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: 
           ))}
         </tbody>
       </CompactTable>
+      </div>
     </div>
   );
 }

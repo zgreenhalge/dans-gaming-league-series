@@ -154,30 +154,51 @@ export function NameTd({
 
 /** The player-name cell of a stat table, linking to the player's page and pinned while the table
  *  scrolls sideways (`sticky={false}` for a table that fits its frame). Passing `avatarUrl` (null for
- *  a player without one) puts the avatar beside the name. */
+ *  a player without one) puts the avatar beside the name. `onToggle` marks the row as expandable: a
+ *  ▸/▾ button before the name (`expanded` says which), reachable by keyboard. */
 export function PlayerCell({
   id,
   name,
   avatarUrl,
   sticky = true,
   className,
+  expanded = false,
+  onToggle,
 }: {
   id: number;
   name: string;
   avatarUrl?: string | null;
   sticky?: boolean;
   className?: string;
+  expanded?: boolean;
+  onToggle?: () => void;
 }) {
+  const link = (
+    <Link
+      href={`/players/${id}`}
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-2 w-full h-full"
+    >
+      {avatarUrl !== undefined && <PlayerAvatar name={name} imageUrl={avatarUrl} size="sm" />}
+      <span className="truncate">{name}</span>
+    </Link>
+  );
   return (
     <NameTd sticky={sticky} className={className}>
-      <Link
-        href={`/players/${id}`}
-        onClick={(e) => e.stopPropagation()}
-        className="flex items-center gap-2 w-full h-full"
-      >
-        {avatarUrl !== undefined && <PlayerAvatar name={name} imageUrl={avatarUrl} size="sm" />}
-        <span className="truncate">{name}</span>
-      </Link>
+      {onToggle ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${name}`}
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            className="w-3 shrink-0 text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          >
+            {expanded ? '▾' : '▸'}
+          </button>
+          {link}
+        </div>
+      ) : link}
     </NameTd>
   );
 }

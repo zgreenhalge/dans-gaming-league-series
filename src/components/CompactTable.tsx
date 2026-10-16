@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { TH_ALIGN_CLS } from './Th';
+import { TH_ALIGN_CLS, labelWords } from './Th';
 import type { ThAlign } from './Th';
 
 // The compact table that sits inside a card (the player page's trophy stat strip, a matchup's
@@ -22,7 +22,8 @@ export function CompactTable({ widths, children }: { widths?: string[]; children
   );
 }
 
-/** A header cell: the small uppercase label, no band and no rule. */
+/** A header cell: the small uppercase label, no band and no rule. A long label wraps at its spaces
+ *  only, like `Th`; body cells never wrap. */
 export function CompactTh({
   children,
   align = 'left',
@@ -35,9 +36,9 @@ export function CompactTh({
   return (
     <th
       title={title}
-      className={`tracked text-[9px] font-semibold leading-normal px-2 pb-1 whitespace-nowrap text-[var(--color-text-secondary)] ${TH_ALIGN_CLS[align]}`}
+      className={`tracked text-[9px] font-semibold leading-normal px-2 pb-1 text-[var(--color-text-secondary)] ${TH_ALIGN_CLS[align]}`}
     >
-      {children}
+      {labelWords(children)}
     </th>
   );
 }
@@ -58,7 +59,7 @@ export function CompactTd({
   children: React.ReactNode;
 }) {
   return (
-    <td className={`px-2 py-1 font-mono text-[11px] tnum ${TH_ALIGN_CLS[align]} ${bold ? 'font-semibold' : ''}`}>
+    <td className={`px-2 py-1 whitespace-nowrap font-mono text-[11px] tnum ${TH_ALIGN_CLS[align]} ${bold ? 'font-semibold' : ''}`}>
       {children}
     </td>
   );

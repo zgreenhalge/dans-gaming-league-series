@@ -139,7 +139,8 @@ keyboard users Tab to it, a screen reader announces one link per row, and right-
 link menu. A click anywhere else on the row navigates (`router.push`), Cmd/Ctrl/Shift-click or a middle
 click opens a new tab, and a click that lands on a link or control inside the row is left to it. The row
 outlines while its link has focus. A row that expands or selects instead of navigating (the matchups
-tables) uses `clickable` with its own `onClick`. `accent="<color>"` tints a row (the leaderboard's medal
+tables) uses `clickable` with its own `onClick`, and its `PlayerCell` takes `onToggle` and `expanded`
+for a ▸/▾ button before the name, so the row reads as expandable and keyboard users can open it. `accent="<color>"` tints a row (the leaderboard's medal
 and gauntlet-zone colors) and sets the `--lift-accent` the hover wash and bar then use, so a tinted row
 needs no hover handlers.
 
@@ -168,7 +169,7 @@ state passes `state={{ col, asc }}`.
 **Compact tables inside cards.** A table that sits inside a card (the player page's trophy stat strip,
 a matchup's per-map breakdown) is built from `CompactTable`, `CompactTh`, `CompactTr`, `CompactTd` and
 `CompactNameTd` (`src/components/CompactTable.tsx`) instead of the stat-table pieces. It has no frame and
-no header band: a small uppercase label above 11px mono figures with 4px of vertical padding, each body
+no header band: a small uppercase label (wrapping at spaces only, like `Th`) above 11px mono figures that never wrap, with 4px of vertical padding, each body
 row divided by a tertiary rule. `CompactTable` fills its container; give it `widths` (one Tailwind width
 class per column) for a fixed layout that shrinks to those widths. `CompactTd` takes `align` and `bold`;
 `CompactNameTd` is the truncating, linked name cell.

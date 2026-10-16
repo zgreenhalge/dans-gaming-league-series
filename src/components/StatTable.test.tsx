@@ -148,6 +148,17 @@ describe('StatTable pieces', () => {
     expect(screen.getByText('Loose').closest('td')?.className).not.toContain('sticky-col');
   });
 
+  test('PlayerCell with onToggle adds a keyboard-reachable expand button that does not trigger the row', () => {
+    const toggle = vi.fn();
+    const rowClick = vi.fn();
+    render(<table><tbody><tr onClick={rowClick}><PlayerCell id={1} name="Dan" onToggle={toggle} expanded /></tr></tbody></table>);
+    const button = screen.getByRole('button', { name: 'Collapse Dan' });
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(button);
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(rowClick).not.toHaveBeenCalled();
+  });
+
   test('a fixed StatTable lays out equal columns and holds its header inside the frame', () => {
     const { container } = render(
       <StatTable fixed header={<div>banner</div>}>
@@ -168,11 +179,12 @@ describe('CompactTable pieces', () => {
         <tbody><CompactTr><CompactTd bold>5</CompactTd><CompactNameTd href="/maps/x">Map X</CompactNameTd></CompactTr></tbody>
       </CompactTable>,
     );
-    const th = screen.getByText('K');
+    const th = screen.getByRole('columnheader', { name: 'K' });
     expect(th.className).toContain('text-[9px]');
     expect(th.className).not.toContain('bg-[var(--color-bg-secondary)]');
     expect(screen.getByText('5').className).toMatch(/py-1.*font-mono.*text-\[11px\].*font-semibold/);
     expect(screen.getByRole('link', { name: 'Map X' })).toHaveAttribute('href', '/maps/x');
+    expect(screen.getByText('5').className).toContain('whitespace-nowrap');
     expect(document.querySelectorAll('col')).toHaveLength(2);
     expect(document.querySelector('table')?.className).toContain('table-fixed');
   });

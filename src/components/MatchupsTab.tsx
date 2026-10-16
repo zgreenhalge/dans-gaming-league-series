@@ -335,7 +335,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
                       onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
                     >
-                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} />
+                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} expanded={isExpanded} onToggle={() => setExpandedOpponent(isExpanded ? null : row.other)} />
                       <Td align="center">
                         <div className="flex justify-center">
                           <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
@@ -405,7 +405,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
                       onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
                     >
-                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} />
+                      <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} expanded={isExpanded} onToggle={() => setExpandedTeammate(isExpanded ? null : row.other)} />
                       <Td align="center">
                         <div className="flex justify-center">
                           <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
