@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { HeadObjectCommand } from '@aws-sdk/client-s3';
-import { r2, R2_BUCKET, demoSegmentKey, MAX_DEMO_SEGMENTS } from '@/lib/r2';
+import { objectExists, demoSegmentKey, MAX_DEMO_SEGMENTS } from '@/lib/r2';
 import { putDemoManifest } from '@/lib/demo/segmentManifest';
 import { requireMatchAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
-
-async function objectExists(key: string): Promise<boolean> {
-  try {
-    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** Writes a multi-segment match's demo manifest once every segment is confirmed present in R2 —
  *  the client is expected to call this only after every PUT to a URL from `demo/upload-url`

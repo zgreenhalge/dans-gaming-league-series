@@ -126,7 +126,7 @@ statistics pages, and the week/round/group scorecards:
 
 | Piece | Standard |
 |---|---|
-| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class. |
+| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class; inside a `FactionTintContext.Provider` (a faction-tinted container such as the match page's per-team Advanced Stats blocks) every `StatTable` and `Tr` does this on its own. |
 | **`Tr`** (row) | `--color-border-tertiary` divider, none under the last row (the card's border closes the table), on an opaque page background (a pinned cell inherits it). `clickable` adds the `lift-row` highlight; rows that aren't clickable don't highlight. |
 | **`NameTd`** (name cell) | Display font, 14px semibold. `sticky` pins it. |
 | **`PlayerCell`** (pinned player name) | A `NameTd sticky` linking to `/players/<id>`; `avatarUrl` adds the avatar. Use it for a plain pinned player name; a row that adds a badge or the "me" highlight (`PlayerName`) builds its own `NameTd sticky` cell. `MapCell` is the map-name equivalent. |
@@ -147,6 +147,12 @@ arrow appears after the label of the sorted column only and nudges the label asi
 reserving space; a label that wraps keeps the arrow beside it. It reads its state from `useSortState()`
 (`src/components/useSortState.ts`) or any `{ col, asc }` pair, so a table that keeps its own sort
 state passes `state={{ col, asc }}`.
+
+**Shared formatting helpers** (`src/lib/util.ts`) — use these instead of a local copy: `fmtPct(num, den)`
+for whole-number percentages (`—` on a zero denominator), `factionClass(side)` for the `faction-ct` /
+`faction-t` tint class (the class counterpart of `sideColor()`), `formatCountdownClock(ms)` and
+`formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` / `fmtWindowDay('YYYY-MM-DD')` for
+a week-window date.
 
 **Tables that keep their own spacing.**
 - Compact tables inside cards (the player page's trophy stat strip, a matchup's per-map breakdown)

@@ -1,4 +1,4 @@
-import { isPlayedScore, deriveRates, groupByMap } from './util';
+import { isPlayedScore, deriveRates, groupByMap, canonicalSortValues } from './util';
 
 // ─── Player stat aggregation ─────────────────────────────────────────────────
 
@@ -111,5 +111,5 @@ export function aggregatePlayerStatsByMap(rows: PlayerAggregateRow[]): PlayerMap
     if (a.matches === 0) continue;
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
   }
-  return out.sort((a, b) => b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr);
+  return out.sort(canonicalSortValues);
 }

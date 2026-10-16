@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { factionClass } from '@/lib/util';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
@@ -61,11 +62,10 @@ type DraftStats = Record<number, { kills: string; assists: string; deaths: strin
 
 type Stage = 'idle' | 'uploading' | 'parsing' | 'preview' | 'submitting';
 
-function factionClass(faction: 'SHIRTS' | 'SKINS', skinsSide: Faction): string {
+function teamFactionClass(faction: 'SHIRTS' | 'SKINS', skinsSide: Faction): string {
   if (!skinsSide) return '';
   const shirtsSide: Faction = skinsSide === 'CT' ? 'T' : 'CT';
-  const side = faction === 'SHIRTS' ? shirtsSide : skinsSide;
-  return side === 'CT' ? 'faction-ct' : 'faction-t';
+  return factionClass(faction === 'SHIRTS' ? shirtsSide : skinsSide);
 }
 
 function blankStatsForPlayers(players: MatchPlayer[]): PlayerStat[] {
@@ -552,7 +552,7 @@ export default function DemoUploadModal({
                     {(['SHIRTS', 'SKINS'] as const).map((faction) => {
                       const score = faction === 'SHIRTS' ? shirtsScore : skinsScore;
                       const setScore = faction === 'SHIRTS' ? setShirtsScore : setSkinsScore;
-                      const cls = factionClass(faction, skinsSide);
+                      const cls = teamFactionClass(faction, skinsSide);
                       return (
                         <div key={faction} className={`flex flex-col gap-1 ${cls}`}>
                           <label className="tracked text-[9px] faction-fg">
@@ -579,7 +579,7 @@ export default function DemoUploadModal({
                 {/* Per-faction stat tables (editable) */}
                 {(['SHIRTS', 'SKINS'] as const).map((faction) => {
                   const fPlayers = faction === 'SHIRTS' ? shirtsPlayers : skinsPlayers;
-                  const cls = factionClass(faction, skinsSide);
+                  const cls = teamFactionClass(faction, skinsSide);
                   return (
                     <div key={faction}>
                       <div className={`tracked text-[10px] mb-2 ${cls} faction-fg`}>

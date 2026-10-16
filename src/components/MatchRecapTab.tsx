@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Crosshair } from 'lucide-react';
-import { tabCls, sideColor } from '@/lib/util';
+import { tabCls, sideColor, factionClass } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import { ticksSince, formatClock } from '@/lib/replay/playback';
 import MapHeatmap from './MapHeatmap';
@@ -23,17 +23,11 @@ import ErrorText from '@/components/ErrorText';
 
 type Side = 'CT' | 'T';
 
-function sideClass(s: Side | null): string {
-  if (s === 'CT') return 'faction-ct';
-  if (s === 'T') return 'faction-t';
-  return '';
-}
-
 /** Light per-row tint + matching hover accent for the event's actor team. */
 function rowTint(s: Side | null): { className: string; style?: React.CSSProperties } {
   if (!s) return { className: '' };
   return {
-    className: `${sideClass(s)} faction-tint`,
+    className: `${factionClass(s)} faction-tint`,
     style: { ['--lift-accent' as string]: 'var(--faction)' },
   };
 }

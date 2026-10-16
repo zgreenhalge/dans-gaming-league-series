@@ -149,6 +149,49 @@ export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+/** `fmtWindowDate()` for a `YYYY-MM-DD` date string. */
+export function fmtWindowDay(dateStr: string): string {
+  return fmtWindowDate(new Date(`${dateStr}T12:00:00Z`));
+}
+
+/** A rate as a whole-number percent (`"43%"`), or `—` when the denominator is zero. */
+export function fmtPct(num: number, den: number): string {
+  if (den === 0) return '—';
+  return `${Math.round((num / den) * 100)}%`;
+}
+
+/** Countdown clock for a duration in ms: `HH:MM:SS`, prefixed by `1 day ` / `N days ` once it
+ *  spans a day, or `starting now` at zero or below. */
+export function formatCountdownClock(ms: number): string {
+  if (ms <= 0) return 'starting now';
+  const s = Math.floor(ms / 1000);
+  const days = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const hms = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  if (days === 1) return `1 day ${hms}`;
+  if (days > 1) return `${days} days ${hms}`;
+  return hms;
+}
+
+/** Relative countdown to (or since) an instant: `in 2d 3h 4m 5s`, or `2d 3h 4m 5s ago` once past.
+ *  `now` defaults to the current time. */
+export function formatCountdownRelative(iso: string, now: number = Date.now()): string {
+  const diff = new Date(iso).getTime() - now;
+  const abs = Math.abs(diff);
+  const s = Math.floor(abs / 1000) % 60;
+  const m = Math.floor(abs / 60_000) % 60;
+  const h = Math.floor(abs / 3_600_000) % 24;
+  const d = Math.floor(abs / 86_400_000);
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0 || d > 0) parts.push(`${h}h`);
+  if (m > 0 || h > 0 || d > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return diff < 0 ? `${parts.join(' ')} ago` : `in ${parts.join(' ')}`;
+}
+
 /**
  * Compact, deterministic UTC timestamp (`MM-DD HH:MM UTC`), or `null` for a missing/invalid date.
  * Used by admin/ops surfaces where day-granular relative time is too coarse and a fixed UTC render
@@ -395,6 +438,14 @@ export function sideColor(side: 'CT' | 'T' | null | undefined): string | undefin
   return undefined;
 }
 
+/** CSS class tinting an element with a side's color (`faction-ct` / `faction-t`); `''` for no
+ *  side. The class-name counterpart of `sideColor()`. */
+export function factionClass(side: 'CT' | 'T' | null | undefined): string {
+  if (side === 'CT') return 'faction-ct';
+  if (side === 'T') return 'faction-t';
+  return '';
+}
+
 /**
  * Canonical leaderboard sort: Wins → RWR% → ADR (all descending).
  * Use this wherever player rows are ranked — never sort by ADR alone.
@@ -409,6 +460,15 @@ export function canonicalSort(
     b.rwr_percentage - a.rwr_percentage ||
     b.overall_adr - a.overall_adr
   );
+}
+
+/** `canonicalSort()`'s ordering for rows that carry the three values as `wins` / `rwr` / `adr` (per-map and
+ *  per-player aggregates) rather than the leaderboard view's column names. */
+export function canonicalSortValues(
+  a: { wins: number; rwr: number; adr: number },
+  b: { wins: number; rwr: number; adr: number },
+): number {
+  return b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr;
 }
 
 /** The canonical `rwr_percentage` formula (round-weighted win rate) — every RWR% anywhere in the

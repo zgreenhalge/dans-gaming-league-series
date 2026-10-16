@@ -12,14 +12,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
+import { factionClass } from '@/lib/util';
 
 type Faction = 'CT' | 'T' | null;
-
-function factionClass(f: Faction): string {
-  if (f === 'CT') return 'faction-ct';
-  if (f === 'T') return 'faction-t';
-  return '';
-}
 
 function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skins: number; shirtsF: Faction; skinsF: Faction }) {
   return (
