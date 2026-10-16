@@ -10,7 +10,7 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getWeekView, getFirstGauntletRound, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
+import { getWeekView, getWeekSummary, resolveWeekOgData, getFirstGauntletRound, getGauntletStageData, getWeekRow, getPodSeasonId, getStagePagePaths } from './queries';
 import { deriveGroupPageView, deriveRoundView, deriveWeekView, stageStatus, type GauntletStageData } from './stage-views';
 import { getSeasonSchedule, getSeasonWeekNav } from './queries';
 import type { WeekWithMatches } from './queries';
@@ -38,6 +38,29 @@ test('getWeekView: scorecard, status and nav for the fixture season', async () =
   assert.deepEqual(view.nav.map((i) => i.href), ['/seasons/1/weeks/10', '/seasons/1/weeks/11']);
   assert.deepEqual(view.nav.map((i) => i.current), [true, false]);
   assert.equal(await getWeekView(1, 9999), null);
+});
+
+test('getWeekSummary: the week on its own, matching the full view minus movement and nav', async () => {
+  const view = await getWeekView(1, 11);
+  const summary = await getWeekSummary(1, 11);
+  assert.ok(view && summary);
+  assert.equal(summary.week.week_number, 2);
+  assert.equal(summary.status, view.status);
+  assert.deepEqual(summary.scorecard.map((r) => [r.player_name, r.wins, r.losses]), view.scorecard.map((r) => [r.player_name, r.wins, r.losses]));
+  assert.equal(await getWeekSummary(1, 9999), null);
+  assert.equal(await getWeekSummary(2, 11), null, 'a week under a different season');
+});
+
+test('resolveWeekOgData: the owning season and the week summary, null for an unknown week', async () => {
+  const found = await resolveWeekOgData(10);
+  assert.ok(found);
+  assert.equal(found.summary.week.id, 10);
+  assert.equal(found.owner.id, 1);
+  assert.equal(await resolveWeekOgData(9999), null);
+});
+
+test('getSeasonSchedule onlyWeek: just that week', async () => {
+  assert.deepEqual((await getSeasonSchedule(1, undefined, { onlyWeek: 2 })).map((w) => w.week_number), [2]);
 });
 
 test('getSeasonSchedule throughWeek and getSeasonWeekNav: full rosters to the week, a light listing of all', async () => {
