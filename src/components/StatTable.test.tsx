@@ -5,10 +5,13 @@
  * Run: npx vitest run src/components/StatTable.test.tsx
  */
 
-import { describe, expect, test } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell } from './StatTable';
-import Th from './Th';
+import { describe, expect, test, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell, ExpandedTd } from './StatTable';
+import { CompactTable, CompactTh, CompactTr, CompactTd, CompactNameTd } from './CompactTable';
+
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 describe('StatTable pieces', () => {
   test('rows divide with the tertiary rule, drop the last line, and highlight only when clickable', () => {
@@ -54,13 +57,6 @@ describe('StatTable pieces', () => {
     expect(link.closest('td')?.className).toContain('sticky-col');
   });
 
-  test('a compact Th is the unbanded small label', () => {
-    render(<table><thead><tr><Th compact align="right">K</Th></tr></thead></table>);
-    const cell = screen.getByRole('columnheader');
-    expect(cell.className).toContain('text-[9px]');
-    expect(cell.className).not.toContain('bg-[var(--color-bg-secondary)]');
-  });
-
   test('the frame is a bordered page-background card; bare drops the border and tinted leaves the background to className', () => {
     const frameOf = (node: React.ReactElement) => {
       const { container, unmount } = render(node);
@@ -82,5 +78,107 @@ describe('StatTable pieces', () => {
     render(<table><tbody><tr><MapCell map="dust2" /></tr></tbody></table>);
     const link = screen.getByRole('link', { name: 'Dust2' });
     expect(link).toHaveAttribute('href', '/maps/dust2');
+  });
+
+  test('a Tr with an href opens it on a plain click and leaves nested links to themselves', () => {
+    push.mockClear();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(
+      <table><tbody>
+        <Tr href="/players/7" data-testid="row">
+          <PlayerCell id={7} name="Dan" />
+          <Td>12</Td>
+        </Tr>
+      </tbody></table>,
+    );
+    const row = screen.getByTestId('row');
+    expect(row.className).toContain('lift-row');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+
+    fireEvent.click(screen.getByText('12'));
+    expect(push).toHaveBeenCalledWith('/players/7');
+
+    push.mockClear();
+    fireEvent.click(screen.getByText('Dan'));
+    expect(push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('12'), { metaKey: true });
+    expect(open).toHaveBeenCalledWith('/players/7', '_blank');
+    open.mockClear();
+    fireEvent(screen.getByText('12'), new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(open).toHaveBeenCalledWith('/players/7', '_blank');
+    open.mockRestore();
+  });
+
+  test('an accent tints the row and sets the hover accent', () => {
+    render(<table><tbody><Tr accent="#f5c542" data-testid="row"><Td>1</Td></Tr></tbody></table>);
+    const row = screen.getByTestId('row');
+    expect(row.className).toContain('row-tint');
+    expect(row.className).toContain('lift-row');
+    expect(row.className).not.toContain('bg-[var(--color-bg-primary)]');
+    expect(row.style.getPropertyValue('--lift-accent')).toBe('#f5c542');
+  });
+
+  test('summary and marker rows take their own background instead of the page one', () => {
+    render(
+      <table><tbody>
+        <Tr variant="summary" data-testid="summary"><Td>1</Td></Tr>
+        <Tr variant="marker" data-testid="marker"><Td>2</Td></Tr>
+      </tbody></table>,
+    );
+    expect(screen.getByTestId('summary').className).toContain('bg-[var(--color-bg-secondary)]');
+    expect(screen.getByTestId('summary').className).toContain('border-t');
+    expect(screen.getByTestId('summary').className).not.toContain('bg-[var(--color-bg-primary)]');
+    expect(screen.getByTestId('marker').className).toContain('row-marker');
+  });
+
+  test('an expanded panel spans every column of the header row', () => {
+    render(
+      <table>
+        <thead><tr><th>A</th><th colSpan={2}>B</th><th>C</th></tr></thead>
+        <tbody><tr><ExpandedTd>detail</ExpandedTd></tr></tbody>
+      </table>,
+    );
+    expect(screen.getByText('detail')).toHaveAttribute('colspan', '4');
+  });
+
+  test('PlayerCell pins by default and can opt out', () => {
+    render(<table><tbody><tr><PlayerCell id={1} name="Pinned" /><PlayerCell id={2} name="Loose" sticky={false} /></tr></tbody></table>);
+    expect(screen.getByText('Pinned').closest('td')?.className).toContain('sticky-col');
+    expect(screen.getByText('Loose').closest('td')?.className).not.toContain('sticky-col');
+  });
+
+  test('a fixed StatTable lays out equal columns and holds its header inside the frame', () => {
+    const { container } = render(
+      <StatTable fixed header={<div>banner</div>}>
+        <tbody><tr><td>x</td></tr></tbody>
+      </StatTable>,
+    );
+    const frame = container.firstElementChild as HTMLElement;
+    expect(frame.querySelector('table')?.className).toContain('table-fixed');
+    expect(frame.firstElementChild?.textContent).toBe('banner');
+  });
+});
+
+describe('CompactTable pieces', () => {
+  test('headers are the small unbanded label and cells are tight 11px figures', () => {
+    render(
+      <CompactTable widths={['w-9', 'w-12']}>
+        <thead><tr><CompactTh align="right">K</CompactTh><CompactTh>Map</CompactTh></tr></thead>
+        <tbody><CompactTr><CompactTd bold>5</CompactTd><CompactNameTd href="/maps/x">Map X</CompactNameTd></CompactTr></tbody>
+      </CompactTable>,
+    );
+    const th = screen.getByText('K');
+    expect(th.className).toContain('text-[9px]');
+    expect(th.className).not.toContain('bg-[var(--color-bg-secondary)]');
+    expect(screen.getByText('5').className).toMatch(/py-1.*font-mono.*text-\[11px\].*font-semibold/);
+    expect(screen.getByRole('link', { name: 'Map X' })).toHaveAttribute('href', '/maps/x');
+    expect(document.querySelectorAll('col')).toHaveLength(2);
+    expect(document.querySelector('table')?.className).toContain('table-fixed');
+  });
+
+  test('without widths the table fills its container', () => {
+    render(<CompactTable><tbody /></CompactTable>);
+    expect(document.querySelector('table')?.className).toContain('w-full');
   });
 });
