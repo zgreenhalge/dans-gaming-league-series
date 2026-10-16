@@ -85,9 +85,22 @@ export default async function AdminPage() {
   // there.
   const nextSeasonName = nextRegularSeasonName(seasons);
 
-  const allSeasons = [...seasons]
+  // One row per regular season, carrying its paired gauntlet's status; a gauntlet with no paired
+  // regular season keeps its own row.
+  const pairedGauntletIds = new Set(paired.values());
+  const allSeasons = seasons
+    .filter((s) => !pairedGauntletIds.has(s.id))
     .sort((a, b) => b.id - a.id)
-    .map((s) => ({ id: s.id, name: s.name, status: s.status, isGauntlet: s.is_gauntlet }));
+    .map((s) => {
+      const gauntlet = gauntletById.get(paired.get(s.id) ?? -1);
+      return {
+        id: s.id,
+        name: s.name,
+        status: s.status,
+        isGauntlet: s.is_gauntlet,
+        gauntletStatus: gauntlet?.status ?? null,
+      };
+    });
 
   return (
     <div className="min-h-screen">
