@@ -147,11 +147,14 @@ export_local_env() {
 # `src/lib/dev-fallback-supabase.ts` only serves fixture data when the variables are unset. Appending
 # `unset` lines makes the later lines win over any earlier export.
 clear_local_env() {
-  if [ -z "${CLAUDE_ENV_FILE:-}" ]; then
-    return 0
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    echo "unset NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY" >> "$CLAUDE_ENV_FILE"
   fi
-  echo "unset NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY" >> "$CLAUDE_ENV_FILE"
-  log "Cleared any stale Supabase connection env vars so build/dev use fixture data."
+}
+
+use_fixture_data() {
+  clear_local_env
+  log "$NO_LOCAL_STACK_MSG"
 }
 
 # --- Run ---------------------------------------------------------------------------------------
@@ -166,14 +169,12 @@ if has_real_env_local; then
 fi
 
 if ! docker_available; then
-  clear_local_env
-  log "$NO_LOCAL_STACK_MSG"
+  use_fixture_data
   exit 0
 fi
 
 if ! start_local_supabase; then
-  clear_local_env
-  log "$NO_LOCAL_STACK_MSG"
+  use_fixture_data
   exit 0
 fi
 
