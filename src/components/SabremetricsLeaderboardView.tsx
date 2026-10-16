@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useSortState } from './useSortState';
 import Th from './Th';
 import SortableTh from './SortableTh';
-import { StatTable, Tr, Td, NameTd, PlayerCell, FactionTintContext } from './StatTable';
+import { StatTable, Tr, Td, NameTd, PlayerCell } from './StatTable';
 import {
   aggregateRows,
   computeLeagueAverages,
@@ -1404,9 +1404,7 @@ function GroupedOrFlat({
         <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
           {g.header}
           <div className={`faction-tint ${factionClass(g.side)}`}>
-            <FactionTintContext.Provider value={g.side !== null}>
-              {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
-            </FactionTintContext.Provider>
+            {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
           </div>
         </div>
       ))}
