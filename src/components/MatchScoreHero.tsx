@@ -50,7 +50,7 @@ function ScoreCategoryTag({ shirts, skins, mapHref }: { shirts: number; skins: n
       title="See this map's score distribution"
       className={`${cls} hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors`}
     >
-      {label} ↗
+      {label}
     </Link>
   );
 }
