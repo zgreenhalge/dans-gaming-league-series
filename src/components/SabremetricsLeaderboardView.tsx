@@ -57,12 +57,11 @@ import RoundEconomyChart from './RoundEconomyChart';
 type Side = 'CT' | 'T' | null;
 
 /** One team's slice of a match-page sabremetrics view — filters the aggregate to its
- *  `playerIds` and wraps it in `header` (typically a `<TeamHeader>`) and side tinting. */
+ *  `playerIds` and wraps it in side tinting. */
 export interface TeamGroup {
   key: string;
   playerIds: Set<number>;
   side: Side;
-  header?: React.ReactNode;
 }
 
 /** The Economy sub-tab's round-by-round chart inputs (#519), grouped into one prop since both
@@ -1385,8 +1384,8 @@ function FactionTint({ side, children }: { side?: Side; children: React.ReactNod
   );
 }
 
-/** Renders `render(...)` once per team group — each under its `header`, filtered to that team's
- *  players, and tinted as one block — or once, ungrouped, for the season/career leaderboard shape
+/** Renders `render(...)` once per team group — filtered to that team's players and tinted as one
+ *  block — or once, ungrouped, for the season/career leaderboard shape
  *  where `groups` is omitted. A `render` that lays out several tables passes `tintSelf` and wraps
  *  each in `<FactionTint side={side}>` itself, so only the tables are tinted and not the space
  *  between them. */
@@ -1406,7 +1405,6 @@ function GroupedOrFlat({
     <>
       {groups.map((g, i) => (
         <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
-          {g.header}
           {tintSelf ? (
             render(aggregated.filter((a) => g.playerIds.has(a.player_id)), g.side)
           ) : (
