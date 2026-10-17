@@ -314,6 +314,7 @@ export function mergeSabremetricResults(
     weaponStats,
     matchKills: sortByRound(segments.flatMap((s) => s.matchKills)),
     matchRounds: sortByRound(segments.flatMap((s) => s.matchRounds)),
+    roundWindows: sortByRound(segments.flatMap((s) => s.roundWindows)),
     matchUtilityThrows: sortByRound(segments.flatMap((s) => s.matchUtilityThrows)),
     matchRoundEconomy: sortByRound(segments.flatMap((s) => s.matchRoundEconomy)),
     matchDamageEvents: sortByRound(segments.flatMap((s) => s.matchDamageEvents)),

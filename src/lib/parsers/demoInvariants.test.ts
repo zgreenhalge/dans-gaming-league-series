@@ -12,9 +12,9 @@ import type { ParsedDemoSabremetricsResult } from '../types';
 import { test, report } from '../test-support/miniTest';
 
 const entry = (n: number) => ({ n, winner: 'SHIRTS' as const, side: 'CT' as const, condition: 'elim' as const });
-const kill = (round_number: number, victim_player_id: number) => ({
+const kill = (round_number: number, victim_player_id: number, tick = round_number * 100 - 50) => ({
   round_number, attacker_player_id: 1, victim_player_id, assister_player_id: null, weapon: 'ak47',
-  headshot: false, noscope: false, wallbang: false, blind_kill: false, midair: false, is_teamkill: false, tick: 1,
+  headshot: false, noscope: false, wallbang: false, blind_kill: false, midair: false, is_teamkill: false, tick,
 });
 
 function clean() {
@@ -26,6 +26,10 @@ function clean() {
     warnings: [],
     matchRounds: [1, 2].map((round_number) => ({ round_number, winner_side: 'CT', shirts_side: 'CT', win_reason: 'elim' })),
     matchKills: [kill(1, 7), kill(2, 7)],
+    roundWindows: [
+      { round_number: 1, freeze_end_tick: 0, settle_tick: 100 },
+      { round_number: 2, freeze_end_tick: 120, settle_tick: 300 },
+    ],
   } as unknown as ParsedDemoSabremetricsResult;
   return { parsed, sab };
 }
@@ -60,6 +64,23 @@ test('checkDemoParseInvariants: flags a non-contiguous round_history', () => {
   const { parsed, sab } = clean();
   parsed.round_history = [entry(1), entry(3)];
   assert.ok(checkDemoParseInvariants(parsed, sab, expected).some((v) => /not contiguous/.test(v)));
+});
+
+test('checkDemoParseInvariants: flags a kill after its round settled and before the next round freeze ends', () => {
+  const { parsed, sab } = clean();
+  // Round 1 settles at tick 100 and round 2's freeze time ends at tick 120: tick 110 is in the gap.
+  sab.matchKills.push(kill(1, 8, 110));
+  assert.match(checkDemoParseInvariants(parsed, sab, expected)[0], /round 1 but lands after that round has settled/);
+  sab.matchKills.pop();
+  sab.matchKills.push(kill(2, 8, 110));
+  assert.match(checkDemoParseInvariants(parsed, sab, expected)[0], /round 2 but lands before that round's freeze time ends/);
+});
+
+test('checkDemoParseInvariants: a kill in a round with no freeze-end tick only needs to precede the settle tick', () => {
+  const { parsed, sab } = clean();
+  sab.roundWindows[1].freeze_end_tick = null;
+  sab.matchKills.push(kill(2, 8, 150));
+  assert.deepEqual(checkDemoParseInvariants(parsed, sab, expected), []);
 });
 
 report();

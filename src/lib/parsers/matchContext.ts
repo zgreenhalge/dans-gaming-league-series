@@ -3,6 +3,7 @@ import {
   buildRoundSides, filterLiveRoundEnds, sideForFaction, type RoundEndRow, type RoundSideInfo,
 } from './roundSides';
 import { roundOf, type RoundBounds } from './_shared';
+import type { DemoRoundWindow } from '../types';
 
 /**
  * Tick the live match starts at — the last `begin_new_match`. MatchZy fires it on every warmup
@@ -168,6 +169,27 @@ export function computeSettleTicks(
   return Int32Array.from(rounds.map((r) => {
     const next = sorted.find((t) => t > r.endTick);
     return next !== undefined ? next - 1 : r.endTick;
+  }));
+}
+
+/**
+ * One `DemoRoundWindow` per live round: the round's `round_freeze_end` tick (the first moment anyone
+ * can act) and its settle tick (the last moment trailing action still belongs to it). A freeze-end
+ * event is assigned to its round by `roundOf()`, like every other event stream.
+ */
+export function collectRoundWindows(
+  freezeEndEvents: { tick: number; total_rounds_played: number }[],
+  context: MatchContext,
+): DemoRoundWindow[] {
+  const freezeEndByRound = new Map<number, number>();
+  for (const e of freezeEndEvents) {
+    const round = roundOf(e, context);
+    if (round != null && !freezeEndByRound.has(round)) freezeEndByRound.set(round, e.tick);
+  }
+  return context.rounds.map((r) => ({
+    round_number: r.roundNumber,
+    freeze_end_tick: freezeEndByRound.get(r.roundNumber) ?? null,
+    settle_tick: context.settleWindowByRound.get(r.roundNumber)!.settleTick,
   }));
 }
 
