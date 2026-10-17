@@ -949,21 +949,20 @@ const UTILITY_SECTIONS = [
   { heading: 'Grenades & Objectives', columns: GRENADE_COLUMNS },
 ];
 
-/** One titled table per `UTILITY_SECTIONS` entry. */
+/** One titled section per `UTILITY_SECTIONS` entry, each holding a table per team in a match's team
+ *  view. */
 function UtilityTable({ aggregated, singlePlayer, teamGroups }: { aggregated: AggregatedSab[]; singlePlayer: boolean; teamGroups?: TeamGroup[] }) {
   return (
-    <GroupedOrFlat aggregated={aggregated} groups={teamGroups} tintSelf render={(agg, side) => (
-      <div className="my-6 space-y-6">
-        {UTILITY_SECTIONS.map(({ heading, columns }) => (
-          <div key={heading}>
-            <h3 className="text-sm font-semibold mb-3">{heading}</h3>
-            <FactionTint side={side}>
-              <UtilityColumnsTable columns={columns} aggregated={agg} singlePlayer={singlePlayer} />
-            </FactionTint>
-          </div>
-        ))}
-      </div>
-    )} />
+    <div className="my-6 space-y-6">
+      {UTILITY_SECTIONS.map(({ heading, columns }) => (
+        <div key={heading}>
+          <h3 className="text-sm font-semibold mb-3">{heading}</h3>
+          <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+            <UtilityColumnsTable columns={columns} aggregated={agg} singlePlayer={singlePlayer} />
+          )} />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1385,31 +1384,22 @@ function FactionTint({ side, children }: { side?: Side; children: React.ReactNod
 }
 
 /** Renders `render(...)` once per team group — filtered to that team's players and tinted as one
- *  block — or once, ungrouped, for the season/career leaderboard shape
- *  where `groups` is omitted. A `render` that lays out several tables passes `tintSelf` and wraps
- *  each in `<FactionTint side={side}>` itself, so only the tables are tinted and not the space
- *  between them. */
+ *  block — or once, ungrouped, for the season/career leaderboard shape where `groups` is omitted. */
 function GroupedOrFlat({
   aggregated,
   groups,
-  tintSelf = false,
   render,
 }: {
   aggregated: AggregatedSab[];
   groups?: TeamGroup[];
-  tintSelf?: boolean;
-  render: (agg: AggregatedSab[], side?: Side) => React.ReactNode;
+  render: (agg: AggregatedSab[]) => React.ReactNode;
 }) {
   if (!groups) return <>{render(aggregated)}</>;
   return (
     <>
       {groups.map((g, i) => (
         <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
-          {tintSelf ? (
-            render(aggregated.filter((a) => g.playerIds.has(a.player_id)), g.side)
-          ) : (
-            <FactionTint side={g.side}>{render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}</FactionTint>
-          )}
+          <FactionTint side={g.side}>{render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}</FactionTint>
         </div>
       ))}
     </>
