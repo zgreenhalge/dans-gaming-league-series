@@ -8,7 +8,7 @@ import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
-import { mapImageFor } from '@/lib/maps';
+import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
 import { buildCrumbs } from '@/lib/crumbs';
@@ -27,7 +27,7 @@ import { getPlayersById } from '@/lib/queries';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
-import { isVetoComplete, effectivePickedMap } from '@/lib/veto';
+import { isVetoComplete, effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
@@ -235,8 +235,9 @@ export default async function MatchPage({
     played && allByAdr.length > 0 ? allByAdr[0].player_id : null;
 
   const shirtsWon = score ? score.shirts > score.skins : false;
-  const shirtsF = shirtsFaction(match.skins_starting_side);
-  const skinsF: Faction = match.skins_starting_side;
+  const skinsStartingSide = effectiveSkinsStartingSide(match);
+  const shirtsF = shirtsFaction(skinsStartingSide);
+  const skinsF: Faction = skinsStartingSide;
 
   const currentPlayerId = session?.user?.playerId ?? null;
 
@@ -362,6 +363,7 @@ export default async function MatchPage({
               played={played}
               vetoComplete={vetoComplete}
               finalScore={score}
+              mapHref={map ? mapSidesHref(map) : null}
               shirtsF={shirtsF}
               skinsF={skinsF}
             />
@@ -446,7 +448,7 @@ export default async function MatchPage({
                 faction: s.faction as 'SHIRTS' | 'SKINS',
               }))}
               targetWinRounds={season.target_win_rounds}
-              skinsSide={match.skins_starting_side}
+              skinsSide={skinsStartingSide}
               sabremetrics={sabremetrics}
               matchKills={matchKills}
               matchDamageEvents={matchDamageEvents}

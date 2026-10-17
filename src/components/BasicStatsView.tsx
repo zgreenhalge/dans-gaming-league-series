@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useSortState } from './useSortState';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, SCORE_CATEGORY_INFO, type ScoreCategory, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
@@ -350,13 +350,11 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
       emptyMessage="No match data."
       categoryLabel="Category"
       total={dist.total}
-      buckets={[
-        { label: 'Crushing', count: dist.crushed, note: '13–3 or worse' },
-        { label: 'Convincing', count: dist.convincing, note: '13–4 to 13–6' },
-        { label: 'Competitive', count: dist.competitive, note: '13–7 to 13–9' },
-        { label: 'Close', count: dist.close, note: '13–10 or 13–11' },
-        { label: 'CRAZY', count: dist.crazy, note: 'Overtime' },
-      ]}
+      buckets={(Object.keys(SCORE_CATEGORY_INFO) as ScoreCategory[]).map((key) => ({
+        label: SCORE_CATEGORY_INFO[key].label,
+        count: dist[key],
+        note: SCORE_CATEGORY_INFO[key].note,
+      }))}
     />
   );
 }
@@ -467,16 +465,18 @@ function MapsAndSidesSection({
   perSideStats: PerSideStat[];
 }) {
   // Multi-map pages fold the per-side figures into the pick/ban table; a single map has no
-  // pick/ban table, so it keeps the standalone per-side panel.
+  // pick/ban table, so its two distributions sit side by side with the standalone per-side panel
+  // underneath.
   return (
     <div className="space-y-6">
       {!singleMap && <MapPickBanTable mapPickBanStats={mapPickBanStats} perSideStats={perSideStats} />}
 
-      <div className={`grid grid-cols-1 gap-6 ${singleMap ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
-        {singleMap && <PerSideStatsTable perSideStats={perSideStats} />}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
         {winConditions && <WinConditionTable dist={winConditions} />}
       </div>
+
+      {singleMap && <PerSideStatsTable perSideStats={perSideStats} />}
     </div>
   );
 }
@@ -525,7 +525,7 @@ export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { r
     { key: 'kills', label: 'Kill Stats' },
     { key: 'games', label: 'Game Stats' },
     { key: 'averages', label: 'Averages' },
-    ...(matches ? [{ key: 'sides' as const, label: 'Maps & Sides' }] : []),
+    ...(matches ? [{ key: 'sides' as const, label: singleMap ? 'Sides' : 'Maps & Sides' }] : []),
   ];
   // Falls back to the first surviving tab when `stab` names one this call site has hidden (e.g.
   // `stab=sides` on a view with no per-match data).

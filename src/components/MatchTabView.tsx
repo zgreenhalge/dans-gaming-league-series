@@ -424,32 +424,8 @@ export default function MatchTabView({
       }));
   const advancedStatRows = [...toSabRows(shirts), ...toSabRows(skins)];
   const advancedStatTeams: TeamGroup[] = [
-    {
-      key: 'shirts',
-      side: shirtsF,
-      playerIds: new Set(shirts.map((p) => p.player_id)),
-      header: (
-        <TeamHeader
-          name="Shirts"
-          faction={shirtsF}
-          score={score?.shirts ?? null}
-          outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
-        />
-      ),
-    },
-    {
-      key: 'skins',
-      side: skinsF,
-      playerIds: new Set(skins.map((p) => p.player_id)),
-      header: (
-        <TeamHeader
-          name="Skins"
-          faction={skinsF}
-          score={score?.skins ?? null}
-          outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
-        />
-      ),
-    },
+    { key: 'shirts', side: shirtsF, playerIds: new Set(shirts.map((p) => p.player_id)) },
+    { key: 'skins', side: skinsF, playerIds: new Set(skins.map((p) => p.player_id)) },
   ];
 
   return (

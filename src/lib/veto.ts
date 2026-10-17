@@ -5,6 +5,8 @@
 // Gauntlet entry for why callers should pass `isGauntlet || match.is_playoff_game` rather than
 // `isGauntlet` alone.
 
+import type { RoundHistoryEntry } from './types';
+
 export interface VetoFields {
   shirts_ban: string | null;
   shirts_ban2: string | null;
@@ -32,4 +34,20 @@ export function isVetoComplete(m: VetoFields, isGauntlet: boolean): boolean {
  */
 export function effectivePickedMap(m: { shirts_pick: string | null; skins_pick: string | null }): string | null {
   return m.shirts_pick ?? m.skins_pick;
+}
+
+/**
+ * The side SKINS started on: the stored `skins_starting_side`, else — for a gauntlet match, whose
+ * knife round decides the side so nothing is stored — the one the demo's first recorded round
+ * implies (`round_history` is in round order and starts at the live match's round 1). `null` when
+ * neither is known.
+ */
+export function effectiveSkinsStartingSide(m: {
+  skins_starting_side: 'CT' | 'T' | null;
+  round_history: RoundHistoryEntry[] | null;
+}): 'CT' | 'T' | null {
+  if (m.skins_starting_side) return m.skins_starting_side;
+  const first = m.round_history?.reduce<RoundHistoryEntry | null>((a, r) => (!a || r.n < a.n ? r : a), null);
+  if (!first) return null;
+  return first.winner === 'SKINS' ? first.side : first.side === 'CT' ? 'T' : 'CT';
 }

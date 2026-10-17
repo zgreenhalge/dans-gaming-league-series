@@ -8,11 +8,13 @@
 // `src/lib/demo/liveScore.ts`'s header comment for why that's the right trigger. Once `played` is
 // true, it renders the final score from the `matches` row instead and the live wiring never mounts.
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
 import { factionClass } from '@/lib/util';
+import { SCORE_CATEGORY_INFO, scoreCategory } from '@/lib/mapSideStats';
 
 type Faction = 'CT' | 'T' | null;
 
@@ -36,11 +38,29 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
   );
 }
 
+/** The score's category (`scoreCategory()`), linking to the map page's score distribution when the
+ *  match has a map — the same bordered link style as the header's other map-backdrop actions. */
+function ScoreCategoryTag({ shirts, skins, mapHref }: { shirts: number; skins: number; mapHref: string | null }) {
+  const { label } = SCORE_CATEGORY_INFO[scoreCategory(shirts, skins)];
+  const cls = 'map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)]';
+  if (!mapHref) return <span className={cls}>{label}</span>;
+  return (
+    <Link
+      href={mapHref}
+      title="See this map's score distribution"
+      className={`${cls} hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors`}
+    >
+      {label}
+    </Link>
+  );
+}
+
 export default function MatchScoreHero({
   matchId,
   played,
   vetoComplete,
   finalScore,
+  mapHref = null,
   shirtsF,
   skinsF,
 }: {
@@ -51,6 +71,8 @@ export default function MatchScoreHero({
    *  never receive anything (e.g. a match still weeks from its veto window). */
   vetoComplete: boolean;
   finalScore: { shirts: number; skins: number } | null;
+  /** The map page's score-distribution view, which the category label links to. */
+  mapHref?: string | null;
   shirtsF: Faction;
   skinsF: Faction;
 }) {
@@ -97,8 +119,11 @@ export default function MatchScoreHero({
   if (played) {
     if (!finalScore) return null;
     return (
-      <div className="mt-5">
-        <ScoreDisplay shirts={finalScore.shirts} skins={finalScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
+      <div className="mt-5 flex flex-col items-center gap-3">
+        <div className="map-text-scrim">
+          <ScoreDisplay shirts={finalScore.shirts} skins={finalScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
+        </div>
+        <ScoreCategoryTag shirts={finalScore.shirts} skins={finalScore.skins} mapHref={mapHref} />
       </div>
     );
   }
