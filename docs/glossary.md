@@ -88,7 +88,9 @@ so you don't have to reverse-engineer them from scratch each time.
     side — `mapSides()` (`src/lib/matchzy.ts`) falls back to `["knife"]` whenever
     `skins_starting_side` is unset at config-build time, rather than forcing a side. Demo ingestion
     then infers which side was actually played from the first live round instead of trusting a stored
-    value — see [`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference).
+    value — see [`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference). The match page
+    colors teams by `effectiveSkinsStartingSide()` (`src/lib/veto.ts`): the stored side, else the one
+    the first round in `round_history` implies.
   - **All gauntlet matches are stored with `is_playoff_game = true`**, so the regular
     `player_season_leaderboard` view excludes them entirely — gauntlet stats must be computed
     directly from `player_match_stats` (`getGauntletStats`, `getGauntletSeasonLeaderboard`,
