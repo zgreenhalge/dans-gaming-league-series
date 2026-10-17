@@ -11,7 +11,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { dedupeDeathEvents, computeSettleTicks, collectRoundWindows } from './matchContext';
+import { dedupeDeathEvents, computeSettleTicks } from './matchContext';
 import { makeContext, death } from './matchContextFixture';
 import type { RoundSideInfo } from './roundSides';
 import { test, report } from '../test-support/miniTest';
@@ -127,30 +127,6 @@ test('computeSettleTicks: an outlier gap is read from the real event tick, not a
     [1060],
   );
   assert.deepEqual(Array.from(result), [1059, 1200]);
-});
-
-test('collectRoundWindows: pairs each live round with its freeze-end tick and settle tick', () => {
-  const ctx = makeContext({
-    rounds: [
-      { roundNumber: 1, winnerSide: 'CT', endTick: 900, settleTick: 1000 },
-      { roundNumber: 2, winnerSide: 'T', endTick: 1900, settleTick: 1900 },
-    ],
-    sides,
-  });
-  // total_rounds_played is the count *before* the round: 0 -> round 1, 1 -> round 2.
-  const windows = collectRoundWindows(
-    [{ tick: 100, total_rounds_played: 0 }, { tick: 1200, total_rounds_played: 1 }],
-    ctx,
-  );
-  assert.deepEqual(windows, [
-    { round_number: 1, freeze_end_tick: 100, settle_tick: 1000 },
-    { round_number: 2, freeze_end_tick: 1200, settle_tick: 1900 },
-  ]);
-});
-
-test('collectRoundWindows: a round with no freeze-end event gets a null freeze_end_tick', () => {
-  const ctx = makeContext({ rounds: [{ roundNumber: 1, winnerSide: 'CT', endTick: 900 }], sides });
-  assert.deepEqual(collectRoundWindows([], ctx), [{ round_number: 1, freeze_end_tick: null, settle_tick: 900 }]);
 });
 
 report();

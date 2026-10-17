@@ -321,16 +321,6 @@ export interface DemoMatchRound {
   win_reason: RoundCondition;
 }
 
-/** The tick span a live round's events can legitimately fall in: from its `round_freeze_end` (null
- *  when the demo has no freeze-end event for it) through its settle tick (`computeSettleTicks()`),
- *  which includes the post-`round_end` trailing action. Diagnostic only, never persisted — it lets
- *  `checkStructuralInvariants()` confirm every `match_kills` row sits inside its own round. */
-export interface DemoRoundWindow {
-  round_number: number;
-  freeze_end_tick: number | null;
-  settle_tick: number;
-}
-
 // `match_utility_throws`: one row per `player_blind` event — the primitive that makes "which flash
 // led to this kill/assist" queryable, not because any single flash is browsable on its own. Self-
 // flashes (flasher === blinded) are kept, not filtered — same "downstream queries decide" convention
@@ -372,8 +362,6 @@ export interface ParsedDemoSabremetricsResult {
   weaponStats: DemoWeaponStat[];
   matchKills: DemoMatchKill[];
   matchRounds: DemoMatchRound[];
-  /** One per entry in `matchRounds`, same round numbers. */
-  roundWindows: DemoRoundWindow[];
   matchUtilityThrows: DemoMatchUtilityThrow[];
   matchRoundEconomy: DemoMatchRoundEconomy[];
   matchDamageEvents: DemoMatchDamageEvent[];

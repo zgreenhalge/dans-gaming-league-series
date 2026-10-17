@@ -454,7 +454,7 @@ function sab(player_id: number, overrides: Partial<SabFields>): DemoSabremetricS
 
 function baseSabResult(overrides: Partial<ParsedDemoSabremetricsResult>): ParsedDemoSabremetricsResult {
   return {
-    sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [], roundWindows: [],
+    sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
     matchUtilityThrows: [], matchRoundEconomy: [], matchDamageEvents: [], warnings: [],
     resolvedPlayerIds: [],
     ...overrides,

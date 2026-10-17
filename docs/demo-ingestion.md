@@ -419,7 +419,7 @@ and asserts `checkDemoParseInvariants()` (`parsers/demoInvariants.ts`) for each:
 - the derived score equals the match's confirmed `final_score`
 - `round_history` has the confirmed live round count and is contiguous
 - `matchRounds` covers exactly the rounds in `round_history`
-- every `matchKills` row sits in a live round, inside that round's tick window, and no player dies twice in one round
+- every `matchKills` row sits in a live round, and no player dies twice in one round
 
 ### The invariants in plain language
 
@@ -428,7 +428,7 @@ An invariant is a fact true of any correct parse of a match, whichever demo it i
 algorithm, so a round-attribution bug in any collector trips it even when that collector's unit tests
 pass. The checks fall into two groups by what they need as input:
 
-**Outcome checks** (`checkOutcomeInvariants()`) compare the parse to a known-good result passed in as `ExpectedOutcome` (the
+**Outcome checks** compare the parse to a known-good result passed in as `ExpectedOutcome` (the
 confirmed `final_score` and live round count):
 
 | Rule | What a violation means |
@@ -436,7 +436,7 @@ confirmed `final_score` and live round count):
 | Derived score equals the expected score | the parser mis-counted rounds won or assigned them to the wrong team |
 | `round_history` length equals the expected round count | rounds were dropped (a missed `round_end`) or invented (warmup/knife/replayed rounds kept) |
 
-**Structural checks** (`checkStructuralInvariants()`) need nothing but the parse itself:
+**Structural checks** need nothing but the parse itself:
 
 | Rule | What a violation means |
 |---|---|
@@ -444,19 +444,13 @@ confirmed `final_score` and live round count):
 | `round_history` is contiguous (`n`, `n+1`, `n+2`, …) | a round is missing from the middle of the match, or the numbering restarted |
 | `matchRounds` covers exactly the rounds in `round_history` | the per-round fact table and the score-side round list disagree about which rounds were played |
 | Every `matchKills` row sits in a live round | a kill was attributed to a warmup, knife, or otherwise non-counted round — the signature of a round-numbering collision |
-| Every `matchKills` row's tick lies inside its round's window (`roundWindows`: the round's `round_freeze_end` tick through its settle tick) | a kill that landed after its round settled and before the next round's freeze time ended — dead air in which nobody can legitimately die — was attributed to one of the two rounds. Trailing action between `round_end` and the settle tick (a bomb detonating, a lingering molotov) stays inside the ended round's window |
 | No player dies twice in one round | two events were attributed to the same round that cannot both belong there (a double-counted death, or kills from two different rounds sharing one number) |
 
-`checkDemoParseInvariants()` runs both groups; the corpus test calls it. `scripts/demo-ingest.ts` does
-not run these checks. Its production equivalents are `quarantineDemo()`
+`scripts/demo-ingest.ts` does not run these checks. Its production equivalents are `quarantineDemo()`
 (round-number regression/duplicates, round count vs. score, nobody reaching `target_win_rounds`),
 `evaluateAutoCommit()`'s zero-warning rule, and the comparison of the derived score against MatchZy's
 `map_result`. The kill-placement, double-death, and `matchRounds`-coverage rules have no production
 counterpart.
-
-`npm run demo-invariants:check [-- <matchId> ...]` (`scripts/check-demo-invariants.ts`) runs the
-structural group over demos already in R2 — every match with a demo when no ids are given — and prints
-each violation per match. It is read-only: it parses and reports, and writes nothing.
 
 **What's committed and what isn't.** Demos run tens to hundreds of MB, so `parsers/realDemos/corpus.json`
 lists each one by R2 key with its confirmed score and round count, and nothing else. The demo files

@@ -5,7 +5,7 @@ import type {
   DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent, ParsedDemoSabremetricsResult,
 } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { buildMatchContext, collectMidairAttackers, collectRoundWindows, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
+import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import { filterLiveRoundEnds, type RoundEndRow } from './parsers/roundSides';
 import { resolveStartingSide } from './parsers/sideInference';
 import { mergeSabremetricResults } from './parsers/segmentMerge';
@@ -171,7 +171,7 @@ export function parseDemoSabremetrics(
         : 'No live rounds found in demo.',
     );
     return {
-      sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [], roundWindows: [],
+      sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
       matchUtilityThrows: [], matchRoundEconomy: [], matchDamageEvents: [],
       warnings,
       resolvedPlayerIds: [...steamToPlayer.values()].map((p) => p.player_id),
@@ -446,9 +446,8 @@ export function parseDemoSabremetrics(
   const uniqueWarnings = [...new Set(warnings)];
 
   return {
-    sabremetrics, weaponStats, matchKills, matchRounds,
-    roundWindows: collectRoundWindows(freezeEndEvents, context),
-    matchUtilityThrows, matchRoundEconomy, matchDamageEvents,
+    sabremetrics, weaponStats, matchKills, matchRounds, matchUtilityThrows, matchRoundEconomy,
+    matchDamageEvents,
     warnings: uniqueWarnings,
     resolvedPlayerIds: steamIds.map((steamId) => steamToPlayer.get(steamId)!.player_id),
   };
