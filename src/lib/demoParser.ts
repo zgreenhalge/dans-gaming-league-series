@@ -46,6 +46,11 @@ export interface ParsedDemoResult {
   effective_side: 'CT' | 'T' | null;
 }
 
+/** Per-round average damage as the whole number `player_match_stats.adr` stores. */
+export function roundedAdr(damage: number, rounds: number): number {
+  return rounds > 0 ? Math.round(damage / rounds) : 0;
+}
+
 export function parseDemoFile(
   demoBuffer: Buffer,
   roster: RosterEntry[],
@@ -68,7 +73,9 @@ export function parseDemoFile(
   const totalRounds = liveRounds.length;
 
   // --- K / D / A / Damage: read all from the engine's own accumulators ---
-  // These match the end-of-match scoreboard exactly, with no event math required.
+  // These match the end-of-match scoreboard exactly, with no event math required. `m_iDamage` also
+  // counts damage to breakable props, so `parseDemoBuffers()` (`demo/parseDemo.ts`) replaces
+  // `damage` with the player-only total from the damage fact rows whenever sabremetrics resolved.
   const kills = new Map<string, number>();
   const deaths = new Map<string, number>();
   const assists = new Map<string, number>();
@@ -146,7 +153,7 @@ export function parseDemoFile(
   for (const [steamId, { player_id, faction }] of steamToPlayer) {
     const roundsWon = faction === 'SHIRTS' ? shirtsRoundsWon : skinsRoundsWon;
     const dmg = damage.get(steamId) ?? 0;
-    const adr = totalRounds > 0 ? Math.round(dmg / totalRounds) : 0;
+    const adr = roundedAdr(dmg, totalRounds);
     const isWin =
       effectiveSide !== null &&
       (faction === 'SHIRTS' ? shirtsRoundsWon > skinsRoundsWon : skinsRoundsWon > shirtsRoundsWon);

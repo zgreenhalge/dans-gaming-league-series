@@ -219,7 +219,10 @@ above: a new derived stat is a query change, not a new table.
   attacker/victim to `player_match_stats_id`; a hit whose victim has no resolvable row is dropped,
   matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are summed from these rows
   (enemy hits only, by the attacker's side) by `collectDamageBySide()` — see
-  [`calculations.md`](./calculations.md).
+  [`calculations.md`](./calculations.md). `parseDemoBuffers()` (`demo/parseDemo.ts`) then sets each
+  player's `player_match_stats.damage` and ADR to that same total (`withEnemyDamage()`), replacing the
+  engine's `m_iDamage`, which also counts damage to breakable props. The engine value stays only when
+  sabremetrics resolved no rounds (starting side unknown), since no event-derived total exists then.
 
 ## Match start (skipping warmup and stray knife rounds)
 

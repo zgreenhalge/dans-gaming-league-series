@@ -14,7 +14,9 @@ Raw numbers, direct from the game scoreboard
 - K = Kills
 - A = Assists
 - D = Deaths
-- Dmg = Damage
+- Dmg = Damage — health enemies lost to the player. For demo-parsed matches it is `damage_ct + damage_t`
+  (below), so damage to breakable props, which the engine's own `m_iDamage` counter includes, isn't
+  counted.
 - Kill Difference = Kills - Deaths
 
 ### Kill Stats
