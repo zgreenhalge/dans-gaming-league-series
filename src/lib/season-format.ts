@@ -334,18 +334,22 @@ interface HalfSearchResult {
   splits: number[][];
 }
 
+/** Cache marker for a not-yet-computed probability — outside [0, 1], and unlike NaN it can't
+ * collide with a computed result. */
+const UNCOMPUTED = -1;
+
 class WinProbTable {
   private readonly cache: Float64Array;
   constructor(private readonly ratings: PlayerRating[]) {
     const pairs = ratings.length * ratings.length;
-    this.cache = new Float64Array(pairs * pairs).fill(Number.NaN);
+    this.cache = new Float64Array(pairs * pairs).fill(UNCOMPUTED);
   }
   /** Probability that team (a, b) beats team (c, d). */
   get(a: number, b: number, c: number, d: number): number {
     const n = this.ratings.length;
     const i = (a * n + b) * n * n + c * n + d;
     let p = this.cache[i];
-    if (Number.isNaN(p)) {
+    if (p === UNCOMPUTED) {
       p = predictWinProbability([this.ratings[a], this.ratings[b]], [this.ratings[c], this.ratings[d]]);
       this.cache[i] = p;
     }
@@ -729,4 +733,13 @@ export function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): Forma
     lopsidedGames,
     maxSideImbalance: Math.max(0, ...playerIds.map((id) => Math.abs(sideBalance.get(id) ?? 0))),
   };
+}
+
+/** A one-line summary of a plan's settings, e.g. "8 weeks · 1 match a week · 2 divisions, halfway
+ * shuffle" — how the Schedule Lab labels a preview. */
+export function describeFormatSettings(settings: SeasonFormatSettings): string {
+  const parts = [`${settings.weeks} weeks`, settings.weekShape === 'match' ? '1 match a week' : '1 group a week'];
+  if (settings.divisions > 1) parts.push(`${settings.divisions} divisions${reshuffles(settings) ? ', halfway shuffle' : ''}`);
+  if (!settings.ehogBalance) parts.push('no EHOG balancing');
+  return parts.join(' · ');
 }
