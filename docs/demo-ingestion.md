@@ -51,6 +51,14 @@ the same steamid/name is readily available on every player entity at any tick, t
 read every other collector in this codebase already relies on. `parsePlayerInfo()`'s name wins when
 both sources agree on a steamid; the per-tick read only fills in steamids it alone found.
 
+**Spectators aren't players.** The same per-tick read samples `team_num` (2 = T, 3 = CT, 1 =
+spectator, 0 = unassigned). A steamid sampled at least once but never on T or CT is dropped
+(`excludeNonPlayers()`), so a spectator in the recording is never a roster candidate: it can't make
+`resolveRoster()` throw "Could not match … demo player(s)", and it can't be matched to a missing
+rostered player by elimination. A steamid with no usable `team_num` sample is kept, since nothing
+says it wasn't playing. Spectators therefore don't appear in `resolvedPlayerIds`, stats, or any
+fact table.
+
 **Learning steam ids on confirm.** When a demo player is matched by the elimination fallback,
 `rosterResolver.ts` emits a warning (`eliminationWarning()`) carrying the demo steam id + the roster
 player it was matched to. The confirm forwards parser `warnings` to `PATCH /score`, which — **for an

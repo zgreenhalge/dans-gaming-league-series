@@ -44,6 +44,34 @@ function withSteamIds(
     .map((p) => ({ steamId: String(p.steamid), name: p.name ?? '' }));
 }
 
+/** CS2 `team_num` of a player actually playing: 2 = T, 3 = CT (1 = spectator, 0 = unassigned). */
+const PLAYING_TEAMS = new Set([2, 3]);
+
+/**
+ * Drops players who were sampled in the demo but never on T or CT — spectators and anyone left
+ * unassigned — so they never count as roster candidates. A player with no usable `team_num`
+ * sample at all (not networked at any sampled tick, or the field absent) is kept: nothing says
+ * they weren't playing, and `parsePlayerInfo()` alone can be the only source that lists them.
+ */
+export function excludeNonPlayers(
+  players: { steamId: string; name: string }[],
+  teamSamples: { steamId: string; teamNum: number }[],
+): { steamId: string; name: string }[] {
+  const sampled = new Set<string>();
+  const played = new Set<string>();
+  for (const s of teamSamples) {
+    if (!Number.isFinite(s.teamNum)) continue;
+    sampled.add(s.steamId);
+    if (PLAYING_TEAMS.has(s.teamNum)) played.add(s.steamId);
+  }
+  return players.filter((p) => !sampled.has(p.steamId) || played.has(p.steamId));
+}
+
+/**
+ * The players who played in the demo: every steamid `parsePlayerInfo()` or a per-`round_end`-tick
+ * read finds, minus spectators (`excludeNonPlayers()`). A spectator is not a roster candidate, so
+ * `resolveRoster()` never has to match one and cannot mistake one for a missing rostered player.
+ */
 export function readDemoPlayers(
   demoBuffer: Buffer,
 ): { steamId: string; name: string }[] {
@@ -59,19 +87,26 @@ export function readDemoPlayers(
   // the others after the restart that necessitated this cross-reference in the first place might
   // not be networked yet at that first tick. Later ticks pick them up.
   const byId = new Map<string, { steamId: string; name: string }>();
+  const teamSamples: { steamId: string; teamNum: number }[] = [];
   const rounds = parseEvent(demoBuffer, 'round_end', [], []) as { tick: number }[];
   if (rounds.length > 0) {
-    const rows = parseTicks(demoBuffer, ['name'], rounds.map((r) => r.tick)) as {
+    const rows = parseTicks(demoBuffer, ['name', 'team_num'], rounds.map((r) => r.tick)) as {
       steamid: string | bigint;
       name?: string;
+      team_num?: number;
     }[];
     for (const p of withSteamIds(rows)) byId.set(p.steamId, p);
+    for (const r of rows) {
+      if (r.steamid && String(r.steamid) !== '0') {
+        teamSamples.push({ steamId: String(r.steamid), teamNum: Number(r.team_num) });
+      }
+    }
   }
   // parsePlayerInfo()'s name (when it has an entry) wins as the cleaner display name — the per-tick
   // sample's `name` field is a fallback for steamids it alone found, not the preferred source.
   for (const p of withSteamIds(parsePlayerInfo(demoBuffer))) byId.set(p.steamId, p);
 
-  return [...byId.values()];
+  return excludeNonPlayers([...byId.values()], teamSamples);
 }
 
 export function resolveRoster(

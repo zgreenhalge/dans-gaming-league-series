@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { eliminationWarning, parseEliminationWarning, noPlayersFoundWarning, resolveRoster } from './rosterResolver';
+import { eliminationWarning, parseEliminationWarning, noPlayersFoundWarning, resolveRoster, excludeNonPlayers } from './rosterResolver';
 import type { RosterEntry } from '../demoParser';
 import { test, report } from '../test-support/miniTest';
 
@@ -163,6 +163,58 @@ test('resolveRoster: duplicate steam ids on the roster do not double-assign the 
   assert.equal(resolved.size, 2);
   assert.equal(resolved.get('111')?.player_id, 1);
   assert.equal(resolved.get('222')?.player_id, 2);
+});
+
+const demo = [
+  { steamId: '111', name: 'Tim' },
+  { steamId: '222', name: 'Dan' },
+  { steamId: '999', name: 'Watcher' },
+];
+
+test('excludeNonPlayers drops a player only ever sampled as spectator or unassigned', () => {
+  const kept = excludeNonPlayers(demo, [
+    { steamId: '111', teamNum: 3 },
+    { steamId: '222', teamNum: 2 },
+    { steamId: '999', teamNum: 1 },
+    { steamId: '999', teamNum: 0 },
+  ]);
+  assert.deepEqual(kept.map((p) => p.steamId), ['111', '222']);
+});
+
+test('excludeNonPlayers keeps a player who was on a team at any sample', () => {
+  const kept = excludeNonPlayers(demo, [
+    { steamId: '111', teamNum: 0 },
+    { steamId: '111', teamNum: 3 },
+    { steamId: '222', teamNum: 2 },
+    { steamId: '999', teamNum: 1 },
+  ]);
+  assert.deepEqual(kept.map((p) => p.steamId), ['111', '222']);
+});
+
+test('excludeNonPlayers keeps a player with no usable team sample', () => {
+  const kept = excludeNonPlayers(demo, [
+    { steamId: '111', teamNum: 3 },
+    { steamId: '999', teamNum: Number.NaN },
+  ]);
+  assert.deepEqual(kept.map((p) => p.steamId), ['111', '222', '999']);
+});
+
+test('a spectator is not matched to a missing rostered player by elimination', () => {
+  const roster: RosterEntry[] = [
+    slot({ player_id: 1, steam_id: '111', name: 'Tim', faction: 'SHIRTS' }),
+    slot({ player_id: 2, steam_id: '222', name: 'Dan', faction: 'SKINS' }),
+    slot({ player_id: 3, steam_id: '333', name: 'Sue', faction: 'SKINS' }),
+  ];
+  const players = excludeNonPlayers(demo, [
+    { steamId: '111', teamNum: 3 },
+    { steamId: '222', teamNum: 2 },
+    { steamId: '999', teamNum: 1 },
+  ]);
+  const warnings: string[] = [];
+  const resolved = resolveRoster(players, roster, warnings);
+  assert.equal(resolved.has('999'), false);
+  assert.equal(resolved.size, 2);
+  assert.ok(warnings.some((w) => w.includes('missing: Sue')));
 });
 
 report();
