@@ -11,8 +11,8 @@ import { sideForRealRound } from './roundSides';
 // disagreement is surfaced as a warning rather than silently overridden.
 
 // CS2 `team_num`: 2 = T, 3 = CT (1 = spectator, 0 = unassigned).
-const T_TEAM = 2;
-const CT_TEAM = 3;
+export const T_TEAM = 2;
+export const CT_TEAM = 3;
 
 type ResolvedRoster = Map<string, { player_id: number; faction: 'SHIRTS' | 'SKINS' }>;
 

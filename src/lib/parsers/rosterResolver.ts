@@ -1,5 +1,6 @@
 import { parseEvent, parsePlayerInfo, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from '../demoParser';
+import { CT_TEAM, T_TEAM } from './sideInference';
 
 function normName(s: string | null | undefined): string {
   return (s ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
@@ -44,9 +45,6 @@ function withSteamIds(
     .map((p) => ({ steamId: String(p.steamid), name: p.name ?? '' }));
 }
 
-/** CS2 `team_num` of a player actually playing: 2 = T, 3 = CT (1 = spectator, 0 = unassigned). */
-const PLAYING_TEAMS = new Set([2, 3]);
-
 /**
  * Drops players who were sampled in the demo but never on T or CT — spectators and anyone left
  * unassigned — so they never count as roster candidates. A player with no usable `team_num`
@@ -62,16 +60,12 @@ export function excludeNonPlayers(
   for (const s of teamSamples) {
     if (!Number.isFinite(s.teamNum)) continue;
     sampled.add(s.steamId);
-    if (PLAYING_TEAMS.has(s.teamNum)) played.add(s.steamId);
+    if (s.teamNum === T_TEAM || s.teamNum === CT_TEAM) played.add(s.steamId);
   }
   return players.filter((p) => !sampled.has(p.steamId) || played.has(p.steamId));
 }
 
-/**
- * The players who played in the demo: every steamid `parsePlayerInfo()` or a per-`round_end`-tick
- * read finds, minus spectators (`excludeNonPlayers()`). A spectator is not a roster candidate, so
- * `resolveRoster()` never has to match one and cannot mistake one for a missing rostered player.
- */
+/** The demo's players — every steamid `parsePlayerInfo()` or the per-tick read finds, minus spectators. */
 export function readDemoPlayers(
   demoBuffer: Buffer,
 ): { steamId: string; name: string }[] {

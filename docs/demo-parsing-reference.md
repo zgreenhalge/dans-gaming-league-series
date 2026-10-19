@@ -50,13 +50,12 @@ analysis and visualization.
   sample ticks from event ticks (which always have a frame) or check the row count.
 - **The event stream can omit `player_hurt` events the entity state still reflects.** A victim's
   `health` drops and the attacker's `m_flTotalRoundDamageDealt` rises by the same amount on a tick
-  with no event; roughly 0.15% of hits across the real-demo corpus. `applyHealthLost()` folds the
-  missing amount into the victim's next recorded hit, so a victim's round total stays right while
-  that chunk can be credited to the next attacker.
+  with no event. `applyHealthLost()` folds the missing amount into the victim's next recorded hit,
+  so a victim's round total stays right while that chunk can be credited to the next attacker.
 - **`m_flTotalRoundDamageDealt` also credits damage to non-player entities.** A shot that breaks a
   prop raises it with no `player_hurt` (the amount is the prop's, not exposed per hit), and a
-  penetrating AWP kill has been seen credited 116 against a victim with 46 health left. Reconcile
-  it only against player damage with that tolerance in mind.
+  penetrating shot can be credited more than the victim's remaining health. Don't reconcile it
+  exactly against player damage.
 - **Warmup and knife rounds are present in the raw tick/event stream** — the demo doesn't mark them
   as excluded for you; whatever's consuming the parser output has to filter on round state
   (`is_warmup_period`, round number, winner) itself. See `liveRounds` filtering in

@@ -4,7 +4,8 @@
 // `POST /api/matches/[id]/demo/parse`, and the real-demo corpus test, so none of them can drift from
 // the others on how a demo is parsed.
 
-import { parseDemoFile, parseDemoFileSegments, roundedAdr, type RosterEntry, type ParsedDemoResult } from '../demoParser';
+import { parseDemoFile, parseDemoFileSegments, type RosterEntry, type ParsedDemoResult } from '../demoParser';
+import { roundedAdr } from '../util';
 import { parseDemoSabremetrics, parseDemoSabremetricsSegments } from '../demoSabremetrics';
 import type { ParsedDemoSabremetricsResult } from '../types';
 

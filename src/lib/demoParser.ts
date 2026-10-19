@@ -6,6 +6,7 @@ import { resolveStartingSide } from './parsers/sideInference';
 import { mergeSegmentResults } from './parsers/segmentMerge';
 import { orchestrateSegments } from './parsers/segmentOrchestrator';
 import type { RoundHistoryEntry } from './types';
+import { roundedAdr } from './util';
 
 const TRACKING = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 
@@ -46,11 +47,6 @@ export interface ParsedDemoResult {
   effective_side: 'CT' | 'T' | null;
 }
 
-/** Per-round average damage as the whole number `player_match_stats.adr` stores. */
-export function roundedAdr(damage: number, rounds: number): number {
-  return rounds > 0 ? Math.round(damage / rounds) : 0;
-}
-
 export function parseDemoFile(
   demoBuffer: Buffer,
   roster: RosterEntry[],
@@ -73,9 +69,8 @@ export function parseDemoFile(
   const totalRounds = liveRounds.length;
 
   // --- K / D / A / Damage: read all from the engine's own accumulators ---
-  // These match the end-of-match scoreboard exactly, with no event math required. `m_iDamage` also
-  // counts damage to breakable props, so `parseDemoBuffers()` (`demo/parseDemo.ts`) replaces
-  // `damage` with the player-only total from the damage fact rows whenever sabremetrics resolved.
+  // These match the end-of-match scoreboard exactly, with no event math required. `damage` is
+  // then overridden by `withEnemyDamage()` (`demo/parseDemo.ts`), since `m_iDamage` counts props.
   const kills = new Map<string, number>();
   const deaths = new Map<string, number>();
   const assists = new Map<string, number>();

@@ -171,22 +171,13 @@ const demo = [
   { steamId: '999', name: 'Watcher' },
 ];
 
-test('excludeNonPlayers drops a player only ever sampled as spectator or unassigned', () => {
-  const kept = excludeNonPlayers(demo, [
-    { steamId: '111', teamNum: 3 },
-    { steamId: '222', teamNum: 2 },
-    { steamId: '999', teamNum: 1 },
-    { steamId: '999', teamNum: 0 },
-  ]);
-  assert.deepEqual(kept.map((p) => p.steamId), ['111', '222']);
-});
-
-test('excludeNonPlayers keeps a player who was on a team at any sample', () => {
+test('excludeNonPlayers drops a player only ever spectating or unassigned, keeps one on a team at any sample', () => {
   const kept = excludeNonPlayers(demo, [
     { steamId: '111', teamNum: 0 },
     { steamId: '111', teamNum: 3 },
     { steamId: '222', teamNum: 2 },
     { steamId: '999', teamNum: 1 },
+    { steamId: '999', teamNum: 0 },
   ]);
   assert.deepEqual(kept.map((p) => p.steamId), ['111', '222']);
 });

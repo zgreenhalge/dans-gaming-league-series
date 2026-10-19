@@ -665,3 +665,8 @@ export function factionColor(f: 'CT' | 'T' | null): string {
   if (f === 'CT') return 'var(--color-ct)';
   return 'var(--color-text-secondary)';
 }
+
+/** Per-round average damage as the whole number `player_match_stats.adr` stores. */
+export function roundedAdr(damage: number, rounds: number): number {
+  return rounds > 0 ? Math.round(damage / rounds) : 0;
+}
