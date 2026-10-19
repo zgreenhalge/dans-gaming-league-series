@@ -19,7 +19,7 @@ export default async function ScheduleLabPage() {
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Schedule Lab' }]} />
       <main className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
         <h1 className="mt-8 mb-6 font-display text-[28px] font-semibold leading-tight">Schedule Lab</h1>
-        <ScheduleLabView players={data.players} rosters={data.rosters} />
+        <ScheduleLabView players={data.players} rosters={data.rosters} careerRecords={data.careerRecords} />
       </main>
     </div>
   );

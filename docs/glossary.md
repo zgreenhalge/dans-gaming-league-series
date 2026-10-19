@@ -174,9 +174,10 @@ so you don't have to reverse-engineer them from scratch each time.
   (`/schedule-lab`), which generates and compares plans without saving anything. See
   [`architecture.md`](./architecture.md#schedule-lab-fixed-length-season-formats).
   - **Division** — a drafted slice of the roster, at least 4 players, whose games stay inside it.
-    The draft ranks players (EHOG, a season's win rate, or random) and deals them as a snake,
-    straight, or in tiers (skill divisions). **Halfway shuffle** re-drafts by first-half win rate in
-    the same order — with tiers, that is promotion and relegation.
+    The draft values players (EHOG, a season's or career win rate, or random) and deals them as a
+    snake, straight, in tiers (skill divisions, sizes configurable), or balanced (closest division
+    averages). The **halfway re-draft** either re-drafts by first-half win rate in the same order —
+    with tiers, that is promotion and relegation — or picks the split with the most new pairings.
   - **Group week** — instead of about one match a week, players meet in a group of 4 (two games, two
     different team splits) or one group of 5–7 for the remainder, playing back to back. Not the same
     thing as a gauntlet group (a pod).

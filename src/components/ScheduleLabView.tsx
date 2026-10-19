@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   buildFormatPlan,
   describeFormatSettings,
+  divisionSizesFor,
   formatIssues,
   FORMAT_MAX_WEEKS,
   FORMAT_MIN_DIVISION_SIZE,
@@ -14,6 +15,8 @@ import {
   type FormatGame,
   type FormatHalf,
   type FormatPlan,
+  type FormatRecord,
+  type HalfwayRedraft,
   type SeasonFormatSettings,
   type WeekShape,
 } from '@/lib/season-format';
@@ -51,7 +54,13 @@ const DRAFT_ORDERS: { value: DraftOrder; label: string }[] = [
   { value: 'snake', label: 'Snake' },
   { value: 'straight', label: 'Straight' },
   { value: 'tiered', label: 'Tiered' },
+  { value: 'balanced', label: 'Balanced' },
 ];
+const HALFWAY_REDRAFTS: { value: HalfwayRedraft; label: string }[] = [
+  { value: 'win-rate', label: 'First-half win rate' },
+  { value: 'new-pairings', label: 'Most new pairings' },
+];
+const CAREER = 'career';
 
 const MAX_PREVIEWS = 6;
 const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.round((0.5 + LOPSIDED_MARGIN) * 100)}%`;
@@ -92,9 +101,10 @@ function previewSummary(p: Preview): string {
   return p.draftSeasonLabel ? `${summary} · ${p.draftSeasonLabel} records` : summary;
 }
 
-/** How a half's divisions were drafted, e.g. "snake draft by EHOG" or "tiered re-draft by
- * simulated first-half win rate". */
+/** How a half's divisions were drafted, e.g. "snake draft by EHOG", "tiered re-draft by simulated
+ * first-half win rate" or "re-drafted for the most new pairings". */
 function halfDraftLabel(half: FormatHalf, order: DraftOrder, seasonLabel: string | null): string {
+  if (half.draftedBy === 'new-pairings') return 're-drafted for the most new pairings';
   const basis = {
     ehog: 'by EHOG',
     'win-rate': `by ${seasonLabel ?? 'season'} win rate`,
@@ -108,7 +118,15 @@ function previewLabel(index: number): string {
   return String.fromCharCode(65 + (index % 26));
 }
 
-export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlayer[]; rosters: ScheduleLabRoster[] }) {
+export function ScheduleLabView({
+  players,
+  rosters,
+  careerRecords,
+}: {
+  players: ScheduleLabPlayer[];
+  rosters: ScheduleLabRoster[];
+  careerRecords: Record<number, FormatRecord>;
+}) {
   const [selected, setSelected] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
   const [settings, setSettings] = useState<Settings>({
     weeks: 8,
@@ -116,12 +134,15 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
     divisions: 1,
     draftBasis: 'ehog',
     draftOrder: 'snake',
+    tierSizes: null,
     halfwayShuffle: true,
+    halfwayRedraft: 'win-rate',
     ehogBalance: true,
   });
-  // A win-rate draft ranks by one season's records; default to the newest season with any.
+  // A win-rate draft ranks by one season's records, or every regular season's; default to the
+  // newest season with any.
   const seasonsWithRecords = rosters.filter((r) => Object.values(r.records).some((rec) => rec.wins + rec.losses > 0));
-  const [draftSeasonId, setDraftSeasonId] = useState<number | null>(seasonsWithRecords[0]?.seasonId ?? null);
+  const [draftSource, setDraftSource] = useState<number | typeof CAREER>(seasonsWithRecords[0]?.seasonId ?? CAREER);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [shownId, setShownId] = useState<number | null>(null);
   const [generated, setGenerated] = useState(0);
@@ -129,7 +150,19 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
 
   const namesById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const maxDivisions = Math.max(1, Math.floor(selected.size / FORMAT_MIN_DIVISION_SIZE));
-  const issues = formatIssues(selected.size, { ...settings, seed: 0 });
+  // Tier sizes the admin set, as long as they still fit the roster and division count; otherwise even.
+  const evenSizes = divisionSizesFor(selected.size, settings.divisions);
+  const setSizes = settings.tierSizes;
+  const tierSizes =
+    setSizes && setSizes.length === settings.divisions && setSizes.reduce((a, v) => a + v, 0) === selected.size ? setSizes : evenSizes;
+  const effective: Settings = { ...settings, tierSizes: settings.draftOrder === 'tiered' ? tierSizes : null };
+  const issues = formatIssues(selected.size, { ...effective, seed: 0 });
+  const setTierSize = (d: number, size: number) => {
+    const next = [...tierSizes];
+    next[d] = size;
+    next[next.length - 1] = selected.size - next.slice(0, -1).reduce((a, v) => a + v, 0);
+    update({ tierSizes: next });
+  };
   const shown = previews.find((p) => p.id === shownId) ?? null;
 
   const update = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }));
@@ -143,16 +176,21 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
 
   function generate() {
     const seed = generated + 1;
-    const draftSeason = settings.draftBasis === 'win-rate' ? (rosters.find((r) => r.seasonId === draftSeasonId) ?? null) : null;
-    const roster = players.filter((p) => selected.has(p.id)).map((p) => ({ ...p, record: draftSeason?.records[p.id] ?? null }));
+    const source =
+      settings.draftBasis !== 'win-rate'
+        ? null
+        : draftSource === CAREER
+          ? { label: 'All regular seasons', records: careerRecords }
+          : (rosters.find((r) => r.seasonId === draftSource) ?? null);
+    const roster = players.filter((p) => selected.has(p.id)).map((p) => ({ ...p, record: source?.records[p.id] ?? null }));
     setGenerated(seed);
     setBusy(true);
     // Yield one frame so the busy state paints before the (synchronous) search runs.
     setTimeout(() => {
-      const result = buildFormatPlan(roster, { ...settings, seed });
+      const result = buildFormatPlan(roster, { ...effective, seed });
       setBusy(false);
       if (!result.ok) return;
-      const preview = { id: seed, label: previewLabel(seed - 1), playerCount: roster.length, draftSeasonLabel: draftSeason?.label ?? null, plan: result.plan };
+      const preview = { id: seed, label: previewLabel(seed - 1), playerCount: roster.length, draftSeasonLabel: source?.label ?? null, plan: result.plan };
       setPreviews((prev) => [...prev, preview].slice(-MAX_PREVIEWS));
       setShownId(seed);
     }, 30);
@@ -223,25 +261,44 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
                 <select
                   aria-label="Season whose win rates the draft ranks by"
                   className="font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]"
-                  value={draftSeasonId ?? ''}
-                  onChange={(e) => setDraftSeasonId(Number(e.target.value))}
+                  value={draftSource}
+                  onChange={(e) => setDraftSource(e.target.value === CAREER ? CAREER : Number(e.target.value))}
                 >
                   {seasonsWithRecords.map((r) => (
                     <option key={r.seasonId} value={r.seasonId}>
                       {r.label}
                     </option>
                   ))}
+                  <option value={CAREER}>All regular seasons</option>
                 </select>
               )}
             </div>
             <Choice label="Draft order" options={DRAFT_ORDERS} value={settings.draftOrder} onChange={(draftOrder) => update({ draftOrder })} />
+            {settings.draftOrder === 'tiered' && (
+              <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+                {tierSizes.slice(0, -1).map((size, d) => (
+                  <Stepper
+                    key={d}
+                    label={`Division ${d + 1}`}
+                    value={size}
+                    min={FORMAT_MIN_DIVISION_SIZE}
+                    max={size + tierSizes[tierSizes.length - 1] - FORMAT_MIN_DIVISION_SIZE}
+                    onChange={(v) => setTierSize(d, v)}
+                  />
+                ))}
+                <div className="flex flex-col gap-1.5">
+                  <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Division {tierSizes.length}</span>
+                  <span className="font-mono text-[14px] h-8 flex items-center">{tierSizes[tierSizes.length - 1]}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
           <div className="flex flex-col gap-2 font-mono text-[12px]">
             <label className={`flex items-center gap-2 ${settings.divisions === 1 ? 'opacity-40' : ''}`}>
               <input type="checkbox" checked={settings.halfwayShuffle} disabled={settings.divisions === 1} onChange={(e) => update({ halfwayShuffle: e.target.checked })} />
-              Reshuffle divisions at halfway
+              Re-draft divisions at halfway
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={settings.ehogBalance} onChange={(e) => update({ ehogBalance: e.target.checked })} />
@@ -249,6 +306,9 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
             </label>
           </div>
         </div>
+        {settings.divisions > 1 && settings.halfwayShuffle && (
+          <Choice label="Halfway re-draft by" options={HALFWAY_REDRAFTS} value={settings.halfwayRedraft} onChange={(halfwayRedraft) => update({ halfwayRedraft })} />
+        )}
         <div className="flex flex-col gap-2">
           <button type="button" className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`} disabled={busy || issues.length > 0} onClick={generate}>
             {busy ? 'Generating…' : 'Generate preview'}
