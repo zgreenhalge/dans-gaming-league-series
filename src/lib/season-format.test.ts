@@ -34,7 +34,9 @@ const BASE: SeasonFormatSettings = {
   divisions: 1,
   draftBasis: 'ehog',
   draftOrder: 'snake',
+  tierSizes: null,
   halfwayShuffle: false,
+  halfwayRedraft: 'win-rate',
   ehogBalance: true,
   seed: 1,
 };
@@ -76,10 +78,12 @@ function assertSound(p: FormatPlan, n: number, gamesEach: number, maxPerWeek: nu
 
 test('draftDivisions deals a ranking as a snake, straight or in tiers', () => {
   const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  assert.deepEqual(draftDivisions(ten, 2, 'snake'), [[1, 4, 5, 8, 9], [2, 3, 6, 7, 10]]);
-  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7], 3, 'snake'), [[1, 6, 7], [2, 5], [3, 4]]);
-  assert.deepEqual(draftDivisions(ten, 2, 'straight'), [[1, 3, 5, 7, 9], [2, 4, 6, 8, 10]]);
-  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], 2, 'tiered'), [[1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13]]);
+  const thirteen = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  assert.deepEqual(draftDivisions(ten, [5, 5], 'snake'), [[1, 4, 5, 8, 9], [2, 3, 6, 7, 10]]);
+  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7], [3, 2, 2], 'snake'), [[1, 6, 7], [2, 5], [3, 4]]);
+  assert.deepEqual(draftDivisions(ten, [5, 5], 'straight'), [[1, 3, 5, 7, 9], [2, 4, 6, 8, 10]]);
+  assert.deepEqual(draftDivisions(thirteen, [7, 6], 'tiered'), [[1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13]]);
+  assert.deepEqual(draftDivisions(thirteen, [4, 9], 'tiered'), [[1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11, 12, 13]]);
 });
 
 test('groupSizes uses groups of 4 and folds the remainder into one group of 5-7', () => {
@@ -140,7 +144,7 @@ test('two divisions with a halfway shuffle re-snake the second half', () => {
   const [first, second] = p.halves;
   assert.equal(first.draftedBy, 'ehog');
   assert.equal(first.records, null);
-  assert.deepEqual(first.divisions, draftDivisions(players(13).map((pl) => pl.id), 2, 'snake'));
+  assert.deepEqual(first.divisions, draftDivisions(players(13).map((pl) => pl.id), [7, 6], 'snake'));
   assert.equal(second.draftedBy, 'first-half-win-rate');
   assert.equal(second.firstWeek, 5);
   assert.ok(second.records, 'second half carries the simulated first-half records');
@@ -171,6 +175,43 @@ test('a random draft is reproducible from the seed and still sound', () => {
   const a = plan(10, { divisions: 2, draftBasis: 'random' });
   assertSound(a, 10, 8, 2);
   assert.deepEqual(plan(10, { divisions: 2, draftBasis: 'random' }).halves, a.halves);
+});
+
+test('tier sizes set each tiered division, and promotion keeps them', () => {
+  const p = plan(13, { divisions: 2, draftOrder: 'tiered', tierSizes: [5, 8], halfwayShuffle: true });
+  assertSound(p, 13, 8, 2);
+  for (const half of p.halves) assert.deepEqual(half.divisions.map((d) => d.length), [5, 8]);
+  assert.deepEqual(p.halves[0].divisions[0], [1, 2, 3, 4, 5]);
+});
+
+test('formatIssues checks tier sizes against the roster and the 4-player floor', () => {
+  const tiered = { ...BASE, divisions: 2, draftOrder: 'tiered' as const };
+  assert.equal(formatIssues(13, { ...tiered, tierSizes: [5, 7] }).length, 1, 'sizes must add up to the roster');
+  assert.equal(formatIssues(13, { ...tiered, tierSizes: [3, 10] }).length, 1, 'a division under 4');
+  assert.equal(formatIssues(13, { ...tiered, tierSizes: [13] }).length, 1, 'one size per division');
+  assert.deepEqual(formatIssues(13, { ...tiered, tierSizes: [4, 9] }), []);
+});
+
+test('a balanced draft evens out division EHOG averages at least as well as a snake', () => {
+  // Uneven gaps between ratings, so a plain snake isn't already the best split.
+  const roster = players(12).map((p, i) => ({ ...p, ehog: [95, 90, 60, 58, 50, 49, 40, 30, 29, 20, 15, 12][i] }));
+  const average = (ids: number[]) => ids.reduce((sum, id) => sum + roster[id - 1].ehog, 0) / ids.length;
+  const spread = (divs: number[][]) => Math.max(...divs.map(average)) - Math.min(...divs.map(average));
+  const balanced = plan(12, { divisions: 3, draftOrder: 'balanced', weeks: 4 }, roster);
+  const snake = plan(12, { divisions: 3, draftOrder: 'snake', weeks: 4 }, roster);
+  assertSound(balanced, 12, 4, 2);
+  assert.ok(spread(balanced.halves[0].divisions) <= spread(snake.halves[0].divisions));
+  assert.equal(formatIssues(12, { ...BASE, divisions: 3, draftOrder: 'balanced', draftBasis: 'random' }).length, 1);
+});
+
+test('a new-pairings re-draft brings more first-half strangers together than a win-rate re-draft', () => {
+  const settings = { divisions: 2, halfwayShuffle: true };
+  const fresh = plan(13, { ...settings, halfwayRedraft: 'new-pairings' });
+  const byRate = plan(13, { ...settings, halfwayRedraft: 'win-rate' });
+  assertSound(fresh, 13, 8, 2);
+  assert.equal(fresh.halves[1].draftedBy, 'new-pairings');
+  assert.deepEqual(fresh.halves[1].divisions.map((d) => d.length), [7, 6]);
+  assert.ok(fresh.scorecard.pairsNeverMet <= byRate.scorecard.pairsNeverMet, `${fresh.scorecard.pairsNeverMet} vs ${byRate.scorecard.pairsNeverMet}`);
 });
 
 test('divisions without a shuffle keep one seeding all season', () => {
