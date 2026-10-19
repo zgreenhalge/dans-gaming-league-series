@@ -1,3 +1,4 @@
+import { DEFAULT_EHOG, MU_DEFAULT, SIGMA_DEFAULT } from '../ehog';
 import type { FormatPlayer } from '../season-format';
 import { seasonTitle } from '../util';
 import { getPlayersById } from './player';
@@ -33,8 +34,16 @@ export async function getScheduleLabData(): Promise<ScheduleLabData> {
     Promise.all(regular.map((s) => getSeasonParticipants(s.id, playersById))),
   ]);
 
+  // A seed_ehog outside the display scale's (10, 100) range has no mu (`fromEhog()`'s domain), and a
+  // NaN rating would poison every win probability it touches — such a player plans as a new one.
   const players = ratings
-    .map((r) => ({ id: r.playerId, name: playersById.get(r.playerId)!.name, mu: r.mu, sigma: r.sigma, ehog: r.ehogRating }))
+    .map((r) => {
+      const name = playersById.get(r.playerId)!.name;
+      if (!Number.isFinite(r.mu) || !Number.isFinite(r.sigma)) {
+        return { id: r.playerId, name, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehog: DEFAULT_EHOG };
+      }
+      return { id: r.playerId, name, mu: r.mu, sigma: r.sigma, ehog: r.ehogRating };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
   const rosters = regular.map((s, i) => ({
     seasonId: s.id,
