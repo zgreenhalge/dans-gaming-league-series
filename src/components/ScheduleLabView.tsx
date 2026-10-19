@@ -9,7 +9,10 @@ import {
   FORMAT_MIN_DIVISION_SIZE,
   FORMAT_MIN_WEEKS,
   LOPSIDED_MARGIN,
+  type DraftBasis,
+  type DraftOrder,
   type FormatGame,
+  type FormatHalf,
   type FormatPlan,
   type SeasonFormatSettings,
   type WeekShape,
@@ -30,8 +33,25 @@ interface Preview {
   id: number;
   label: string;
   playerCount: number;
+  /** The season whose records a win-rate draft ranked by; null for any other draft. */
+  draftSeasonLabel: string | null;
   plan: FormatPlan;
 }
+
+const WEEK_SHAPES: { value: WeekShape; label: string }[] = [
+  { value: 'match', label: '1 match' },
+  { value: 'group', label: '1 group (2 games)' },
+];
+const DRAFT_BASES: { value: DraftBasis; label: string }[] = [
+  { value: 'ehog', label: 'EHOG' },
+  { value: 'win-rate', label: 'Win rate' },
+  { value: 'random', label: 'Random' },
+];
+const DRAFT_ORDERS: { value: DraftOrder; label: string }[] = [
+  { value: 'snake', label: 'Snake' },
+  { value: 'straight', label: 'Straight' },
+  { value: 'tiered', label: 'Tiered' },
+];
 
 const MAX_PREVIEWS = 6;
 const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.round((0.5 + LOPSIDED_MARGIN) * 100)}%`;
@@ -66,13 +86,42 @@ function range({ min, max }: { min: number; max: number }): string {
   return min === max ? String(min) : `${min}–${max}`;
 }
 
+/** A preview's settings line, naming the season a win-rate draft ranked by. */
+function previewSummary(p: Preview): string {
+  const summary = describeFormatSettings(p.plan.settings);
+  return p.draftSeasonLabel ? `${summary} · ${p.draftSeasonLabel} records` : summary;
+}
+
+/** How a half's divisions were drafted, e.g. "snake draft by EHOG" or "tiered re-draft by
+ * simulated first-half win rate". */
+function halfDraftLabel(half: FormatHalf, order: DraftOrder, seasonLabel: string | null): string {
+  const basis = {
+    ehog: 'by EHOG',
+    'win-rate': `by ${seasonLabel ?? 'season'} win rate`,
+    random: 'at random',
+    'first-half-win-rate': 'by simulated first-half win rate',
+  }[half.draftedBy];
+  return `${order} ${half.draftedBy === 'first-half-win-rate' ? 're-draft' : 'draft'} ${basis}`;
+}
+
 function previewLabel(index: number): string {
   return String.fromCharCode(65 + (index % 26));
 }
 
 export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlayer[]; rosters: ScheduleLabRoster[] }) {
   const [selected, setSelected] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
-  const [settings, setSettings] = useState<Settings>({ weeks: 8, weekShape: 'match', divisions: 1, halfwayShuffle: true, ehogBalance: true });
+  const [settings, setSettings] = useState<Settings>({
+    weeks: 8,
+    weekShape: 'match',
+    divisions: 1,
+    draftBasis: 'ehog',
+    draftOrder: 'snake',
+    halfwayShuffle: true,
+    ehogBalance: true,
+  });
+  // A win-rate draft ranks by one season's records; default to the newest season with any.
+  const seasonsWithRecords = rosters.filter((r) => Object.values(r.records).some((rec) => rec.wins + rec.losses > 0));
+  const [draftSeasonId, setDraftSeasonId] = useState<number | null>(seasonsWithRecords[0]?.seasonId ?? null);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [shownId, setShownId] = useState<number | null>(null);
   const [generated, setGenerated] = useState(0);
@@ -94,7 +143,8 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
 
   function generate() {
     const seed = generated + 1;
-    const roster = players.filter((p) => selected.has(p.id));
+    const draftSeason = settings.draftBasis === 'win-rate' ? (rosters.find((r) => r.seasonId === draftSeasonId) ?? null) : null;
+    const roster = players.filter((p) => selected.has(p.id)).map((p) => ({ ...p, record: draftSeason?.records[p.id] ?? null }));
     setGenerated(seed);
     setBusy(true);
     // Yield one frame so the busy state paints before the (synchronous) search runs.
@@ -102,7 +152,7 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
       const result = buildFormatPlan(roster, { ...settings, seed });
       setBusy(false);
       if (!result.ok) return;
-      const preview = { id: seed, label: previewLabel(seed - 1), playerCount: roster.length, plan: result.plan };
+      const preview = { id: seed, label: previewLabel(seed - 1), playerCount: roster.length, draftSeasonLabel: draftSeason?.label ?? null, plan: result.plan };
       setPreviews((prev) => [...prev, preview].slice(-MAX_PREVIEWS));
       setShownId(seed);
     }, 30);
@@ -162,17 +212,32 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
         <SectionLabel>Format</SectionLabel>
         <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
           <Stepper label="Weeks" value={settings.weeks} min={FORMAT_MIN_WEEKS} max={FORMAT_MAX_WEEKS} onChange={(weeks) => update({ weeks })} />
-          <div className="flex flex-col gap-1.5">
-            <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Each week</span>
-            <TabBar bordered>
-              {(['match', 'group'] as WeekShape[]).map((shape) => (
-                <button key={shape} type="button" role="tab" aria-selected={settings.weekShape === shape} className={tabCls(settings.weekShape === shape, { compact: true })} onClick={() => update({ weekShape: shape })}>
-                  {shape === 'match' ? '1 match' : '1 group (2 games)'}
-                </button>
-              ))}
-            </TabBar>
-          </div>
+          <Choice label="Each week" options={WEEK_SHAPES} value={settings.weekShape} onChange={(weekShape) => update({ weekShape })} />
           <Stepper label="Divisions" value={settings.divisions} min={1} max={maxDivisions} onChange={(divisions) => update({ divisions })} />
+        </div>
+        {settings.divisions > 1 && (
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
+            <div className="flex flex-wrap items-end gap-3">
+              <Choice label="Draft divisions by" options={DRAFT_BASES} value={settings.draftBasis} onChange={(draftBasis) => update({ draftBasis })} />
+              {settings.draftBasis === 'win-rate' && (
+                <select
+                  aria-label="Season whose win rates the draft ranks by"
+                  className="font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]"
+                  value={draftSeasonId ?? ''}
+                  onChange={(e) => setDraftSeasonId(Number(e.target.value))}
+                >
+                  {seasonsWithRecords.map((r) => (
+                    <option key={r.seasonId} value={r.seasonId}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <Choice label="Draft order" options={DRAFT_ORDERS} value={settings.draftOrder} onChange={(draftOrder) => update({ draftOrder })} />
+          </div>
+        )}
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
           <div className="flex flex-col gap-2 font-mono text-[12px]">
             <label className={`flex items-center gap-2 ${settings.divisions === 1 ? 'opacity-40' : ''}`}>
               <input type="checkbox" checked={settings.halfwayShuffle} disabled={settings.divisions === 1} onChange={(e) => update({ halfwayShuffle: e.target.checked })} />
@@ -206,7 +271,7 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
                     <div className="flex items-start justify-between gap-2">
                       <button type="button" className="text-left hover:underline" onClick={() => setShownId(p.id)}>
                         <span className="font-display text-[14px]">{p.label}</span>
-                        <span className="block font-normal text-[var(--color-text-secondary)]">{describeFormatSettings(p.plan.settings)}</span>
+                        <span className="block font-normal text-[var(--color-text-secondary)]">{previewSummary(p)}</span>
                       </button>
                       <button
                         type="button"
@@ -247,6 +312,21 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
   );
 }
 
+function Choice<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="tracked text-[10px] text-[var(--color-text-secondary)]">{label}</span>
+      <TabBar bordered>
+        {options.map((o) => (
+          <button key={o.value} type="button" role="tab" aria-selected={value === o.value} className={tabCls(value === o.value, { compact: true })} onClick={() => onChange(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </TabBar>
+    </div>
+  );
+}
+
 function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
   const btn = 'w-8 h-8 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-40';
   return (
@@ -274,21 +354,21 @@ function PlanSchedule({ preview, namesById }: { preview: Preview; namesById: Map
     <section className="flex flex-col gap-8">
       <div>
         <SectionLabel>Preview {preview.label} schedule</SectionLabel>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{describeFormatSettings(plan.settings)}</div>
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview)}</div>
       </div>
       {plan.halves.map((half) => (
         <div key={half.half} className="flex flex-col gap-4">
           {multiDivision && (
             <div className="flex flex-col gap-2">
               <div className="tracked text-[11px]">
-                Weeks {half.firstWeek}–{half.lastWeek} · {half.seededBy === 'ehog' ? 'divisions snake-seeded by EHOG' : 'divisions reshuffled by simulated first-half win rate'}
+                Weeks {half.firstWeek}–{half.lastWeek} · {halfDraftLabel(half, plan.settings.draftOrder, preview.draftSeasonLabel)}
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {half.divisions.map((ids, d) => (
                   <div key={d} className="border border-[var(--color-border-primary)] p-2 font-mono text-[12px]">
                     <div className="text-[10px] text-[var(--color-text-secondary)] mb-1">Division {d + 1}</div>
                     {ids.map((id) => {
-                      const record = half.firstHalfRecords?.[id];
+                      const record = half.records?.[id];
                       return (
                         <div key={id} className="flex justify-between gap-2">
                           <span>{name(id)}</span>
