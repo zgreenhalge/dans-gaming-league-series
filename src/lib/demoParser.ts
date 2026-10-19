@@ -70,7 +70,8 @@ export function parseDemoFile(
 
   // --- K / D / A / Damage: read all from the engine's own accumulators ---
   // These match the end-of-match scoreboard exactly, with no event math required. `damage` is
-  // then overridden by `withEnemyDamage()` (`demo/parseDemo.ts`), since `m_iDamage` counts props.
+  // overridden by `withEnemyDamage()` (`demo/parseDemo.ts`) when sabremetrics resolved, since
+  // `m_iDamage` also counts props.
   const kills = new Map<string, number>();
   const deaths = new Map<string, number>();
   const assists = new Map<string, number>();
