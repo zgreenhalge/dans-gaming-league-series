@@ -10,12 +10,17 @@
  * - `weeks` — season length.
  * - `weekShape` — `'match'`: each player plays about one 2v2 match a week; `'group'`: each week
  *   players meet in groups of 4–7 and play two games each back to back (see `groupGames()`).
- * - `divisions` — players are snake-seeded by EHOG into this many divisions; matches stay inside a
- *   division.
- * - `halfwayShuffle` — with more than one division, the second half re-snakes the divisions by
- *   first-half win rate. A plan is built before any game is played, so it simulates the first half:
- *   each game's winner is drawn from its predicted win probability with the plan's seed
- *   (`simulateRecords()`). In a real season the second half is drawn from actual results.
+ * - `divisions` — how many divisions the roster is drafted into; matches stay inside a division.
+ * - `draftBasis` / `draftOrder` — how divisions are drafted: players are ranked (`rankForDraft()`)
+ *   by EHOG, by a win-loss record the caller supplies (`FormatPlayer.record`, e.g. a past season's),
+ *   or at random, and the ranking is dealt into divisions (`draftDivisions()`) as a snake
+ *   (1-2-2-1, even skill spread), straight (1-2-1-2) or tiered (top players together — skill
+ *   divisions).
+ * - `halfwayShuffle` — with more than one division, the second half re-drafts the divisions by
+ *   first-half win rate in the same order; with `tiered` that is promotion and relegation. A plan
+ *   is built before any game is played, so it simulates the first half: each game's winner is
+ *   drawn from its predicted win probability with the plan's seed (`simulateRecords()`). In a real
+ *   season the second half is drawn from actual results.
  * - `ehogBalance` — steer team splits away from the most lopsided pairings (see
  *   `LOPSIDED_MARGIN`). EHOG only ever shapes who plays whom and which division a player starts
  *   in; standings stay Wins → RWR% → ADR (`canonicalSort()`).
@@ -38,15 +43,26 @@ import { predictWinProbability, type PlayerRating } from './ehog';
 import { mulberry32, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
 
 export type WeekShape = 'match' | 'group';
+/** What players are ranked by before they're dealt into divisions. */
+export type DraftBasis = 'ehog' | 'win-rate' | 'random';
+/** How a ranking is dealt into divisions — see `draftDivisions()`. */
+export type DraftOrder = 'snake' | 'straight' | 'tiered';
 
 export interface SeasonFormatSettings {
   weeks: number;
   weekShape: WeekShape;
   divisions: number;
+  draftBasis: DraftBasis;
+  draftOrder: DraftOrder;
   halfwayShuffle: boolean;
   ehogBalance: boolean;
   /** Search seed — the same players and settings with the same seed always produce the same plan. */
   seed: number;
+}
+
+export interface FormatRecord {
+  wins: number;
+  losses: number;
 }
 
 export interface FormatPlayer {
@@ -54,6 +70,8 @@ export interface FormatPlayer {
   mu: number;
   sigma: number;
   ehog: number;
+  /** The record a `'win-rate'` draft ranks by; a player without one ranks at `UNKNOWN_WIN_RATE`. */
+  record?: FormatRecord | null;
 }
 
 export const FORMAT_MIN_WEEKS = 2;
@@ -64,6 +82,8 @@ export const FORMAT_MAX_PLAYERS = 24;
 export const FORMAT_MIN_DIVISION_SIZE = 4;
 /** A game counts as lopsided when either side's predicted win probability is above 0.5 + this. */
 export const LOPSIDED_MARGIN = 0.25;
+/** Where a `'win-rate'` draft ranks a player with no record (a new player): the middle. */
+export const UNKNOWN_WIN_RATE = 0.5;
 
 export interface FormatGame {
   /** 1-based group number within the division's week (`'group'` shape), else null. */
@@ -90,11 +110,14 @@ export interface FormatHalf {
   half: number;
   firstWeek: number;
   lastWeek: number;
-  /** Player ids per division (index 0 = division 1), in seeding order. */
+  /** Player ids per division (index 0 = division 1), in draft order. */
   divisions: number[][];
-  seededBy: 'ehog' | 'simulated-win-rate';
-  /** Simulated first-half record per player id — set on a reshuffled half only. */
-  firstHalfRecords: Record<number, { wins: number; losses: number }> | null;
+  /** What this half's divisions were ranked by: the season's draft basis, or (a reshuffled second
+   *  half) the simulated first-half win rate. */
+  draftedBy: DraftBasis | 'first-half-win-rate';
+  /** The records the ranking used, per player id — a `'win-rate'` draft's supplied records, or a
+   *  reshuffled half's simulated first-half records; null otherwise. */
+  records: Record<number, FormatRecord> | null;
 }
 
 export interface FormatScorecard {
@@ -224,7 +247,7 @@ function halfTemplates(size: number, weeks: number, shape: WeekShape, divisionSi
   return { templates: matchPhaseShape(size, weeks, gamesPerPlayer).map((m) => matchWeekTemplate(size, m)), gamesPerPlayer };
 }
 
-/** Division sizes for `n` players in `k` divisions, as `snakeDivisions()` fills them. */
+/** Division sizes for `n` players in `k` divisions, as `draftDivisions()` fills them. */
 function divisionSizesFor(n: number, k: number): number[] {
   return Array.from({ length: k }, (_, d) => Math.floor(n / k) + (d < n % k ? 1 : 0));
 }
@@ -288,16 +311,49 @@ export function formatIssues(playerCount: number, settings: SeasonFormatSettings
 // ---------------------------------------------------------------------------------------------
 // Divisions
 
-/** Alternating snake: with k divisions, ranks 1..k go to divisions 1..k, ranks k+1..2k to k..1,
- * and so on — so each division gets an even share of the top, middle and bottom. */
-export function snakeDivisions(rankedIds: number[], k: number): number[][] {
+/** Deals a ranking into `k` divisions:
+ * - `snake` — ranks 1..k go to divisions 1..k, ranks k+1..2k to k..1, and so on, so each division
+ *   gets an even share of the top, middle and bottom.
+ * - `straight` — ranks 1..k to divisions 1..k every round, so division 1 always picks first.
+ * - `tiered` — the top players fill division 1, the next fill division 2, and so on (skill
+ *   divisions), sized like the other orders (earlier divisions take any extra player).
+ * Each division lists its players in ranking order. */
+export function draftDivisions(rankedIds: number[], k: number, order: DraftOrder): number[][] {
   const divisions: number[][] = Array.from({ length: k }, () => []);
+  if (order === 'tiered') {
+    let next = 0;
+    divisionSizesFor(rankedIds.length, k).forEach((size, d) => {
+      divisions[d] = rankedIds.slice(next, next + size);
+      next += size;
+    });
+    return divisions;
+  }
   rankedIds.forEach((id, i) => {
     const row = Math.floor(i / k);
     const col = i % k;
-    divisions[row % 2 === 0 ? col : k - 1 - col].push(id);
+    divisions[order === 'snake' && row % 2 === 1 ? k - 1 - col : col].push(id);
   });
   return divisions;
+}
+
+/** Player ids best first by `basis`. A win rate ranks by `records`, a player without one at
+ * `UNKNOWN_WIN_RATE`, with EHOG breaking ties; `random` shuffles with the plan's seeded `rand`. */
+function rankForDraft(
+  players: FormatPlayer[],
+  basis: DraftBasis,
+  records: Map<number, FormatRecord>,
+  rand: () => number,
+): number[] {
+  const ids = players.map((p) => p.id);
+  if (basis === 'random') return shuffled(ids, rand);
+  const ehog = new Map(players.map((p) => [p.id, p.ehog]));
+  const byEhog = (a: number, b: number) => ehog.get(b)! - ehog.get(a)!;
+  if (basis === 'ehog') return ids.sort(byEhog);
+  const rate = (id: number) => {
+    const r = records.get(id);
+    return r && r.wins + r.losses > 0 ? r.wins / (r.wins + r.losses) : UNKNOWN_WIN_RATE;
+  };
+  return ids.sort((a, b) => rate(b) - rate(a) || byEhog(a, b));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -540,8 +596,8 @@ function shuffled(items: number[], rand: () => number): number[] {
 /** A simulated record per player over `games`: each game's winner is drawn from its predicted
  * win probability. Stands in for real first-half results when a plan reshuffles at the halfway
  * point before any game has been played. */
-function simulateRecords(games: FormatGame[], rand: () => number): Map<number, { wins: number; losses: number }> {
-  const records = new Map<number, { wins: number; losses: number }>();
+function simulateRecords(games: FormatGame[], rand: () => number): Map<number, FormatRecord> {
+  const records = new Map<number, FormatRecord>();
   const add = (id: number, won: boolean) => {
     const r = records.get(id) ?? { wins: 0, losses: 0 };
     if (won) r.wins++;
@@ -573,29 +629,25 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   const weeks: FormatWeek[] = [];
   let firstWeek = 1;
   for (const [h, halfWeeks] of halfLengths(settings).entries()) {
-    let divisions: number[][];
-    let records: Map<number, { wins: number; losses: number }> | null = null;
-    const byEhog = (a: number, b: number) => players[indexById.get(b)!].ehog - players[indexById.get(a)!].ehog;
+    let draftedBy: FormatHalf['draftedBy'];
+    let records: Map<number, FormatRecord>;
     if (h === 0) {
-      divisions = snakeDivisions(players.map((p) => p.id).sort(byEhog), settings.divisions);
+      draftedBy = settings.draftBasis;
+      records = new Map(players.flatMap((p) => (p.record ? [[p.id, p.record] as const] : [])));
     } else {
-      // The halfway reshuffle ranks by first-half win rate (simulated — see simulateRecords()),
-      // with EHOG breaking ties.
-      const simulated = simulateRecords(weeks.flatMap((w) => w.divisions.flatMap((d) => d.games)), rand);
-      records = simulated;
-      const rate = (id: number) => {
-        const r = simulated.get(id);
-        return r ? r.wins / (r.wins + r.losses) : 0;
-      };
-      divisions = snakeDivisions(players.map((p) => p.id).sort((a, b) => rate(b) - rate(a) || byEhog(a, b)), settings.divisions);
+      // The halfway reshuffle ranks by first-half win rate (simulated — see simulateRecords()), in
+      // the season's draft order.
+      draftedBy = 'first-half-win-rate';
+      records = simulateRecords(weeks.flatMap((w) => w.divisions.flatMap((d) => d.games)), rand);
     }
+    const divisions = draftDivisions(rankForDraft(players, draftedBy === 'first-half-win-rate' ? 'win-rate' : draftedBy, records, rand), settings.divisions, settings.draftOrder);
     halves.push({
       half: h + 1,
       firstWeek,
       lastWeek: firstWeek + halfWeeks - 1,
       divisions,
-      seededBy: h === 0 ? 'ehog' : 'simulated-win-rate',
-      firstHalfRecords: records ? Object.fromEntries(records) : null,
+      draftedBy,
+      records: draftedBy === 'win-rate' || draftedBy === 'first-half-win-rate' ? Object.fromEntries(records) : null,
     });
 
     const halfWeeksOut: FormatWeek[] = Array.from({ length: halfWeeks }, (_, i) => ({ week: firstWeek + i, half: h + 1, divisions: [] }));
@@ -739,7 +791,10 @@ export function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): Forma
  * shuffle" — how the Schedule Lab labels a preview. */
 export function describeFormatSettings(settings: SeasonFormatSettings): string {
   const parts = [`${settings.weeks} weeks`, settings.weekShape === 'match' ? '1 match a week' : '1 group a week'];
-  if (settings.divisions > 1) parts.push(`${settings.divisions} divisions${reshuffles(settings) ? ', halfway shuffle' : ''}`);
+  if (settings.divisions > 1) {
+    const basis = { ehog: 'EHOG', 'win-rate': 'win rate', random: 'random' }[settings.draftBasis];
+    parts.push(`${settings.divisions} divisions (${settings.draftOrder}, ${basis})${reshuffles(settings) ? ', halfway shuffle' : ''}`);
+  }
   if (!settings.ehogBalance) parts.push('no EHOG balancing');
   return parts.join(' · ');
 }

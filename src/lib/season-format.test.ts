@@ -13,7 +13,7 @@ import {
   buildFormatPlan,
   formatIssues,
   groupSizes,
-  snakeDivisions,
+  draftDivisions,
   type FormatPlan,
   type FormatPlayer,
   type SeasonFormatSettings,
@@ -28,10 +28,19 @@ function players(n: number): FormatPlayer[] {
   });
 }
 
-const BASE: SeasonFormatSettings = { weeks: 8, weekShape: 'match', divisions: 1, halfwayShuffle: false, ehogBalance: true, seed: 1 };
+const BASE: SeasonFormatSettings = {
+  weeks: 8,
+  weekShape: 'match',
+  divisions: 1,
+  draftBasis: 'ehog',
+  draftOrder: 'snake',
+  halfwayShuffle: false,
+  ehogBalance: true,
+  seed: 1,
+};
 
-function plan(n: number, settings: Partial<SeasonFormatSettings>): FormatPlan {
-  const result = buildFormatPlan(players(n), { ...BASE, ...settings });
+function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
+  const result = buildFormatPlan(roster, { ...BASE, ...settings });
   if (!result.ok) throw new Error(`expected a plan, got issues: ${result.issues.join(' ')}`);
   return result.plan;
 }
@@ -65,9 +74,12 @@ function assertSound(p: FormatPlan, n: number, gamesEach: number, maxPerWeek: nu
   assert.ok(p.scorecard.maxSideImbalance <= 2, `${label}: side imbalance ${p.scorecard.maxSideImbalance}`);
 }
 
-test('snakeDivisions alternates direction each row', () => {
-  assert.deepEqual(snakeDivisions([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 2), [[1, 4, 5, 8, 9], [2, 3, 6, 7, 10]]);
-  assert.deepEqual(snakeDivisions([1, 2, 3, 4, 5, 6, 7], 3), [[1, 6, 7], [2, 5], [3, 4]]);
+test('draftDivisions deals a ranking as a snake, straight or in tiers', () => {
+  const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  assert.deepEqual(draftDivisions(ten, 2, 'snake'), [[1, 4, 5, 8, 9], [2, 3, 6, 7, 10]]);
+  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7], 3, 'snake'), [[1, 6, 7], [2, 5], [3, 4]]);
+  assert.deepEqual(draftDivisions(ten, 2, 'straight'), [[1, 3, 5, 7, 9], [2, 4, 6, 8, 10]]);
+  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], 2, 'tiered'), [[1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13]]);
 });
 
 test('groupSizes uses groups of 4 and folds the remainder into one group of 5-7', () => {
@@ -126,13 +138,39 @@ test('two divisions with a halfway shuffle re-snake the second half', () => {
   assertSound(p, 13, 8, 2);
   assert.equal(p.halves.length, 2);
   const [first, second] = p.halves;
-  assert.equal(first.seededBy, 'ehog');
-  assert.deepEqual(first.divisions, snakeDivisions(players(13).map((pl) => pl.id), 2));
-  assert.equal(second.seededBy, 'simulated-win-rate');
+  assert.equal(first.draftedBy, 'ehog');
+  assert.equal(first.records, null);
+  assert.deepEqual(first.divisions, draftDivisions(players(13).map((pl) => pl.id), 2, 'snake'));
+  assert.equal(second.draftedBy, 'first-half-win-rate');
   assert.equal(second.firstWeek, 5);
-  assert.ok(second.firstHalfRecords, 'second half carries the simulated first-half records');
-  for (const r of Object.values(second.firstHalfRecords!)) assert.equal(r.wins + r.losses, 4);
+  assert.ok(second.records, 'second half carries the simulated first-half records');
+  for (const r of Object.values(second.records!)) assert.equal(r.wins + r.losses, 4);
   assert.deepEqual(second.divisions.map((d) => d.length).sort(), [6, 7]);
+});
+
+test('a win-rate draft ranks by the supplied records, a player without one at 50%', () => {
+  // Reverse the EHOG order through records: player 8 has the best record, player 1 the worst.
+  const roster = players(8).map((p) => ({ ...p, record: p.id === 4 ? null : { wins: p.id, losses: 8 - p.id } }));
+  const p = plan(8, { divisions: 2, weeks: 4, draftBasis: 'win-rate', draftOrder: 'tiered' }, roster);
+  // Win rates: 8 → 100%, 7 → 88%, 6 → 75%, 5 → 63%, then 4 (no record, 50%) ties nobody.
+  assert.deepEqual(p.halves[0].divisions, [[8, 7, 6, 5], [4, 3, 2, 1]]);
+  assert.equal(p.halves[0].draftedBy, 'win-rate');
+  assert.equal(p.halves[0].records![8].wins, 8);
+});
+
+test('a tiered draft with a halfway shuffle promotes and relegates by first-half win rate', () => {
+  const p = plan(8, { divisions: 2, weeks: 4, draftOrder: 'tiered', halfwayShuffle: true });
+  assertSound(p, 8, 4, 2);
+  const second = p.halves[1];
+  const rate = (id: number) => second.records![id].wins / (second.records![id].wins + second.records![id].losses);
+  const [top, bottom] = second.divisions;
+  assert.ok(Math.min(...top.map(rate)) >= Math.max(...bottom.map(rate)), 'division 1 holds the best first-half records');
+});
+
+test('a random draft is reproducible from the seed and still sound', () => {
+  const a = plan(10, { divisions: 2, draftBasis: 'random' });
+  assertSound(a, 10, 8, 2);
+  assert.deepEqual(plan(10, { divisions: 2, draftBasis: 'random' }).halves, a.halves);
 });
 
 test('divisions without a shuffle keep one seeding all season', () => {
