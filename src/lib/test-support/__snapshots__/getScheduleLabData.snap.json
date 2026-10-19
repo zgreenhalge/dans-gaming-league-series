@@ -1,0 +1,88 @@
+{
+  "players": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "mu": 27,
+      "sigma": 6.8,
+      "ehog": 1450
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "mu": 25.3,
+      "sigma": 7.1,
+      "ehog": 1380
+    },
+    {
+      "id": 3,
+      "name": "Carol",
+      "mu": 23.6,
+      "sigma": 7.4,
+      "ehog": 1290
+    },
+    {
+      "id": 4,
+      "name": "Dave",
+      "mu": 23.9,
+      "sigma": 7.3,
+      "ehog": 1310
+    },
+    {
+      "id": 5,
+      "name": "Erin",
+      "mu": 22.5,
+      "sigma": 7.8,
+      "ehog": 1200
+    },
+    {
+      "id": 6,
+      "name": "Frank",
+      "mu": null,
+      "sigma": 8.3333333333,
+      "ehog": 1250
+    },
+    {
+      "id": 7,
+      "name": "Grace",
+      "mu": 19.654007982690917,
+      "sigma": 8.3333333333,
+      "ehog": 33
+    },
+    {
+      "id": 8,
+      "name": "Heidi",
+      "mu": 19.654007982690917,
+      "sigma": 8.3333333333,
+      "ehog": 33
+    }
+  ],
+  "rosters": [
+    {
+      "seasonId": 3,
+      "label": "Season 6",
+      "playerIds": [
+        1,
+        2,
+        3,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "seasonId": 1,
+      "label": "Season 5",
+      "playerIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  ]
+}
