@@ -25,12 +25,14 @@ export interface ScheduleLabData {
   players: ScheduleLabPlayer[];
   /** Regular seasons' participants, newest season first. */
   rosters: ScheduleLabRoster[];
+  /** Each player's record summed over every regular season — a career win-rate draft's ranking. */
+  careerRecords: Record<number, FormatRecord>;
 }
 
 /** Everything the Schedule Lab (`/schedule-lab`) needs to plan a season format in the browser:
  *  players with the rating state `buildFormatPlan()` balances on, and each regular season's
  *  participants (`getSeasonParticipants()` — rostered or played) as a starting roster, with the
- *  season's records (`getAllLeaderboards()`) for a win-rate division draft. */
+ *  season's records (`getAllLeaderboards()`) — and their career sum — for a win-rate division draft. */
 export async function getScheduleLabData(): Promise<ScheduleLabData> {
   const [playersById, seasons] = await Promise.all([getPlayersById(), getSeasons()]);
   const regular = seasons.filter((s) => !s.is_gauntlet).sort((a, b) => b.id - a.id);
@@ -59,5 +61,13 @@ export async function getScheduleLabData(): Promise<ScheduleLabData> {
       (leaderboards.get(s.id) ?? []).map((row) => [row.player_id, { wins: row.matches_won, losses: row.matches_played - row.matches_won }]),
     ),
   }));
-  return { players, rosters };
+  const careerRecords: Record<number, FormatRecord> = {};
+  for (const roster of rosters) {
+    for (const [id, r] of Object.entries(roster.records)) {
+      const total = (careerRecords[Number(id)] ??= { wins: 0, losses: 0 });
+      total.wins += r.wins;
+      total.losses += r.losses;
+    }
+  }
+  return { players, rosters, careerRecords };
 }
