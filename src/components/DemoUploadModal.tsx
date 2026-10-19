@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { factionClass } from '@/lib/util';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
@@ -15,6 +16,7 @@ import {
   type KillCreditFlags, type UtilityThrowRow,
 } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
+import Th from '@/components/Th';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -60,11 +62,10 @@ type DraftStats = Record<number, { kills: string; assists: string; deaths: strin
 
 type Stage = 'idle' | 'uploading' | 'parsing' | 'preview' | 'submitting';
 
-function factionClass(faction: 'SHIRTS' | 'SKINS', skinsSide: Faction): string {
+function teamFactionClass(faction: 'SHIRTS' | 'SKINS', skinsSide: Faction): string {
   if (!skinsSide) return '';
   const shirtsSide: Faction = skinsSide === 'CT' ? 'T' : 'CT';
-  const side = faction === 'SHIRTS' ? shirtsSide : skinsSide;
-  return side === 'CT' ? 'faction-ct' : 'faction-t';
+  return factionClass(faction === 'SHIRTS' ? shirtsSide : skinsSide);
 }
 
 function blankStatsForPlayers(players: MatchPlayer[]): PlayerStat[] {
@@ -551,7 +552,7 @@ export default function DemoUploadModal({
                     {(['SHIRTS', 'SKINS'] as const).map((faction) => {
                       const score = faction === 'SHIRTS' ? shirtsScore : skinsScore;
                       const setScore = faction === 'SHIRTS' ? setShirtsScore : setSkinsScore;
-                      const cls = factionClass(faction, skinsSide);
+                      const cls = teamFactionClass(faction, skinsSide);
                       return (
                         <div key={faction} className={`flex flex-col gap-1 ${cls}`}>
                           <label className="tracked text-[9px] faction-fg">
@@ -578,7 +579,7 @@ export default function DemoUploadModal({
                 {/* Per-faction stat tables (editable) */}
                 {(['SHIRTS', 'SKINS'] as const).map((faction) => {
                   const fPlayers = faction === 'SHIRTS' ? shirtsPlayers : skinsPlayers;
-                  const cls = factionClass(faction, skinsSide);
+                  const cls = teamFactionClass(faction, skinsSide);
                   return (
                     <div key={faction}>
                       <div className={`tracked text-[10px] mb-2 ${cls} faction-fg`}>
@@ -587,17 +588,10 @@ export default function DemoUploadModal({
                       <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
                         <table className="w-full min-w-max border-collapse text-[12px]">
                           <thead>
-                            <tr className="bg-[var(--color-bg-secondary)]">
-                              <th className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-left pl-3 pr-2 py-2 border-b border-[var(--color-border-primary)]">
-                                Player
-                              </th>
+                            <tr>
+                              <Th>Player</Th>
                               {(['K', 'A', 'D', 'DMG', 'ADR'] as const).map((h) => (
-                                <th
-                                  key={h}
-                                  className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right px-2 py-2 border-b border-[var(--color-border-primary)] w-14"
-                                >
-                                  {h}
-                                </th>
+                                <Th key={h} align="right" className="w-14">{h}</Th>
                               ))}
                             </tr>
                           </thead>
@@ -617,7 +611,7 @@ export default function DemoUploadModal({
                                   key={p.player_id}
                                   className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
                                 >
-                                  <td className="pl-3 pr-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
+                                  <td className="px-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
                                     {p.player_name}
                                   </td>
                                   <td className="px-2 py-1.5 text-right">

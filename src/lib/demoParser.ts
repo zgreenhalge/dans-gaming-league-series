@@ -6,6 +6,7 @@ import { resolveStartingSide } from './parsers/sideInference';
 import { mergeSegmentResults } from './parsers/segmentMerge';
 import { orchestrateSegments } from './parsers/segmentOrchestrator';
 import type { RoundHistoryEntry } from './types';
+import { roundedAdr } from './util';
 
 const TRACKING = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 
@@ -68,7 +69,9 @@ export function parseDemoFile(
   const totalRounds = liveRounds.length;
 
   // --- K / D / A / Damage: read all from the engine's own accumulators ---
-  // These match the end-of-match scoreboard exactly, with no event math required.
+  // These match the end-of-match scoreboard exactly, with no event math required. `damage` is
+  // overridden by `withEnemyDamage()` (`demo/parseDemo.ts`) when sabremetrics resolved, since
+  // `m_iDamage` also counts props.
   const kills = new Map<string, number>();
   const deaths = new Map<string, number>();
   const assists = new Map<string, number>();
@@ -146,7 +149,7 @@ export function parseDemoFile(
   for (const [steamId, { player_id, faction }] of steamToPlayer) {
     const roundsWon = faction === 'SHIRTS' ? shirtsRoundsWon : skinsRoundsWon;
     const dmg = damage.get(steamId) ?? 0;
-    const adr = totalRounds > 0 ? Math.round(dmg / totalRounds) : 0;
+    const adr = roundedAdr(dmg, totalRounds);
     const isWin =
       effectiveSide !== null &&
       (faction === 'SHIRTS' ? shirtsRoundsWon > skinsRoundsWon : skinsRoundsWon > shirtsRoundsWon);

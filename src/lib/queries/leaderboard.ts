@@ -201,6 +201,37 @@ export async function getSeasonLeaderboard(
 }
 
 /**
+ * The names of a season's players who have played, in standings order — `getSeasonLeaderboard()`'s
+ * ranking without its all-seasons stats scan: rounds won are read only for this season's played
+ * non-playoff matches, which is all `canonicalSort()` needs beyond the view's own columns. Rostered
+ * players who haven't played yet aren't listed.
+ */
+export async function getSeasonStandingNames(seasonId: number): Promise<string[]> {
+  const rowsQuery = getAdminClient().from('player_season_leaderboard').select('*').eq('season_id', seasonId);
+  const statsQuery = resolveAllMatches().then((matches) =>
+    batchedIn<{ player_id: number; rounds_won: number | null }>(
+      'player_match_stats',
+      'match_id',
+      matches.filter((m) => m.season_id === seasonId && m.played && !m.is_playoff_game).map((m) => m.id),
+      'player_id, rounds_won',
+    ),
+  );
+  const [{ data: rows, error }, stats] = await Promise.all([rowsQuery, statsQuery]);
+  if (error) throw error;
+
+  const roundsWon = new Map<number, number>();
+  for (const s of stats) roundsWon.set(s.player_id, (roundsWon.get(s.player_id) ?? 0) + n(s.rounds_won));
+
+  return ((rows ?? []) as LeaderboardRow[])
+    .map((r) => {
+      const row = normalizeRow(r);
+      return { ...row, rwr_percentage: deriveRwr({ total_rounds_played: row.total_rounds_played, total_rounds_won: roundsWon.get(row.player_id) ?? 0 }) };
+    })
+    .sort(canonicalSort)
+    .map((r) => r.player_name);
+}
+
+/**
  * Each player's real running (SHIRTS count − SKINS count) across every played match, regular season
  * and gauntlet unified — the actual career exposure `initialBalance` (season-schedule-engine.ts) and
  * gauntlet pod labeling (gauntlet-engine.ts) draw from, so a schedule/pod decision reflects a

@@ -75,8 +75,7 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 
 - **`.font-display`** / **`.font-mono`** — the two custom font families
 - **`.tracked`** / **`.tracked-wide`** — uppercase, letter-spaced "broadcast label" styling for
-  small section headers/eyebrows. Table header cells use the same letter-spacing (`--tracking-label`)
-  without the uppercase, through `Th`/`SortableTh` (see Table header cells)
+  small section headers/eyebrows. Table header cells are plain sans instead (see Table header cells)
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for
@@ -120,28 +119,99 @@ card's own sub-view switch should all render as `TabBar`/`tabCls()`, sized or sp
 rather than a second, differently-styled tab control. Two tab components that look different for no
 reason reads as two unrelated features, not one drill-down.
 
-**Table header cells.** A stat table's header row is made of the shared **`Th`**
-(`src/components/Th.tsx`) for plain columns and **`SortableTh`** (`src/components/SortableTh.tsx`) for
-columns that sort — never a re-typed class string. They share one look: 10px semibold, letter-spaced
-but not uppercased, 8px padding on every side, on a tinted header band with a bottom rule. Plain
-data cells in those tables use the same `p-2` (8px on every side), so a header and the figures under
-it share one inset, pinned name column included; expanded-detail (`colSpan`) panels and footer label
-rows are exempt.
-`align="left"|"right"|"center"` aligns the label with the figures below it; `sticky` on the first
-(name) cell pins it while the table scrolls sideways (`.sticky-col`, which also paints the band so
-scrolled cells never show through).
+**Stat tables.** A stat table is built from the shared pieces in `src/components/StatTable.tsx` and
+the headers in `Th` / `SortableTh` — never a re-typed class string. One standard covers the
+leaderboard, the season and career Stats and Advanced Stats tables, the player, match, map and
+statistics pages, and the week/round/group scorecards:
+
+| Piece | Standard |
+|---|---|
+| **`StatTable`** (frame) | A bordered card with the page background, scrolling sideways when columns overflow. `bare` drops the border inside a bordered container; `tinted` leaves the background to a faction-tint class (inside a `FactionTintContext.Provider`, a faction-tinted container such as the match page's per-team Advanced Stats blocks, every `StatTable` and `Tr` does this on its own); `fixed` lays the columns out equally (the name cell adds `truncate`); `header` puts a banner inside the frame above the table (the scouting report's map image). |
+| **`Tr`** (row) | `--color-border-tertiary` divider, none under the last row (the card's border closes the table), on an opaque page background (a pinned cell inherits it). `clickable` adds the `lift-row` highlight; rows that aren't clickable don't highlight. `href` makes the row a link, `accent` tints it, `variant` sets a summary or marker row (below), `tinted` leaves the background to a faction-tint class. `accent`, `tinted` and a non-body `variant` each own the row's background, so use one. |
+| **`NameTd`** (name cell) | Display font, 14px semibold. `sticky` pins it. |
+| **`PlayerCell`** (player name) | A `NameTd` linking to `/players/<id>`, pinned unless `sticky={false}` (a fixed-layout table that fits its frame); `avatarUrl` adds the avatar. Use it for a plain player name; a row that adds a badge or the "me" highlight (`PlayerName`) builds its own `NameTd sticky` cell. `MapCell` is the map-name equivalent. |
+| **`Td`** (figure cell) | Mono 12px with tabular digits, right-aligned (`align` overrides). `muted` greys a secondary figure, `bold` emphasises a headline one, `mono={false}` is the escape hatch for a column of text. |
+| **Padding** | 8px on every side, headers and body cells alike, pinned name column included. Expanded-detail panels (`ExpandedTd`) are exempt. |
+
+**Clickable rows.** A row that opens a page is `<Tr href="/players/7">`; its figure cells are plain
+`Td`s. The name cell (`PlayerCell`, or a `NameTd` holding a `Link`) carries the row's one real link, so
+keyboard users Tab to it, a screen reader announces one link per row, and right-click offers the usual
+link menu. A click anywhere else on the row navigates (`router.push`), Cmd/Ctrl/Shift-click or a middle
+click opens a new tab, and a click that lands on a link or control inside the row is left to it. The row
+outlines while anything in it has focus. A row that expands or selects instead of navigating (the matchups
+tables) uses `clickable` with its own `onClick`, and its `PlayerCell` takes `onToggle` and `expanded`
+for a ▸/▾ button before the name, so the row reads as expandable and keyboard users can open it. `accent="<color>"` tints a row (the leaderboard's medal
+and gauntlet-zone colors) and sets the `--lift-accent` the hover wash and bar use on a clickable row, so a tinted row
+needs no hover handlers.
+
+**Summary, marker and expanded rows.** `Tr variant="summary"` is an averages or totals row: tertiary
+background (distinct from the secondary header band) under a tertiary top rule (the players and league averages in the scouting report, the "All
+maps" footer). `Tr variant="marker"` sets one row apart inside a body: a light fill between white rules
+(the "Current" rating among the EHOG projection scenarios). `ExpandedTd` is the full-width panel under
+an expanded row: 12px padding on the secondary background, spanning every column of the header row so the
+table never counts its columns.
+
+**Table header cells.** `Th` (plain columns) and `SortableTh` (columns that sort) share one look:
+10px semibold plain sans (no letter-spacing, not uppercased), 8px padding on every side, on a tinted
+header band with a bottom rule. A long label wraps onto a second line at its spaces only (never inside a
+hyphenated or slashed word) rather than widening its column; body cells never wrap, so a column is as
+wide as its widest figure or name. `align="left"|"right"|"center"` aligns the label with the figures
+below it; `sticky` on the first (name) cell pins it while the table scrolls sideways (`.sticky-col`, which also
+paints the band so scrolled cells never show through).
 
 `SortableTh` is a `<button>` inside the `<th>`, so Tab reaches it and Enter or Space sorts, with a
 focus ring and a hover tint, and `aria-sort` announces the sorted column and direction. Its sort
-arrow has a reserved slot on the side away from the alignment edge (before the label when
-right-aligned, after it when left-aligned), hidden until the column is sorted, so sorting never
-shifts the column's width or the label's alignment. It reads its state from `useSortState()`
+arrow appears after the label of the sorted column only and nudges the label aside rather than
+reserving space; a label that wraps keeps the arrow beside it. It reads its state from `useSortState()`
 (`src/components/useSortState.ts`) or any `{ col, asc }` pair, so a table that keeps its own sort
 state passes `state={{ col, asc }}`.
 
-Three kinds of table keep their own small headers: the compact tables inside cards (the player
-page's trophy stat strip, a matchup's per-map breakdown), the stat-entry table in the demo upload
-modal, and the admin tables.
+**Compact tables inside cards.** A table that sits inside a card (the player page's trophy stat strip,
+a matchup's per-map breakdown) is built from `CompactTable`, `CompactTh`, `CompactTr`, `CompactTd` and
+`CompactNameTd` (`src/components/CompactTable.tsx`) instead of the stat-table pieces. It has no frame and
+no header band: a small uppercase label (wrapping at spaces only, like `Th`) above 11px mono figures that never wrap, with 4px of vertical padding, each body
+row divided by a tertiary rule. `CompactTable` fills its container; give it `widths` (one Tailwind width
+class per column) for a fixed layout that shrinks to those widths. `CompactTd` takes `align` and `bold`;
+`CompactNameTd` is the truncating, linked name cell.
+
+**Shared formatting helpers** (`src/lib/util.ts`) — use these instead of a local copy: `fmtPct(num, den)`
+for whole-number percentages (`—` on a zero denominator), `factionClass(side)` for the `faction-ct` /
+`faction-t` tint class (the class counterpart of `sideColor()`), `formatCountdownClock(ms)` and
+`formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` / `fmtWindowDay('YYYY-MM-DD')` for
+a week-window date.
+
+**Tables that keep their own spacing.**
+- The stat-entry table in the demo upload modal uses `Th` for its headers and keeps its own 4–6px
+  body padding, since its cells hold inputs.
+- The admin tables (`PlayerManager`, `AdminActivityFeed`, `PlayerRow`) are intentionally different and
+  stay on their own markup.
+
+**List-style rows.** Cards with images, avatars and two-line content (`MatchCard`, `UpcomingGamesPanel`,
+the seasons list, `SeasonRosterPanel`, `MapPoolPicker`, H2H rows, `MatchManager`) are not tables. Every
+one already shares the frame-and-divider recipe of a table: a `lift-row` on clickable rows only, a
+`--color-border-tertiary` divider, and `last:border-b-0` so the container's border closes the list. What
+differs is padding, from 8px to 20px vertically and 12px to 24px horizontally. Some of that carries
+meaning and some is drift:
+- *Meaningful:* page-level lists with two lines of content (the seasons list, the home page rows) sit
+  roomier than dense in-card lists (H2H section rows, the roster, map pool, and match management); an
+  image-backed row (`MatchCard` with a map image) is as tall as its image needs.
+- *Drift:* the half-steps between neighbours at the same level (`px-4 py-2.5` / `px-4 py-3` / `px-3.5
+  py-2` for in-card lists; `px-5 py-3` / `px-5 py-4` for page lists).
+
+The standard for a list row is two densities, with the divider, `lift-row` and last-row rules as above:
+**regular** (`px-5 py-4`, page-level lists with two-line content) and **compact** (`px-4 py-2.5`, in-card
+and single-line lists). A list adopts one of them rather than choosing its own padding. The rows that
+keep their own spacing:
+- Image-backed rows and cards (`MatchCard` with a map image, the hero season rows at `px-6 py-5`): their
+  height follows the image.
+- `MatchManager`'s rows and its expanded panel: an admin surface whose `grid` columns and expansion are
+  its own layout.
+- H2H rows whose `grid-cols` template sets the columns: they take the compact horizontal padding but keep
+  their column template.
+
+A shared row component is not part of the standard: the rows differ in element (`Link`, `button`, `div`),
+in grid template and in click behavior, so the only code they have in common is a class string, and the
+standard is the two densities above applied to that string.
 
 **Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
 `size="sm"|"lg"`) for a "nothing here" message — `sm` for an inline one-liner inside an existing

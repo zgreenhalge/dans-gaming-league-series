@@ -51,6 +51,14 @@ the same steamid/name is readily available on every player entity at any tick, t
 read every other collector in this codebase already relies on. `parsePlayerInfo()`'s name wins when
 both sources agree on a steamid; the per-tick read only fills in steamids it alone found.
 
+**Spectators aren't players.** The same per-tick read samples `team_num` (2 = T, 3 = CT, 1 =
+spectator, 0 = unassigned). A steamid sampled at least once but never on T or CT is dropped
+(`excludeNonPlayers()`), so a spectator in the recording is never a roster candidate: it can't make
+`resolveRoster()` throw "Could not match … demo player(s)", and it can't be matched to a missing
+rostered player by elimination. A steamid with no usable `team_num` sample is kept, since nothing
+says it wasn't playing. Spectators therefore don't appear in `resolvedPlayerIds`, stats, or any
+fact table.
+
 **Learning steam ids on confirm.** When a demo player is matched by the elimination fallback,
 `rosterResolver.ts` emits a warning (`eliminationWarning()`) carrying the demo steam id + the roster
 player it was matched to. The confirm forwards parser `warnings` to `PATCH /score`, which — **for an
@@ -219,7 +227,10 @@ above: a new derived stat is a query change, not a new table.
   attacker/victim to `player_match_stats_id`; a hit whose victim has no resolvable row is dropped,
   matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are summed from these rows
   (enemy hits only, by the attacker's side) by `collectDamageBySide()` — see
-  [`calculations.md`](./calculations.md).
+  [`calculations.md`](./calculations.md). `parseDemoBuffers()` (`demo/parseDemo.ts`) then sets each
+  player's `player_match_stats.damage` and ADR to that same total (`withEnemyDamage()`), replacing the
+  engine's `m_iDamage`, which also counts damage to breakable props. The engine value stays only when
+  sabremetrics resolved no rounds (starting side unknown), since no event-derived total exists then.
 
 ## Match start (skipping warmup and stray knife rounds)
 
@@ -420,6 +431,37 @@ and asserts `checkDemoParseInvariants()` (`parsers/demoInvariants.ts`) for each:
 - `round_history` has the confirmed live round count and is contiguous
 - `matchRounds` covers exactly the rounds in `round_history`
 - every `matchKills` row sits in a live round, and no player dies twice in one round
+
+### The invariants in plain language
+
+An invariant is a fact true of any correct parse of a match, whichever demo it is. Each check in
+`checkDemoParseInvariants()` is about the *match* (its rounds, score, kills), not one collector's
+algorithm, so a round-attribution bug in any collector trips it even when that collector's unit tests
+pass. The checks fall into two groups by what they need as input:
+
+**Outcome checks** compare the parse to a known-good result passed in as `ExpectedOutcome` (the
+confirmed `final_score` and live round count):
+
+| Rule | What a violation means |
+|---|---|
+| Derived score equals the expected score | the parser mis-counted rounds won or assigned them to the wrong team |
+| `round_history` length equals the expected round count | rounds were dropped (a missed `round_end`) or invented (warmup/knife/replayed rounds kept) |
+
+**Structural checks** need nothing but the parse itself:
+
+| Rule | What a violation means |
+|---|---|
+| No parser warnings (`parsed.warnings`, `sab.warnings`) | a parser already flagged its own result as suspect (side disagreement, inferred roster player, duplicate event) |
+| `round_history` is contiguous (`n`, `n+1`, `n+2`, …) | a round is missing from the middle of the match, or the numbering restarted |
+| `matchRounds` covers exactly the rounds in `round_history` | the per-round fact table and the score-side round list disagree about which rounds were played |
+| Every `matchKills` row sits in a live round | a kill was attributed to a warmup, knife, or otherwise non-counted round — the signature of a round-numbering collision |
+| No player dies twice in one round | two events were attributed to the same round that cannot both belong there (a double-counted death, or kills from two different rounds sharing one number) |
+
+`scripts/demo-ingest.ts` does not run these checks. Its production equivalents are `quarantineDemo()`
+(round-number regression/duplicates, round count vs. score, nobody reaching `target_win_rounds`),
+`evaluateAutoCommit()`'s zero-warning rule, and the comparison of the derived score against MatchZy's
+`map_result`. The kill-placement, double-death, and `matchRounds`-coverage rules have no production
+counterpart.
 
 **What's committed and what isn't.** Demos run tens to hundreds of MB, so `parsers/realDemos/corpus.json`
 lists each one by R2 key with its confirmed score and round count, and nothing else. The demo files

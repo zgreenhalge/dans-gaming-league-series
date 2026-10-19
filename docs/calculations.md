@@ -14,7 +14,9 @@ Raw numbers, direct from the game scoreboard
 - K = Kills
 - A = Assists
 - D = Deaths
-- Dmg = Damage
+- Dmg = Damage — health enemies lost to the player. For demo-parsed matches it is `damage_ct + damage_t`
+  (below), so damage to breakable props, which the engine's own `m_iDamage` counter includes, isn't
+  counted.
 - Kill Difference = Kills - Deaths
 
 ### Kill Stats
@@ -128,7 +130,7 @@ rather than crediting a whole match to the side a team started on. `aggregatePla
 falls back to the coarser whole-match `rounds_won`/`rounds_played`-on-starting-side approximation for
 a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the player
 page's own Side stats table (`aggregatePlayerSideStats()`), and — via the shared `PerSideStatsTable`
-component (`aggregatePerSideStats()`) — on Basic Stats' season/career/map Maps & Sides tab and
+component (`aggregatePerSideStats()`) — on Basic Stats' season/career Maps & Sides tab and the map page's Sides tab and
 Advanced Stats' Sides sub-tab.
 
 `SideSplitTable` (the Sides sub-tab's own per-player table, as opposed to the team-level
@@ -151,7 +153,7 @@ expired, see `RoundCondition`) is tallied by `aggregateWinConditions()`
 (`src/lib/mapSideStats.ts`) into a count and share per condition across every round in scope. A
 round with no recorded condition (a `match_rounds` row predating this column, or a parser miss) is
 excluded rather than guessed into a bucket. Surfaced as "Round win condition" on the season/career/
-map Maps & Sides tab, next to Score Distribution. This is a separate figure from the per-round icon
+map page's Sides tab, next to Score Distribution. This is a separate figure from the per-round icon
 on the match page's round-history strip (`RoundHistoryEntry.condition`, driven by the denormalized
 `matches.round_history` column populated at demo-parse time): both ultimately classify the same CS2
 `round_end` reason, but `RoundHistoryStrip` shows one match's rounds individually while this
@@ -590,7 +592,9 @@ The default sort order for every regular-season and career leaderboard: **Wins �
 all descending. Applying all three keys in sequence avoids overweighting any single metric and
 produces a stable, consistent ordering across views.
 
-Implemented by `canonicalSort(rows)` in `src/lib/util.ts`. Use it everywhere regular-season or
+Implemented by `canonicalSort(rows)` in `src/lib/util.ts`; rows that carry the three values as
+`wins` / `rwr` / `adr` (per-map aggregates) use `canonicalSortValues()`, the same ordering.
+Use it everywhere regular-season or
 career player rows are ranked — never sort by ADR alone.
 
 ## Canonical Gauntlet Ranking

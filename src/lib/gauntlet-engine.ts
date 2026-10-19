@@ -147,7 +147,7 @@ export async function materializePod(
         match_number: matchNumber,
         is_playoff_game: true,
         final_score: null,
-        picked_map: null,
+        skins_pick: null,
         shirts_ban: null,
         shirts_ban2: null,
         skins_ban1: null,

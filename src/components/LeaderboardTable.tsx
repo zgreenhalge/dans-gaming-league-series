@@ -9,6 +9,7 @@ import { canonicalSort } from '@/lib/util';
 import { ehogColorFor } from './EhogBadge';
 import Th from './Th';
 import SortableTh from './SortableTh';
+import { StatTable, Tr, Td, NameTd } from './StatTable';
 import type { SeedPlacement } from '@/lib/gauntlet-bracket';
 
 type SortCol =
@@ -186,95 +187,69 @@ export default function LeaderboardTable({
   ];
 
   return (
-    <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-      <table className="w-full min-w-max border-collapse text-[13px]">
-        <thead>
-          <tr>
-            {firstColMode === 'player' && showRank && <Th className="w-6">#</Th>}
-            <SortableTh label={firstColLabel} sortKey="name" state={sortState} onSort={clickHeader} sticky={stickyNameCol} />
-            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
-            {hasEhog && <SortableTh label="EHOG" title="EHOG rating as of most recent match in this view" sortKey="ehog" state={sortState} onSort={clickHeader} align="right" />}
-            {STAT_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((p) => {
-            const played = p.total_rounds_played > 0;
-            const medal = medalRank.get(p.player_id);
-            const zone = zoneColor.get(p.player_id);
-            const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
-            const textColor = elimZone.has(p.player_id)
-              ? 'var(--color-text-secondary)'
-              : rowColor;
-            const href = firstColMode === 'season'
-              ? `/seasons/${p.season_id}`
-              : `/players/${p.player_id}`;
-            return (
-              <tr
-                key={firstColMode === 'season' ? p.season_id : p.player_id}
-                className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                style={{ background: rowColor
-                  ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))`
-                  : 'var(--color-bg-primary)'
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; onPlayerHover?.(p.player_id); }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : 'var(--color-bg-primary)'; onPlayerHover?.(null); }}
-              >
-                {firstColMode === 'player' && showRank && (
-                  <td className="p-2 font-mono text-[11px] tnum"
-                    style={{ color: textColor ?? 'var(--color-text-secondary)' }}
-                  >
-                    <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
-                  </td>
-                )}
-                <td className={`p-2 ${stickyNameCol ? 'sticky-col ' : ''}font-display font-semibold`}
-                  style={{ color: textColor ?? undefined }}
+    <StatTable>
+      <thead>
+        <tr>
+          {firstColMode === 'player' && showRank && <Th className="w-6">#</Th>}
+          <SortableTh label={firstColLabel} sortKey="name" state={sortState} onSort={clickHeader} sticky={stickyNameCol} />
+          {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
+          {hasEhog && <SortableTh label="EHOG" title="EHOG rating as of most recent match in this view" sortKey="ehog" state={sortState} onSort={clickHeader} align="right" />}
+          {STAT_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((p) => {
+          const played = p.total_rounds_played > 0;
+          const ehog = ehogRatings?.[p.player_id];
+          const medal = medalRank.get(p.player_id);
+          const zone = zoneColor.get(p.player_id);
+          const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
+          const textColor = elimZone.has(p.player_id)
+            ? 'var(--color-text-secondary)'
+            : rowColor;
+          const href = firstColMode === 'season'
+            ? `/seasons/${p.season_id}`
+            : `/players/${p.player_id}`;
+          return (
+            <Tr
+              key={firstColMode === 'season' ? p.season_id : p.player_id}
+              href={href}
+              accent={rowColor ?? undefined}
+              onMouseEnter={() => onPlayerHover?.(p.player_id)}
+              onMouseLeave={() => onPlayerHover?.(null)}
+            >
+              {firstColMode === 'player' && showRank && (
+                <Td align="left" style={{ color: textColor ?? 'var(--color-text-secondary)' }}>
+                  {canonicalRankOf.get(p.player_id) ?? '-'}
+                </Td>
+              )}
+              <NameTd sticky={stickyNameCol} style={{ color: textColor ?? undefined }}>
+                <Link href={href} className="flex items-center w-full h-full">
+                  <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
+                </Link>
+              </NameTd>
+              {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
+                <Td key={c.key}>{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Td>
+              ))}
+              {hasEhog && (
+                <Td
+                  bold
+                  title={ehog != null ? 'EHOG rating as of most recent match in this view' : undefined}
+                  style={ehog != null ? { color: ehogColorFor(ehog) } : undefined}
                 >
-                  <Link href={href} className="flex items-center w-full h-full">
-                    <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
-                  </Link>
-                </td>
-                {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
-                  <td key={c.key} className="p-2 text-right font-mono tnum">
-                    <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
-                  </td>
-                ))}
-                {hasEhog && (
-                  <td
-                    className="p-2 text-right font-mono tnum font-semibold"
-                    title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
-                    style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
-                  >
-                    <Link href={href} className="block w-full h-full">
-                      {ehogRatings[p.player_id] != null
-                        ? ehogRatings[p.player_id].toFixed(1)
-                        : <span className="text-[var(--color-text-secondary)]">—</span>}
-                    </Link>
-                  </td>
-                )}
-                <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                  <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
-                </td>
-                <td className="p-2 text-right font-mono tnum font-semibold">
-                  <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  {ehog != null ? ehog.toFixed(1) : <span className="text-[var(--color-text-secondary)]">—</span>}
+                </Td>
+              )}
+              <Td muted>{p.matches_played}</Td>
+              <Td muted>{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Td>
+              <Td>{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Td>
+              <Td muted>{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Td>
+              <Td>{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Td>
+              <Td bold>{dash(played, p.overall_adr.toFixed(2))}</Td>
+            </Tr>
+          );
+        })}
+      </tbody>
+    </StatTable>
   );
 }

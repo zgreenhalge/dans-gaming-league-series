@@ -40,7 +40,7 @@ function gauntletMatchStub(id: number, matchNumber: number, finalScore: string |
     match_number: matchNumber,
     final_score: finalScore,
     scheduled_at: scheduledAt,
-    picked_map: null,
+    skins_pick: null,
     shirts_pick: null,
     skins_starting_side: null,
     is_feature_match: false,
@@ -206,7 +206,7 @@ async function main() {
   await test('gauntletMatchToUpcomingGameRow: maps shirts_stats/skins_stats down to { player_id, player_name }', () => {
     const match: GauntletMatch = {
       ...gauntletMatchStub(5, 1, null, '2026-02-01T00:00:00Z'),
-      picked_map: 'Cobblestone',
+      skins_pick: 'Cobblestone',
       shirts_pick: 'Vertigo',
       is_feature_match: true,
       shirts_stats: [{ player_id: 1, player_name: 'Alice', faction: 'SHIRTS', kills: 20, assists: 2, deaths: 15, adr: 80, damage: 1900, is_win: true, rounds_won: 13, rounds_played: 24 }],
@@ -216,7 +216,7 @@ async function main() {
       id: 5,
       match_number: 1,
       scheduled_at: '2026-02-01T00:00:00Z',
-      picked_map: 'Cobblestone',
+      skins_pick: 'Cobblestone',
       shirts_pick: 'Vertigo',
       is_feature_match: true,
       shirts: [{ player_id: 1, player_name: 'Alice' }],

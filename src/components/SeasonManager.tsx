@@ -1,16 +1,13 @@
 'use client';
 
-// Manage -> Season for the unified admin console (issue #262). Every season is one row; gauntlet
-// build/seed/reset for that season lives inline in its own expansion instead of two separate
-// season-pickers underneath (the old shape: a flat "Seasons" list, then a *second*, disconnected
-// season dropdown to build a gauntlet, then a *third*, separate list to seed/reset one — three
-// un-linked tools that each made you re-find the same season). A season is expandable exactly when
-// it's an ACTIVE regular season with gauntlet-lifecycle work available; every other row (UPCOMING,
-// ARCHIVED, or a gauntlet season itself) is a plain, non-interactive line, with "go live"
-// as the one action UPCOMING seasons get inline instead of behind an expand. Every mutation still
-// goes through the existing, unmodified components (`CreateSeasonForm`, `CreateGauntletForm`,
-// `GauntletLifecycleList`, `MarkSeasonActiveButton`) scoped to a single season — this is composition,
-// not new mutation logic.
+// Manage -> Season for the unified admin console (issue #262). Every regular season is one row, with
+// its paired gauntlet shown as a badge on that row; gauntlet build/seed/reset for the season lives
+// inline in its expansion. A season is expandable when it's an ACTIVE regular season, or an
+// ARCHIVED one whose paired gauntlet is still open; every other row (UPCOMING, ARCHIVED, or an
+// unpaired gauntlet season) is a plain, non-interactive line, with "go live" as the one action
+// UPCOMING seasons get inline instead of behind an expand. Every mutation goes through the
+// existing components (`CreateGauntletForm`, `GauntletLifecycleList`, `MarkSeasonActiveButton`)
+// scoped to a single season — this is composition, not new mutation logic.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -28,6 +25,8 @@ export interface SeasonSummary {
   name: string;
   status: string;
   isGauntlet: boolean;
+  /** Status of the paired gauntlet season, or null when the season has none. */
+  gauntletStatus: string | null;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -124,6 +123,11 @@ export function SeasonManager({
                       <span className={`inline-block font-mono text-[9px] uppercase tracking-wide px-1.5 py-[1px] rounded border shrink-0 ${STATUS_BADGE[s.status] ?? STATUS_BADGE.ARCHIVED}`}>
                         {s.status}
                       </span>
+                      {s.gauntletStatus && (
+                        <span className={`inline-block font-mono text-[9px] uppercase tracking-wide px-1.5 py-[1px] rounded border shrink-0 ${STATUS_BADGE[s.gauntletStatus] ?? STATUS_BADGE.ARCHIVED}`}>
+                          Gauntlet {s.gauntletStatus}
+                        </span>
+                      )}
                     </div>
                     <ErrorText error={error && `⚠ ${error.message}`} className="mt-1 break-words" />
                   </div>

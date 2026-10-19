@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { isVetoComplete, type VetoFields } from './veto';
+import { effectiveSkinsStartingSide, isVetoComplete, type VetoFields } from './veto';
 import { test, report } from './test-support/miniTest';
 
 const full: VetoFields = {
@@ -65,6 +65,26 @@ test('isVetoComplete: all-null is incomplete in both shapes', () => {
   };
   assert.equal(isVetoComplete(m, true), false);
   assert.equal(isVetoComplete(m, false), false);
+});
+
+test('effectiveSkinsStartingSide: a stored side wins over the demo-derived one', () => {
+  const round_history = [{ n: 1, winner: 'SHIRTS' as const, side: 'CT' as const, condition: 'elim' as const }];
+  assert.equal(effectiveSkinsStartingSide({ skins_starting_side: 'CT', round_history }), 'CT');
+});
+
+test('effectiveSkinsStartingSide: derives the side from the first recorded round when none is stored', () => {
+  const rounds = (winner: 'SHIRTS' | 'SKINS', side: 'CT' | 'T') => [
+    { n: 5, winner: 'SHIRTS' as const, side: 'T' as const, condition: 'elim' as const },
+    { n: 3, winner, side, condition: 'elim' as const },
+  ];
+  assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: rounds('SKINS', 'T') }), 'T');
+  assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: rounds('SHIRTS', 'CT') }), 'T');
+  assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: rounds('SHIRTS', 'T') }), 'CT');
+});
+
+test('effectiveSkinsStartingSide: null when nothing is stored or recorded', () => {
+  assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: null }), null);
+  assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: [] }), null);
 });
 
 report();

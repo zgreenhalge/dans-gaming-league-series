@@ -16,7 +16,7 @@ import type { DemoPlayerStat, ParsedDemoResult } from '../demoParser';
 import type {
   ParsedDemoSabremetricsResult, DemoSabremetricStat, DemoWeaponStat, WeaponStatFields, SabFields,
 } from '../types';
-import { addNumericFields } from '../util';
+import { addNumericFields, roundedAdr } from '../util';
 
 /**
  * Groups `rows` by the string value of `keyFields` and sums every other numeric field across the
@@ -247,7 +247,7 @@ export function mergeSegmentResults(segments: ParsedDemoResult[]): ParsedDemoRes
   // a derived rate rather than a raw counter.
   const summedStats = sumNumericFields(segments.flatMap((s) => s.stats), ['player_id', 'faction']);
   const stats: DemoPlayerStat[] = summedStats.map((s) => {
-    const adr = s.rounds_played > 0 ? Math.round(s.damage / s.rounds_played) : 0;
+    const adr = roundedAdr(s.damage, s.rounds_played);
     const is_win =
       allScoresKnown &&
       (s.faction === 'SHIRTS' ? shirts_score! > skins_score! : skins_score! > shirts_score!);

@@ -325,7 +325,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     if (isGauntlet) {
       return rounds.flatMap((r) => r.matches).map((m) => ({
         final_score: m.final_score,
-        picked_map: m.picked_map,
+        skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
         shirts_stats: m.shirts_stats,
@@ -334,7 +334,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     }
     return schedule.flatMap((w) => w.matches).map((m) => ({
       final_score: m.final_score,
-      picked_map: m.picked_map,
+      skins_pick: m.skins_pick,
       shirts_pick: m.shirts_pick,
       skins_starting_side: m.skins_starting_side,
       shirts_stats: m.shirts_stats,

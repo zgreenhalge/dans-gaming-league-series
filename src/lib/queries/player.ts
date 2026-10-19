@@ -5,6 +5,7 @@ import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
 import { asPage, cacheQuery, fetchAllPages, getWeekLookup } from './_shared';
+import { effectivePickedMap } from '../veto';
 
 
 export interface PlayerHistoryRow extends PlayerMatchStat {
@@ -21,7 +22,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   skins: { player_id: number; player_name: string }[];
   shirts_stats: RosterStat[];
   skins_stats: RosterStat[];
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   shirts_ban: string | null;
@@ -232,14 +233,14 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         season_number: extractSeasonNumber(se.name),
         season_name: se.name,
         is_gauntlet: se.is_gauntlet,
-        map: m.shirts_pick ?? m.picked_map,
+        map: effectivePickedMap(m),
         final_score: m.final_score,
         scheduled_at: m.scheduled_at,
         shirts: roster.shirts,
         skins: roster.skins,
         shirts_stats: roster.shirts_stats ?? [],
         skins_stats: roster.skins_stats ?? [],
-        picked_map: m.picked_map,
+        skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
         shirts_ban: m.shirts_ban,

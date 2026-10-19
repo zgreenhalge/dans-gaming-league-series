@@ -672,11 +672,11 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
   // JSON/text columns (`round_history`, ban pairs, `pre_match_win_prob*`, etc.) never used here.
   type GauntletMatchRow = Pick<
     Match,
-    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
+    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'skins_pick' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
   >;
   const { data: matchData, error: mErr } = await db
     .from('matches')
-    .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, is_feature_match, week_id')
+    .select('id, match_number, final_score, scheduled_at, skins_pick, shirts_pick, skins_starting_side, is_feature_match, week_id')
     .in('week_id', weekIds)
     .order('match_number');
   if (mErr) throw mErr;
@@ -778,7 +778,7 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
         match_number: m.match_number,
         final_score: m.final_score,
         scheduled_at: m.scheduled_at,
-        picked_map: m.picked_map,
+        skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
         is_feature_match: m.is_feature_match,
@@ -819,7 +819,7 @@ export function gauntletMatchToUpcomingGameRow(m: GauntletMatch): UpcomingGameRo
     id: m.id,
     match_number: m.match_number,
     scheduled_at: m.scheduled_at,
-    picked_map: m.picked_map,
+    skins_pick: m.skins_pick,
     shirts_pick: m.shirts_pick,
     is_feature_match: m.is_feature_match,
     shirts: m.shirts_stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),

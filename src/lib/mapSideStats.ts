@@ -11,7 +11,7 @@ import { resolveSide } from './parsers/roundSides';
  */
 export interface VetoFields {
   final_score: string | null;
-  picked_map: string | null;
+  skins_pick: string | null;
   shirts_pick: string | null;
   shirts_ban?: string | null;
   shirts_ban2?: string | null;
@@ -23,7 +23,7 @@ export interface VetoFields {
 }
 
 export interface MapVetoOutcome {
-  /** The effective played map(s) — `shirts_pick ?? picked_map`, trimmed, original casing. */
+  /** Every pick recorded (`shirts_pick` and/or `skins_pick`), trimmed, original casing. */
   picked: string[];
   /** Every map banned in this match's veto, trimmed, original casing. */
   banned: string[];
@@ -37,7 +37,7 @@ export function classifyMatchVeto(m: VetoFields): MapVetoOutcome {
   if (!isPlayedScore(m.final_score)) return { picked: [], banned: [], noPicked: [] };
 
   const picked = Array.from(
-    new Set([m.shirts_pick, m.picked_map].filter((v): v is string => !!v).map((v) => v.trim())),
+    new Set([m.shirts_pick, m.skins_pick].filter((v): v is string => !!v).map((v) => v.trim())),
   );
   const banned = [m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]
     .filter((v): v is string => !!v)
@@ -199,7 +199,7 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
         else b.tLosses++;
       }
 
-      // shirts picked when shirts_pick is set; otherwise skins picked via picked_map
+      // shirts picked when shirts_pick is set; otherwise skins picked via skins_pick
       const shirtsPicked = m.shirts_pick != null;
       const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
       if (getWinningFaction(m) === teamThatPicked) b.pickedAndWon++;
@@ -237,23 +237,38 @@ export interface ScoreDistribution {
   total: number;
 }
 
+export type ScoreCategory = 'crazy' | 'close' | 'competitive' | 'convincing' | 'crushed';
+
+/** Display label and score range per `ScoreCategory`, shared by the distribution table and the
+ *  per-match badge. */
+export const SCORE_CATEGORY_INFO: Record<ScoreCategory, { label: string; note: string }> = {
+  crushed: { label: 'Crushing', note: '13–3 or worse' },
+  convincing: { label: 'Convincing', note: '13–4 to 13–6' },
+  competitive: { label: 'Competitive', note: '13–7 to 13–9' },
+  close: { label: 'Close', note: '13–10 or 13–11' },
+  crazy: { label: 'CRAZY', note: 'Overtime' },
+};
+
 // Buckets are keyed on the losing team's round count. Overtime (winner > 13)
 // is its own "crazy" bucket, checked before the loser-round buckets.
+export function scoreCategory(shirts: number, skins: number): ScoreCategory {
+  const winner = Math.max(shirts, skins);
+  const loser = Math.min(shirts, skins);
+  if (winner > 13) return 'crazy';
+  if (loser <= 3) return 'crushed';
+  if (loser <= 6) return 'convincing';
+  if (loser <= 9) return 'competitive';
+  return 'close';
+}
+
 export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreDistribution {
   const out: ScoreDistribution = { crazy: 0, close: 0, competitive: 0, convincing: 0, crushed: 0, total: 0 };
   for (const m of matches) {
     if (!isPlayedScore(m.final_score)) continue;
     const parsed = parseScore(m.final_score);
     if (!parsed) continue;
-    const { shirts, skins } = parsed;
-    const winner = Math.max(shirts, skins);
-    const loser = Math.min(shirts, skins);
     out.total++;
-    if (winner > 13) out.crazy++;
-    else if (loser <= 3) out.crushed++;
-    else if (loser <= 6) out.convincing++;
-    else if (loser <= 9) out.competitive++;
-    else out.close++;
+    out[scoreCategory(parsed.shirts, parsed.skins)]++;
   }
   return out;
 }
@@ -388,7 +403,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
       if (m.is_win) b.wins++;
       b.totalRounds += m.rounds_played;
 
-      const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.picked_map != null;
+      const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.skins_pick != null;
       if (playerPicked) b.picked++;
 
       if (m.skins_starting_side) {
@@ -456,7 +471,7 @@ export function aggregatePlayerSideStats(
       bucket.roundsPlayed += m.rounds_played;
     }
 
-    const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.picked_map != null : m.shirts_pick != null;
+    const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.skins_pick != null : m.shirts_pick != null;
     if (playerTeamChoseSide) bucket.numTimesPicked++;
   }
 

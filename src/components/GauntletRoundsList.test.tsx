@@ -21,7 +21,7 @@ function gauntletMatch(overrides: Partial<GauntletMatch> & { id: number }): Gaun
     match_number: 1,
     final_score: null,
     scheduled_at: null,
-    picked_map: null,
+    skins_pick: null,
     shirts_pick: null,
     skins_starting_side: null,
     is_feature_match: false,
