@@ -44,6 +44,18 @@ analysis and visualization.
   boundaries) — reading one at the wrong tick silently gives you a partial or carried-over value
   rather than an error. DGLS's approach of reading at a specific, deliberately-chosen tick (the
   final live tick per round) exists specifically to avoid this trap.
+- **`parseTicks` only returns rows for ticks the recording has a frame for.** A tick number computed
+  from other ticks (an event tick ± an offset) can fall in a gap, and the call returns no rows for it
+  rather than failing — a collector that defaults a missing value to 0 reads a silent zero. Take
+  sample ticks from event ticks (which always have a frame) or check the row count.
+- **The event stream can omit `player_hurt` events the entity state still reflects.** A victim's
+  `health` drops and the attacker's `m_flTotalRoundDamageDealt` rises by the same amount on a tick
+  with no event. `applyHealthLost()` folds the missing amount into the victim's next recorded hit,
+  so a victim's round total stays right while that chunk can be credited to the next attacker.
+- **`m_flTotalRoundDamageDealt` also credits damage to non-player entities.** A shot that breaks a
+  prop raises it with no `player_hurt` (the amount is the prop's, not exposed per hit), and a
+  penetrating shot can be credited more than the victim's remaining health. Don't reconcile it
+  exactly against player damage.
 - **Warmup and knife rounds are present in the raw tick/event stream** — the demo doesn't mark them
   as excluded for you; whatever's consuming the parser output has to filter on round state
   (`is_warmup_period`, round number, winner) itself. See `liveRounds` filtering in
