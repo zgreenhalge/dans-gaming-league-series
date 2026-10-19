@@ -162,6 +162,16 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Scouting report** — pre-match prep view (`getMatchScoutingData()` → `ScoutingReport.tsx`)
   showing each upcoming player's recent form/history before a match is played. Only shown for an
   unplayed match — see **Match H2H tab** above for what a match's own tab shows once it's played.
+- **Fixed-length format** — the alternative to the round-robin schedule: the season length is chosen,
+  and `buildFormatPlan()` (`src/lib/season-format.ts`) covers as much of the league as it allows,
+  with every player getting the same number of games. Tried out in the **Schedule Lab**
+  (`/schedule-lab`), which generates and compares plans without saving anything. See
+  [`architecture.md`](./architecture.md#schedule-lab-fixed-length-season-formats).
+  - **Division** — a snake-seeded (by EHOG) slice of the roster, at least 4 players, whose games stay
+    inside it. **Halfway shuffle** re-snakes divisions by first-half win rate.
+  - **Group week** — instead of about one match a week, players meet in a group of 4 (two games, two
+    different team splits) or one group of 5–7 for the remainder, playing back to back. Not the same
+    thing as a gauntlet group (a pod).
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
@@ -199,6 +209,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |
 | Played match's own H2H tab | `src/components/MatchH2H.tsx` |
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
+| Fixed-length season planner + Schedule Lab | `src/lib/season-format.ts`, `src/lib/queries/schedule-lab.ts`, `src/components/ScheduleLabView.tsx`, `src/app/schedule-lab/` |
 | Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
 | Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts` (survey questions, validation, summary), `src/lib/superlatives.ts` (superlatives validation, tally), `src/lib/feedback-rules.ts` (`isFeedbackLocked()`, `Validated`), `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/lib/feedback-lifecycle.ts` (shared open/close, reset and answer-save handlers; the lock rule is `isFeedbackLocked()` in `feedback-rules.ts`), `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/survey/[id]/`, `src/app/admin/seasons/superlatives/[id]/` (via `resolveFeedbackAdminSeason()`, `src/lib/feedback-page.ts`), `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `Feedback*.tsx` (banner, player editor, admin controls, form frame, reset control) / `feedbackRequest.ts` / `RemoveXButton.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
