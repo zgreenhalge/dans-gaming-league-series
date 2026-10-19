@@ -18,6 +18,7 @@ import type { ScheduleLabPlayer, ScheduleLabRoster } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import TabBar from './TabBar';
 import Th from './Th';
+import { StatTable, Td, Tr } from './StatTable';
 import SectionLabel from './SectionLabel';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
@@ -196,50 +197,48 @@ export function ScheduleLabView({ players, rosters }: { players: ScheduleLabPlay
         {previews.length === 0 ? (
           <EmptyState size="sm" message="No previews yet." />
         ) : (
-          <div className="overflow-x-auto border border-[var(--color-border-primary)]">
-            <table className="w-full font-mono text-[12px]">
-              <thead>
-                <tr>
-                  <Th sticky />
-                  {previews.map((p) => (
-                    <Th key={p.id} align="left" className={`min-w-[150px] ${p.id === shownId ? 'text-[var(--color-site-accent)]' : ''}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <button type="button" className="text-left hover:underline" onClick={() => setShownId(p.id)}>
-                          <span className="font-display text-[14px]">{p.label}</span>
-                          <span className="block font-normal text-[var(--color-text-secondary)]">{describeFormatSettings(p.plan.settings)}</span>
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Remove preview ${p.label}`}
-                          className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                          onClick={() => {
-                            setPreviews((prev) => prev.filter((q) => q.id !== p.id));
-                            if (shownId === p.id) setShownId(null);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </Th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {SCORE_ROWS.map((row) => (
-                  <tr key={row.label} className="border-b border-[var(--color-border-primary)] last:border-b-0">
-                    <td className="p-2 sticky-col text-[var(--color-text-secondary)] whitespace-nowrap" title={row.title}>
-                      {row.label}
-                    </td>
-                    {previews.map((p) => (
-                      <td key={p.id} className={`p-2 ${p.id === shownId ? 'bg-[var(--color-bg-secondary)]' : ''}`}>
-                        {row.value(p)}
-                      </td>
-                    ))}
-                  </tr>
+          <StatTable>
+            <thead>
+              <tr>
+                <Th sticky />
+                {previews.map((p) => (
+                  <Th key={p.id} align="left" className={`min-w-[150px] ${p.id === shownId ? 'text-[var(--color-site-accent)]' : ''}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <button type="button" className="text-left hover:underline" onClick={() => setShownId(p.id)}>
+                        <span className="font-display text-[14px]">{p.label}</span>
+                        <span className="block font-normal text-[var(--color-text-secondary)]">{describeFormatSettings(p.plan.settings)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Remove preview ${p.label}`}
+                        className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                        onClick={() => {
+                          setPreviews((prev) => prev.filter((q) => q.id !== p.id));
+                          if (shownId === p.id) setShownId(null);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </Th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody>
+              {SCORE_ROWS.map((row) => (
+                <Tr key={row.label}>
+                  <Td align="left" muted className="sticky-col" title={row.title}>
+                    {row.label}
+                  </Td>
+                  {previews.map((p) => (
+                    <Td key={p.id} align="left" className={p.id === shownId ? 'bg-[var(--color-bg-secondary)]' : ''}>
+                      {row.value(p)}
+                    </Td>
+                  ))}
+                </Tr>
+              ))}
+            </tbody>
+          </StatTable>
         )}
       </section>
 
