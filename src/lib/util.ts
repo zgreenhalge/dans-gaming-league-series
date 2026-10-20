@@ -574,10 +574,22 @@ export function mergeLeaderboardRows(
 }
 
 /**
+ * Sorts matches of one season most-recent-first: week desc → match number desc. The within-season
+ * tail of `compareMatchRefDesc()`, and the order of the standings Form (`buildSeasonForm()`).
+ */
+export function compareWithinSeasonDesc(
+  a: { weekNumber: number; matchNumber: number },
+  b: { weekNumber: number; matchNumber: number },
+): number {
+  if (a.weekNumber !== b.weekNumber) return b.weekNumber - a.weekNumber;
+  return b.matchNumber - a.matchNumber;
+}
+
+/**
  * Sorts match summaries most-recent-first: season number desc → gauntlet before regular (within
- * the same season number) → week desc → match number desc. Gauntlet seasons carry the same season
- * number as their paired regular season but happened later, so they sort above it in the list.
- * Use the negated result for ascending (oldest-first) sorts.
+ * the same season number) → `compareWithinSeasonDesc()` (week desc → match number desc). Gauntlet
+ * seasons carry the same season number as their paired regular season but happened later, so they
+ * sort above it in the list. Use the negated result for ascending (oldest-first) sorts.
  */
 export function compareMatchRefDesc(
   a: { seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number },
@@ -587,8 +599,7 @@ export function compareMatchRefDesc(
   const sb = b.seasonNumber ?? -1;
   if (sa !== sb) return sb - sa;
   if (a.isGauntlet !== b.isGauntlet) return a.isGauntlet ? -1 : 1;
-  if (a.weekNumber !== b.weekNumber) return b.weekNumber - a.weekNumber;
-  return b.matchNumber - a.matchNumber;
+  return compareWithinSeasonDesc(a, b);
 }
 
 /** Stakes copy for a gauntlet pod, shown in the round list grouped by pod. Not shown for the final
