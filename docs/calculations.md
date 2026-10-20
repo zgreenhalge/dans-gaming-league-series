@@ -685,6 +685,9 @@ feeding the same `gauntletSeeding` prop on `LeaderboardTable`:
   (outside 4-20). Implemented by `projectGauntletSeeding(qualifierCount)` in
   `src/lib/gauntlet-bracket.ts`, which maps seeds to placements; `SeasonTabView.tsx` zips that
   against the current standings (already in canonical-sort order) to key it by `player_id`.
+  The Gauntlet Preview tool (`/tools/gauntlet-preview`) shows the same projection for any qualifier
+  count, one row per seed: bye, plays in (with the round and group it enters), or relegated
+  (`buildGauntletPreview()`, `src/lib/gauntlet-preview.ts`).
 
 Once the regular season itself is archived, medal tinting (`showMedals`) still only takes over when
 neither source above has data — matching the general LeaderboardTable rule that seed tinting always
