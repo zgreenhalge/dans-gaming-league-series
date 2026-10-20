@@ -186,11 +186,12 @@ export function ScheduleLabView({
 
   function generate() {
     const seed = generated + 1;
+    // Records only matter to a win-rate draft, which needs divisions to draft into.
     const source =
-      settings.draftBasis !== 'win-rate'
+      settings.divisions === 1 || settings.draftBasis !== 'win-rate'
         ? null
         : draftSource === CAREER
-          ? { label: 'All regular seasons', records: careerRecords }
+          ? { label: 'Career', records: careerRecords }
           : (rosters.find((r) => r.seasonId === draftSource) ?? null);
     const roster = players.filter((p) => selected.has(p.playerId)).map((p) => ({ ...p, record: source?.records[p.playerId] ?? null }));
     setGenerated(seed);
