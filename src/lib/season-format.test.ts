@@ -133,6 +133,19 @@ test('one league, a group a week: two games a week, everyone partners everyone a
   }
 });
 
+test('a doubleheader week never replays the same matchup in a 4-player division', () => {
+  // 9 players in divisions of 5 and 4 over 5 weeks: 8 games each, so the 4-player division plays
+  // both of a doubleheader week's matches with the same four players.
+  const p = plan(9, { divisions: 2, weeks: 5 });
+  assertSound(p, 9, 8, 2);
+  for (const w of p.weeks) {
+    for (const d of w.divisions) {
+      const keys = d.games.map((g) => [[...g.shirts].sort().join('+'), [...g.skins].sort().join('+')].sort().join(' v '));
+      assert.equal(new Set(keys).size, keys.length, `week ${w.week} division ${d.division} replays a matchup`);
+    }
+  }
+});
+
 test('odd groups even out over the season', () => {
   assertSound(plan(13, { weekShape: 'group' }), 13, 16, 3);
 });

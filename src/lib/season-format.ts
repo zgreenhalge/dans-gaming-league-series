@@ -259,8 +259,10 @@ function halfTemplates(size: number, weeks: number, shape: WeekShape, divisionSi
   return { templates: matchPhaseShape(size, weeks, gamesPerPlayer).map((m) => matchWeekTemplate(size, m)), gamesPerPlayer };
 }
 
-/** Even division sizes for `n` players in `k` divisions, earlier divisions taking any extra player
- * — the sizes a snake or straight draft deals, and a tiered draft's default. */
+/** Division sizes for `n` players in `k` divisions, as even as possible, earlier divisions taking
+ * any extra player: a straight draft's sizes and a tiered draft's default. A snake deals the same
+ * sizes in another order (later divisions take the extras), which is all the rest of the plan
+ * needs — it treats sizes as a set, or reads them from the drafted divisions. */
 export function divisionSizesFor(n: number, k: number): number[] {
   return Array.from({ length: k }, (_, d) => Math.floor(n / k) + (d < n % k ? 1 : 0));
 }
@@ -353,7 +355,7 @@ export function formatIssues(playerCount: number, settings: SeasonFormatSettings
  * - `straight` — ranks 1..k to divisions 1..k every round, so division 1 always picks first.
  * - `tiered` — the top players fill division 1, the next fill division 2, and so on (skill
  *   divisions).
- * Snake and straight deal even sizes (earlier divisions take any extra player); `sizes` matters
+ * Snake and straight deal sizes as even as possible (see `divisionSizesFor()`); `sizes` matters
  * for `tiered`. Each division lists its players in ranking order. */
 export function draftDivisions(rankedIds: number[], sizes: number[], order: Exclude<DraftOrder, 'balanced'>): number[][] {
   const k = sizes.length;
@@ -534,13 +536,15 @@ function searchHalf(
   const size = members.length;
   const weeks = templates.length;
   const iterations = 10000 + 900 * size * weeks;
-  // Per week: the games each slot plays in, and the games of each group — so a move only rescores
-  // the games it actually touches.
+  // Per week: the games each slot plays in, and the games that could repeat each other — a group's
+  // games (separate groups share no players), or every game of a match week (a doubleheader can
+  // seat the same four players twice) — so a move only rescores the games it actually touches.
   const slotGames = templates.map((t) => Array.from({ length: size }, (_, slot) => t.games.flatMap((g, gi) => (g.includes(slot) ? [gi] : []))));
-  const groupGameIdx = templates.map((t) => {
-    const byGroup = new Map<number, number[]>();
-    t.group.forEach((grp, gi) => { if (grp !== null) byGroup.set(grp, [...(byGroup.get(grp) ?? []), gi]); });
-    return byGroup;
+  const rematchBucket = (t: WeekTemplate, gi: number) => t.group[gi] ?? -1;
+  const bucketGames = templates.map((t) => {
+    const byBucket = new Map<number, number[]>();
+    t.games.forEach((_, gi) => byBucket.set(rematchBucket(t, gi), [...(byBucket.get(rematchBucket(t, gi)) ?? []), gi]));
+    return byBucket;
   });
 
   let best: { cost: number; result: HalfSearchResult } | null = null;
@@ -583,18 +587,17 @@ function searchHalf(
       return delta;
     };
     const gameKey = (w: number, g: number) => matchupKey(player(w, g, 0), player(w, g, 1), player(w, g, 2), player(w, g, 3), n);
-    /** Exact rematches (the same two teams twice in one week) inside the groups `gameIdx` touch —
-     * only possible inside a group, since separate groups share no players. */
+    /** Exact rematches (the same two teams twice in one week) among the games that could repeat
+     * the games in `gameIdx` (see `bucketGames`). */
     const rematches = (w: number, gameIdx: number[]) => {
       const t = templates[w];
-      if (t.group[0] === null) return 0;
       let count = 0;
       const seen: number[] = [];
       for (const gi of gameIdx) {
-        const grp = t.group[gi]!;
-        if (seen.includes(grp)) continue;
-        seen.push(grp);
-        const keys = groupGameIdx[w].get(grp)!.map((g) => gameKey(w, g));
+        const bucket = rematchBucket(t, gi);
+        if (seen.includes(bucket)) continue;
+        seen.push(bucket);
+        const keys = bucketGames[w].get(bucket)!.map((g) => gameKey(w, g));
         for (let x = 0; x < keys.length; x++) for (let y = x + 1; y < keys.length; y++) if (keys[x] === keys[y]) count++;
       }
       return WEIGHT.rematch * count;
