@@ -25,6 +25,7 @@ import {
   type GauntletSeasonLightView,
   type GauntletRound,
 } from '@/lib/queries';
+import { StatusPill } from '@/components/StatusPill';
 import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -93,12 +94,7 @@ function Topbar({ season }: { season: Season }) {
 
 function SeasonStatusTag({ status, needsSignup }: { status: Season['status']; needsSignup: boolean }) {
   if (status === 'ACTIVE') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)] shrink-0">
-        <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
-        Live
-      </span>
-    );
+    return <StatusPill variant="live">Live</StatusPill>;
   }
   if (status === 'UPCOMING') {
     return <UpcomingSeasonTag needsSignup={needsSignup} />;

@@ -5,7 +5,8 @@ import { StatTable, Tr, Td, NameTd } from './StatTable';
 import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 
-const PILL_CLS = 'inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold border';
+import { StatusPill } from './StatusPill';
+import { PanelHeader, PanelLink } from './PanelHeader';
 
 /** A player's recent results, newest first, as colored `W` / `L` letters — the standings Form column. */
 export function FormCell({ results }: { results: boolean[] }) {
@@ -52,40 +53,19 @@ export function HomeStandingsPanel({
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            href={seasonHref}
-            className="font-display text-[18px] font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-site-accent)] transition-colors"
-          >
-            {title}
-          </Link>
-          {live ? (
-            <span className={`${PILL_CLS} text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]`}>
-              <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
-              Live
-            </span>
-          ) : (
-            <span className={`${PILL_CLS} text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-[var(--color-border-primary)]`}>
-              Final
-            </span>
-          )}
-          {gauntletHref && (
-            <Link
-              href={gauntletHref}
-              className={`${PILL_CLS} text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)]`}
-            >
-              Gauntlet live
-            </Link>
-          )}
-        </div>
-        <Link
-          href={seasonHref}
-          className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-site-accent)] transition-colors shrink-0"
-        >
-          View all →
-        </Link>
-      </div>
+      <PanelHeader
+        title={title}
+        titleHref={seasonHref}
+        align="center"
+        right={<PanelLink href={seasonHref}>View all →</PanelLink>}
+      >
+        <StatusPill variant={live ? 'live' : 'neutral'}>{live ? 'Live' : 'Final'}</StatusPill>
+        {gauntletHref && (
+          <StatusPill variant="amber" href={gauntletHref}>
+            Gauntlet live
+          </StatusPill>
+        )}
+      </PanelHeader>
       {rows.length === 0 ? (
         <EmptyState message="No standings yet." className="px-6 py-4" />
       ) : (
