@@ -213,6 +213,20 @@ A shared row component is not part of the standard: the rows differ in element (
 in grid template and in click behavior, so the only code they have in common is a class string, and the
 standard is the two densities above applied to that string.
 
+**Ranked pair rows.** `DuoRow` / `RivalRow` (with `DuoHeader` / `RivalHeader`, `src/components/H2HRows.tsx`)
+are the one row for a ranked duo or rivalry: `H2HSection`'s Best Friends / Closest Rivals cards render them as
+selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Rivalries as links (`href`).
+`compact` drops a duo's rounds column and a rivalry's avatars for a narrow card.
+
+**Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
+`MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it
+summarizes (a week or round page, the season, the Schedule tab), with a small `tracked` secondary link
+on the right ("All games →", "View all →") where there is a longer list to go to. A scheduled-game row
+ends in a *date block* — the weekday over a large day number, in the site accent — then the time and a
+countdown; the block appears only for a row that has a time. A list-only panel with nothing to list
+(Upcoming Games, To Be Scheduled, Top duos, Hottest Rivalries) is omitted; standings and Match history,
+which sit inside a panel that has other content, show an `EmptyState` line instead.
+
 **Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
 `size="sm"|"lg"`) for a "nothing here" message — `sm` for an inline one-liner inside an existing
 layout, `lg` for a standalone bordered/centered block. Don't hand-roll the class string per call

@@ -711,3 +711,46 @@ Metrics derived from pairing-specific data
 - `maxWinDiff` = Highest winDiff of any rivals in the league
 - `roundDiffPerGame` = |aRoundsWon - bRoundsWon| / games
 - `maxRoundDiff` = Highest roundDiffPerGame of any rivals in the league
+
+### Pairing rankings and personal matchups
+
+The home page's **Top duos** and **Hottest Rivalries** list the three highest-rated pairs, and
+`H2HSection`'s "Best Friends" / "Closest Rivals" cards the top five: both rank through `rankDuos()` /
+`rankRivals()` (`src/lib/queries/h2h.ts`) on the Friends Rating and Rival Rating above, each shown
+as the rating × 100, rounded. Only pairs that have played together (duos) or met (rivals) are ranked.
+
+A player's own two matchups on the home page's **My Stats** are computed from the same data:
+
+- **Best friend** (`bestFriendOf()`) — the partner with the highest Friends Rating among the duos
+  the player is in, shown with their record together. Ties go to more games together, then the
+  lower player id.
+- **Worst nightmare** (`worstNightmareOf()`) — the opponent the player has lost to most, by margin:
+  losses minus wins against that opponent. Only an opponent with a positive margin (they have beaten
+  the player more often than the player has beaten them) qualifies, so a player with no losing
+  matchup has none. Ties go to more meetings, then the lower player id.
+
+## Home Page
+
+Figures that appear only on the home page.
+
+**Form** (the standings column) — a player's most recent results in the standings' season, newest
+first, up to five (`FORM_LENGTH`), as `W` / `L`. Only played regular-season matches count (the
+`isPlayedScore()` gate, no playoff games); "newest" is by week then match number, the order the
+player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
+`src/lib/queries/leaderboard.ts`.
+
+**My Stats** — career figures for the signed-in player: **Rank** is the place on the combined
+regular and gauntlet career leaderboard (`mergeLeaderboardRows()` of `getCareerLeaderboard()` and
+`getGauntletStats().career`, the Statistics page's default view) in `canonicalSort()` order; **W-L**
+and **ADR** come from the same merged row. **Match history** lists the last five played matches
+(`lastPlayed()`, `src/lib/queries/player.ts`) with the stored `final_score`, shirts first, as every
+match card shows it. `buildMyStats()` in `src/lib/queries/home.ts`.
+
+**Standings season** — the first active regular season; with none active, the latest finished one
+(highest season number). `pickStandingsSeason()` in `src/lib/queries/home.ts`.
+
+**Upcoming Games / To Be Scheduled** — see `getHomeGames()` in `src/lib/queries/home.ts`. A regular
+season shows every scheduled unplayed match plus the unscheduled ones in its current week
+(`getUpcomingGames()`); a gauntlet has no weeks, so every unscheduled bracket match counts. The
+Upcoming Games heading links to the current week's page (`findCurrentWeek()`) or, for a gauntlet,
+the first round with an unplayed match (`findCurrentGauntletRound()`).

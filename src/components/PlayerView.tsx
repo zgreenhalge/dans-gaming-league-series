@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { groupRoundsByMatch, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
+import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
@@ -16,7 +16,8 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
 import { useTabState, resolveTab } from './useTabState';
 import Sparkline from './Sparkline';
-import { CountdownTimer } from './CountdownTimer';
+import { NextMatchLink } from './NextMatchLink';
+import { WLChip } from './WLChip';
 import MatchupsTab from './MatchupsTab';
 import PlayerTrailsTab from './PlayerTrailsTab';
 import EhogTimeline from './EhogTimeline';
@@ -55,10 +56,6 @@ const GAUNTLET_PLACEMENTS: Record<1 | 2 | 3, string> = {
   2: '2nd Place',
   3: '3rd Place',
 };
-
-function isPlayed(r: PlayerHistoryRow): boolean {
-  return isPlayedScore(r.final_score) && r.rounds_played > 0;
-}
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
 function percentileOf(value: number, all: number[]): number {
@@ -188,7 +185,7 @@ export default function PlayerView({
     );
   }, [selectedSeason, history, includeRegular, includeGauntlet, regularToGauntlet]);
 
-  const last5 = useMemo(() => filtered.filter(isPlayed).slice(0, 5), [filtered]);
+  const last5 = useMemo(() => lastPlayed(filtered, 5), [filtered]);
 
   const filteredTrophies = useMemo(() => {
     const base = selectedSeason === 'all'
@@ -234,8 +231,9 @@ export default function PlayerView({
     [filtered, matchWeaponClassStats],
   );
   const filteredEconomyStats = useMemo(() => filterByMatchIds(economyStats, filtered), [filtered, economyStats]);
-  const playedHistory = useMemo(() => filtered.filter(isPlayed), [filtered]);
-  const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
+  const playedHistory = useMemo(() => filtered.filter(isPlayedHistoryRow), [filtered]);
+  const upcomingHistory = filtered.filter((r) => !isPlayedHistoryRow(r)).reverse();
+  const nextMatch = upcomingHistory[0] ?? null;
 
   const h2hData = useLiveH2HData(playedHistory, players);
   // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the
@@ -342,39 +340,22 @@ export default function PlayerView({
             <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
           ) : (
             last5.map((r, i) => (
-              <span key={r.id ?? i} className={`wl-chip wl-chip--sm ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
-                {r.is_win ? 'W' : 'L'}
-              </span>
+              <WLChip key={r.id ?? i} won={r.is_win} />
             ))
           )}
         </div>
       </div>
 
       {/* Next Match — below Last 5 */}
-      {upcomingHistory.length > 0 && (() => {
-        const next = upcomingHistory[0];
-        const opponents = next.faction === 'SHIRTS'
-          ? next.skins.map((p) => p.player_name).join(' & ') || 'TBD'
-          : next.shirts.map((p) => p.player_name).join(' & ') || 'TBD';
-        return (
-          <Link
-            href={`/matches/${next.match_id}`}
-            className="mb-4 inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
-          >
-            <span className="tracked text-[10px] text-[var(--color-text-secondary)] shrink-0">Next Match</span>
-            <div className="flex items-center gap-2 font-mono text-[12px] min-w-0">
-              {next.map && (
-                <span className="font-semibold text-[var(--color-text-primary)] truncate">{next.map}</span>
-              )}
-              <span className="text-[var(--color-text-secondary)] shrink-0">vs</span>
-              <span className="text-[var(--color-text-primary)] truncate">{opponents}</span>
-              {next.scheduled_at && (
-                <CountdownTimer iso={next.scheduled_at} className="tracked text-[9px] text-[var(--color-text-secondary)]" />
-              )}
-            </div>
-          </Link>
-        );
-      })()}
+      {nextMatch && (
+        <NextMatchLink
+          className="mb-4"
+          matchId={nextMatch.match_id}
+          map={nextMatch.map}
+          opponents={opponentNames(nextMatch)}
+          scheduledAt={nextMatch.scheduled_at}
+        />
+      )}
 
       {/* Tab bar + filter controls */}
       <TabBar

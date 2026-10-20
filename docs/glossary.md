@@ -156,8 +156,9 @@ so you don't have to reverse-engineer them from scratch each time.
   played, and only once a demo's been parsed into kills (`matchKills.length > 0` — see
   `MatchTabView.tsx`); a played match with no parsed demo shows neither tab.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
-  (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
-  its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
+  (`H2HSection.tsx`) and the home page's Top duos / Hottest Rivalries rank pairs (both through
+  `rankDuos()`/`rankRivals()`), and how the `H2HMatrix` colors its cells. Shared via
+  `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
   Each metric that feeds the score (games played, wins, round win rate, meetings,
   win-difference) lives on its own scale — raw counts can run into the dozens, rates top
   out at 100, differences shrink toward 0 as a rivalry gets closer. To combine them into
@@ -165,6 +166,17 @@ so you don't have to reverse-engineer them from scratch each time.
   across all eligible pairs* (e.g. `maxRwr` = the highest round win rate anyone posted),
   turning every term into a 0–1 "how close to the best?" fraction before the weights
   (0.5 / 0.3 / 0.2, etc.) are applied. `Math.max(1, ...)` guards the empty-data case.
+- **My Stats** — the home page's panel for the signed-in player: career rank, W-L and ADR, Next
+  Match, **Best friend** (their highest-rated partner), **Worst nightmare** (the opponent they've
+  lost to most) and Match history. Career-scoped, not season-scoped. Definitions in
+  [`calculations.md`](./calculations.md#home-page). Signed out, the panel is a blurred placeholder
+  with a Login prompt.
+- **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating,
+  games and W-L for a duo; matches and rounds won on each side for a rivalry), the title linking to the Statistics
+  H2H tab and each row to that pair's H2H matchup (`/statistics?tab=h2h&a=…&b=…`, `&type=opponent` for a
+  rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads).
+- **Form** — a player's last five results in the standings' season, newest first, as `W`/`L` (the
+  home standings column). Not the same as the player page's **Last 5**, which spans every season.
 - **Scouting report** — pre-match prep view (`getMatchScoutingData()` → `ScoutingReport.tsx`)
   showing each upcoming player's recent form/history before a match is played. Only shown for an
   unplayed match — see **Match H2H tab** above for what a match's own tab shows once it's played.
@@ -215,7 +227,8 @@ so you don't have to reverse-engineer them from scratch each time.
 | Breadcrumb trails and week/round/group URLs | `src/lib/crumbs.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
-| Home page Upcoming Games panel (scheduled matches soonest-first, plus unplayed matches still needing a time) | `getUpcomingGames()` (`src/lib/queries/schedule.ts`, regular season, anchored on `findCurrentWeek()`) / `getUpcomingGauntletGames()` (`src/lib/queries/gauntlet.ts`, gauntlet — no weekly structure to anchor on, so every unscheduled bracket match qualifies), rendered by `src/components/UpcomingGamesPanel.tsx` |
+| Home page data (Upcoming Games / To Be Scheduled, standings season, My Stats) | `src/lib/queries/home.ts` — `getHomeGames()` (over `getUpcomingGames()` in `queries/schedule.ts` for a regular season, anchored on `findCurrentWeek()`; `getUpcomingGauntletGames()` in `queries/gauntlet.ts` for a gauntlet, which has no weekly structure so every unscheduled bracket match qualifies), `pickStandingsSeason()`, `getMyStats()`; Form from `getSeasonForm()` (`queries/leaderboard.ts`); pair rankings from `rankDuos()`/`rankRivals()`/`bestFriendOf()`/`worstNightmareOf()` (`queries/h2h.ts`) |
+| Home page panels | `src/app/page.tsx` composing `src/components/UpcomingGamesPanel.tsx`, `HomeStandingsPanel.tsx`, `MyStatsPanel.tsx` (+ `MyStatsLockedPanel`), `TopPairsPanels.tsx` (rows from `H2HRows.tsx`, shared with `H2HSection`) and `NextMatchLink.tsx` (shared with the player page) |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
 | H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/MatchupDetail.tsx` |
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |

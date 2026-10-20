@@ -20,6 +20,30 @@ export function gauntletHref(hubSeasonId: number): string {
   return `/seasons/${hubSeasonId}?view=gauntlet`;
 }
 
+/** The season hub's Schedule tab. */
+export function seasonScheduleHref(hubSeasonId: number): string {
+  return `${seasonHref(hubSeasonId)}?tab=schedule`;
+}
+
+/** The season hub's Gauntlet view opened on its Schedule tab. */
+export function gauntletScheduleHref(hubSeasonId: number): string {
+  return `${gauntletHref(hubSeasonId)}&tab=schedule`;
+}
+
+/** The Statistics page's H2H tab — the career-wide H2H overview. */
+export function careerH2HHref(): string {
+  return '/statistics?tab=h2h';
+}
+
+/** A pair's H2H matchup on a page that renders `H2HSection` — `basePath` is `/statistics` (career)
+ *  or a season hub (`seasonHref()`). Writes the `a`/`b`/`type` params `useH2HPairUrlState()` reads:
+ *  names, with `type` omitted for the default `'partner'`. */
+export function h2hPairHref(basePath: string, aName: string, bName: string, type: 'partner' | 'opponent'): string {
+  const params = new URLSearchParams({ tab: 'h2h', a: aName, b: bName });
+  if (type === 'opponent') params.set('type', 'opponent');
+  return `${basePath}?${params.toString()}`;
+}
+
 export function weekHref(hubSeasonId: number, weekId: number): string {
   return `/seasons/${hubSeasonId}/weeks/${weekId}`;
 }

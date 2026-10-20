@@ -142,6 +142,82 @@ export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => strin
   };
 }
 
+/** A duo with its 0–100 friendship rating (`duoBlendedScorer()` ×100, the number `H2HSection`'s
+ *  rating circle shows). */
+export interface RankedDuo {
+  duo: DuoStats;
+  rating: number;
+}
+
+/** A rivalry with its 0–100 rivalry rating (`rivalBlendedScorer()` ×100). */
+export interface RankedRival {
+  rival: H2HStats;
+  rating: number;
+}
+
+/** The `limit` highest-scoring `items`, best first, each built into a `R` with its score as a
+ *  rounded 0–100 rating. */
+function rankBy<T, R>(items: T[], score: (item: T) => number, limit: number, make: (item: T, rating: number) => R): R[] {
+  return items
+    .map((item) => ({ item, raw: score(item) }))
+    .sort((x, y) => y.raw - x.raw)
+    .slice(0, limit)
+    .map(({ item, raw }) => make(item, Math.round(raw * 100)));
+}
+
+/**
+ * The `limit` highest-rated duos (the "Best Friends" ranking) — only pairs that have played together,
+ * normalised against the full `duos` set so the rating matches the one shown beside any other
+ * ranking of the same data. Shared by `H2HSection` and the home page's Top duos panel.
+ */
+export function rankDuos(duos: DuoStats[], limit: number): RankedDuo[] {
+  return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit, (duo, rating) => ({ duo, rating }));
+}
+
+/** The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. */
+export function rankRivals(rivals: H2HStats[], limit: number): RankedRival[] {
+  return rankBy(rivals.filter((r) => r.meetings > 0), rivalBlendedScorer(rivals), limit, (rival, rating) => ({ rival, rating }));
+}
+
+/** One player's standing against a single other player, from that player's side. */
+export interface PersonalMatchup {
+  otherId: number;
+  wins: number;
+  losses: number;
+}
+
+/**
+ * The partner `playerId` has the highest friendship rating with (`duoBlendedScorer()`, normalised
+ * against the full `duos` set), with their record together. `null` when the player has no
+ * partnered games. Ties break on more games together, then the lower partner id.
+ */
+export function bestFriendOf(duos: DuoStats[], playerId: number): PersonalMatchup | null {
+  const score = duoBlendedScorer(duos);
+  const [best] = duos
+    .filter((d) => d.gamesPlayed > 0 && (d.playerA === playerId || d.playerB === playerId))
+    .map((d) => ({ otherId: d.playerA === playerId ? d.playerB : d.playerA, wins: d.wins, losses: d.losses, games: d.gamesPlayed, score: score(d) }))
+    .sort((x, y) => y.score - x.score || y.games - x.games || x.otherId - y.otherId);
+  return best ? { otherId: best.otherId, wins: best.wins, losses: best.losses } : null;
+}
+
+/**
+ * The opponent `playerId` has the worst record against — the largest losses-minus-wins margin, so
+ * only an opponent who has actually beaten the player more often than not qualifies (`null`
+ * otherwise). Ties break on more meetings, then the lower opponent id.
+ */
+export function worstNightmareOf(rivals: H2HStats[], playerId: number): PersonalMatchup | null {
+  const [worst] = rivals
+    .filter((r) => r.meetings > 0 && (r.playerA === playerId || r.playerB === playerId))
+    .map((r) => {
+      const asA = r.playerA === playerId;
+      const wins = asA ? r.aWins : r.bWins;
+      const losses = asA ? r.bWins : r.aWins;
+      return { otherId: asA ? r.playerB : r.playerA, wins, losses, margin: losses - wins };
+    })
+    .filter((m) => m.margin > 0)
+    .sort((x, y) => y.margin - x.margin || y.wins + y.losses - (x.wins + x.losses) || x.otherId - y.otherId);
+  return worst ? { otherId: worst.otherId, wins: worst.wins, losses: worst.losses } : null;
+}
 
 /**
  * Computes head-to-head relationship data — partner records (`duos`) and

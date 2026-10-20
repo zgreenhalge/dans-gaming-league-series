@@ -8,7 +8,7 @@ import { useTabState } from './useTabState';
 import { useH2HPairUrlState } from './useH2HPairUrlState';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
-import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, tabCls, filterByMatchIds } from '@/lib/util';
+import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, tabCls, filterByMatchIds } from '@/lib/util';
 import { useLiveH2HData } from './useLiveH2HData';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
@@ -19,38 +19,6 @@ import TabBar from './TabBar';
 type Tab = 'leaderboard' | 'stats' | 'advanced' | 'h2h';
 
 const CAREER_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 'h2h'];
-
-function mergeRows(
-  a: LeaderboardRowWithId[],
-  b: LeaderboardRowWithId[],
-): LeaderboardRowWithId[] {
-  const map = new Map<number, LeaderboardRowWithId>();
-  for (const row of [...a, ...b]) {
-    const prev = map.get(row.player_id);
-    if (!prev) {
-      map.set(row.player_id, { ...row });
-      continue;
-    }
-    const totals = {
-      matches_played: prev.matches_played + row.matches_played,
-      matches_won: prev.matches_won + row.matches_won,
-      matches_lost: prev.matches_lost + row.matches_lost,
-      total_kills: prev.total_kills + row.total_kills,
-      total_assists: prev.total_assists + row.total_assists,
-      total_deaths: prev.total_deaths + row.total_deaths,
-      total_damage: prev.total_damage + row.total_damage,
-      total_rounds_played: prev.total_rounds_played + row.total_rounds_played,
-      total_rounds_won: prev.total_rounds_won + row.total_rounds_won,
-    };
-    map.set(row.player_id, {
-      ...prev,
-      season_id: -1,
-      ...totals,
-      ...deriveRates(totals),
-    });
-  }
-  return Array.from(map.values());
-}
 
 export default function CareerStatsView({
   regularSeasons,
@@ -97,7 +65,7 @@ export default function CareerStatsView({
 
   const rows = useMemo<LeaderboardRowWithId[]>(() => {
     if (selectedSeason === 'all') {
-      if (includeRegular && includeGauntlet) return mergeRows(careerRows, gauntletCareerRows);
+      if (includeRegular && includeGauntlet) return mergeLeaderboardRows(careerRows, gauntletCareerRows);
       if (includeRegular) return careerRows;
       return gauntletCareerRows;
     }
@@ -106,7 +74,7 @@ export default function CareerStatsView({
     const gnt = includeGauntlet
       ? (pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[selectedSeason]) ?? []
       : [];
-    if (reg.length > 0 && gnt.length > 0) return mergeRows(reg, gnt);
+    if (reg.length > 0 && gnt.length > 0) return mergeLeaderboardRows(reg, gnt);
     return reg.length > 0 ? reg : gnt;
   }, [selectedSeason, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
 

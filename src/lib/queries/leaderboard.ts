@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, deriveRates, deriveRwr } from '../util';
+import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 
@@ -473,3 +473,61 @@ export const getAllLeaderboards = cache(async (): Promise<
 
   return out;
 });
+
+/** How many results a player's Form shows. */
+const FORM_LENGTH = 5;
+
+/**
+ * Each player's most recent results, newest first (`true` = win) — the standings Form column. Pure
+ * core of `getSeasonForm()`: `matches` are the season's played matches in any order, `stats` the
+ * `is_win` of every player in them. Newest is by week then match number, the order the player
+ * page's "Last 5" uses. A player with fewer than `limit` played matches gets what they have.
+ */
+export function buildSeasonForm(
+  matches: { id: number; weekNumber: number; matchNumber: number }[],
+  stats: { match_id: number; player_id: number; is_win: boolean }[],
+  limit: number = FORM_LENGTH,
+): Map<number, boolean[]> {
+  const rank = new Map<number, number>();
+  [...matches]
+    .sort((a, b) => b.weekNumber - a.weekNumber || b.matchNumber - a.matchNumber)
+    .forEach((m, i) => rank.set(m.id, i));
+  const form = new Map<number, boolean[]>();
+  for (const s of stats
+    .filter((s) => rank.has(s.match_id))
+    .sort((a, b) => rank.get(a.match_id)! - rank.get(b.match_id)!)) {
+    const results = form.get(s.player_id) ?? [];
+    if (results.length < limit) results.push(s.is_win);
+    form.set(s.player_id, results);
+  }
+  return form;
+}
+
+/**
+ * `buildSeasonForm()` for one regular season's played matches (gauntlet and playoff matches are
+ * excluded, matching the standings the column sits in).
+ */
+export async function getSeasonForm(seasonId: number): Promise<Map<number, boolean[]>> {
+  const weeks = await getWeekLookup([seasonId]);
+  const weekIds = Array.from(weeks.keys());
+  if (weekIds.length === 0) return new Map();
+
+  const matchRows = await batchedIn<{ id: number; week_id: number; match_number: number; final_score: string | null; is_playoff_game: boolean }>(
+    'matches',
+    'week_id',
+    weekIds,
+    'id, week_id, match_number, final_score, is_playoff_game',
+  );
+  const matches = matchRows
+    .filter((m) => !m.is_playoff_game && isPlayedScore(m.final_score))
+    .map((m) => ({ id: m.id, weekNumber: weeks.get(m.week_id)!.week_number, matchNumber: m.match_number }));
+  if (matches.length === 0) return new Map();
+
+  const stats = await batchedIn<{ match_id: number; player_id: number; is_win: boolean }>(
+    'player_match_stats',
+    'match_id',
+    matches.map((m) => m.id),
+    'match_id, player_id, is_win',
+  );
+  return buildSeasonForm(matches, stats);
+}

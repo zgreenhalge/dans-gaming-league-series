@@ -810,6 +810,15 @@ export function getUpcomingGauntletGames(rounds: GauntletRound[]): UpcomingGames
   };
 }
 
+/** The round "happening now" in a gauntlet — the first round (by `round_number`) that still has an
+ *  unplayed match, else the last round. `null` when there are no rounds. The home page's Upcoming
+ *  Games heading links to it. */
+export function findCurrentGauntletRound(rounds: GauntletRound[]): GauntletRound | null {
+  if (rounds.length === 0) return null;
+  const ordered = [...rounds].sort((a, b) => a.round_number - b.round_number);
+  return ordered.find((r) => r.matches.some((m) => !isPlayedScore(m.final_score))) ?? ordered[ordered.length - 1];
+}
+
 /** Adapts a `GauntletMatch` into the shared `UpcomingGameRow` shape the Upcoming Games panel
  *  renders — `GauntletMatch` carries full per-player stat rows (`shirts_stats`/`skins_stats`)
  *  rather than the `{ player_id, player_name }[]` roster shape `MatchWithRoster` (and the panel)
