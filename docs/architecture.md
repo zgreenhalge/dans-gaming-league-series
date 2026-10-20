@@ -27,7 +27,8 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/players` | Player index |
 | `/players/[id]` | Player profile — career stats + per-season breakdown + match log. Shows a "Formerly …" line if the player has past names. The viewer can rename themself in place here (`PlayerNameEditor`) if it's their own profile |
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
-| `/schedule-lab` | Schedule Lab — pick a roster (or load a regular season's participants) and fixed-length format settings, generate schedule previews in the browser, and compare their scorecards side by side; nothing is saved. Public and read-only, unlisted (`noindex`). See [Schedule Lab](#schedule-lab-fixed-length-season-formats) |
+| `/tools` | Tools index — a card per open tool, from `TOOLS` (`src/lib/tools.ts`). Tools are public sandbox pages with no sign-in and no side effects: each reads league data and computes in the browser. Linked from the side nav |
+| `/tools/schedule-lab` | Schedule Lab — pick a roster (or load a regular season's participants) and fixed-length format settings, generate schedule previews in the browser, and compare their scorecards side by side; nothing is saved. See [Schedule Lab](#schedule-lab-fixed-length-season-formats) |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
 | `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), a Quick actions panel (shortcuts for global tools like bulk demo re-parse), an Activity feed (every `background_jobs` row across all four pipelines plus live `ops_errors`, one newest-first list tagged Errored / In Progress / Completed and narrowed by tag/type/range filter chips, plus a separate History view), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
@@ -54,7 +55,7 @@ Data and shaping are split: `getWeekView()` / `getGauntletStageData()` (`src/lib
 
 ### Schedule Lab (fixed-length season formats)
 
-The round-robin generator (`buildSeasonSchedule()`, `season-schedule.ts`) makes every pair partner exactly once, so a season's length is set by its roster: N players need N−1 or N weeks. `buildFormatPlan()` (`src/lib/season-format.ts`) is the fixed-length alternative: the admin picks the length and the planner covers as much of the league as that length allows. It is pure — players with their EHOG state in, a plan and a scorecard out — and `/schedule-lab` (`ScheduleLabView`) runs it in the browser on `getScheduleLabData()` (`queries/schedule-lab.ts`), so previews can be generated and compared freely without touching the database.
+The round-robin generator (`buildSeasonSchedule()`, `season-schedule.ts`) makes every pair partner exactly once, so a season's length is set by its roster: N players need N−1 or N weeks. `buildFormatPlan()` (`src/lib/season-format.ts`) is the fixed-length alternative: the admin picks the length and the planner covers as much of the league as that length allows. It is pure — players with their EHOG state in, a plan and a scorecard out — and `/tools/schedule-lab` (`ScheduleLabView`) runs it in the browser on `getScheduleLabData()` (`queries/schedule-lab.ts`), so previews can be generated and compared freely without touching the database.
 
 Settings (`SeasonFormatSettings`):
 
