@@ -174,7 +174,8 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating,
   games and W-L for a duo; matches and rounds won on each side for a rivalry), the title linking to the Statistics
   H2H tab and each row to that pair's H2H matchup (`/statistics?tab=h2h&a=…&b=…`, `&type=opponent` for a
-  rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads).
+  rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads; `h2hPairHref()` and the hook
+  share their names and default in `src/lib/h2hPairParams.ts`).
 - **Form** — a player's last five results in the standings' season, newest first, as `W`/`L` (the
   home standings column). Not the same as the player page's **Last 5**, which spans every season.
 - **Scouting report** — pre-match prep view (`getMatchScoutingData()` → `ScoutingReport.tsx`)
@@ -227,7 +228,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Breadcrumb trails and week/round/group URLs | `src/lib/crumbs.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
-| Home page data (Upcoming Games / To Be Scheduled, standings season, My Stats) | `src/lib/queries/home.ts` — `getHomeGames()` (over `getUpcomingGames()` in `queries/schedule.ts` for a regular season, anchored on `findCurrentWeek()`; `getUpcomingGauntletGames()` in `queries/gauntlet.ts` for a gauntlet, which has no weekly structure so every unscheduled bracket match qualifies), `pickStandingsSeason()`, `getMyStats()`; Form from `getSeasonForm()` (`queries/leaderboard.ts`); pair rankings from `rankDuos()`/`rankRivals()`/`bestFriendOf()`/`worstNightmareOf()` (`queries/h2h.ts`) |
+| Home page data (Upcoming Games / To Be Scheduled, standings season, My Stats) | `src/lib/queries/home.ts` — `getHomeGames()` / `getHomeGamesFor()` (over `getUpcomingGames()` in `queries/schedule.ts` for a regular season, anchored on `findCurrentWeek()`; `getUpcomingGauntletGames()` in `queries/gauntlet.ts` for a gauntlet, which has no weekly structure so every unscheduled bracket match qualifies), `resolveHomeSeasons()` / `pickStandingsSeason()` (`queries/seasons.ts`, the one rule for the current season), `getMyStats()` (`queries/myStats.ts`); Form from `getSeasonForm()` (`queries/leaderboard.ts`); pair rankings from `rankDuos()`/`rankRivals()`/`bestFriendOf()`/`worstNightmareOf()` (`queries/h2h.ts`) |
 | Home page panels | `src/app/page.tsx` composing `src/components/UpcomingGamesPanel.tsx`, `HomeStandingsPanel.tsx`, `MyStatsPanel.tsx` (+ `MyStatsLockedPanel`), `TopPairsPanels.tsx` (rows from `H2HRows.tsx`, shared with `H2HSection`) and `NextMatchLink.tsx` (shared with the player page) |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
 | H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/MatchupDetail.tsx` |

@@ -16,6 +16,7 @@ export * from './trophies';
 export * from './maps';
 export * from './h2h';
 export * from './home';
+export * from './myStats';
 export * from './ehog';
 export * from './sabremetrics';
 export * from './replay';

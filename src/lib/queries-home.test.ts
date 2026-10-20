@@ -1,6 +1,6 @@
 /**
- * Tests for the home page's data layer: `queries/home.ts` (`getHomeGames`, `pickStandingsSeason`,
- * `buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` (`queries/leaderboard.ts`),
+ * Tests for the home page's data layer: `queries/home.ts` (`getHomeGames`), `queries/seasons.ts` (`pickStandingsSeason`),
+ * `queries/myStats.ts` (`buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` (`queries/leaderboard.ts`),
  * `rankDuos` / `rankRivals` / `bestFriendOf` / `worstNightmareOf` (`queries/h2h.ts`),
  * `findCurrentGauntletRound` (`queries/gauntlet.ts`) and the history-row helpers in
  * `queries/player.ts`. The DB-backed functions run against the shared fixture league; the pure ones

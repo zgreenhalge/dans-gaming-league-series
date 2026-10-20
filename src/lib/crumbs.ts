@@ -1,3 +1,4 @@
+import { h2hPairNameParams, type H2HPairType } from './h2hPairParams';
 import { seasonTitle, weekLabel } from './util';
 
 export interface Crumb {
@@ -36,11 +37,10 @@ export function careerH2HHref(): string {
 }
 
 /** A pair's H2H matchup on a page that renders `H2HSection` — `basePath` is `/statistics` (career)
- *  or a season hub (`seasonHref()`). Writes the `a`/`b`/`type` params `useH2HPairUrlState()` reads:
- *  names, with `type` omitted for the default `'partner'`. */
-export function h2hPairHref(basePath: string, aName: string, bName: string, type: 'partner' | 'opponent'): string {
-  const params = new URLSearchParams({ tab: 'h2h', a: aName, b: bName });
-  if (type === 'opponent') params.set('type', 'opponent');
+ *  or a season hub (`seasonHref()`). Writes the `a`/`b`/`type` params `useH2HPairUrlState()` reads
+ *  (encoding in `h2hPairParams.ts`). */
+export function h2hPairHref(basePath: string, aName: string, bName: string, type: H2HPairType): string {
+  const params = new URLSearchParams({ tab: 'h2h', ...h2hPairNameParams(aName, bName, type) });
   return `${basePath}?${params.toString()}`;
 }
 

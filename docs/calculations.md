@@ -744,12 +744,12 @@ regular and gauntlet career leaderboard (`mergeLeaderboardRows()` of `getCareerL
 `getGauntletStats().career`, the Statistics page's default view) in `canonicalSort()` order; **W-L**
 and **ADR** come from the same merged row. **Match history** lists the last five played matches
 (`lastPlayed()`, `src/lib/queries/player.ts`) with the stored `final_score`, shirts first, as every
-match card shows it. `buildMyStats()` in `src/lib/queries/home.ts`.
+match card shows it. `buildMyStats()` in `src/lib/queries/myStats.ts`.
 
 **Standings season** — the first active regular season; with none active, the latest finished one
-(highest season number). `pickStandingsSeason()` in `src/lib/queries/home.ts`.
+(highest season number). `resolveHomeSeasons()` (`pickStandingsSeason()`) in `src/lib/queries/seasons.ts`, which also picks the Upcoming Games season.
 
-**Upcoming Games / To Be Scheduled** — see `getHomeGames()` in `src/lib/queries/home.ts`. A regular
+**Upcoming Games / To Be Scheduled** — see `getHomeGames()` in `src/lib/queries/home.ts` (over `resolveHomeSeasons()`). A regular
 season shows every scheduled unplayed match plus the unscheduled ones in its current week
 (`getUpcomingGames()`); a gauntlet has no weeks, so every unscheduled bracket match counts. The
 Upcoming Games heading links to the current week's page (`findCurrentWeek()`) or, for a gauntlet,

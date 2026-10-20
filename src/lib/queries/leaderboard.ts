@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
+import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 
@@ -480,8 +480,8 @@ const FORM_LENGTH = 5;
 /**
  * Each player's most recent results, newest first (`true` = win) — the standings Form column. Pure
  * core of `getSeasonForm()`: `matches` are the season's played matches in any order, `stats` the
- * `is_win` of every player in them. Newest is by week then match number, the order the player
- * page's "Last 5" uses. A player with fewer than `limit` played matches gets what they have.
+ * `is_win` of every player in them. Newest is by `compareWithinSeasonDesc()`, the within-season
+ * order the player page's "Last 5" uses. A player with fewer than `limit` played matches gets what they have.
  */
 export function buildSeasonForm(
   matches: { id: number; weekNumber: number; matchNumber: number }[],
@@ -490,7 +490,7 @@ export function buildSeasonForm(
 ): Map<number, boolean[]> {
   const rank = new Map<number, number>();
   [...matches]
-    .sort((a, b) => b.weekNumber - a.weekNumber || b.matchNumber - a.matchNumber)
+    .sort(compareWithinSeasonDesc)
     .forEach((m, i) => rank.set(m.id, i));
   const form = new Map<number, boolean[]>();
   for (const s of stats

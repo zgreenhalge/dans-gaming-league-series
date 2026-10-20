@@ -3,11 +3,12 @@
 import type { DuoStats, H2HStats } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer } from '@/lib/queries';
 import { firstName } from '@/lib/util';
+import type { H2HPairType } from '@/lib/h2hPairParams';
 
 export interface H2HPair {
   a: number;
   b: number;
-  type: 'partner' | 'opponent';
+  type: H2HPairType;
 }
 
 function samePair(x: H2HPair | null, a: number, b: number): boolean {
