@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { CountdownTimer } from './CountdownTimer';
 import { PlayerName } from './PlayerName';
+import { PanelHeader, PanelLink } from './PanelHeader';
 import { toSentenceCase } from '@/lib/maps';
 import { FeatureMatchIcon } from './FeatureMatch';
 import type { UpcomingGameRow } from '@/lib/queries';
@@ -78,8 +79,6 @@ function GameRow({
   );
 }
 
-const HEADING_CLS = 'font-display text-[18px] font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-site-accent)] transition-colors';
-
 /** A single bordered block of `GameRow`s under a linked title — the shape shared by the "Upcoming
  *  Games" and "To Be Scheduled" blocks. `allGamesHref` adds an "All games →" link to the right of
  *  the title. Renders nothing when `games` is empty, so a caller doesn't need its own parallel
@@ -102,19 +101,11 @@ function GameBlock({
   if (games.length === 0) return null;
   return (
     <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${className ? ` ${className}` : ''}`}>
-      <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)] flex items-baseline justify-between gap-3">
-        <Link href={titleHref} className={HEADING_CLS}>
-          {title}
-        </Link>
-        {allGamesHref && (
-          <Link
-            href={allGamesHref}
-            className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-site-accent)] transition-colors"
-          >
-            All games →
-          </Link>
-        )}
-      </div>
+      <PanelHeader
+        title={title}
+        titleHref={titleHref}
+        right={allGamesHref && <PanelLink href={allGamesHref}>All games →</PanelLink>}
+      />
       {games.map((g) => (
         <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
       ))}

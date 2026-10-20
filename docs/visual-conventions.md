@@ -224,7 +224,12 @@ selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Riv
 **Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
 `MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it
 summarizes (a week or round page, the season, the Schedule tab), with a small `tracked` secondary link
-on the right ("All games →", "View all →") where there is a longer list to go to. A scheduled-game row
+on the right ("All games →", "View all →") where there is a longer list to go to. The shared
+**`PanelHeader`** (`src/components/PanelHeader.tsx`) draws that strip — `title`, `titleHref`, a `right`
+slot, and `children` beside the title for pills (`align="center"` for a pill row, `baseline` otherwise)
+— and **`PanelLink`** is the secondary link (`hover="primary"` for one that sits on a plain page rather
+than a panel, as in `PlayerView`'s stats tab). `UpcomingGamesPanel`'s `GameBlock`, `HomeStandingsPanel`,
+`MyStatsPanel` and `PlayerView` use them; don't re-type the class strings. A scheduled-game row
 ends in a *date block* — the weekday over a large day number, in the site accent — then the time and a
 countdown; the block appears only for a row that has a time. A list-only panel with nothing to list
 (Upcoming Games, To Be Scheduled, Top duos, Hottest Rivalries) is omitted; standings and Match history,

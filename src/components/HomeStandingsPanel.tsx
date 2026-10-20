@@ -6,6 +6,7 @@ import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 
 import { StatusPill } from './StatusPill';
+import { PanelHeader, PanelLink } from './PanelHeader';
 
 /** A player's recent results, newest first, as colored `W` / `L` letters — the standings Form column. */
 export function FormCell({ results }: { results: boolean[] }) {
@@ -52,28 +53,19 @@ export function HomeStandingsPanel({
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            href={seasonHref}
-            className="font-display text-[18px] font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-site-accent)] transition-colors"
-          >
-            {title}
-          </Link>
-          <StatusPill variant={live ? 'live' : 'neutral'}>{live ? 'Live' : 'Final'}</StatusPill>
-          {gauntletHref && (
-            <StatusPill variant="amber" href={gauntletHref}>
-              Gauntlet live
-            </StatusPill>
-          )}
-        </div>
-        <Link
-          href={seasonHref}
-          className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-site-accent)] transition-colors shrink-0"
-        >
-          View all →
-        </Link>
-      </div>
+      <PanelHeader
+        title={title}
+        titleHref={seasonHref}
+        align="center"
+        right={<PanelLink href={seasonHref}>View all →</PanelLink>}
+      >
+        <StatusPill variant={live ? 'live' : 'neutral'}>{live ? 'Live' : 'Final'}</StatusPill>
+        {gauntletHref && (
+          <StatusPill variant="amber" href={gauntletHref}>
+            Gauntlet live
+          </StatusPill>
+        )}
+      </PanelHeader>
       {rows.length === 0 ? (
         <EmptyState message="No standings yet." className="px-6 py-4" />
       ) : (
