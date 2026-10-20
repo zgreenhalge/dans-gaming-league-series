@@ -15,7 +15,6 @@ import {
   type FormatGame,
   type FormatHalf,
   type FormatPlan,
-  type FormatPlayerSeason,
   type FormatRecord,
   type HalfwayRedraft,
   type SeasonFormatSettings,
@@ -74,13 +73,13 @@ const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string
   { label: 'Most games in a week', title: 'The busiest single week any one player has', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
   {
     label: 'Doubleheader weeks',
-    title: 'Per player, fewest to most: weeks in a second match or group, which pay back a bye',
-    value: (p) => range(p.plan.scorecard.doubleheaderWeeks),
+    title: 'Weeks where someone plays twice — a second match, or a second group in a group-week season — paying back a bye',
+    value: (p) => String(p.plan.scorecard.doubleheaderWeeks),
   },
   {
     label: 'Bye weeks',
-    title: 'Per player, fewest to most: weeks with no match or group, when a division doesn’t divide by 4',
-    value: (p) => range(p.plan.scorecard.byeWeeks),
+    title: 'Weeks where someone sits out, when a division doesn’t divide into whole matches or groups',
+    value: (p) => String(p.plan.scorecard.byeWeeks),
   },
   {
     label: 'Different teammates',
@@ -90,7 +89,7 @@ const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string
   { label: 'Pairs who partner', value: (p) => `${p.plan.scorecard.pairsPartnered} / ${p.plan.scorecard.pairs}` },
   {
     label: 'Players who miss someone',
-    title: 'Players who never play with or against at least one other player all season — the schedule’s player table names who',
+    title: 'Players who never play with or against at least one other player all season',
     value: (p) => `${p.plan.scorecard.playersMissingSomeone} / ${playerCount(p)}`,
   },
   { label: 'Repeat teammate pairs', title: 'Pairs who are teammates more than once', value: (p) => String(p.plan.scorecard.repeatTeammatePairs) },
@@ -434,7 +433,6 @@ const PlanSchedule = memo(function PlanSchedule({ preview, namesById }: { previe
         <SectionLabel>Preview {previewLetter(preview)} schedule</SectionLabel>
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview)}</div>
       </div>
-      <PlayerSeasons players={plan.scorecard.players} name={name} />
       {plan.halves.map((half) => (
         <div key={half.half} className="flex flex-col gap-4">
           {multiDivision && (
@@ -496,48 +494,6 @@ const PlanSchedule = memo(function PlanSchedule({ preview, namesById }: { previe
     </section>
   );
 });
-
-/** Each player's own season: games, doubleheaders and byes, teammates, sides, and who they never meet. */
-function PlayerSeasons({ players, name }: { players: FormatPlayerSeason[]; name: (id: number) => string }) {
-  const byName = [...players].sort((a, b) => name(a.playerId).localeCompare(name(b.playerId)));
-  return (
-    <div>
-      <SectionLabel>Players</SectionLabel>
-      <StatTable>
-        <thead>
-          <tr>
-            <Th sticky>Player</Th>
-            <Th align="right">Games</Th>
-            <Th align="right" title="Weeks in a second match or group">Doubleheaders</Th>
-            <Th align="right" title="Weeks with no match or group">Byes</Th>
-            <Th align="right">Busiest week</Th>
-            <Th align="right">Teammates</Th>
-            <Th align="right" title="Shirts games minus Skins games">Sides</Th>
-            <Th>Never meets</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {byName.map((p) => (
-            <Tr key={p.playerId}>
-              <Td align="left" mono={false} className="sticky-col">
-                {name(p.playerId)}
-              </Td>
-              <Td>{p.games}</Td>
-              <Td>{p.doubleheaderWeeks}</Td>
-              <Td>{p.byeWeeks}</Td>
-              <Td>{p.mostGamesInAWeek}</Td>
-              <Td>{p.teammates}</Td>
-              <Td>{p.sideBalance > 0 ? `+${p.sideBalance}` : p.sideBalance}</Td>
-              <Td align="left" muted={p.neverMeets.length === 0}>
-                {p.neverMeets.length === 0 ? 'Meets everyone' : p.neverMeets.map(name).sort().join(', ')}
-              </Td>
-            </Tr>
-          ))}
-        </tbody>
-      </StatTable>
-    </div>
-  );
-}
 
 function GameLine({ game, name }: { game: FormatGame; name: (id: number) => string }) {
   const pct = Math.round(game.shirtsWinProb * 100);

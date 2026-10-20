@@ -147,20 +147,37 @@ test('a doubleheader week never replays the same matchup in a 4-player division'
   }
 });
 
-test('every doubleheader pays back a bye, and never-meets match the pair count', () => {
-  for (const p of [plan(13, {}), plan(13, { weekShape: 'group' }), plan(13, { divisions: 2, halfwayShuffle: true })]) {
-    const label = JSON.stringify(p.settings);
-    const sc = p.scorecard;
-    assert.equal(sc.players.length, 13);
-    for (const ps of sc.players) {
-      assert.equal(ps.doubleheaderWeeks, ps.byeWeeks, `${label}: player ${ps.playerId} doubleheaders vs byes`);
-      for (const other of ps.neverMeets) {
-        assert.ok(sc.players.find((q) => q.playerId === other)!.neverMeets.includes(ps.playerId), `${label}: never-meets is symmetric`);
+/** Each player's per-week game counts across a plan. */
+function weeklyGames(p: FormatPlan): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  p.weeks.forEach((w, wi) => {
+    for (const d of w.divisions) {
+      for (const g of d.games) {
+        for (const id of [...g.shirts, ...g.skins]) {
+          const weeks = out.get(id) ?? Array.from({ length: p.weeks.length }, () => 0);
+          weeks[wi]++;
+          out.set(id, weeks);
+        }
       }
     }
-    assert.equal(sc.players.reduce((sum, ps) => sum + ps.neverMeets.length, 0), 2 * sc.pairsNeverMet);
-    assert.equal(sc.playersMissingSomeone, sc.players.filter((ps) => ps.neverMeets.length > 0).length);
-    assert.equal(sc.maxGamesInAWeek, Math.max(...sc.players.map((ps) => ps.mostGamesInAWeek)));
+  });
+  return out;
+}
+
+test('every doubleheader pays back a bye, and the scorecard counts the weeks they fall in', () => {
+  for (const p of [plan(13, {}), plan(13, { weekShape: 'group' }), plan(13, { divisions: 2, halfwayShuffle: true })]) {
+    const label = JSON.stringify(p.settings);
+    const usual = p.settings.weekShape === 'match' ? 1 : 2;
+    const perPlayer = weeklyGames(p);
+    for (const [id, weeks] of perPlayer) {
+      assert.equal(weeks.filter((c) => c > usual).length, weeks.filter((c) => c < usual).length, `${label}: player ${id} doubleheaders vs byes`);
+    }
+    const all = [...perPlayer.values()];
+    const weeksWhere = (test: (c: number) => boolean) => p.weeks.filter((_, wi) => all.some((weeks) => test(weeks[wi]))).length;
+    assert.equal(p.scorecard.doubleheaderWeeks, weeksWhere((c) => c > usual));
+    assert.equal(p.scorecard.byeWeeks, weeksWhere((c) => c < usual));
+    assert.equal(p.scorecard.maxGamesInAWeek, Math.max(...all.flat()));
+    assert.ok(p.scorecard.playersMissingSomeone <= Math.min(13, 2 * p.scorecard.pairsNeverMet));
   }
 });
 
@@ -169,8 +186,7 @@ test('group weeks give leftover players a bye, paid back by a second group anoth
     const p = plan(n, { weekShape: 'group' });
     assertSound(p, n, 16, 4);
     assertPods(p);
-    assert.ok(p.scorecard.byeWeeks.max > 0, `n=${n}: a roster not divisible by 4 has byes`);
-    for (const ps of p.scorecard.players) assert.equal(ps.doubleheaderWeeks, ps.byeWeeks);
+    assert.ok(p.scorecard.byeWeeks > 0, `n=${n}: a roster not divisible by 4 has bye weeks`);
   }
 });
 
