@@ -5,7 +5,7 @@ import { StatTable, Tr, Td, NameTd } from './StatTable';
 import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 
-const PILL_CLS = 'inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold border';
+import { StatusPill } from './StatusPill';
 
 /** A player's recent results, newest first, as colored `W` / `L` letters — the standings Form column. */
 export function FormCell({ results }: { results: boolean[] }) {
@@ -60,23 +60,11 @@ export function HomeStandingsPanel({
           >
             {title}
           </Link>
-          {live ? (
-            <span className={`${PILL_CLS} text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]`}>
-              <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
-              Live
-            </span>
-          ) : (
-            <span className={`${PILL_CLS} text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-[var(--color-border-primary)]`}>
-              Final
-            </span>
-          )}
+          <StatusPill variant={live ? 'live' : 'neutral'}>{live ? 'Live' : 'Final'}</StatusPill>
           {gauntletHref && (
-            <Link
-              href={gauntletHref}
-              className={`${PILL_CLS} text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)]`}
-            >
+            <StatusPill variant="amber" href={gauntletHref}>
               Gauntlet live
-            </Link>
+            </StatusPill>
           )}
         </div>
         <Link

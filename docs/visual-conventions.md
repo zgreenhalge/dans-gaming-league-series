@@ -63,6 +63,9 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 
 - **`.wl-chip` / `.wl-chip--{win,loss,pending}` / `.wl-chip--sm`** — the canonical W/L/pending badge.
   Don't build ad-hoc colored pill markup for match results — use these.
+- **`<StatusPill>`** (`src/components/StatusPill.tsx`) — the small bordered Live / Final / Gauntlet
+  pill: `variant="live"` (green, pulsing dot), `"neutral"` (grey) or `"amber"`; `href` makes it a link.
+  `StageStatusTag`, `SeasonStatusTag`, the seasons list and `HomeStandingsPanel` all render it.
 - **`.form-square` / `.form-dot`** (`--w` / `--l` modifiers) — recent-form history indicators
   (squares for emphasis, dots for compact inline use)
 - **`.player-name-me`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the

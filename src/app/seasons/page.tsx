@@ -14,6 +14,7 @@ import {
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
+import { StatusPill } from '@/components/StatusPill';
 import { seasonTitle, extractSeasonNumber, canonicalSort } from '@/lib/util';
 
 export const revalidate = 60;
@@ -47,10 +48,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
         className="lift-row block px-6 py-5 border-b border-[var(--color-border-tertiary)]"
       >
         <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]">
-            <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
-            Live
-          </span>
+          <StatusPill variant="live">Live</StatusPill>
         </div>
         <div className="font-display text-[28px] font-semibold leading-tight">
           {seasonTitle(season.name)}
