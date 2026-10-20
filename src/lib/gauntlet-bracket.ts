@@ -46,7 +46,7 @@ export interface BracketPlan {
  * behind the handoff's worked N=13 pods (A={2,7,8,13}, B={3,6,9,12}, C={4,5,10,11}) and the N=12
  * pair ({4,7,8,11}/{5,6,9,10}).
  */
-function snakeGroups(seeds: number[], numGroups: number): number[][] {
+export function snakeGroups(seeds: number[], numGroups: number): number[][] {
   const groups: number[][] = Array.from({ length: numGroups }, () => []);
   const blockSize = numGroups * 2;
   seeds.forEach((seed, i) => {

@@ -1,0 +1,125 @@
+{
+  "players": [
+    {
+      "playerId": 1,
+      "mu": 27,
+      "sigma": 6.8,
+      "ehogRating": 1450,
+      "name": "Alice"
+    },
+    {
+      "playerId": 2,
+      "mu": 25.3,
+      "sigma": 7.1,
+      "ehogRating": 1380,
+      "name": "Bob"
+    },
+    {
+      "playerId": 3,
+      "mu": 23.6,
+      "sigma": 7.4,
+      "ehogRating": 1290,
+      "name": "Carol"
+    },
+    {
+      "playerId": 4,
+      "mu": 23.9,
+      "sigma": 7.3,
+      "ehogRating": 1310,
+      "name": "Dave"
+    },
+    {
+      "playerId": 5,
+      "mu": 22.5,
+      "sigma": 7.8,
+      "ehogRating": 1200,
+      "name": "Erin"
+    },
+    {
+      "playerId": 6,
+      "mu": null,
+      "sigma": 8.3333333333,
+      "ehogRating": 1250,
+      "name": "Frank"
+    },
+    {
+      "playerId": 7,
+      "mu": 19.654007982690917,
+      "sigma": 8.3333333333,
+      "ehogRating": 33,
+      "name": "Grace"
+    },
+    {
+      "playerId": 8,
+      "mu": 19.654007982690917,
+      "sigma": 8.3333333333,
+      "ehogRating": 33,
+      "name": "Heidi"
+    }
+  ],
+  "rosters": [
+    {
+      "seasonId": 3,
+      "label": "Season 6",
+      "playerIds": [
+        1,
+        2,
+        3,
+        5,
+        6,
+        7
+      ],
+      "records": {}
+    },
+    {
+      "seasonId": 1,
+      "label": "Season 5",
+      "playerIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "records": {
+        "1": {
+          "wins": 1,
+          "losses": 0
+        },
+        "2": {
+          "wins": 1,
+          "losses": 0
+        },
+        "3": {
+          "wins": 0,
+          "losses": 1
+        },
+        "4": {
+          "wins": 0,
+          "losses": 1
+        }
+      }
+    }
+  ],
+  "careerRecords": {
+    "1": {
+      "wins": 1,
+      "losses": 0
+    },
+    "2": {
+      "wins": 1,
+      "losses": 0
+    },
+    "3": {
+      "wins": 0,
+      "losses": 1
+    },
+    "4": {
+      "wins": 0,
+      "losses": 1
+    }
+  }
+}

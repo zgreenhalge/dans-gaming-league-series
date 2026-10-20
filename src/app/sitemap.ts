@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { SITE_URL, matchUrl } from '@/lib/seo/site';
 import { getSeasons, getPlayersById, getMapLookup, getAllPlayedMatchIds, getStagePagePaths } from '@/lib/queries';
+import { TOOLS, toolHref } from '@/lib/tools';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [seasons, playersById, mapLookup, matchIds, stagePaths] = await Promise.all([
@@ -16,6 +17,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/statistics`, changeFrequency: 'daily', priority: 0.8 },
     { url: `${SITE_URL}/seasons`, changeFrequency: 'weekly', priority: 0.6 },
     { url: `${SITE_URL}/maps`, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${SITE_URL}/tools`, changeFrequency: 'monthly', priority: 0.4 },
+    ...TOOLS.map((t) => ({ url: `${SITE_URL}${toolHref(t.slug)}`, changeFrequency: 'monthly' as const, priority: 0.4 })),
   ];
 
   const seasonRoutes: MetadataRoute.Sitemap = seasons.map((s) => ({

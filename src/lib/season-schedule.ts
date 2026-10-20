@@ -121,8 +121,9 @@ function newOpponentPairCount(a: [number, number], b: [number, number], seen: Re
   return count;
 }
 
-/** Deterministic PRNG (mulberry32) so a retry attempt is reproducible from its seed alone. */
-function mulberry32(seed: number): () => number {
+/** Deterministic PRNG (mulberry32) so a retry attempt is reproducible from its seed alone. Shared
+ * with `season-format.ts`, whose search is seeded the same way. */
+export function mulberry32(seed: number): () => number {
   let a = seed;
   return () => {
     a |= 0;

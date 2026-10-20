@@ -5,6 +5,7 @@ export * from './seasons';
 export * from './feedback';
 export * from './season-schedule-draft';
 export * from './schedule';
+export * from './schedule-lab';
 export * from './match';
 export * from './admin';
 export * from './player';
