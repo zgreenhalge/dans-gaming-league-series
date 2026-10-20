@@ -13,7 +13,7 @@ import { SELECT_CLS } from './formStyles';
 
 const DEFAULT_QUALIFIERS = 12;
 
-const FATE_LABEL: Record<SeedFate, string> = { bye: 'Bye to the final', plays: 'Plays in', relegated: 'Relegated' };
+const FATE_LABEL: Record<SeedFate, string> = { bye: 'Bye to the final', plays: 'Plays in', wontQualify: "Won't qualify" };
 
 export function GauntletPreviewView({ seasons }: { seasons: GauntletPreviewSeason[] }) {
   const [seasonId, setSeasonId] = useState<number | null>(null);
@@ -73,7 +73,7 @@ export function GauntletPreviewView({ seasons }: { seasons: GauntletPreviewSeaso
                 <Td align="left" mono={false} muted={row.name === null}>
                   {row.name ?? '—'}
                 </Td>
-                <Td align="left" mono={false} bold={row.fate === 'bye'} muted={row.fate === 'relegated'}>
+                <Td align="left" mono={false} bold={row.fate === 'bye'} muted={row.fate === 'wontQualify'}>
                   {FATE_LABEL[row.fate]}
                 </Td>
                 <Td align="left" mono={false} muted>

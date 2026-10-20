@@ -25,7 +25,7 @@ export const TOOLS: Tool[] = [
   {
     slug: 'gauntlet-preview',
     name: 'Gauntlet Preview',
-    summary: 'See the gauntlet bracket any number of qualifiers produces: pods, byes, relegations and the final.',
+    summary: 'See the gauntlet bracket any number of qualifiers produces: pods, byes, seeds that won\'t qualify and the final.',
   },
 ];
 
