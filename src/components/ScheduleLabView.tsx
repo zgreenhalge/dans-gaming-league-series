@@ -74,12 +74,12 @@ const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string
   { label: 'Most games in a week', title: 'The busiest single week any one player has', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
   {
     label: 'Doubleheader weeks',
-    title: 'Per player, fewest to most: weeks with more games than usual (2+ in a match week, 3+ in a group week)',
+    title: 'Per player, fewest to most: weeks in a second match or group, which pay back a bye',
     value: (p) => range(p.plan.scorecard.doubleheaderWeeks),
   },
   {
     label: 'Bye weeks',
-    title: 'Per player, fewest to most: weeks with fewer games than usual (none in a match week, 1 or none in a group week)',
+    title: 'Per player, fewest to most: weeks with no match or group, when a division doesn’t divide by 4',
     value: (p) => range(p.plan.scorecard.byeWeeks),
   },
   {
@@ -508,8 +508,8 @@ function PlayerSeasons({ players, name }: { players: FormatPlayerSeason[]; name:
           <tr>
             <Th sticky>Player</Th>
             <Th align="right">Games</Th>
-            <Th align="right" title="Weeks with more games than usual">Doubleheaders</Th>
-            <Th align="right" title="Weeks with fewer games than usual">Byes</Th>
+            <Th align="right" title="Weeks in a second match or group">Doubleheaders</Th>
+            <Th align="right" title="Weeks with no match or group">Byes</Th>
             <Th align="right">Busiest week</Th>
             <Th align="right">Teammates</Th>
             <Th align="right" title="Shirts games minus Skins games">Sides</Th>
