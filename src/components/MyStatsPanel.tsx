@@ -5,6 +5,7 @@ import type { MyStats, MyStatsPlayer } from '@/lib/queries';
 import { ordinal } from '@/lib/util';
 import EmptyState from './EmptyState';
 import { NextMatchLink } from './NextMatchLink';
+import { WLChip } from './WLChip';
 import { PlayerName } from './PlayerName';
 import StatTileGrid from './StatTileGrid';
 
@@ -61,13 +62,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
       />
 
       {next && (
-        <NextMatchLink
-          className="mt-4"
-          matchId={next.matchId}
-          map={next.map}
-          opponents={next.opponents}
-          scheduledAt={next.scheduledAt}
-        />
+        <NextMatchLink className="mt-4" {...next} />
       )}
 
       {(bestFriend || worstNightmare) && (
@@ -110,12 +105,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
               href={`/matches/${m.matchId}`}
               className="lift-row flex items-center gap-3 px-2 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0"
             >
-              <span
-                className={`wl-chip wl-chip--sm ${m.won ? 'wl-chip--win' : 'wl-chip--loss'}`}
-                aria-label={m.won ? 'Win' : 'Loss'}
-              >
-                {m.won ? 'W' : 'L'}
-              </span>
+              <WLChip won={m.won} />
               <span className="font-mono text-[12px] w-12 shrink-0">{m.score}</span>
               <span className="text-[12px] truncate flex-1 min-w-0">vs {m.opponents}</span>
               {m.map && <span className="font-mono text-[11px] text-[var(--color-text-secondary)] shrink-0">{toSentenceCase(m.map)}</span>}

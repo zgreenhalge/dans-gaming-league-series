@@ -155,30 +155,27 @@ export interface RankedRival {
   rating: number;
 }
 
+/** The `limit` highest-scoring `items`, best first, each with its score as a rounded 0–100 rating. */
+function rankBy<T>(items: T[], score: (item: T) => number, limit: number): { item: T; rating: number }[] {
+  return items
+    .map((item) => ({ item, raw: score(item) }))
+    .sort((x, y) => y.raw - x.raw)
+    .slice(0, limit)
+    .map(({ item, raw }) => ({ item, rating: Math.round(raw * 100) }));
+}
+
 /**
  * The `limit` highest-rated duos (the "Best Friends" ranking) — only pairs that have played together,
  * normalised against the full `duos` set so the rating matches the one shown beside any other
  * ranking of the same data. Shared by `H2HSection` and the home page's Top duos panel.
  */
 export function rankDuos(duos: DuoStats[], limit: number): RankedDuo[] {
-  const score = duoBlendedScorer(duos);
-  return duos
-    .filter((d) => d.gamesPlayed > 0)
-    .map((duo) => ({ duo, raw: score(duo) }))
-    .sort((x, y) => y.raw - x.raw)
-    .slice(0, limit)
-    .map(({ duo, raw }) => ({ duo, rating: Math.round(raw * 100) }));
+  return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit).map(({ item, rating }) => ({ duo: item, rating }));
 }
 
 /** The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. */
 export function rankRivals(rivals: H2HStats[], limit: number): RankedRival[] {
-  const score = rivalBlendedScorer(rivals);
-  return rivals
-    .filter((r) => r.meetings > 0)
-    .map((rival) => ({ rival, raw: score(rival) }))
-    .sort((x, y) => y.raw - x.raw)
-    .slice(0, limit)
-    .map(({ rival, raw }) => ({ rival, rating: Math.round(raw * 100) }));
+  return rankBy(rivals.filter((r) => r.meetings > 0), rivalBlendedScorer(rivals), limit).map(({ item, rating }) => ({ rival: item, rating }));
 }
 
 /** One player's standing against a single other player, from that player's side. */
@@ -195,26 +192,11 @@ export interface PersonalMatchup {
  */
 export function bestFriendOf(duos: DuoStats[], playerId: number): PersonalMatchup | null {
   const score = duoBlendedScorer(duos);
-  let best: { duo: DuoStats; score: number } | null = null;
-  for (const duo of duos) {
-    if (duo.gamesPlayed === 0 || (duo.playerA !== playerId && duo.playerB !== playerId)) continue;
-    const s = score(duo);
-    const other = duo.playerA === playerId ? duo.playerB : duo.playerA;
-    const bestOther = best ? (best.duo.playerA === playerId ? best.duo.playerB : best.duo.playerA) : 0;
-    if (
-      best === null ||
-      s > best.score ||
-      (s === best.score && (duo.gamesPlayed > best.duo.gamesPlayed || (duo.gamesPlayed === best.duo.gamesPlayed && other < bestOther)))
-    ) {
-      best = { duo, score: s };
-    }
-  }
-  if (!best) return null;
-  return {
-    otherId: best.duo.playerA === playerId ? best.duo.playerB : best.duo.playerA,
-    wins: best.duo.wins,
-    losses: best.duo.losses,
-  };
+  const [best] = duos
+    .filter((d) => d.gamesPlayed > 0 && (d.playerA === playerId || d.playerB === playerId))
+    .map((d) => ({ otherId: d.playerA === playerId ? d.playerB : d.playerA, wins: d.wins, losses: d.losses, games: d.gamesPlayed, score: score(d) }))
+    .sort((x, y) => y.score - x.score || y.games - x.games || x.otherId - y.otherId);
+  return best ? { otherId: best.otherId, wins: best.wins, losses: best.losses } : null;
 }
 
 /**
@@ -223,24 +205,16 @@ export function bestFriendOf(duos: DuoStats[], playerId: number): PersonalMatchu
  * otherwise). Ties break on more meetings, then the lower opponent id.
  */
 export function worstNightmareOf(rivals: H2HStats[], playerId: number): PersonalMatchup | null {
-  let worst: (PersonalMatchup & { margin: number }) | null = null;
-  for (const r of rivals) {
-    if (r.meetings === 0 || (r.playerA !== playerId && r.playerB !== playerId)) continue;
-    const asA = r.playerA === playerId;
-    const wins = asA ? r.aWins : r.bWins;
-    const losses = asA ? r.bWins : r.aWins;
-    const margin = losses - wins;
-    if (margin <= 0) continue;
-    const otherId = asA ? r.playerB : r.playerA;
-    const meetings = wins + losses;
-    if (
-      worst === null ||
-      margin > worst.margin ||
-      (margin === worst.margin && (meetings > worst.wins + worst.losses || (meetings === worst.wins + worst.losses && otherId < worst.otherId)))
-    ) {
-      worst = { otherId, wins, losses, margin };
-    }
-  }
+  const [worst] = rivals
+    .filter((r) => r.meetings > 0 && (r.playerA === playerId || r.playerB === playerId))
+    .map((r) => {
+      const asA = r.playerA === playerId;
+      const wins = asA ? r.aWins : r.bWins;
+      const losses = asA ? r.bWins : r.aWins;
+      return { otherId: asA ? r.playerB : r.playerA, wins, losses, margin: losses - wins };
+    })
+    .filter((m) => m.margin > 0)
+    .sort((x, y) => y.margin - x.margin || y.wins + y.losses - (x.wins + x.losses) || x.otherId - y.otherId);
   return worst ? { otherId: worst.otherId, wins: worst.wins, losses: worst.losses } : null;
 }
 

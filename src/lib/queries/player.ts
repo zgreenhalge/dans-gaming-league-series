@@ -279,8 +279,7 @@ export function lastPlayed(history: PlayerHistoryRow[], limit: number): PlayerHi
 /** The earliest not-yet-played row of `history` — the player page's "Next Match" and the home
  *  page's. `null` when nothing is upcoming. */
 export function nextUpcoming(history: PlayerHistoryRow[]): PlayerHistoryRow | null {
-  const upcoming = history.filter((r) => !isPlayedHistoryRow(r));
-  return upcoming.length > 0 ? upcoming[upcoming.length - 1] : null;
+  return history.findLast((r) => !isPlayedHistoryRow(r)) ?? null;
 }
 
 /** The names of the other team in a history row's match, "A & B" — `TBD` while it has no roster. */

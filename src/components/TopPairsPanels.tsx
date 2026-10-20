@@ -10,30 +10,58 @@ export const TOP_PAIRS_LIMIT = 3;
 
 type Tone = 'green' | 'amber';
 
-const TONE: Record<Tone, { panel: string; header: string; title: string; label: string }> = {
+const TONE: Record<Tone, { panel: string; header: string; title: string; label: string; ringStart: string; ringEnd: string }> = {
   green: {
     panel: 'border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)]',
     header: 'border-[var(--color-accent-green-border)]',
     title: 'text-[var(--color-accent-green-strong)]',
     label: 'text-[var(--color-accent-green-fg)]',
+    ringStart: 'white',
+    ringEnd: 'var(--color-accent-green-fill)',
   },
   amber: {
     panel: 'border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)]',
     header: 'border-[var(--color-accent-amber-border)]',
     title: 'text-[var(--color-accent-amber-strong)]',
     label: 'text-[var(--color-accent-amber-fg)]',
+    ringStart: 'black',
+    ringEnd: 'var(--color-accent-red-fg)',
   },
 };
 
-function PairsPanel({
-  title,
-  tone,
-  rows,
-}: {
-  title: string;
-  tone: Tone;
-  rows: { key: string; href: string; names: [string, string]; avatars: [string | null, string | null]; label: string; meta: string; rating: number; ratingTitle: string }[];
-}) {
+interface PairRow {
+  key: string;
+  href: string;
+  players: [H2HData['players'][number], H2HData['players'][number]];
+  label: string;
+  meta: string;
+  rating: number;
+  ratingTitle: string;
+}
+
+/** Resolves a ranked pair's two players from the roster and builds its row; a pair with a player
+ *  missing from the roster is dropped. */
+function pairRow(
+  data: H2HData,
+  ids: [number, number],
+  type: 'partner' | 'opponent',
+  fields: { separator: string; meta: string; rating: number; ratingTitle: string },
+): PairRow[] {
+  const a = data.players.find((p) => p.id === ids[0]);
+  const b = data.players.find((p) => p.id === ids[1]);
+  if (!a || !b) return [];
+  return [{
+    key: `${a.id}-${b.id}`,
+    href: h2hPairHref('/statistics', a.name, b.name, type),
+    players: [a, b],
+    label: `${a.name} ${fields.separator} ${b.name}`,
+    meta: fields.meta,
+    rating: fields.rating,
+    ratingTitle: fields.ratingTitle,
+  }];
+}
+
+function PairsPanel({ title, tone, rows }: { title: string; tone: Tone; rows: PairRow[] }) {
   const t = TONE[tone];
   if (rows.length === 0) return null;
   return (
@@ -50,8 +78,8 @@ function PairsPanel({
         >
           <span className={`display-numeral text-[12px] w-3.5 ${t.label}`}>{i + 1}</span>
           <div className="flex shrink-0">
-            <PlayerAvatar name={r.names[0]} imageUrl={r.avatars[0]} size="sm" />
-            <div className="-ml-1.5"><PlayerAvatar name={r.names[1]} imageUrl={r.avatars[1]} size="sm" /></div>
+            <PlayerAvatar name={r.players[0].name} imageUrl={r.players[0].steam_avatar_url} size="sm" />
+            <div className="-ml-1.5"><PlayerAvatar name={r.players[1].name} imageUrl={r.players[1].steam_avatar_url} size="sm" /></div>
           </div>
           <div className="min-w-0 flex-1">
             <div className="font-display font-semibold text-[14px] truncate">{r.label}</div>
@@ -59,8 +87,8 @@ function PairsPanel({
           </div>
           <RatingCircle
             value={r.rating}
-            colorStart={tone === 'green' ? 'white' : 'black'}
-            colorEnd={tone === 'green' ? 'var(--color-accent-green-fill)' : 'var(--color-accent-red-fg)'}
+            colorStart={t.ringStart}
+            colorEnd={t.ringEnd}
             size="xs"
             title={r.ratingTitle}
           />
@@ -73,22 +101,14 @@ function PairsPanel({
 /** The home page's Top duos: the career partners with the highest friendship rating
  *  (`rankDuos()`), each linking to that pair's career H2H matchup. */
 export function TopDuosPanel({ data }: { data: H2HData }) {
-  const player = new Map(data.players.map((p) => [p.id, p]));
-  const rows = rankDuos(data.duos, TOP_PAIRS_LIMIT).flatMap(({ duo, rating }) => {
-    const a = player.get(duo.playerA);
-    const b = player.get(duo.playerB);
-    if (!a || !b) return [];
-    return [{
-      key: `${duo.playerA}-${duo.playerB}`,
-      href: h2hPairHref('/statistics', a.name, b.name, 'partner'),
-      names: [a.name, b.name] as [string, string],
-      avatars: [a.steam_avatar_url, b.steam_avatar_url] as [string | null, string | null],
-      label: `${a.name} & ${b.name}`,
+  const rows = rankDuos(data.duos, TOP_PAIRS_LIMIT).flatMap(({ duo, rating }) =>
+    pairRow(data, [duo.playerA, duo.playerB], 'partner', {
+      separator: '&',
       meta: `${duo.gamesPlayed} games · ${duo.wins}-${duo.losses}`,
       rating,
       ratingTitle: '50% games played together² · 30% win rate² · 20% round win rate²',
-    }];
-  });
+    }),
+  );
   return <PairsPanel title="Top duos" tone="green" rows={rows} />;
 }
 
@@ -96,21 +116,13 @@ export function TopDuosPanel({ data }: { data: H2HData }) {
  *  (`rankRivals()`), each linking to that pair's career H2H matchup. The record counts the first
  *  player's wins first. */
 export function HottestRivalriesPanel({ data }: { data: H2HData }) {
-  const player = new Map(data.players.map((p) => [p.id, p]));
-  const rows = rankRivals(data.rivals, TOP_PAIRS_LIMIT).flatMap(({ rival, rating }) => {
-    const a = player.get(rival.playerA);
-    const b = player.get(rival.playerB);
-    if (!a || !b) return [];
-    return [{
-      key: `${rival.playerA}-${rival.playerB}`,
-      href: h2hPairHref('/statistics', a.name, b.name, 'opponent'),
-      names: [a.name, b.name] as [string, string],
-      avatars: [a.steam_avatar_url, b.steam_avatar_url] as [string | null, string | null],
-      label: `${a.name} vs ${b.name}`,
+  const rows = rankRivals(data.rivals, TOP_PAIRS_LIMIT).flatMap(({ rival, rating }) =>
+    pairRow(data, [rival.playerA, rival.playerB], 'opponent', {
+      separator: 'vs',
       meta: `${rival.meetings} meetings · ${rival.aWins}-${rival.bWins}`,
       rating,
       ratingTitle: '50% times faced² · 30% game outcome closeness² · 20% avg round closeness²',
-    }];
-  });
+    }),
+  );
   return <PairsPanel title="Hottest Rivalries" tone="amber" rows={rows} />;
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
+import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, nextUpcoming, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
@@ -17,6 +17,7 @@ import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
 import { useTabState, resolveTab } from './useTabState';
 import Sparkline from './Sparkline';
 import { NextMatchLink } from './NextMatchLink';
+import { WLChip } from './WLChip';
 import MatchupsTab from './MatchupsTab';
 import PlayerTrailsTab from './PlayerTrailsTab';
 import EhogTimeline from './EhogTimeline';
@@ -55,7 +56,6 @@ const GAUNTLET_PLACEMENTS: Record<1 | 2 | 3, string> = {
   2: '2nd Place',
   3: '3rd Place',
 };
-
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
 function percentileOf(value: number, all: number[]): number {
@@ -233,6 +233,7 @@ export default function PlayerView({
   const filteredEconomyStats = useMemo(() => filterByMatchIds(economyStats, filtered), [filtered, economyStats]);
   const playedHistory = useMemo(() => filtered.filter(isPlayedHistoryRow), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayedHistoryRow(r)).reverse();
+  const nextMatch = nextUpcoming(filtered);
 
   const h2hData = useLiveH2HData(playedHistory, players);
   // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the
@@ -339,22 +340,20 @@ export default function PlayerView({
             <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
           ) : (
             last5.map((r, i) => (
-              <span key={r.id ?? i} className={`wl-chip wl-chip--sm ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
-                {r.is_win ? 'W' : 'L'}
-              </span>
+              <WLChip key={r.id ?? i} won={r.is_win} />
             ))
           )}
         </div>
       </div>
 
       {/* Next Match — below Last 5 */}
-      {upcomingHistory.length > 0 && (
+      {nextMatch && (
         <NextMatchLink
           className="mb-4"
-          matchId={upcomingHistory[0].match_id}
-          map={upcomingHistory[0].map}
-          opponents={opponentNames(upcomingHistory[0])}
-          scheduledAt={upcomingHistory[0].scheduled_at}
+          matchId={nextMatch.match_id}
+          map={nextMatch.map}
+          opponents={opponentNames(nextMatch)}
+          scheduledAt={nextMatch.scheduled_at}
         />
       )}
 

@@ -474,7 +474,7 @@ export const getAllLeaderboards = cache(async (): Promise<
 });
 
 /** How many results a player's Form shows. */
-export const FORM_LENGTH = 5;
+const FORM_LENGTH = 5;
 
 /**
  * Each player's most recent results, newest first (`true` = win) — the standings Form column. Pure

@@ -9,6 +9,7 @@ import { sortRows, type SortValue } from '@/lib/sort-rows';
 import { hasPlayed, type PlayerRecord } from '@/lib/group-scorecard';
 import type { WeekScorecardRow, GroupRow } from '@/lib/stage-views';
 import type { RankMovement } from '@/lib/season-standings';
+import { ordinal } from '@/lib/util';
 
 // The scorecard tables on the week, round and group pages. Both show the exact values the ranking is
 // computed from (`deriveGroupScorecard()` / `canonicalGauntletRankMap()` — group-scorecard.ts), in the
@@ -27,12 +28,6 @@ const WEEK_SORT: Record<string, (r: WeekScorecardRow) => SortValue> = {
 };
 
 const OUTCOME_ORDER = { advances: 0, eliminated: 1, pending: 2 } as const;
-
-function ordinal(n: number): string {
-  const v = n % 100;
-  const suffix = ['th', 'st', 'nd', 'rd'][(v - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][v] ?? 'th';
-  return `${n}${suffix}`;
-}
 
 function pct(n: number): string {
   return `${n.toFixed(1)}%`;

@@ -67,31 +67,13 @@ function UpcomingSeasonRow({
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
-  const [seasons, leaderboards, rosterSeasonIds, h2h] = await Promise.all([
+  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
     getCareerH2HDataCached(),
+    currentPlayerId != null ? getOpenFeedbackSeasonIds().then((ids) => new Set(ids)) : new Set<number>(),
   ]);
-  const myStats = currentPlayerId != null ? await getMyStats(currentPlayerId, h2h) : null;
-
-  // Survey / superlatives banners for the signed-in player: only seasons with something open, and
-  // only those the player played (the views are null otherwise).
-  const openFeedbackIds = currentPlayerId != null ? new Set(await getOpenFeedbackSeasonIds()) : new Set<number>();
-  const feedbackBanners = (
-    await Promise.all(
-      seasons
-        .filter((s) => !s.is_gauntlet && openFeedbackIds.has(s.id))
-        .sort((a, b) => b.id - a.id)
-        .map(async (s) => {
-          const [survey, superlatives] = await Promise.all([
-            getSeasonSurveyView(s.id, currentPlayerId),
-            getSeasonSuperlativesView(s.id, currentPlayerId),
-          ]);
-          return { season: s, survey, superlatives };
-        }),
-    )
-  ).filter((b) => b.survey || b.superlatives?.mode === 'ballot');
 
   const upcoming = seasons
     .filter((s) => !s.is_gauntlet && s.status === 'UPCOMING')
@@ -100,15 +82,28 @@ export default async function Home() {
   // Games (Upcoming Games + To Be Scheduled) come from the active regular season, else the active
   // gauntlet; standings from the active regular season, else the latest finished one.
   const standings = pickStandingsSeason(seasons);
-  const [games, form] = await Promise.all([
+
+  // Survey / superlatives banners for the signed-in player: only seasons with something open, and
+  // only those the player played (the views are null otherwise).
+  const feedbackSeasons = seasons
+    .filter((s) => !s.is_gauntlet && openFeedbackIds.has(s.id))
+    .sort((a, b) => b.id - a.id);
+
+  const [myStats, games, form, feedbackViews] = await Promise.all([
+    currentPlayerId != null ? getMyStats(currentPlayerId, h2h) : null,
     getHomeGames(seasons),
     standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
+    Promise.all(
+      feedbackSeasons.map(async (s) => {
+        const [survey, superlatives] = await Promise.all([
+          getSeasonSurveyView(s.id, currentPlayerId),
+          getSeasonSuperlativesView(s.id, currentPlayerId),
+        ]);
+        return { season: s, survey, superlatives };
+      }),
+    ),
   ]);
-
-  // The rail's My Stats shows twice: first on a phone, where the rail stacks under the main column
-  // and a signed-in player's own panel would otherwise sit below the whole standings table, and in
-  // the rail on a wide screen. Only one is ever displayed.
-  const myStatsPanel = myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />;
+  const feedbackBanners = feedbackViews.filter((b) => b.survey || b.superlatives?.mode === 'ballot');
 
   return (
     <div className="min-h-screen">
@@ -137,10 +132,14 @@ export default async function Home() {
           </div>
         )}
 
-        <div className="lg:hidden mb-6">{myStatsPanel}</div>
-
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
-          <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
+        {/* One grid, so My Stats is a single element: first on a phone (above the games and
+            standings) and top of the right-hand column on a wide screen, where the games and
+            standings column spans the rail's three rows. */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_auto_1fr]">
+          <div className="lg:col-start-2 lg:row-start-1">
+            {myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />}
+          </div>
+          <div className="min-w-0 flex flex-col gap-6 lg:col-start-1 lg:row-start-1 lg:row-span-3">
             {games && (
               <UpcomingGamesPanel
                 scheduled={games.scheduled}
@@ -162,11 +161,12 @@ export default async function Home() {
               />
             )}
           </div>
-          <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-4">
-            <div className="hidden lg:block">{myStatsPanel}</div>
+          <div className="lg:col-start-2 lg:row-start-2 empty:hidden">
             <TopDuosPanel data={h2h} />
+          </div>
+          <div className="self-start lg:col-start-2 lg:row-start-3 empty:hidden">
             <HottestRivalriesPanel data={h2h} />
-          </aside>
+          </div>
         </div>
       </main>
     </div>

@@ -5,9 +5,9 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats } from '@/lib/queries';
+import { getPlayer, isPlayedHistoryRow, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
-import { isPlayedScore, parseRouteId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
@@ -90,7 +90,7 @@ export default async function PlayerPage({
   }));
 
   const playedMatchIds = detail.history
-    .filter((h) => isPlayedScore(h.final_score) && h.rounds_played > 0)
+    .filter(isPlayedHistoryRow)
     .map((h) => h.match_id);
   // Neither depends on the other's result — both only need `detail`, already in hand — so they
   // run together instead of as two sequential round trips.

@@ -61,10 +61,10 @@ export default function H2HSection({
   // so the top-5 ranking and matrix gradient stay derived from the same formula.
   const duoScore = useMemo(() => duoBlendedScorer(duos), [duos]);
   const duoBreakdown = useMemo(() => duoBreakdownScorer(duos), [duos]);
-  const topDuos = useMemo(() => rankDuos(duos, 5).map((r) => r.duo), [duos]);
+  const topDuos = useMemo(() => rankDuos(duos, 5), [duos]);
   const rivalScore = useMemo(() => rivalBlendedScorer(rivals), [rivals]);
   const rivalBreakdown = useMemo(() => rivalBreakdownScorer(rivals), [rivals]);
-  const topRivals = useMemo(() => rankRivals(rivals, 5).map((r) => r.rival), [rivals]);
+  const topRivals = useMemo(() => rankRivals(rivals, 5), [rivals]);
 
   const avgFriendshipRating = useMemo(() => {
     const eligible = duos.filter((d) => d.gamesPlayed > 0);
@@ -116,7 +116,7 @@ export default function H2HSection({
               </div>
             </div>
             <div>
-              {topDuos.map((d, i) => {
+              {topDuos.map(({ duo: d, rating }, i) => {
                 const a = playersById.get(d.playerA);
                 const b = playersById.get(d.playerB);
                 if (!a || !b) return null;
@@ -140,7 +140,7 @@ export default function H2HSection({
                     <span className="font-display font-semibold text-[11px] flex-1 truncate">{a.name} &amp; {b.name}</span>
                     <div className="grid grid-cols-[28px_34px_44px_88px] gap-x-2 shrink-0 items-center">
                       <div className="flex justify-center">
-                        <RatingCircle value={Math.round(duoScore(d) * 100)} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={duoBreakdown(d)} />
+                        <RatingCircle value={rating} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={duoBreakdown(d)} />
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="display-numeral text-[13px] text-right">{d.gamesPlayed}</span>
@@ -185,7 +185,7 @@ export default function H2HSection({
               <span />
             </div>
             <div>
-              {topRivals.map((r) => {
+              {topRivals.map(({ rival: r, rating }) => {
                 const a = playersById.get(r.playerA);
                 const b = playersById.get(r.playerB);
                 if (!a || !b) return null;
@@ -210,7 +210,7 @@ export default function H2HSection({
                     <span className={`display-numeral text-[12px] text-center${aRoundsHigher ? ` ${accent}` : !bRoundsHigher ? '' : ` ${dim}`}`}>{r.aStats.roundsWon}</span>
                     <span className={`display-numeral text-[12px] text-center${aWinsHigher ? ` ${accent}` : !bWinsHigher ? '' : ` ${dim}`}`}>{r.aWins}</span>
                     <div className="flex items-center justify-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)] self-stretch -my-2">
-                      <RatingCircle value={Math.round(rivalScore(r) * 100)} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={rivalBreakdown(r)} />
+                      <RatingCircle value={rating} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={rivalBreakdown(r)} />
                     </div>
                     <span className={`display-numeral text-[12px] text-center${bWinsHigher ? ` ${accent}` : !aWinsHigher ? '' : ` ${dim}`}`}>{r.bWins}</span>
                     <span className={`display-numeral text-[12px] text-center${bRoundsHigher ? ` ${accent}` : !aRoundsHigher ? '' : ` ${dim}`}`}>{r.bStats.roundsWon}</span>

@@ -75,7 +75,7 @@ export async function getHomeGames(seasons: Season[]): Promise<HomeGames | null>
 // view), matches from the player's full history, and the matchups from the career H2H.
 
 /** How many results the panel's Match history lists. */
-export const MY_STATS_RECENT_LIMIT = 5;
+const MY_STATS_RECENT_LIMIT = 5;
 
 /** One played match in the panel's Match history, from the player's side. `score` is the stored
  *  `final_score` (shirts–skins), shown as-is like every other match card. */
