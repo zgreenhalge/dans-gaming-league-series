@@ -24,6 +24,7 @@ test('tool links and breadcrumbs', () => {
   assert.equal(toolHref(lab.slug), '/tools/schedule-lab');
   assert.deepEqual(toolCrumbs(lab).map((c) => c.label), ['DGLS', 'Tools', 'Schedule Lab']);
   assert.deepEqual(toolCrumbs().map((c) => c.label), ['DGLS', 'Tools']);
+  assert.equal(toolHref(getTool('win-probability').slug), '/tools/win-probability');
   assert.throws(() => getTool('nope'));
 });
 

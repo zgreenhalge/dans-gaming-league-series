@@ -2,7 +2,7 @@ import type { FormatPlayer, FormatRecord } from '../season-format';
 import { seasonTitle } from '../util';
 import { getPlayersById } from './player';
 import { getSeasons, getSeasonParticipants } from './seasons';
-import { getPlayerRatings } from './ehog';
+import { getRatedPlayers } from './ehog';
 import { getRawSeasonLeaderboardRows } from './leaderboard';
 
 export interface ScheduleLabPlayer extends FormatPlayer {
@@ -20,7 +20,7 @@ export interface ScheduleLabRoster {
 }
 
 export interface ScheduleLabData {
-  /** Every player with their current EHOG state (`getPlayerRatings()`), sorted by name. */
+  /** Every player with their current EHOG state (`getRatedPlayers()`), sorted by name. */
   players: ScheduleLabPlayer[];
   /** Regular seasons' participants, newest season first. */
   rosters: ScheduleLabRoster[];
@@ -36,14 +36,10 @@ export interface ScheduleLabData {
 export async function getScheduleLabData(): Promise<ScheduleLabData> {
   const [playersById, seasons, leaderboardRows] = await Promise.all([getPlayersById(), getSeasons(), getRawSeasonLeaderboardRows()]);
   const regular = seasons.filter((s) => !s.is_gauntlet).sort((a, b) => b.id - a.id);
-  const [ratings, participants] = await Promise.all([
-    getPlayerRatings([...playersById.keys()]),
+  const [players, participants] = await Promise.all([
+    getRatedPlayers(playersById),
     Promise.all(regular.map((s) => getSeasonParticipants(s.id, playersById))),
   ]);
-
-  const players = ratings
-    .map((r) => ({ ...r, name: playersById.get(r.playerId)!.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
 
   const recordsBySeason = new Map<number, Record<number, FormatRecord>>();
   const careerRecords: Record<number, FormatRecord> = {};
