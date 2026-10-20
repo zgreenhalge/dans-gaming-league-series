@@ -27,4 +27,11 @@ test('tool links and breadcrumbs', () => {
   assert.throws(() => getTool('nope'));
 });
 
+test('Gauntlet Preview is registered with its own crumbs', () => {
+  const preview = getTool('gauntlet-preview');
+  assert.equal(toolHref(preview.slug), '/tools/gauntlet-preview');
+  assert.deepEqual(toolCrumbs(preview).map((c) => c.label), ['DGLS', 'Tools', 'Gauntlet Preview']);
+  assert.equal(toolCrumbs(preview)[1].href, '/tools');
+});
+
 report();
