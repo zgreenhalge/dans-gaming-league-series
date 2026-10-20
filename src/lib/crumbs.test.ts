@@ -10,8 +10,11 @@ import {
   gauntletLink,
   groupHref,
   groupName,
+  h2hPairHref,
   regularSeasonLink,
   roundHref,
+  seasonScheduleHref,
+  gauntletScheduleHref,
   stageHeading,
   weekHref,
 } from './crumbs';
@@ -109,4 +112,18 @@ test('regularSeasonLink: a back link from a gauntlet page, none when the hub is 
 test('gauntletLink: a forward link to the first round, none without one', () => {
   assert.deepEqual(gauntletLink(5, 1), { label: 'Gauntlet →', href: '/seasons/5/rounds/1', direction: 'forward' });
   assert.equal(gauntletLink(5, null), undefined);
+});
+
+test('seasonScheduleHref / gauntletScheduleHref: the hub\'s Schedule tab, in the regular or gauntlet view', () => {
+  assert.equal(seasonScheduleHref(5), '/seasons/5?tab=schedule');
+  assert.equal(gauntletScheduleHref(5), '/seasons/5?view=gauntlet&tab=schedule');
+});
+
+test('h2hPairHref: names in a, b; type only for opponents (partner is the default)', () => {
+  assert.equal(h2hPairHref('/statistics', 'Sean', 'Eric', 'partner'), '/statistics?tab=h2h&a=Sean&b=Eric');
+  assert.equal(h2hPairHref('/seasons/3', 'Grach', 'Sean', 'opponent'), '/seasons/3?tab=h2h&a=Grach&b=Sean&type=opponent');
+});
+
+test('h2hPairHref: names are URL-encoded', () => {
+  assert.equal(h2hPairHref('/statistics', 'A & B', 'C D', 'partner'), '/statistics?tab=h2h&a=A+%26+B&b=C+D');
 });

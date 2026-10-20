@@ -7,7 +7,7 @@ import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { winRatePct } from '@/lib/util';
 import { findDuo, findRival } from '@/lib/h2h';
 import type { H2HData } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals } from '@/lib/queries';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
@@ -61,16 +61,10 @@ export default function H2HSection({
   // so the top-5 ranking and matrix gradient stay derived from the same formula.
   const duoScore = useMemo(() => duoBlendedScorer(duos), [duos]);
   const duoBreakdown = useMemo(() => duoBreakdownScorer(duos), [duos]);
-  const topDuos = useMemo(() => {
-    const eligible = duos.filter((d) => d.gamesPlayed > 0);
-    return [...eligible].sort((x, y) => duoScore(y) - duoScore(x)).slice(0, 5);
-  }, [duos, duoScore]);
+  const topDuos = useMemo(() => rankDuos(duos, 5).map((r) => r.duo), [duos]);
   const rivalScore = useMemo(() => rivalBlendedScorer(rivals), [rivals]);
   const rivalBreakdown = useMemo(() => rivalBreakdownScorer(rivals), [rivals]);
-  const topRivals = useMemo(() => {
-    const eligible = rivals.filter((r) => r.meetings > 0);
-    return [...eligible].sort((x, y) => rivalScore(y) - rivalScore(x)).slice(0, 5);
-  }, [rivals, rivalScore]);
+  const topRivals = useMemo(() => rankRivals(rivals, 5).map((r) => r.rival), [rivals]);
 
   const avgFriendshipRating = useMemo(() => {
     const eligible = duos.filter((d) => d.gamesPlayed > 0);
