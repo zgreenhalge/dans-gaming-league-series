@@ -121,10 +121,11 @@ const getSeasonBaseData = cache(async (): Promise<{
   return { perPlayerStats, rosterBySeason };
 });
 
-/** The raw, unfiltered `player_season_leaderboard` table. `cache()`-wrapped so
- *  `getCareerLeaderboard()`, `getAllLeaderboards()`, and any indirect caller of the latter (e.g.
+/** The raw, unfiltered `player_season_leaderboard` table, without the `player_match_stats`
+ *  augmentation `getAllLeaderboards()` adds. `cache()`-wrapped so `getCareerLeaderboard()`,
+ *  `getAllLeaderboards()`, `getScheduleLabData()` and any indirect caller of them (e.g.
  *  `getAllSeasonMedalists()`) share one read instead of each re-scanning the view. */
-const getRawSeasonLeaderboardRows = cache(async (): Promise<LeaderboardRow[]> => {
+export const getRawSeasonLeaderboardRows = cache(async (): Promise<LeaderboardRow[]> => {
   const { data, error } = await getAdminClient().from('player_season_leaderboard').select('*');
   if (error) throw error;
   return (data ?? []) as LeaderboardRow[];
