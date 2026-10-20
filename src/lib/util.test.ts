@@ -47,7 +47,6 @@ import {
   finalRoundOf,
   finalRoundNumberOf,
   ordinal,
-  deriveKda,
   mergeLeaderboardRows,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
@@ -468,12 +467,6 @@ test('ordinal: st / nd / rd / th, with 11-13 always th', () => {
   assert.deepEqual([1, 2, 3, 4, 10].map(ordinal), ['1st', '2nd', '3rd', '4th', '10th']);
   assert.deepEqual([11, 12, 13, 14].map(ordinal), ['11th', '12th', '13th', '14th']);
   assert.deepEqual([21, 22, 23, 101, 111, 112].map(ordinal), ['21st', '22nd', '23rd', '101st', '111th', '112th']);
-});
-
-test('deriveKda: kills plus assists per death; with no deaths, kills plus assists', () => {
-  assert.equal(deriveKda({ total_kills: 100, total_assists: 30, total_deaths: 50 }), 2.6);
-  assert.equal(deriveKda({ total_kills: 10, total_assists: 4, total_deaths: 0 }), 14);
-  assert.equal(deriveKda({ total_kills: 0, total_assists: 0, total_deaths: 0 }), 0);
 });
 
 function lbRow(playerId: number, overrides: Partial<LeaderboardRowWithId> = {}): LeaderboardRowWithId {

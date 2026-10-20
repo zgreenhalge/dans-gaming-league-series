@@ -22,7 +22,8 @@ Raw numbers, direct from the game scoreboard
 ### Kill Stats
 
 - K/D = Kills / Deaths
-- KDA = (Kills + Assists) / Deaths — shown only on the home page's My Stats, beside K/D
+- KDA = (Kills + Assists) / Deaths — informational: shown beside K/D on the home page's My Stats and
+  averaged per duo on H2H's Best Friends rows (see Narrative Metrics)
 - Dmg/Kill = Damage / Kills
 - HS% = Headshot Kills / Kills — kill-only headshot rate, from the in-game scoreboard; distinct
   from the hit-based `Head Accuracy` sabremetric below (which counts every headshot *hit*, not
