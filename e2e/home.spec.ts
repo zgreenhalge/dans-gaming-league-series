@@ -39,6 +39,14 @@ test.describe('with a running season', () => {
     await loginAs(page, 'Zach', '/maps');
     await page.goto('/');
 
+    // Top duos / Hottest Rivalries read a 60-second cache that can predate this test's seeded
+    // match (the web server's readiness probe fetches `/` first), so reload until it refreshes.
+    test.setTimeout(150_000);
+    await expect(async () => {
+      await page.reload();
+      await expect(page.getByRole('link', { name: 'Top duos', exact: true })).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 90_000, intervals: [3_000] });
+
     await expect(page.getByText('My Stats', { exact: true })).toBeVisible();
     await expect(page.getByText('Match history', { exact: true })).toBeVisible();
 

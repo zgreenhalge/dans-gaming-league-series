@@ -96,7 +96,7 @@ standings and no Upcoming Games). The home page reads the whole league and is se
 signed-in test logs in on another page and then loads `/` fresh: the dev login only updates the
 client session. Its Top duos / Hottest Rivalries data comes from `getCareerH2HDataCached()`, a
 60-second `unstable_cache`, so a home visit made before any match exists can hide those panels for
-up to a minute.
+up to a minute; the signed-in test reloads until they appear.
 
 ## CI placement
 
