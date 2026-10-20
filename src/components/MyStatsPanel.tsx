@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { h2hPairHref } from '@/lib/crumbs';
 import { toSentenceCase } from '@/lib/maps';
 import type { MyStats, MyStatsPlayer } from '@/lib/queries';
-import { ordinal } from '@/lib/util';
 import EmptyState from './EmptyState';
+import { ehogColorFor } from './EhogBadge';
 import { NextMatchLink } from './NextMatchLink';
 import { WLChip } from './WLChip';
 import { PlayerName } from './PlayerName';
@@ -39,12 +39,12 @@ function H2HRow({
 }
 
 /**
- * The home page's My Stats panel for a signed-in player: career rank, W-L and ADR, their next
+ * The home page's My Stats panel for a signed-in player: EHOG, W-L, KDA and ADR, their next
  * match, best friend and worst nightmare (each linking to the career H2H matchup), and their last
  * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/myStats.ts`).
  */
 export function MyStatsPanel({ stats }: { stats: MyStats }) {
-  const { playerId, playerName, rank, record, adr, next, recent, bestFriend, worstNightmare } = stats;
+  const { playerId, playerName, ehog, record, kda, kd, adr, next, recent, bestFriend, worstNightmare } = stats;
   const played = record.wins + record.losses > 0;
 
   return (
@@ -54,10 +54,21 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
         <PlayerName name={playerName} isMe />
       </Link>
       <StatTileGrid
-        columns="grid-cols-3"
+        columns="grid-cols-4"
         tiles={[
-          { label: 'Rank', title: 'Career rank: wins, then RWR%, then ADR', value: rank != null ? ordinal(rank) : '—' },
+          {
+            label: 'EHOG',
+            title: 'Current EHOG rating',
+            value: ehog != null ? ehog.toFixed(1) : '—',
+            valueStyle: ehog != null ? { color: ehogColorFor(ehog) } : undefined,
+          },
           { label: 'W-L', title: 'Career match record', value: played ? `${record.wins}-${record.losses}` : '—' },
+          {
+            label: 'KDA',
+            title: 'Career (kills + assists) per death; K/D is kills per death',
+            value: played ? kda.toFixed(2) : '—',
+            sub: played ? `${kd.toFixed(2)} K/D` : undefined,
+          },
           { label: 'ADR', title: 'Career average damage per round', value: played ? adr.toFixed(2) : '—' },
         ]}
       />
@@ -124,10 +135,11 @@ export function MyStatsLockedPanel() {
       <div className="select-none opacity-70 blur-[5px]" aria-hidden>
         <div className="font-display text-[28px] font-bold mt-1 mb-3">Your Name</div>
         <StatTileGrid
-          columns="grid-cols-3"
+          columns="grid-cols-4"
           tiles={[
-            { label: 'Rank', value: '4th' },
+            { label: 'EHOG', value: '23.4' },
             { label: 'W-L', value: '11-9' },
+            { label: 'KDA', value: '1.42' },
             { label: 'ADR', value: '74.05' },
           ]}
         />
@@ -139,7 +151,7 @@ export function MyStatsLockedPanel() {
       <div className="mt-4 flex flex-col items-start gap-2">
         <div className="font-display text-[17px] font-semibold">Login to see your stats</div>
         <div className="text-[13px] text-[var(--color-text-secondary)]">
-          Your rank, next match, best friend, worst nightmare and match history.
+          Your EHOG, KDA, next match, best friend, worst nightmare and match history.
         </div>
         {/* Intentionally a plain <a>, not next/link's <Link>: this route is a Route Handler that
             302s to steamcommunity.com for the OpenID flow, not an app page (see TopbarShell). */}

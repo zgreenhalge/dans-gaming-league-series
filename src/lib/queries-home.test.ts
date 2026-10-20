@@ -242,7 +242,15 @@ test('isPlayedHistoryRow / lastPlayed / nextUpcoming / opponentNames', () => {
 
 // ─── buildMyStats ────────────────────────────────────────────────────────────
 
-function leaderboardRow(playerId: number, name: string, won: number, lost: number, rwr: number, adr: number): LeaderboardRowWithId {
+function leaderboardRow(
+  playerId: number,
+  name: string,
+  won: number,
+  lost: number,
+  rwr: number,
+  adr: number,
+  overrides: Partial<LeaderboardRowWithId> = {},
+): LeaderboardRowWithId {
   return {
     season_id: 0,
     player_id: playerId,
@@ -264,10 +272,11 @@ function leaderboardRow(playerId: number, name: string, won: number, lost: numbe
     deaths_in_wins: 0,
     kills_in_losses: 0,
     deaths_in_losses: 0,
+    ...overrides,
   };
 }
 
-test('buildMyStats: career rank, record, ADR, next match, recent matches, best friend and worst nightmare', () => {
+test('buildMyStats: career EHOG, record, KDA, ADR, next match, recent matches, best friend and worst nightmare', () => {
   const h2h: H2HData = {
     duos: [duoStats({ playerA: 1, playerB: 2, gamesPlayed: 5, wins: 3, losses: 2 })],
     rivals: [rival(1, 3, 1, 4)],
@@ -281,14 +290,20 @@ test('buildMyStats: career rank, record, ADR, next match, recent matches, best f
   const stats = buildMyStats({
     playerId: 1,
     playerName: 'Alice',
-    // Out of order on purpose: the rank comes from `canonicalSort()`, not input order.
-    leaderboard: [leaderboardRow(2, 'Bob', 5, 5, 50, 70), leaderboardRow(1, 'Alice', 8, 2, 55, 80), leaderboardRow(3, 'Carol', 8, 2, 54, 79)],
+    leaderboard: [
+      leaderboardRow(2, 'Bob', 5, 5, 50, 70),
+      leaderboardRow(1, 'Alice', 8, 2, 55, 80, { total_kills: 100, total_assists: 30, total_deaths: 50 }),
+      leaderboardRow(3, 'Carol', 8, 2, 54, 79),
+    ],
+    ehog: 23.4,
     history,
     h2h,
   });
 
-  assert.equal(stats.rank, 1);
+  assert.equal(stats.ehog, 23.4);
   assert.deepEqual(stats.record, { wins: 8, losses: 2 });
+  assert.equal(stats.kda, 2.6);
+  assert.equal(stats.kd, 2);
   assert.equal(stats.adr, 80);
   assert.deepEqual(stats.next, { matchId: 9, opponents: 'Carol & Dave', map: 'Harbor', scheduledAt: '2026-10-25T19:30:00Z' });
   assert.deepEqual(stats.recent, [
@@ -299,16 +314,19 @@ test('buildMyStats: career rank, record, ADR, next match, recent matches, best f
   assert.deepEqual(stats.worstNightmare, { id: 3, name: 'Carol', wins: 1, losses: 4 });
 });
 
-test('buildMyStats: a player with no matches has no rank, record, history or matchups', () => {
+test('buildMyStats: a player with no matches has no rating, record, KDA, history or matchups', () => {
   const stats = buildMyStats({
     playerId: 7,
     playerName: 'Grace',
     leaderboard: [leaderboardRow(1, 'Alice', 8, 2, 55, 80)],
+    ehog: null,
     history: [],
     h2h: { duos: [], rivals: [], players: H2H_PLAYERS },
   });
-  assert.equal(stats.rank, null);
+  assert.equal(stats.ehog, null);
   assert.deepEqual(stats.record, { wins: 0, losses: 0 });
+  assert.equal(stats.kda, 0);
+  assert.equal(stats.kd, 0);
   assert.equal(stats.adr, 0);
   assert.equal(stats.next, null);
   assert.deepEqual(stats.recent, []);
@@ -445,7 +463,7 @@ test('getMyStats: assembled from the career leaderboard, player history and care
   matchesSnapshot('getMyStats-player1', stats);
   assert.ok(stats);
   assert.equal(stats.playerName, 'Alice');
-  assert.equal(stats.rank, 1);
+  assert.equal(stats.record.wins, 2);
   assert.equal(await getMyStats(9999, h2h), null);
 });
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `MyStatsPanel.tsx`: the career rank / W-L / ADR tiles, the Next Match line,
+ * Component tests for `MyStatsPanel.tsx`: the EHOG / W-L / KDA / ADR tiles, the Next Match line,
  * the Best friend and Worst nightmare rows (each linking to the career H2H matchup — hidden when
  * there isn't one), the Match history list and its empty state, and the signed-out placeholder.
  *
@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { ehogColorFor } from './EhogBadge';
 import { MyStatsPanel, MyStatsLockedPanel } from './MyStatsPanel';
 import type { MyStats } from '@/lib/queries';
 
@@ -16,8 +17,10 @@ function stats(overrides: Partial<MyStats> = {}): MyStats {
   return {
     playerId: 5,
     playerName: 'Rook',
-    rank: 4,
+    ehog: 23.46,
     record: { wins: 31, losses: 19 },
+    kda: 1.4286,
+    kd: 1.1,
     adr: 74.051,
     next: { matchId: 20, opponents: 'Bishop & Pixel', map: 'Harbor', scheduledAt: null },
     recent: [
@@ -31,17 +34,24 @@ function stats(overrides: Partial<MyStats> = {}): MyStats {
 }
 
 describe('MyStatsPanel', () => {
-  test('shows the player, their ordinal career rank, record and ADR to two decimals', () => {
+  test('shows the player, their EHOG to one decimal, career record, KDA and ADR to two', () => {
     render(<MyStatsPanel stats={stats()} />);
     expect(screen.getByRole('link', { name: 'Rook' })).toHaveAttribute('href', '/players/5');
-    expect(screen.getByText('4th')).toBeInTheDocument();
+    expect(screen.getByText('23.5')).toBeInTheDocument();
     expect(screen.getByText('31-19')).toBeInTheDocument();
+    expect(screen.getByText('1.43')).toBeInTheDocument();
+    expect(screen.getByText('1.10 K/D')).toBeInTheDocument();
     expect(screen.getByText('74.05')).toBeInTheDocument();
   });
 
-  test('a player with no played matches shows dashes instead of a rank, record and ADR', () => {
-    render(<MyStatsPanel stats={stats({ rank: null, record: { wins: 0, losses: 0 }, adr: 0, recent: [], next: null })} />);
-    expect(screen.getAllByText('—')).toHaveLength(3);
+  test('the EHOG figure takes the rating tier color', () => {
+    render(<MyStatsPanel stats={stats()} />);
+    expect(screen.getByText('23.5')).toHaveStyle({ color: ehogColorFor(23.46) });
+  });
+
+  test('a player with no played matches or rating shows dashes instead of the figures', () => {
+    render(<MyStatsPanel stats={stats({ ehog: null, record: { wins: 0, losses: 0 }, kda: 0, kd: 0, adr: 0, recent: [], next: null })} />);
+    expect(screen.getAllByText('—')).toHaveLength(4);
   });
 
   test('Best friend and Worst nightmare link to the career H2H matchup, partner and opponent', () => {

@@ -23,6 +23,7 @@ import {
   getBatchMatchRatingDeltas,
   getMatchRatingDeltas,
   getPlayerRatings,
+  getCurrentEhogRating,
 } from './queries';
 
 async function main() {
@@ -36,6 +37,11 @@ async function main() {
     const data = await getPlayerEhogRating(6);
     assert.equal(data.currentRating, null);
     assert.deepEqual(data.history, []);
+  });
+
+  await test('getCurrentEhogRating: matches getPlayerEhogRating\'s current rating, null without one', async () => {
+    assert.equal(await getCurrentEhogRating(1), (await getPlayerEhogRating(1)).currentRating);
+    assert.equal(await getCurrentEhogRating(6), null);
   });
 
   await test('getAllEhogSnapshots() — latest per player per season segment, snapshot', async () => {
