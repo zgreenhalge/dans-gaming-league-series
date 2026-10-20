@@ -477,7 +477,6 @@ const WEIGHT = {
   repeatOpponent: 2, // per meeting beyond the second
 };
 const RESTARTS = 3;
-const SIDE_BALANCE_RUNS = 6;
 
 /** League-wide pair counts — accumulate across halves so the second half avoids first-half pairs. */
 interface PairCounts {
@@ -817,27 +816,12 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
- * generator uses. That search minimizes the league's total imbalance, which over a long season can
- * still leave one player several sides off, so it runs `SIDE_BALANCE_RUNS` times and keeps the run
- * whose worst player is closest to even. Flipping a game's sides inverts its stored win probability
- * along with it. */
+ * generator uses. Flipping a game's sides inverts its stored win probability along with it. */
 function assignSides(weeks: FormatWeek[], rand: () => number): void {
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
-  let best: { worst: number; total: number; plans: MatchPlan[] } | null = null;
-  for (let run = 0; run < SIDE_BALANCE_RUNS; run++) {
-    const plans: MatchPlan[] = games.map((g) => ({ shirts: g.shirts, skins: g.skins }));
-    optimizeSideBalance(plans, new Map(), rand);
-    const balance = new Map<number, number>();
-    for (const m of plans) {
-      for (const id of m.shirts) balance.set(id, (balance.get(id) ?? 0) + 1);
-      for (const id of m.skins) balance.set(id, (balance.get(id) ?? 0) - 1);
-    }
-    const values = [...balance.values()].map(Math.abs);
-    const worst = Math.max(...values);
-    const total = values.reduce((a, v) => a + v, 0);
-    if (!best || worst < best.worst || (worst === best.worst && total < best.total)) best = { worst, total, plans };
-  }
-  best!.plans.forEach((m, i) => {
+  const plans: MatchPlan[] = games.map((g) => ({ shirts: g.shirts, skins: g.skins }));
+  optimizeSideBalance(plans, new Map(), rand);
+  plans.forEach((m, i) => {
     const g = games[i];
     if (m.shirts !== g.shirts) {
       g.shirtsWinProb = 1 - g.shirtsWinProb;
