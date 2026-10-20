@@ -174,7 +174,8 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating,
   games and W-L for a duo; matches and rounds won on each side for a rivalry), the title linking to the Statistics
   H2H tab and each row to that pair's H2H matchup (`/statistics?tab=h2h&a=…&b=…`, `&type=opponent` for a
-  rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads).
+  rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads; `h2hPairHref()` and the hook
+  share their names and default in `src/lib/h2hPairParams.ts`).
 - **Form** — a player's last five results in the standings' season, newest first, as `W`/`L` (the
   home standings column). Not the same as the player page's **Last 5**, which spans every season.
 - **Scouting report** — pre-match prep view (`getMatchScoutingData()` → `ScoutingReport.tsx`)

@@ -4,35 +4,34 @@ import { useCallback, useMemo } from 'react';
 import { useSetUrlParams } from './useUrlState';
 import { useUrlStateContext } from './UrlStateProvider';
 import type { H2HPair } from './H2HMatrix';
+import { DEFAULT_H2H_PAIR_TYPE, H2H_PAIR_PARAM, readH2HPairNames } from '@/lib/h2hPairParams';
 
 /** Resolves an `H2HPair` (by player id) from `a`/`b`/`type` URL params (`a`/`b` are player names,
- * matched case-insensitively — the same encoding `h2hPairToParams` writes). `null` if either name is
+ * matched case-insensitively — the encoding in `src/lib/h2hPairParams.ts`). `null` if either name is
  * absent or doesn't match a known player. */
 export function parseH2HPairFromParams(
   searchParams: URLSearchParams,
   players: { id: number; name: string }[],
 ): H2HPair | null {
-  const aName = searchParams.get('a');
-  const bName = searchParams.get('b');
-  if (!aName || !bName) return null;
-  const a = players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
-  const b = players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
+  const names = readH2HPairNames(searchParams);
+  if (!names) return null;
+  const a = players.find((p) => p.name.toLowerCase() === names.aName.toLowerCase());
+  const b = players.find((p) => p.name.toLowerCase() === names.bName.toLowerCase());
   if (!a || !b) return null;
-  const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
-  return { a: a.id, b: b.id, type };
+  return { a: a.id, b: b.id, type: names.type };
 }
 
 /** The inverse of `parseH2HPairFromParams` — an `H2HSection` `onPairChange` handler's pair (by
  * player id) into the `a`/`b`/`type` patch to hand `useSetUrlParams()`. `type` omits itself for the
- * default `'partner'`, matching this codebase's "writing the default removes the param" convention. */
+ * default, matching this codebase's "writing the default removes the param" convention. */
 export function h2hPairToParams(
   pair: H2HPair,
   players: { id: number; name: string }[],
 ): { a?: string; b?: string; type?: string } {
   return {
-    a: players.find((p) => p.id === pair.a)?.name,
-    b: players.find((p) => p.id === pair.b)?.name,
-    type: pair.type === 'opponent' ? 'opponent' : undefined,
+    [H2H_PAIR_PARAM.a]: players.find((p) => p.id === pair.a)?.name,
+    [H2H_PAIR_PARAM.b]: players.find((p) => p.id === pair.b)?.name,
+    [H2H_PAIR_PARAM.type]: pair.type === DEFAULT_H2H_PAIR_TYPE ? undefined : pair.type,
   };
 }
 
@@ -51,9 +50,9 @@ export function useH2HPairUrlState(
 ): { initialPair: H2HPair | null; onPairChange: (pair: H2HPair) => void } {
   const { searchParams } = useUrlStateContext();
   const setUrlParams = useSetUrlParams();
-  const aRaw = searchParams.get('a');
-  const bRaw = searchParams.get('b');
-  const typeRaw = searchParams.get('type');
+  const aRaw = searchParams.get(H2H_PAIR_PARAM.a);
+  const bRaw = searchParams.get(H2H_PAIR_PARAM.b);
+  const typeRaw = searchParams.get(H2H_PAIR_PARAM.type);
 
   const initialPair = useMemo(
     () => parseH2HPairFromParams(searchParams, players),
