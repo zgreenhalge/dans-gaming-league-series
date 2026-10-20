@@ -301,6 +301,14 @@ test('a new-pairings re-draft brings more first-half strangers together than a w
   assert.ok(fresh.scorecard.pairsNeverMet <= byRate.scorecard.pairsNeverMet, `${fresh.scorecard.pairsNeverMet} vs ${byRate.scorecard.pairsNeverMet}`);
 });
 
+test('players who miss someone counts the whole league, including other divisions', () => {
+  // Two divisions with no halfway re-draft never meet across divisions, so every player misses
+  // someone even though every reachable pair may meet.
+  const p = plan(8, { divisions: 2, weeks: 4 });
+  assert.equal(p.scorecard.playersMissingSomeone, 8);
+  assert.equal(plan(7, {}).scorecard.playersMissingSomeone, 0);
+});
+
 test('divisions without a shuffle keep one seeding all season', () => {
   const p = plan(8, { divisions: 2, weeks: 4 });
   assertSound(p, 8, 4, 2);
