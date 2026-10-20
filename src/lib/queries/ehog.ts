@@ -224,17 +224,24 @@ export interface PlayerMuSigma {
 
 export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSigma[]> {
   if (playerIds.length === 0) return [];
-  const rows = await batchedIn<{ player_id: number; mu: number; sigma: number; ehog_rating: number; sequence_index: number }>(
-    'player_rating_history', 'player_id', playerIds,
-    'player_id, mu, sigma, ehog_rating, sequence_index',
+  // One `order by sequence_index desc limit 1` read per player (served by the
+  // (player_id, formula_version, sequence_index) index) so the read stays flat as history grows.
+  const latestRows = await Promise.all(
+    playerIds.map(async (pid) => {
+      const { data, error } = await getAdminClient()
+        .from('player_rating_history')
+        .select('player_id, mu, sigma, ehog_rating')
+        .eq('player_id', pid)
+        .order('sequence_index', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0] ?? null;
+    }),
   );
 
-  const latest = new Map<number, { mu: number; sigma: number; ehogRating: number; seq: number }>();
-  for (const r of rows) {
-    const prev = latest.get(r.player_id);
-    if (!prev || r.sequence_index > prev.seq) {
-      latest.set(r.player_id, { mu: r.mu, sigma: r.sigma, ehogRating: r.ehog_rating, seq: r.sequence_index });
-    }
+  const latest = new Map<number, { mu: number; sigma: number; ehogRating: number }>();
+  for (const r of latestRows) {
+    if (r) latest.set(r.player_id, { mu: r.mu, sigma: r.sigma, ehogRating: r.ehog_rating });
   }
 
   // Players with no rating_history yet may still have a configured seed_ehog (a known new
