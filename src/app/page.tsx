@@ -134,12 +134,12 @@ export default async function Home() {
 
         {/* One grid, so My Stats is a single element: first on a phone (above the games and
             standings) and top of the right-hand column on a wide screen, where the games and
-            standings column spans the rail's three rows. */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_auto_1fr]">
-          <div className="lg:col-start-2 lg:row-start-1">
+            standings column spans the rail's two rows. */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_1fr]">
+          <div className="min-w-0 lg:col-start-2 lg:row-start-1">
             {myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />}
           </div>
-          <div className="min-w-0 flex flex-col gap-6 lg:col-start-1 lg:row-start-1 lg:row-span-3">
+          <div className="min-w-0 flex flex-col gap-6 lg:col-start-1 lg:row-start-1 lg:row-span-2">
             {games && (
               <UpcomingGamesPanel
                 scheduled={games.scheduled}
@@ -161,10 +161,8 @@ export default async function Home() {
               />
             )}
           </div>
-          <div className="lg:col-start-2 lg:row-start-2 empty:hidden">
+          <div className="min-w-0 flex flex-col gap-4 self-start lg:col-start-2 lg:row-start-2 empty:hidden">
             <TopDuosPanel data={h2h} />
-          </div>
-          <div className="self-start lg:col-start-2 lg:row-start-3 empty:hidden">
             <HottestRivalriesPanel data={h2h} />
           </div>
         </div>

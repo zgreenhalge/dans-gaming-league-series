@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, nextUpcoming, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
+import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
@@ -233,7 +233,7 @@ export default function PlayerView({
   const filteredEconomyStats = useMemo(() => filterByMatchIds(economyStats, filtered), [filtered, economyStats]);
   const playedHistory = useMemo(() => filtered.filter(isPlayedHistoryRow), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayedHistoryRow(r)).reverse();
-  const nextMatch = nextUpcoming(filtered);
+  const nextMatch = upcomingHistory[0] ?? null;
 
   const h2hData = useLiveH2HData(playedHistory, players);
   // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the

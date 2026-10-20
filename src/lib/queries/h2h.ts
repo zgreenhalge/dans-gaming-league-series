@@ -155,13 +155,14 @@ export interface RankedRival {
   rating: number;
 }
 
-/** The `limit` highest-scoring `items`, best first, each with its score as a rounded 0–100 rating. */
-function rankBy<T>(items: T[], score: (item: T) => number, limit: number): { item: T; rating: number }[] {
+/** The `limit` highest-scoring `items`, best first, each built into a `R` with its score as a
+ *  rounded 0–100 rating. */
+function rankBy<T, R>(items: T[], score: (item: T) => number, limit: number, make: (item: T, rating: number) => R): R[] {
   return items
     .map((item) => ({ item, raw: score(item) }))
     .sort((x, y) => y.raw - x.raw)
     .slice(0, limit)
-    .map(({ item, raw }) => ({ item, rating: Math.round(raw * 100) }));
+    .map(({ item, raw }) => make(item, Math.round(raw * 100)));
 }
 
 /**
@@ -170,12 +171,12 @@ function rankBy<T>(items: T[], score: (item: T) => number, limit: number): { ite
  * ranking of the same data. Shared by `H2HSection` and the home page's Top duos panel.
  */
 export function rankDuos(duos: DuoStats[], limit: number): RankedDuo[] {
-  return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit).map(({ item, rating }) => ({ duo: item, rating }));
+  return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit, (duo, rating) => ({ duo, rating }));
 }
 
 /** The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. */
 export function rankRivals(rivals: H2HStats[], limit: number): RankedRival[] {
-  return rankBy(rivals.filter((r) => r.meetings > 0), rivalBlendedScorer(rivals), limit).map(({ item, rating }) => ({ rival: item, rating }));
+  return rankBy(rivals.filter((r) => r.meetings > 0), rivalBlendedScorer(rivals), limit, (rival, rating) => ({ rival, rating }));
 }
 
 /** One player's standing against a single other player, from that player's side. */

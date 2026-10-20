@@ -276,10 +276,11 @@ export function lastPlayed(history: PlayerHistoryRow[], limit: number): PlayerHi
   return history.filter(isPlayedHistoryRow).slice(0, limit);
 }
 
-/** The earliest not-yet-played row of `history` — the player page's "Next Match" and the home
- *  page's. `null` when nothing is upcoming. */
+/** The earliest not-yet-played row of `history` (`getPlayer()` returns it newest first) — the home
+ *  page's Next Match, and the player page's too. `null` when nothing is upcoming. */
 export function nextUpcoming(history: PlayerHistoryRow[]): PlayerHistoryRow | null {
-  return history.findLast((r) => !isPlayedHistoryRow(r)) ?? null;
+  const upcoming = history.filter((r) => !isPlayedHistoryRow(r));
+  return upcoming.length > 0 ? upcoming[upcoming.length - 1] : null;
 }
 
 /** The names of the other team in a history row's match, "A & B" — `TBD` while it has no roster. */
