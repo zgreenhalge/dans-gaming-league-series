@@ -167,9 +167,9 @@ so you don't have to reverse-engineer them from scratch each time.
   across all eligible pairs* (e.g. `maxRwr` = the highest round win rate anyone posted),
   turning every term into a 0–1 "how close to the best?" fraction before the weights
   (0.5 / 0.3 / 0.2, etc.) are applied. `Math.max(1, ...)` guards the empty-data case.
-- **My Stats** — the home page's panel for the signed-in player: EHOG, career W-L, KDA (kills + assists per death, unlike the stat tables' K/D) and ADR, Next
-  Match, **Best friend** (their highest-rated partner), **Worst nightmare** (the opponent they've
-  lost to most) and Match history. Career-scoped, not season-scoped. Definitions in
+- **My Stats** — the home page's panel for the signed-in player: EHOG, career W-L, KDA (kills +
+  assists per death, unlike the stat tables' K/D) and ADR, Next Match, **Best friend** (their
+  highest-rated partner), **Worst nightmare** (the opponent they've lost to most) and Match history. Career-scoped, not season-scoped. Definitions in
   [`calculations.md`](./calculations.md#home-page). Signed out, the panel is a blurred placeholder
   with a Login prompt.
 - **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating,

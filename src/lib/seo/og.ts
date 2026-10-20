@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { getCurrentEhogRating, getMapLookup, getMatchTeamNames, getGauntletSeasonLeaderboard } from '../queries';
+import { getMapLookup, getMatchTeamNames, getGauntletSeasonLeaderboard } from '../queries';
 import type { Player, Match } from '@/lib/types';
 import { effectivePickedMap } from '../veto';
 
@@ -21,7 +21,7 @@ type LeaderboardAgg = {
  * collapses into a single set of Supabase round trips per request.
  */
 export const getPlayerMeta = cache(async (playerId: number) => {
-  const [{ data: player }, { data: rows }, { data: gauntletRows }, ehog] = await Promise.all([
+  const [{ data: player }, { data: rows }, { data: gauntletRows }, { data: ratingRow }] = await Promise.all([
     getAdminClient()
       .from('players')
       .select('id, name, steam_avatar_url')
@@ -36,7 +36,11 @@ export const getPlayerMeta = cache(async (playerId: number) => {
       .select('kills, deaths, damage, rounds_played, is_win, match_id, matches!inner(is_playoff_game)')
       .eq('player_id', playerId)
       .eq('matches.is_playoff_game', true),
-    getCurrentEhogRating(playerId),
+    getAdminClient()
+      .from('player_current_ratings')
+      .select('ehog_v1')
+      .eq('player_id', playerId)
+      .maybeSingle(),
   ]);
   if (!player) return null;
   const p = player as Pick<Player, 'id' | 'name' | 'steam_avatar_url'>;
@@ -59,6 +63,7 @@ export const getPlayerMeta = cache(async (playerId: number) => {
     agg.total_rounds_played += g.rounds_played;
   }
 
+  const ehog: number | null = (ratingRow as { ehog_v1?: number } | null)?.ehog_v1 ?? null;
 
   const rates = deriveRates({ ...agg, total_rounds_won: 0 });
   const wr = agg.matches_played > 0 ? rates.win_rate_percentage.toFixed(0) : null;

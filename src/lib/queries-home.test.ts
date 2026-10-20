@@ -292,7 +292,7 @@ test('buildMyStats: career EHOG, record, KDA, ADR, next match, recent matches, b
     playerName: 'Alice',
     leaderboard: [
       leaderboardRow(2, 'Bob', 5, 5, 50, 70),
-      leaderboardRow(1, 'Alice', 8, 2, 55, 80, { total_kills: 100, total_assists: 30, total_deaths: 50, kd_ratio: 2 }),
+      leaderboardRow(1, 'Alice', 8, 2, 55, 80, { total_kills: 100, total_assists: 30, total_deaths: 50 }),
       leaderboardRow(3, 'Carol', 8, 2, 54, 79),
     ],
     ehog: 23.4,
