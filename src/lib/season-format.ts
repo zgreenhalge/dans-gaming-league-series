@@ -44,7 +44,7 @@
 
 import { predictWinProbability, type PlayerRating } from './ehog';
 import { snakeGroups } from './gauntlet-bracket';
-import { collectCoveragePairs, mulberry32, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
+import { balanceCost, collectCoveragePairs, mulberry32, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
 
 export type WeekShape = 'match' | 'group';
 /** What players are ranked by before they're dealt into divisions. */
@@ -887,6 +887,6 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorec
     pairsNeverMet,
     repeatTeammatePairs: [...teammateCount.values()].filter((c) => c > 1).length,
     lopsidedGames: games.filter((g) => isLopsided(g.shirtsWinProb)).length,
-    maxSideImbalance: Math.max(0, ...playerIds.map((id) => Math.abs(sideBalance.get(id) ?? 0))),
+    maxSideImbalance: balanceCost(sideBalance).worst,
   };
 }

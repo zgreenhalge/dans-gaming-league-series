@@ -235,8 +235,7 @@ function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], s
 // much as it hurts the partner, a net-zero move the search never takes) long before the season is
 // actually balanced. Randomizing each match's starting orientation before climbing breaks that
 // structural symmetry; running several random restarts and keeping the best guards against any one
-// restart still landing in a bad optimum. Each pass flips one match, so a restart converges in a few
-// passes per match.
+// restart still landing in a bad optimum.
 const BALANCE_SEARCH_RESTARTS = 8;
 
 /** Swaps `m`'s shirts/skins labels in place and updates `balance` to match (each of the 4 players'
@@ -282,12 +281,12 @@ export function chooseSides(
 
 /** How far from even a balance map is: the worst single player's |balance|, then the sum of squared
  * balances as the tiebreak. Compared lexicographically — a lower `worst` always wins. */
-interface BalanceCost {
+export interface BalanceCost {
   worst: number;
   squares: number;
 }
 
-function balanceCost(balance: Map<number, number>): BalanceCost {
+export function balanceCost(balance: Map<number, number>): BalanceCost {
   let worst = 0;
   let squares = 0;
   for (const v of balance.values()) {

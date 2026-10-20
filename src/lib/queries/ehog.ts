@@ -222,22 +222,31 @@ export interface PlayerMuSigma {
   ehogRating: number;
 }
 
+const LATEST_RATING_CONCURRENCY = 20;
+
 export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSigma[]> {
   if (playerIds.length === 0) return [];
   // One `order by sequence_index desc limit 1` read per player (served by the
-  // (player_id, formula_version, sequence_index) index) so the read stays flat as history grows.
-  const latestRows = await Promise.all(
-    playerIds.map(async (pid) => {
-      const { data, error } = await getAdminClient()
-        .from('player_rating_history')
-        .select('player_id, mu, sigma, ehog_rating')
-        .eq('player_id', pid)
-        .order('sequence_index', { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      return data?.[0] ?? null;
-    }),
-  );
+  // (player_id, formula_version, sequence_index) index), issued `LATEST_RATING_CONCURRENCY` at a
+  // time so the in-flight request count stays bounded and the read stays flat as history grows.
+  const latestRows = [];
+  for (const group of chunk(playerIds, LATEST_RATING_CONCURRENCY)) {
+    latestRows.push(
+      ...(await Promise.all(
+        group.map(async (pid) => {
+          const { data, error } = await getAdminClient()
+            .from('player_rating_history')
+            .select('player_id, mu, sigma, ehog_rating')
+            .eq('player_id', pid)
+            .eq('formula_version', 'ehog_v1')
+            .order('sequence_index', { ascending: false })
+            .limit(1);
+          if (error) throw error;
+          return data?.[0] ?? null;
+        }),
+      )),
+    );
+  }
 
   const latest = new Map<number, { mu: number; sigma: number; ehogRating: number }>();
   for (const r of latestRows) {
