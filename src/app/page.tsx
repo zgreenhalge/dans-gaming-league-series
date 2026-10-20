@@ -4,71 +4,31 @@ import { authOptions } from '@/lib/authOptions';
 import {
   getSeasons,
   getAllLeaderboards,
-  getSeasonSchedule,
-  getUpcomingGames,
-  getGauntletRounds,
-  getUpcomingGauntletGames,
-  gauntletMatchToUpcomingGameRow,
+  getSeasonForm,
+  getHomeGames,
+  pickStandingsSeason,
+  getMyStats,
+  getCareerH2HDataCached,
   getPlayerRosterSeasonIds,
   getOpenFeedbackSeasonIds,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
 } from '@/lib/queries';
-import type { UpcomingGameRow } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
+import { gauntletHref, seasonHref } from '@/lib/crumbs';
 import { TopbarShell } from '@/components/TopbarShell';
 import { seasonTitle } from '@/lib/util';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
+import { HomeStandingsPanel } from '@/components/HomeStandingsPanel';
+import { MyStatsPanel, MyStatsLockedPanel } from '@/components/MyStatsPanel';
+import { TopDuosPanel, HottestRivalriesPanel } from '@/components/TopPairsPanels';
 
 export const dynamic = 'force-dynamic';
 
 function HomeTopbar() {
   return <TopbarShell crumbs={[{ label: 'DGLS' }]} />;
-}
-
-function ActiveSeasonPanel({
-  season,
-  leaderboard,
-}: {
-  season: Season;
-  leaderboard: LeaderboardRowWithId[];
-}) {
-  // seasonTitle() collapses both a regular season and its paired gauntlet to the same "Season N" —
-  // fine everywhere else since context disambiguates, but here they can both render as Live tiles
-  // at once, so the gauntlet keeps its full name ("Season N Gauntlet") to stay distinguishable.
-  // Linking to the gauntlet's own id is enough — the season page itself redirects a gauntlet id to
-  // its paired regular season and renders the gauntlet tab inline.
-  return (
-    <div
-      className="lift-card border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
-      style={{ borderLeftColor: 'var(--color-site-accent)', borderLeftWidth: '3px' }}
-    >
-      <Link
-        href={`/seasons/${season.id}`}
-        className="block px-6 py-5 hover:bg-[var(--color-bg-secondary)] transition-colors"
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]">
-            <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
-            Live
-          </span>
-          {season.is_gauntlet && (
-            <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
-              Gauntlet
-            </span>
-          )}
-        </div>
-        <div className="font-display text-[32px] font-semibold leading-tight text-[var(--color-text-primary)]">
-          {season.is_gauntlet ? season.name : seasonTitle(season.name)}
-        </div>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
-          {season.is_gauntlet ? 'In progress' : `${leaderboard.length} players`}
-        </div>
-      </Link>
-    </div>
-  );
 }
 
 function UpcomingSeasonRow({
@@ -82,7 +42,7 @@ function UpcomingSeasonRow({
 }) {
   return (
     <Link
-      href={`/seasons/${season.id}`}
+      href={seasonHref(season.id)}
       className="lift-row flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0"
     >
       <div className="min-w-0">
@@ -107,11 +67,13 @@ function UpcomingSeasonRow({
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
-  const [seasons, leaderboards, rosterSeasonIds] = await Promise.all([
+  const [seasons, leaderboards, rosterSeasonIds, h2h] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
+    getCareerH2HDataCached(),
   ]);
+  const myStats = currentPlayerId != null ? await getMyStats(currentPlayerId, h2h) : null;
 
   // Survey / superlatives banners for the signed-in player: only seasons with something open, and
   // only those the player played (the views are null otherwise).
@@ -134,29 +96,19 @@ export default async function Home() {
   const upcoming = seasons
     .filter((s) => !s.is_gauntlet && s.status === 'UPCOMING')
     .sort((a, b) => a.id - b.id);
-  const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
-  // Kept separate from `active` rather than merged in: a gauntlet has no weekly schedule (no
-  // `start_date`, no week/match structure), so it only ever drives its own Live tile, never the
-  // Upcoming Games panel's "first active regular season" pick below.
-  const activeGauntlets = seasons.filter((s) => s.is_gauntlet && s.status === 'ACTIVE');
 
-  // Upcoming Games panel data, from whichever season is actually active — a regular season anchors
-  // "needs scheduling" on its current week (getUpcomingGames()); a gauntlet has no weekly structure
-  // to anchor that on, so it surfaces every unscheduled bracket match instead
-  // (getUpcomingGauntletGames()).
-  let upcomingScheduled: UpcomingGameRow[] = [];
-  let upcomingUnscheduled: UpcomingGameRow[] = [];
-  if (active.length > 0) {
-    const schedule = await getSeasonSchedule(active[0].id);
-    const upcomingGames = getUpcomingGames(schedule, active[0].start_date);
-    upcomingScheduled = upcomingGames.scheduled;
-    upcomingUnscheduled = upcomingGames.unscheduled;
-  } else if (activeGauntlets.length > 0) {
-    const rounds = await getGauntletRounds(activeGauntlets[0].id);
-    const upcomingGames = getUpcomingGauntletGames(rounds);
-    upcomingScheduled = upcomingGames.scheduled.map(gauntletMatchToUpcomingGameRow);
-    upcomingUnscheduled = upcomingGames.unscheduled.map(gauntletMatchToUpcomingGameRow);
-  }
+  // Games (Upcoming Games + To Be Scheduled) come from the active regular season, else the active
+  // gauntlet; standings from the active regular season, else the latest finished one.
+  const standings = pickStandingsSeason(seasons);
+  const [games, form] = await Promise.all([
+    getHomeGames(seasons),
+    standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
+  ]);
+
+  // The rail's My Stats shows twice: first on a phone, where the rail stacks under the main column
+  // and a signed-in player's own panel would otherwise sit below the whole standings table, and in
+  // the rail on a wide screen. Only one is ever displayed.
+  const myStatsPanel = myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />;
 
   return (
     <div className="min-h-screen">
@@ -173,7 +125,7 @@ export default async function Home() {
           />
         ))}
         {upcoming.length > 0 && (
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+          <div className="mb-8 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
             {upcoming.map((s) => (
               <UpcomingSeasonRow
                 key={s.id}
@@ -185,19 +137,37 @@ export default async function Home() {
           </div>
         )}
 
-        {[...active, ...activeGauntlets].map((s) => (
-          <ActiveSeasonPanel
-            key={s.id}
-            season={s}
-            leaderboard={leaderboards.get(s.id) ?? []}
-          />
-        ))}
+        <div className="lg:hidden mb-6">{myStatsPanel}</div>
 
-        <UpcomingGamesPanel
-          scheduled={upcomingScheduled}
-          unscheduled={upcomingUnscheduled}
-          currentPlayerId={currentPlayerId}
-        />
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
+            {games && (
+              <UpcomingGamesPanel
+                scheduled={games.scheduled}
+                unscheduled={games.unscheduled}
+                headingHref={games.headingHref}
+                scheduleHref={games.scheduleHref}
+                currentPlayerId={currentPlayerId}
+              />
+            )}
+            {standings && (
+              <HomeStandingsPanel
+                title={seasonTitle(standings.season.name)}
+                seasonHref={seasonHref(standings.season.id)}
+                live={standings.live}
+                gauntletHref={standings.gauntlet ? gauntletHref(standings.season.id) : undefined}
+                rows={leaderboards.get(standings.season.id) ?? []}
+                form={form}
+                currentPlayerId={currentPlayerId}
+              />
+            )}
+          </div>
+          <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-4">
+            <div className="hidden lg:block">{myStatsPanel}</div>
+            <TopDuosPanel data={h2h} />
+            <HottestRivalriesPanel data={h2h} />
+          </aside>
+        </div>
       </main>
     </div>
   );
