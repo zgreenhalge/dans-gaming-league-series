@@ -8,8 +8,9 @@
  *
  * Settings (`SeasonFormatSettings`):
  * - `weeks` — season length.
- * - `weekShape` — `'match'`: each player plays about one 2v2 match a week; `'group'`: each week
- *   players meet in groups of 4–7 and play two games each back to back (see `groupGames()`).
+ * - `weekShape` — `'match'`: each player plays about one 2v2 match a week; `'group'`: each player
+ *   is in about one group a week — four players playing two games back to back with two different
+ *   team splits (the gauntlet's pod).
  * - `divisions` — how many divisions the roster is drafted into; matches stay inside a division.
  * - `draftBasis` / `draftOrder` — how divisions are drafted: players are valued (`draftValues()`)
  *   by EHOG, by a win-loss record the caller supplies (`FormatPlayer.record`, e.g. a past season's
@@ -28,14 +29,16 @@
  *   `LOPSIDED_MARGIN`). EHOG only ever shapes who plays whom and which division a player starts
  *   in; standings stay Wins → RWR% → ADR (`canonicalSort()`).
  *
- * Every player plays the same number of games: a player who sits out a week has a doubleheader
- * somewhere else (`matchPhaseShape()`), and odd-sized groups alternate a longer and a shorter week
- * (`groupGames()`). Settings that can't keep that promise are refused with a reason by
+ * Every player plays the same number of matches or groups: the count nearest one a week that
+ * every division can split into whole units of four (`unitsPerPlayer()`). When a division doesn't
+ * divide by 4 the weeks then differ (`unitsPerWeek()`): a week with one fewer unit leaves the
+ * leftover players a bye, and a week with one more seats a few players in a second match or group
+ * — a doubleheader. Settings that can't keep that promise are refused with a reason by
  * `formatIssues()` rather than producing an uneven plan.
  *
  * Search: each (half, division) is a simulated-annealing search over which player fills which slot
  * of a fixed week template, and which of a game's three possible 2v2 splits is played. The cost
- * function, in order of weight: equal game counts, no exact rematch inside a group, no repeat
+ * function, in order of weight: equal game counts, no exact rematch in a week, no repeat
  * teammates, every pair meets (as teammates or opponents), lopsided games (only beyond the margin),
  * piled-up repeat opponents. Shirts/skins sides are assigned afterwards by `optimizeSideBalance()`
  * (`season-schedule.ts`) — flipping sides never changes a game's win probability, so the EHOG term
@@ -135,13 +138,20 @@ export interface FormatHalf {
 export interface FormatScorecard {
   games: number;
   gamesPerPlayer: { min: number; max: number };
-  /** Total player-weeks with no game. */
-  idlePlayerWeeks: number;
+  /** Weeks where at least one player plays twice — a second match, or a second group in a group-week
+   *  season — and weeks where at least one player has a bye. A week's usual load is one match or
+   *  one group. */
+  doubleheaderWeeks: number;
+  byeWeeks: number;
+  /** The most games any one player plays in a single week. */
   maxGamesInAWeek: number;
   distinctTeammates: { min: number; max: number; possible: number };
   pairs: number;
   pairsPartnered: number;
   pairsNeverMet: number;
+  /** Players who never meet at least one player they share a division with in some half (a
+   *  reachable pair, see `reachablePairs()`) all season. */
+  playersMissingSomeone: number;
   repeatTeammatePairs: number;
   lopsidedGames: number;
   maxSideImbalance: number;
@@ -160,7 +170,7 @@ export type FormatResult = { ok: true; plan: FormatPlan } | { ok: false; issues:
 // Shapes: how many games a week holds and which slots play in each game
 
 /** One week's games over slot indices 0..size-1; the search decides which player fills each slot.
- * `group` is the 0-based group index per game (`'group'` shape) or null (`'match'` shape). */
+ * `group` is the 1-based group number per game (`'group'` shape) or null (`'match'` shape). */
 interface WeekTemplate {
   games: number[][];
   group: (number | null)[];
@@ -173,77 +183,53 @@ const SPLITS: [[number, number], [number, number]][] = [
   [[0, 3], [1, 2]],
 ];
 
-/** Groups a division is split into each week: as many groups of 4 as possible, with the remainder
- * folded into one group of 5, 6 or 7. */
-export function groupSizes(size: number): number[] {
-  const fours = Math.floor(size / 4);
-  const rest = size % 4;
-  if (rest === 0) return Array.from({ length: fours }, () => 4);
-  return [...Array.from({ length: fours - 1 }, () => 4), 4 + rest];
-}
+/** What one unit of a week — a match or a group — holds, per week shape. */
+export const WEEK_UNIT: Record<WeekShape, { games: number; noun: string }> = {
+  match: { games: 1, noun: 'matches' },
+  group: { games: 2, noun: 'groups' },
+};
 
-/** A group's games over its own slots. Every slot plays twice, except in groups of 5 and 7, where
- * the total can't split evenly: a "long" week gives two slots a third game and a "short" week gives
- * two slots a single game, so alternating them evens out at two games a week. A group's games share
- * players, so they're played back to back. */
-function groupGames(size: number, long: boolean): number[][] {
-  switch (size) {
-    case 4:
-      return [[0, 1, 2, 3], [0, 1, 2, 3]];
-    case 5:
-      return long ? [[0, 1, 2, 3], [0, 1, 2, 4], [0, 1, 3, 4]] : [[0, 1, 2, 3], [0, 1, 2, 4]];
-    case 6:
-      return [[0, 1, 2, 3], [0, 2, 4, 5], [1, 3, 4, 5]];
-    case 7:
-      return long
-        ? [[0, 1, 2, 3], [4, 5, 6, 0], [1, 2, 4, 5], [3, 6, 0, 1]]
-        : [[0, 1, 2, 3], [4, 5, 6, 0], [1, 2, 4, 5]];
-    default:
-      throw new Error(`groupGames: no group of ${size}`);
-  }
-}
-
-function groupWeekTemplate(size: number, long: boolean): WeekTemplate {
+/** One week of a division: `units` groups of four slots, filled round-robin over the slots, so slots
+ * at the start of the cycle get a second unit (a doubleheader) whenever the week holds more than
+ * `size / 4` units, and slots at the end get none (a bye) when it holds fewer. When `size` divides
+ * by 4, each pass after the first starts two slots further on, so a second unit never seats the
+ * same four slots as a first one (which, in a group, would force a repeated matchup). A `'match'` unit is
+ * one game; a `'group'` unit is two games over the same four slots (the search picks two different
+ * team splits), played back to back. */
+function weekTemplate(size: number, units: number, shape: WeekShape): WeekTemplate {
   const games: number[][] = [];
-  const group: number[] = [];
-  let offset = 0;
-  groupSizes(size).forEach((s, gi) => {
-    for (const g of groupGames(s, long)) {
-      games.push(g.map((slot) => slot + offset));
-      group.push(gi);
+  const group: (number | null)[] = [];
+  const passOffset = size % 4 === 0 ? 2 : 0;
+  let next = 0;
+  for (let u = 0; u < units; u++) {
+    const unit: number[] = [];
+    while (unit.length < 4) {
+      unit.push((next + passOffset * Math.floor(next / size)) % size);
+      next++;
     }
-    offset += s;
-  });
+    for (let g = 0; g < WEEK_UNIT[shape].games; g++) {
+      games.push([...unit]);
+      group.push(shape === 'group' ? u + 1 : null);
+    }
+  }
   return { games, group };
 }
 
-/** `matches` games filled round-robin over the slots, so slots at the start of the cycle get a
- * second game (a doubleheader) whenever the week holds more than `size / 4` matches, and slots at
- * the end get none (an idle week) when it holds fewer. */
-function matchWeekTemplate(size: number, matches: number): WeekTemplate {
-  const games: number[][] = [];
-  let next = 0;
-  for (let i = 0; i < matches; i++) {
-    const game: number[] = [];
-    while (game.length < 4) game.push(next++ % size);
-    games.push(game);
+/** Matches or groups per player in a half: the count nearest one per week (the higher one on a tie)
+ * that every division can split into whole units of four (players × units must be a multiple of
+ * 4). Shared across divisions so standings stay comparable league-wide. */
+function unitsPerPlayer(divisionSizes: number[], weeks: number): number {
+  const fits = (u: number) => u >= 1 && divisionSizes.every((s) => (s * u) % 4 === 0);
+  for (let d = 0; ; d++) {
+    if (fits(weeks + d)) return weeks + d;
+    if (fits(weeks - d)) return weeks - d;
   }
-  return { games, group: games.map(() => null) };
 }
 
-/** The games-per-player target for a `'match'` half: the smallest count, at least one per week, that
- * every division can split into whole 2v2 matches (players × games must be a multiple of 4). Shared
- * across divisions so standings stay comparable league-wide. */
-function matchGamesPerPlayer(divisionSizes: number[], weeks: number): number {
-  let g = weeks;
-  while (divisionSizes.some((s) => (s * g) % 4 !== 0)) g++;
-  return g;
-}
-
-/** Matches per week for one division's `'match'` half: the total spread as evenly as the weeks
- * allow, with the extra matches placed evenly through the half rather than bunched at the start. */
-function matchPhaseShape(size: number, weeks: number, gamesPerPlayer: number): number[] {
-  const total = (size * gamesPerPlayer) / 4;
+/** Matches or groups per week for one division's half: the total spread as evenly as the weeks
+ * allow, with the extra units placed evenly through the half rather than bunched at the start. */
+function unitsPerWeek(size: number, weeks: number, perPlayer: number): number[] {
+  const total = (size * perPlayer) / 4;
   const base = Math.floor(total / weeks);
   const extra = total % weeks;
   const counts = Array.from({ length: weeks }, () => base);
@@ -252,11 +238,11 @@ function matchPhaseShape(size: number, weeks: number, gamesPerPlayer: number): n
 }
 
 function halfTemplates(size: number, weeks: number, shape: WeekShape, divisionSizes: number[]): { templates: WeekTemplate[]; gamesPerPlayer: number } {
-  if (shape === 'group') {
-    return { templates: Array.from({ length: weeks }, (_, i) => groupWeekTemplate(size, i % 2 === 0)), gamesPerPlayer: 2 * weeks };
-  }
-  const gamesPerPlayer = matchGamesPerPlayer(divisionSizes, weeks);
-  return { templates: matchPhaseShape(size, weeks, gamesPerPlayer).map((m) => matchWeekTemplate(size, m)), gamesPerPlayer };
+  const perPlayer = unitsPerPlayer(divisionSizes, weeks);
+  return {
+    templates: unitsPerWeek(size, weeks, perPlayer).map((units) => weekTemplate(size, units, shape)),
+    gamesPerPlayer: perPlayer * WEEK_UNIT[shape].games,
+  };
 }
 
 /** Division sizes for `n` players in `k` divisions, as even as possible, earlier divisions taking
@@ -323,23 +309,21 @@ export function formatIssues(playerCount: number, settings: SeasonFormatSettings
     return issues;
   }
 
-  const halves = halfLengths(settings);
-  if (settings.weekShape === 'group') {
-    const oddGroups = sizes.some((s) => groupSizes(s).some((g) => g % 2 === 1));
-    if (oddGroups && halves.some((w) => w % 2 === 1)) {
-      issues.push(
-        `A division of ${sizes.join('/')} needs a group of 5 or 7, which alternates 3-game and 1-game weeks — that needs an even number of weeks${halves.length > 1 ? ' in each half' : ''} for games to even out.`,
-      );
-    }
-  } else {
-    for (const w of halves) {
-      const g = matchGamesPerPlayer(sizes, w);
-      for (const s of sizes) {
-        const busiest = Math.max(...matchPhaseShape(s, w, g));
-        if (busiest * 4 > s * 2) {
-          issues.push(`A division of ${s} can't fit ${g} games each into ${w} weeks without someone playing 3 in a week.`);
-          return issues;
-        }
+  const unit = WEEK_UNIT[settings.weekShape].noun;
+  for (const w of halfLengths(settings)) {
+    const u = unitsPerPlayer(sizes, w);
+    for (const s of sizes) {
+      const busiest = Math.max(...unitsPerWeek(s, w, u));
+      // A week of more than size / 2 units would put someone in three of them.
+      if (busiest * 4 > s * 2) {
+        issues.push(`A division of ${s} can't fit ${u} ${unit} each into ${w} weeks without someone in 3 ${unit} in a week.`);
+        return issues;
+      }
+      // Four players have only three team splits, so two groups of the same four in one week (four
+      // games) must repeat a matchup.
+      if (settings.weekShape === 'group' && s === 4 && busiest > 1) {
+        issues.push(`A division of 4 would need two groups in one week to fit ${u} groups into ${w} weeks, which repeats a matchup — 4 players only have 3 team splits.`);
+        return issues;
       }
     }
   }
@@ -535,16 +519,8 @@ function searchHalf(
   const size = members.length;
   const weeks = templates.length;
   const iterations = 10000 + 900 * size * weeks;
-  // Per week: the games each slot plays in, and the games that could repeat each other — a group's
-  // games (separate groups share no players), or every game of a match week (a doubleheader can
-  // seat the same four players twice) — so a move only rescores the games it actually touches.
+  // Per week: the games each slot plays in, so a move only rescores the games it actually touches.
   const slotGames = templates.map((t) => Array.from({ length: size }, (_, slot) => t.games.flatMap((g, gi) => (g.includes(slot) ? [gi] : []))));
-  const rematchBucket = (t: WeekTemplate, gi: number) => t.group[gi] ?? -1;
-  const bucketGames = templates.map((t) => {
-    const byBucket = new Map<number, number[]>();
-    t.games.forEach((_, gi) => byBucket.set(rematchBucket(t, gi), [...(byBucket.get(rematchBucket(t, gi)) ?? []), gi]));
-    return byBucket;
-  });
 
   let best: { cost: number; result: HalfSearchResult } | null = null;
   for (let restart = 0; restart < RESTARTS; restart++) {
@@ -586,19 +562,13 @@ function searchHalf(
       return delta;
     };
     const gameKey = (w: number, g: number) => matchupKey(player(w, g, 0), player(w, g, 1), player(w, g, 2), player(w, g, 3), n);
-    /** Exact rematches (the same two teams twice in one week) among the games that could repeat
-     * the games in `gameIdx` (see `bucketGames`). */
-    const rematches = (w: number, gameIdx: number[]) => {
-      const t = templates[w];
+    /** Exact rematches in week `w` — the same two teams twice: a group's two games, or two
+     * matches or groups that seat the same four players in a doubleheader week. A week holds at
+     * most a dozen or so games per division, so comparing all of them is cheap. */
+    const rematches = (w: number) => {
+      const keys = templates[w].games.map((_, g) => gameKey(w, g));
       let count = 0;
-      const seen: number[] = [];
-      for (const gi of gameIdx) {
-        const bucket = rematchBucket(t, gi);
-        if (seen.includes(bucket)) continue;
-        seen.push(bucket);
-        const keys = bucketGames[w].get(bucket)!.map((g) => gameKey(w, g));
-        for (let x = 0; x < keys.length; x++) for (let y = x + 1; y < keys.length; y++) if (keys[x] === keys[y]) count++;
-      }
+      for (let x = 0; x < keys.length; x++) for (let y = x + 1; y < keys.length; y++) if (keys[x] === keys[y]) count++;
       return WEIGHT.rematch * count;
     };
 
@@ -610,7 +580,7 @@ function searchHalf(
     for (let w = 0; w < weeks; w++) {
       const all = templates[w].games.map((_, gi) => gi);
       for (const g of all) cost += applyGame(w, g, 1);
-      cost += rematches(w, all);
+      cost += rematches(w);
     }
 
     // Cools geometrically from 20 to 0.01 over the run.
@@ -645,12 +615,12 @@ function searchHalf(
         touched = [g0];
       }
 
-      let delta = -rematches(w, touched);
+      let delta = -rematches(w);
       for (const g of touched) delta += applyGame(w, g, -1);
       if (isSwap) swap(slots[w], x, y);
       else splits[w][g0] = newSplit;
       for (const g of touched) delta += applyGame(w, g, 1);
-      delta += rematches(w, touched);
+      delta += rematches(w);
 
       if (delta <= 0 || rand() < Math.exp(-delta / temperature)) {
         cost += delta;
@@ -794,7 +764,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
           for (const p of [pa, pb, pc, pd]) playing.add(p);
           recordGame(history, n, pa, pb, pc, pd);
           return {
-            group: t.group[g] === null ? null : t.group[g]! + 1,
+            group: t.group[g],
             shirts: [players[pa].playerId, players[pb].playerId],
             skins: [players[pc].playerId, players[pd].playerId],
             shirtsWinProb: winProb(pa, pb, pc, pd),
@@ -812,7 +782,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   }
 
   assignSides(weeks, rand);
-  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), halves, weeks) } };
+  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), halves, weeks, settings.weekShape) } };
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
@@ -831,11 +801,11 @@ function assignSides(weeks: FormatWeek[], rand: () => number): void {
   });
 }
 
-/** Every pair of players who share a division in at least one half, keyed by `pairKey()`: the only
- * pairs a plan can make teammates or opponents. `mates` counts each player's distinct reachable
- * division-mates. */
-function reachablePairs(halves: FormatHalf[]): { pairs: Set<string>; mates: Map<number, number> } {
-  const pairs = new Set<string>();
+/** Every pair of players who share a division in at least one half, keyed by `pairKey()` with the
+ * two player ids: the only pairs a plan can make teammates or opponents. `mates` counts each
+ * player's distinct reachable division-mates. */
+function reachablePairs(halves: FormatHalf[]): { pairs: Map<string, [number, number]>; mates: Map<number, number> } {
+  const pairs = new Map<string, [number, number]>();
   const mates = new Map<number, number>();
   for (const half of halves) {
     for (const ids of half.divisions) {
@@ -843,7 +813,7 @@ function reachablePairs(halves: FormatHalf[]): { pairs: Set<string>; mates: Map<
         for (let j = i + 1; j < ids.length; j++) {
           const key = pairKey(ids[i], ids[j]);
           if (pairs.has(key)) continue;
-          pairs.add(key);
+          pairs.set(key, [ids[i], ids[j]]);
           mates.set(ids[i], (mates.get(ids[i]) ?? 0) + 1);
           mates.set(ids[j], (mates.get(ids[j]) ?? 0) + 1);
         }
@@ -856,19 +826,18 @@ function reachablePairs(halves: FormatHalf[]): { pairs: Set<string>; mates: Map<
 /** The comparison numbers for a plan — what the Schedule Lab shows side by side. `pairs` and
  * `distinctTeammates.possible` count only reachable pairs (see `reachablePairs()`), so plans with
  * different division counts are measured against what each can actually achieve. */
-function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: FormatWeek[]): FormatScorecard {
+function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: FormatWeek[], shape: WeekShape): FormatScorecard {
   const { pairs: reachable, mates: reachableMates } = reachablePairs(halves);
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
   const { teammatePairs, opponentPairs } = collectCoveragePairs(games);
-  const gameCount = new Map<number, number>();
-  const sideBalance = new Map<number, number>();
+  const gameCount = new Map<number, number>(playerIds.map((id) => [id, 0]));
+  const sideBalance = new Map<number, number>(playerIds.map((id) => [id, 0]));
   const teammateCount = new Map<string, number>();
   const teammates = new Map<number, Set<number>>(playerIds.map((id) => [id, new Set()]));
 
   for (const g of games) {
-    for (const id of [...g.shirts, ...g.skins]) gameCount.set(id, (gameCount.get(id) ?? 0) + 1);
-    for (const id of g.shirts) sideBalance.set(id, (sideBalance.get(id) ?? 0) + 1);
-    for (const id of g.skins) sideBalance.set(id, (sideBalance.get(id) ?? 0) - 1);
+    for (const id of g.shirts) sideBalance.set(id, sideBalance.get(id)! + 1);
+    for (const id of g.skins) sideBalance.set(id, sideBalance.get(id)! - 1);
     for (const [a, b] of [g.shirts, g.skins]) {
       const k = pairKey(a, b);
       teammateCount.set(k, (teammateCount.get(k) ?? 0) + 1);
@@ -877,36 +846,44 @@ function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: Forma
     }
   }
 
+  let doubleheaderWeeks = 0;
+  let byeWeeks = 0;
   let maxGamesInAWeek = 0;
-  let idlePlayerWeeks = 0;
   for (const w of weeks) {
-    const perPlayer = new Map<number, number>();
-    for (const d of w.divisions) {
-      idlePlayerWeeks += d.idlePlayerIds.length;
-      for (const g of d.games) for (const id of [...g.shirts, ...g.skins]) perPlayer.set(id, (perPlayer.get(id) ?? 0) + 1);
-    }
-    for (const c of perPlayer.values()) maxGamesInAWeek = Math.max(maxGamesInAWeek, c);
+    const thisWeek = new Map<number, number>(playerIds.map((id) => [id, 0]));
+    for (const d of w.divisions) for (const g of d.games) for (const id of [...g.shirts, ...g.skins]) thisWeek.set(id, thisWeek.get(id)! + 1);
+    const counts = [...thisWeek.values()];
+    for (const [id, c] of thisWeek) gameCount.set(id, gameCount.get(id)! + c);
+    if (counts.some((c) => c > WEEK_UNIT[shape].games)) doubleheaderWeeks++;
+    if (counts.some((c) => c < WEEK_UNIT[shape].games)) byeWeeks++;
+    maxGamesInAWeek = Math.max(maxGamesInAWeek, ...counts);
   }
 
   let pairs = 0;
   let pairsPartnered = 0;
   let pairsNeverMet = 0;
-  for (const k of reachable) {
+  const missingSomeone = new Set<number>();
+  for (const [k, [a, b]] of reachable) {
     pairs++;
     if (teammatePairs.has(k)) pairsPartnered++;
-    if (!teammatePairs.has(k) && !opponentPairs.has(k)) pairsNeverMet++;
+    if (!teammatePairs.has(k) && !opponentPairs.has(k)) {
+      pairsNeverMet++;
+      missingSomeone.add(a).add(b);
+    }
   }
-  const counts = playerIds.map((id) => gameCount.get(id) ?? 0);
+  const counts = [...gameCount.values()];
   const distinct = playerIds.map((id) => teammates.get(id)!.size);
   return {
     games: games.length,
     gamesPerPlayer: { min: Math.min(...counts), max: Math.max(...counts) },
-    idlePlayerWeeks,
+    doubleheaderWeeks,
+    byeWeeks,
     maxGamesInAWeek,
     distinctTeammates: { min: Math.min(...distinct), max: Math.max(...distinct), possible: Math.max(0, ...reachableMates.values()) },
     pairs,
     pairsPartnered,
     pairsNeverMet,
+    playersMissingSomeone: missingSomeone.size,
     repeatTeammatePairs: [...teammateCount.values()].filter((c) => c > 1).length,
     lopsidedGames: games.filter((g) => isLopsided(g.shirtsWinProb)).length,
     maxSideImbalance: balanceCost(sideBalance).worst,

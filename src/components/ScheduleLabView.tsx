@@ -71,8 +71,17 @@ const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.roun
 const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string }[] = [
   { label: 'Players', value: (p) => String(playerCount(p)) },
   { label: 'Games each', value: (p) => range(p.plan.scorecard.gamesPerPlayer) },
-  { label: 'Most games in a week', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
-  { label: 'Weeks sat out', title: 'Total player-weeks with no game, league-wide', value: (p) => String(p.plan.scorecard.idlePlayerWeeks) },
+  { label: 'Most games in a week', title: 'The busiest single week any one player has', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
+  {
+    label: 'Doubleheader weeks',
+    title: 'Weeks where someone plays twice — a second match, or a second group in a group-week season',
+    value: (p) => String(p.plan.scorecard.doubleheaderWeeks),
+  },
+  {
+    label: 'Bye weeks',
+    title: 'Weeks where someone sits out, when a division doesn’t divide into whole matches or groups',
+    value: (p) => String(p.plan.scorecard.byeWeeks),
+  },
   {
     label: 'Different teammates',
     title: 'How many different players each player partners with',
@@ -80,9 +89,9 @@ const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string
   },
   { label: 'Pairs who partner', value: (p) => `${p.plan.scorecard.pairsPartnered} / ${p.plan.scorecard.pairs}` },
   {
-    label: 'Pairs who never meet',
-    title: 'Pairs of players who are never teammates or opponents all season',
-    value: (p) => `${p.plan.scorecard.pairsNeverMet} / ${p.plan.scorecard.pairs}`,
+    label: 'Players who miss someone',
+    title: 'Players who never play with or against at least one other player all season',
+    value: (p) => `${p.plan.scorecard.playersMissingSomeone} / ${playerCount(p)}`,
   },
   { label: 'Repeat teammate pairs', title: 'Pairs who are teammates more than once', value: (p) => String(p.plan.scorecard.repeatTeammatePairs) },
   {
