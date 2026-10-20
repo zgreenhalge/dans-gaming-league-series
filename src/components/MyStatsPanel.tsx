@@ -66,12 +66,8 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
           {
             label: 'KDA',
             title: 'Career (kills + assists) per death; K/D is kills per death',
-            value: played ? (
-              <>
-                {kda.toFixed(2)}
-                <span className="block mt-1 font-mono text-[9px] font-normal text-[var(--color-text-secondary)]">{kd.toFixed(2)} K/D</span>
-              </>
-            ) : '—',
+            value: played ? kda.toFixed(2) : '—',
+            sub: played ? `${kd.toFixed(2)} K/D` : undefined,
           },
           { label: 'ADR', title: 'Career average damage per round', value: played ? adr.toFixed(2) : '—' },
         ]}

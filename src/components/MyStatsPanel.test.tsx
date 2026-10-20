@@ -39,7 +39,7 @@ describe('MyStatsPanel', () => {
     expect(screen.getByRole('link', { name: 'Rook' })).toHaveAttribute('href', '/players/5');
     expect(screen.getByText('23.5')).toBeInTheDocument();
     expect(screen.getByText('31-19')).toBeInTheDocument();
-    expect(screen.getByText('1.43', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('1.43')).toBeInTheDocument();
     expect(screen.getByText('1.10 K/D')).toBeInTheDocument();
     expect(screen.getByText('74.05')).toBeInTheDocument();
   });

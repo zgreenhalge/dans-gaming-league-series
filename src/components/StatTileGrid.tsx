@@ -7,6 +7,8 @@
 export interface StatTile {
   label: string;
   value: React.ReactNode;
+  /** A small secondary figure under the value ("1.10 K/D"). */
+  sub?: string;
   /** Tooltip — kept in sync with the equivalent table column's `title`. */
   title?: string;
   /** Inline style for the value (e.g. Plus-stat color scale). */
@@ -42,6 +44,7 @@ export default function StatTileGrid({
               <div className="font-display text-[20px] font-semibold tnum leading-none" style={t.valueStyle}>
                 {t.value}
               </div>
+              {t.sub && <div className="mt-1 font-mono text-[9px] text-[var(--color-text-secondary)]">{t.sub}</div>}
             </div>
           ))}
         </div>

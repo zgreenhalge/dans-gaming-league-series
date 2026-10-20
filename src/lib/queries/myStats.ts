@@ -1,6 +1,6 @@
 import type { H2HData } from '../h2h';
 import type { LeaderboardRowWithId } from '../types';
-import { deriveKd, deriveKda, mergeLeaderboardRows } from '../util';
+import { deriveKda, mergeLeaderboardRows } from '../util';
 import { getCurrentEhogRating } from './ehog';
 import { getGauntletStats } from './gauntlet';
 import { bestFriendOf, worstNightmareOf, type PersonalMatchup } from './h2h';
@@ -50,7 +50,7 @@ export interface MyStats {
   record: { wins: number; losses: number };
   /** Career (kills + assists) per death — see `deriveKda()`. */
   kda: number;
-  /** Career kills per death — see `deriveKd()`. */
+  /** Career kills per death (the row's `kd_ratio`). */
   kd: number;
   adr: number;
   next: MyStatsNextMatch | null;
@@ -89,7 +89,7 @@ export function buildMyStats(input: {
     ehog,
     record: { wins: row?.matches_won ?? 0, losses: row?.matches_lost ?? 0 },
     kda: row ? deriveKda(row) : 0,
-    kd: row ? deriveKd(row) : 0,
+    kd: row?.kd_ratio ?? 0,
     adr: row?.overall_adr ?? 0,
     next: next
       ? { matchId: next.match_id, opponents: opponentNames(next), map: next.map, scheduledAt: next.scheduled_at }
