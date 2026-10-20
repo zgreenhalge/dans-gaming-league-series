@@ -71,7 +71,6 @@ function weeklyGames(p: FormatPlan): Map<number, number[]> {
   return out;
 }
 
-
 /** Structural checks every plan must pass. */
 function assertSound(p: FormatPlan, n: number, gamesEach: number, maxPerWeek: number) {
   const label = JSON.stringify(p.settings);
@@ -99,43 +98,6 @@ function assertSound(p: FormatPlan, n: number, gamesEach: number, maxPerWeek: nu
   assert.ok(p.scorecard.maxSideImbalance <= 2, `${label}: side imbalance ${p.scorecard.maxSideImbalance}`);
 }
 
-test('draftDivisions deals a ranking as a snake, straight or in tiers', () => {
-  const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  const thirteen = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
-  assert.deepEqual(draftDivisions(ten, [5, 5], 'snake'), [[1, 4, 5, 8, 9], [2, 3, 6, 7, 10]]);
-  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7], [3, 2, 2], 'snake'), [[1, 6, 7], [2, 5], [3, 4]]);
-  assert.deepEqual(draftDivisions(ten, [5, 5], 'straight'), [[1, 3, 5, 7, 9], [2, 4, 6, 8, 10]]);
-  assert.deepEqual(draftDivisions(thirteen, [7, 6], 'tiered'), [[1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13]]);
-  assert.deepEqual(draftDivisions(thirteen, [4, 9], 'tiered'), [[1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11, 12, 13]]);
-});
-
-test('formatIssues refuses divisions smaller than a 2v2', () => {
-  assert.equal(formatIssues(7, { ...BASE, divisions: 2 }).length, 1);
-  assert.deepEqual(formatIssues(8, { ...BASE, divisions: 2 }), []);
-  assert.equal(formatIssues(3, BASE).length, 1);
-});
-
-test('formatIssues accepts group seasons of any roster size and length', () => {
-  for (const n of [7, 10, 13]) for (const weeks of [5, 7, 8]) assert.deepEqual(formatIssues(n, { ...BASE, weekShape: 'group', weeks }), [], `n=${n} weeks=${weeks}`);
-});
-
-test('formatIssues refuses a 4-player division two groups in one week', () => {
-  // Divisions of 5 and 4 over 5 weeks need 8 groups each, so the 4-player division would play two
-  // groups — four games over only three possible team splits — in some week.
-  assert.equal(formatIssues(9, { ...BASE, weekShape: 'group', divisions: 2, weeks: 5 }).length, 1);
-  assert.deepEqual(formatIssues(9, { ...BASE, weekShape: 'match', divisions: 2, weeks: 5 }), []);
-  assert.deepEqual(formatIssues(8, { ...BASE, weekShape: 'group', divisions: 2, weeks: 5 }), []);
-});
-
-test('one league, one match a week: equal games and everyone meets everyone', () => {
-  for (const n of [7, 13]) {
-    const p = plan(n, {});
-    assertSound(p, n, 8, 2);
-    assert.equal(p.scorecard.pairsNeverMet, 0, `n=${n}: every pair meets`);
-    assert.equal(p.halves.length, 1);
-  }
-});
-
 /** Every group in a group-week plan is four players playing exactly two games with different
  *  team splits, and each player's week is a bye (0), one group (2) or two groups (4). */
 function assertPods(p: FormatPlan) {
@@ -157,6 +119,43 @@ function assertPods(p: FormatPlan) {
   }
 }
 
+test('draftDivisions deals a ranking as a snake, straight or in tiers', () => {
+  const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const thirteen = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  assert.deepEqual(draftDivisions(ten, [5, 5], 'snake'), [[1, 4, 5, 8, 9], [2, 3, 6, 7, 10]]);
+  assert.deepEqual(draftDivisions([1, 2, 3, 4, 5, 6, 7], [3, 2, 2], 'snake'), [[1, 6, 7], [2, 5], [3, 4]]);
+  assert.deepEqual(draftDivisions(ten, [5, 5], 'straight'), [[1, 3, 5, 7, 9], [2, 4, 6, 8, 10]]);
+  assert.deepEqual(draftDivisions(thirteen, [7, 6], 'tiered'), [[1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13]]);
+  assert.deepEqual(draftDivisions(thirteen, [4, 9], 'tiered'), [[1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11, 12, 13]]);
+});
+
+test('formatIssues refuses divisions smaller than a 2v2', () => {
+  assert.equal(formatIssues(7, { ...BASE, divisions: 2 }).length, 1);
+  assert.deepEqual(formatIssues(8, { ...BASE, divisions: 2 }), []);
+  assert.equal(formatIssues(3, BASE).length, 1);
+});
+
+test('formatIssues accepts group seasons of any roster size and length', () => {
+  for (const n of [7, 10, 13]) for (const weeks of [5, 7, 8]) assert.deepEqual(formatIssues(n, { ...BASE, weekShape: 'group', weeks }), [], `n=${n} weeks=${weeks}`);
+});
+
+test('formatIssues refuses a 4-player division two groups in one week', () => {
+  // Divisions of 5 and 4 over 6 weeks need 8 groups each, so the 4-player division would play two
+  // groups — four games over only three possible team splits — in some week.
+  assert.equal(formatIssues(9, { ...BASE, weekShape: 'group', divisions: 2, weeks: 6 }).length, 1);
+  assert.deepEqual(formatIssues(9, { ...BASE, weekShape: 'match', divisions: 2, weeks: 6 }), []);
+  assert.deepEqual(formatIssues(8, { ...BASE, weekShape: 'group', divisions: 2, weeks: 6 }), []);
+});
+
+test('one league, one match a week: equal games and everyone meets everyone', () => {
+  for (const n of [7, 13]) {
+    const p = plan(n, {});
+    assertSound(p, n, 8, 2);
+    assert.equal(p.scorecard.pairsNeverMet, 0, `n=${n}: every pair meets`);
+    assert.equal(p.halves.length, 1);
+  }
+});
+
 test('one league, a group a week: groups of 4, everyone partners everyone at 10 players', () => {
   const p = plan(10, { weekShape: 'group' });
   assertSound(p, 10, 16, 4);
@@ -165,9 +164,9 @@ test('one league, a group a week: groups of 4, everyone partners everyone at 10 
 });
 
 test('a doubleheader week never replays the same matchup in a 4-player division', () => {
-  // 9 players in divisions of 5 and 4 over 5 weeks: 8 games each, so the 4-player division plays
+  // 9 players in divisions of 5 and 4 over 6 weeks: 8 games each, so the 4-player division plays
   // both of a doubleheader week's matches with the same four players.
-  const p = plan(9, { divisions: 2, weeks: 5 });
+  const p = plan(9, { divisions: 2, weeks: 6 });
   assertSound(p, 9, 8, 2);
   for (const w of p.weeks) {
     for (const d of w.divisions) {
@@ -190,6 +189,29 @@ test('every doubleheader pays back a bye, and the scorecard counts the weeks the
     assert.equal(p.scorecard.doubleheaderWeeks, weeksWhere((c) => c > usual));
     assert.equal(p.scorecard.byeWeeks, weeksWhere((c) => c < usual));
     assert.equal(p.scorecard.maxGamesInAWeek, Math.max(...all.flat()));
+  }
+});
+
+test('group seasons round to the group count nearest one a week', () => {
+  // 7 players can only split into whole groups at 4 or 8 groups each; over 5 weeks, 4 is nearer.
+  const p = plan(7, { weekShape: 'group', weeks: 5 });
+  assertSound(p, 7, 8, 4);
+  assertPods(p);
+});
+
+test('a division that divides by 4 never seats the same four players in two groups of one week', () => {
+  // Divisions of 9 and 8 over 6 weeks need 8 groups each, so the 8-player division plays three groups
+  // in some weeks — its third must mix players from both of the first two.
+  const p = plan(17, { weekShape: 'group', divisions: 2, weeks: 6 });
+  assertSound(p, 17, 16, 4);
+  assertPods(p);
+  for (const w of p.weeks) {
+    for (const d of w.divisions) {
+      const groupPlayers = new Map<number, string>();
+      for (const g of d.games) groupPlayers.set(g.group!, [...g.shirts, ...g.skins].sort((a, b) => a - b).join(','));
+      const sets = [...groupPlayers.values()];
+      assert.equal(new Set(sets).size, sets.length, `week ${w.week} division ${d.division}: two groups seat the same four players`);
+    }
   }
 });
 

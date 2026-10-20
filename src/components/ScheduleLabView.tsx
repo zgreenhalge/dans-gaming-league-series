@@ -73,7 +73,7 @@ const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string
   { label: 'Most games in a week', title: 'The busiest single week any one player has', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
   {
     label: 'Doubleheader weeks',
-    title: 'Weeks where someone plays twice — a second match, or a second group in a group-week season — paying back a bye',
+    title: 'Weeks where someone plays twice — a second match, or a second group in a group-week season',
     value: (p) => String(p.plan.scorecard.doubleheaderWeeks),
   },
   {

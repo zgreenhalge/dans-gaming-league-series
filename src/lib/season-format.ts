@@ -29,11 +29,12 @@
  *   `LOPSIDED_MARGIN`). EHOG only ever shapes who plays whom and which division a player starts
  *   in; standings stay Wins → RWR% → ADR (`canonicalSort()`).
  *
- * Every player plays the same number of games. A week holds whole matches or groups of 4, so when a
- * division doesn't divide by 4 the weeks alternate: a week with one fewer leaves the leftover
- * players a bye, and a week with one more seats some players in a second match or group — a
- * doubleheader — that pays a bye back (`unitsPerWeek()`). Settings that can't keep that promise are
- * refused with a reason by `formatIssues()` rather than producing an uneven plan.
+ * Every player plays the same number of matches or groups: the count nearest one a week that
+ * every division can split into whole units of four (`unitsPerPlayer()`). When a division doesn't
+ * divide by 4 the weeks then differ (`unitsPerWeek()`): a week with one fewer unit leaves the
+ * leftover players a bye, and a week with one more seats a few players in a second match or group
+ * — a doubleheader. Settings that can't keep that promise are refused with a reason by
+ * `formatIssues()` rather than producing an uneven plan.
  *
  * Search: each (half, division) is a simulated-annealing search over which player fills which slot
  * of a fixed week template, and which of a game's three possible 2v2 splits is played. The cost
@@ -189,31 +190,39 @@ export const WEEK_UNIT: Record<WeekShape, { games: number; noun: string }> = {
 
 /** One week of a division: `units` groups of four slots, filled round-robin over the slots, so slots
  * at the start of the cycle get a second unit (a doubleheader) whenever the week holds more than
- * `size / 4` units, and slots at the end get none (a bye) when it holds fewer. A `'match'` unit is
+ * `size / 4` units, and slots at the end get none (a bye) when it holds fewer. When `size` divides
+ * by 4, each pass after the first starts two slots further on, so a second unit never seats the
+ * same four slots as a first one (which, in a group, would force a repeated matchup). A `'match'` unit is
  * one game; a `'group'` unit is two games over the same four slots (the search picks two different
  * team splits), played back to back. */
 function weekTemplate(size: number, units: number, shape: WeekShape): WeekTemplate {
   const games: number[][] = [];
   const group: (number | null)[] = [];
+  const passOffset = size % 4 === 0 ? 2 : 0;
   let next = 0;
   for (let u = 0; u < units; u++) {
     const unit: number[] = [];
-    while (unit.length < 4) unit.push(next++ % size);
+    while (unit.length < 4) {
+      unit.push((next + passOffset * Math.floor(next / size)) % size);
+      next++;
+    }
     for (let g = 0; g < WEEK_UNIT[shape].games; g++) {
-      games.push(unit);
+      games.push([...unit]);
       group.push(shape === 'group' ? u + 1 : null);
     }
   }
   return { games, group };
 }
 
-/** Matches or groups per player in a half: the smallest count, at least one per week, that every
- * division can split into whole units of four (players × units must be a multiple of 4). Shared
- * across divisions so standings stay comparable league-wide. */
+/** Matches or groups per player in a half: the count nearest one per week (the higher one on a tie)
+ * that every division can split into whole units of four (players × units must be a multiple of
+ * 4). Shared across divisions so standings stay comparable league-wide. */
 function unitsPerPlayer(divisionSizes: number[], weeks: number): number {
-  let u = weeks;
-  while (divisionSizes.some((s) => (s * u) % 4 !== 0)) u++;
-  return u;
+  const fits = (u: number) => u >= 1 && divisionSizes.every((s) => (s * u) % 4 === 0);
+  for (let d = 0; ; d++) {
+    if (fits(weeks + d)) return weeks + d;
+    if (fits(weeks - d)) return weeks - d;
+  }
 }
 
 /** Matches or groups per week for one division's half: the total spread as evenly as the weeks
@@ -820,7 +829,7 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[], shape: WeekSh
     const counts = [...thisWeek.values()];
     for (const [id, c] of thisWeek) gameCount.set(id, gameCount.get(id)! + c);
     if (counts.some((c) => c > WEEK_UNIT[shape].games)) doubleheaderWeeks++;
-    if (w.divisions.some((d) => d.idlePlayerIds.length > 0)) byeWeeks++;
+    if (counts.some((c) => c < WEEK_UNIT[shape].games)) byeWeeks++;
     maxGamesInAWeek = Math.max(maxGamesInAWeek, ...counts);
   }
 
