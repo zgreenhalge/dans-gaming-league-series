@@ -113,78 +113,36 @@ export async function findPlayerByName(name: string): Promise<Player | null> {
   return null;
 }
 
-export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
-  const { data: player, error: pErr } = await getAdminClient()
-    .from('players')
-    .select('*')
-    .eq('id', playerId)
-    .maybeSingle();
-  if (pErr) throw pErr;
-  if (!player) return null;
+/** The roster columns `player_match_stats` rows carry, as read for every player in a match. */
+type RosterStatRow = {
+  match_id: number;
+  player_id: number;
+  faction: 'SHIRTS' | 'SKINS';
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+  is_win: boolean;
+  rounds_won: number;
+  rounds_played: number;
+};
 
-  const [statRows, medalists] = await Promise.all([
-    fetchAllPages<PlayerMatchStat>((from, to) =>
-      asPage(getAdminClient().from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
-    ),
-    getAllSeasonMedalists(),
-  ]);
-  const trophies = medalists.get(playerId) ?? [];
-  if (statRows.length === 0) {
-    return { player: player as Player, history: [], trophies };
-  }
-
-  const matchIds = Array.from(new Set(statRows.map((s) => s.match_id)));
-  const [{ data: matches, error: mErr }, weekLookup] = await Promise.all([
-    getAdminClient().from('matches').select('*').in('id', matchIds),
-    getWeekLookup(),
-  ]);
-  if (mErr) throw mErr;
-  const matchById = new Map<number, Match>();
-  for (const m of (matches ?? []) as Match[]) matchById.set(m.id, m);
-
-  const seasonIds = Array.from(
-    new Set(
-      (matches ?? [])
-        .map((m) => weekLookup.get((m as Match).week_id)?.season_id)
-        .filter((id): id is number => id != null),
-    ),
-  );
-  const { data: seasons, error: seErr } = await getAdminClient()
-    .from('seasons')
-    .select('*')
-    .in('id', seasonIds);
-  if (seErr) throw seErr;
-  const seasonById = new Map<number, Season>();
-  for (const s of (seasons ?? []) as Season[]) seasonById.set(s.id, s);
-
-  // Fetch all stat rows for the involved matches so we can show full rosters.
+/** Fills each of `rows`' `shirts` / `skins` / `shirts_stats` / `skins_stats` from the full
+ *  `player_match_stats` of just those rows' matches. */
+async function attachRosters(rows: PlayerHistoryRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const matchIds = Array.from(new Set(rows.map((r) => r.match_id)));
   const [{ data: allStats, error: aErr }, players] = await Promise.all([
-    getAdminClient()
-      .from('player_match_stats')
-      .select('*')
-      .in('match_id', matchIds),
+    getAdminClient().from('player_match_stats').select('*').in('match_id', matchIds),
     getPlayersById(),
   ]);
   if (aErr) throw aErr;
 
-  type StatRow = {
-    match_id: number;
-    player_id: number;
-    faction: 'SHIRTS' | 'SKINS';
-    kills: number;
-    assists: number;
-    deaths: number;
-    adr: number;
-    is_win: boolean;
-    rounds_won: number;
-    rounds_played: number;
-  };
-
   const rosterByMatch = new Map<
     number,
-    { shirts: { player_id: number; player_name: string }[]; skins: { player_id: number; player_name: string }[]; shirts_stats?: StatRow[]; skins_stats?: StatRow[] }
+    { shirts: { player_id: number; player_name: string }[]; skins: { player_id: number; player_name: string }[]; shirts_stats?: RosterStatRow[]; skins_stats?: RosterStatRow[] }
   >();
-  for (const st of (allStats ?? []) as StatRow[]) {
+  for (const st of (allStats ?? []) as RosterStatRow[]) {
     const entry = rosterByMatch.get(st.match_id) ?? { shirts: [], skins: [] };
     const p = players.get(st.player_id);
     const slot = {
@@ -216,6 +174,51 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     rosterByMatch.set(st.match_id, entry);
   }
 
+  for (const row of rows) {
+    const roster = rosterByMatch.get(row.match_id);
+    if (!roster) continue;
+    row.shirts = roster.shirts;
+    row.skins = roster.skins;
+    row.shirts_stats = (roster.shirts_stats ?? []) as RosterStat[];
+    row.skins_stats = (roster.skins_stats ?? []) as RosterStat[];
+  }
+}
+
+/**
+ * A player's match history, newest first. Rosters (a read of every involved match's
+ * `player_match_stats`) are attached to all rows, or — with `recentLimit` — only to the rows
+ * `getPlayerRecent()` returns: the `recentLimit` newest played matches and the next upcoming one.
+ */
+async function loadPlayerHistory(playerId: number, recentLimit?: number): Promise<PlayerHistoryRow[]> {
+  const statRows = await fetchAllPages<PlayerMatchStat>((from, to) =>
+    asPage(getAdminClient().from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
+  );
+  if (statRows.length === 0) return [];
+
+  const matchIds = Array.from(new Set(statRows.map((s) => s.match_id)));
+  const [{ data: matches, error: mErr }, weekLookup] = await Promise.all([
+    getAdminClient().from('matches').select('*').in('id', matchIds),
+    getWeekLookup(),
+  ]);
+  if (mErr) throw mErr;
+  const matchById = new Map<number, Match>();
+  for (const m of (matches ?? []) as Match[]) matchById.set(m.id, m);
+
+  const seasonIds = Array.from(
+    new Set(
+      (matches ?? [])
+        .map((m) => weekLookup.get((m as Match).week_id)?.season_id)
+        .filter((id): id is number => id != null),
+    ),
+  );
+  const { data: seasons, error: seErr } = await getAdminClient()
+    .from('seasons')
+    .select('*')
+    .in('id', seasonIds);
+  if (seErr) throw seErr;
+  const seasonById = new Map<number, Season>();
+  for (const s of (seasons ?? []) as Season[]) seasonById.set(s.id, s);
+
   const history = statRows
     .map((s) => {
       const m = matchById.get(s.match_id);
@@ -224,7 +227,6 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
       if (!w) return null;
       const se = seasonById.get(w.season_id);
       if (!se) return null;
-      const roster = rosterByMatch.get(m.id) ?? { shirts: [], skins: [] };
       return {
         ...s,
         match_number: m.match_number,
@@ -236,10 +238,10 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         map: effectivePickedMap(m),
         final_score: m.final_score,
         scheduled_at: m.scheduled_at,
-        shirts: roster.shirts,
-        skins: roster.skins,
-        shirts_stats: roster.shirts_stats ?? [],
-        skins_stats: roster.skins_stats ?? [],
+        shirts: [] as PlayerHistoryRow['shirts'],
+        skins: [] as PlayerHistoryRow['skins'],
+        shirts_stats: [] as RosterStat[],
+        skins_stats: [] as RosterStat[],
         skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
@@ -260,8 +262,45 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
       ),
     );
 
-  return { player: player as Player, history, trophies };
+  if (recentLimit == null) {
+    await attachRosters(history);
+    return history;
+  }
+  const next = nextUpcoming(history);
+  const keep = new Set([...lastPlayed(history, recentLimit), ...(next ? [next] : [])]);
+  const kept = history.filter((r) => keep.has(r));
+  await attachRosters(kept);
+  return kept;
 }
+
+async function getPlayerRow(playerId: number): Promise<Player | null> {
+  const { data: player, error } = await getAdminClient().from('players').select('*').eq('id', playerId).maybeSingle();
+  if (error) throw error;
+  return (player ?? null) as Player | null;
+}
+
+export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
+  const player = await getPlayerRow(playerId);
+  if (!player) return null;
+  const [history, medalists] = await Promise.all([loadPlayerHistory(playerId), getAllSeasonMedalists()]);
+  return { player, history, trophies: medalists.get(playerId) ?? [] };
+}
+
+/**
+ * The slice of `getPlayer()` the home page's My Stats panel reads: `player` plus a `history` holding
+ * only the `recentLimit` newest played matches and the next upcoming one (still newest first, so
+ * `lastPlayed()` and `nextUpcoming()` give the same answers as on the full history), with rosters
+ * for just those matches. Skips the trophy read. `null` when the player doesn't exist.
+ */
+export async function getPlayerRecent(
+  playerId: number,
+  recentLimit: number,
+): Promise<{ player: Player; history: PlayerHistoryRow[] } | null> {
+  const player = await getPlayerRow(playerId);
+  if (!player) return null;
+  return { player, history: await loadPlayerHistory(playerId, recentLimit) };
+}
+
 
 /** True for a history row whose match has a real result — the row counts toward the player's
  *  record, "Last 5" and match history. A `"0-0"` placeholder, an unscored match, or a row with no

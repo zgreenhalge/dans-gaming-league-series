@@ -7,7 +7,7 @@ import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod } from '../stage-types';
 import { getPlayersById } from './player';
-import { getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
+import { cacheQuery, getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
 import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics } from './sabremetrics';
@@ -68,11 +68,12 @@ function aggToRow(
  * Aggregates stats from all gauntlet seasons (is_gauntlet = true).
  * The leaderboard view excludes playoff games, so we compute directly from
  * player_match_stats.
+ * `cache()`-wrapped so the home page's My Stats and the Statistics page share one read per request.
  */
-export async function getGauntletStats(): Promise<{
+export const getGauntletStats = cacheQuery(async (): Promise<{
   career: LeaderboardRowWithId[];
   bySeason: Record<number, LeaderboardRowWithId[]>;
-}> {
+}> => {
   const { data: gauntletSeasons, error: gsErr } = await getAdminClient()
     .from('seasons')
     .select('id')
@@ -214,7 +215,7 @@ export async function getGauntletStats(): Promise<{
     .sort(canonicalSort);
 
   return { career, bySeason };
-}
+});
 
 /** Groups a round's matches by `pod_index` — the shared first step behind every "which games belong
  * to the same pod" derivation (pod-thread publishing, pod-aware event-sync). Matches with no
