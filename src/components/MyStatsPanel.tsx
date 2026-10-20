@@ -40,7 +40,7 @@ function H2HRow({
 /**
  * The home page's My Stats panel for a signed-in player: career rank, W-L and ADR, their next
  * match, best friend and worst nightmare (each linking to the career H2H matchup), and their last
- * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/home.ts`).
+ * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/myStats.ts`).
  */
 export function MyStatsPanel({ stats }: { stats: MyStats }) {
   const { playerId, playerName, rank, record, adr, next, recent, bestFriend, worstNightmare } = stats;
