@@ -4,7 +4,7 @@
  * exactly once, so N players need N-1 or N weeks). Here the admin picks the length instead, and the
  * planner covers as much of the league as that length allows. Nothing here reads or writes the
  * database: it takes players with their EHOG state and returns a plan plus a scorecard, so the
- * Schedule Lab (`/schedule-lab`) can generate and compare plans freely.
+ * Schedule Lab (`/tools/schedule-lab`) can generate and compare plans freely.
  *
  * Settings (`SeasonFormatSettings`):
  * - `weeks` — season length.

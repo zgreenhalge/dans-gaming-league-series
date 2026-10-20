@@ -29,7 +29,7 @@ export interface ScheduleLabData {
   careerRecords: Record<number, FormatRecord>;
 }
 
-/** Everything the Schedule Lab (`/schedule-lab`) needs to plan a season format in the browser:
+/** Everything the Schedule Lab (`/tools/schedule-lab`) needs to plan a season format in the browser:
  *  players with the rating state `buildFormatPlan()` balances on, and each regular season's
  *  participants (`getSeasonParticipants()` — rostered or played) as a starting roster, with the
  *  season's records (`getAllLeaderboards()`) — and their career sum — for a win-rate division draft. */

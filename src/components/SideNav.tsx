@@ -115,6 +115,7 @@ export function SideNav({ seasons }: Props) {
 
       <NavLink href="/statistics">Statistics</NavLink>
       <NavLink href="/maps">Maps</NavLink>
+      <NavLink href="/tools">Tools</NavLink>
       <NavLink href="/scrim" prefetch={false}>
         <span className="inline-flex items-center gap-1.5">
           Scrim
