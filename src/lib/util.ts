@@ -1,4 +1,5 @@
 import { mapSlug } from './maps';
+import type { LeaderboardRowWithId } from './types';
 
 /**
  * Whether a DatHost server is actually up and reachable — the shared "on and done booting" check
@@ -446,6 +447,14 @@ export function factionClass(side: 'CT' | 'T' | null | undefined): string {
   return '';
 }
 
+/** `1` → `"1st"`, `2` → `"2nd"`, `11` → `"11th"`, `23` → `"23rd"` — a place on a ranked list. */
+export function ordinal(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
+  const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
 /**
  * Canonical leaderboard sort: Wins → RWR% → ADR (all descending).
  * Use this wherever player rows are ranked — never sort by ADR alone.
@@ -523,6 +532,45 @@ export function deriveRates(totals: {
     rwr_percentage: deriveRwr(totals),
     overall_adr: deriveAdr(totals),
   };
+}
+
+/**
+ * Merges two leaderboards (regular and gauntlet) into one row per player: totals are summed and the
+ * rate fields re-derived through `deriveRates()`, so a merged row is what a single combined
+ * leaderboard would have produced. Unsorted — rank with `canonicalSort()`. A player in only one
+ * list keeps their row as is. This is the "regular + gauntlet" career `CareerStatsView` shows by
+ * default and the home page's My Stats ranks against.
+ */
+export function mergeLeaderboardRows(
+  a: LeaderboardRowWithId[],
+  b: LeaderboardRowWithId[],
+): LeaderboardRowWithId[] {
+  const map = new Map<number, LeaderboardRowWithId>();
+  for (const row of [...a, ...b]) {
+    const prev = map.get(row.player_id);
+    if (!prev) {
+      map.set(row.player_id, { ...row });
+      continue;
+    }
+    const totals = {
+      matches_played: prev.matches_played + row.matches_played,
+      matches_won: prev.matches_won + row.matches_won,
+      matches_lost: prev.matches_lost + row.matches_lost,
+      total_kills: prev.total_kills + row.total_kills,
+      total_assists: prev.total_assists + row.total_assists,
+      total_deaths: prev.total_deaths + row.total_deaths,
+      total_damage: prev.total_damage + row.total_damage,
+      total_rounds_played: prev.total_rounds_played + row.total_rounds_played,
+      total_rounds_won: prev.total_rounds_won + row.total_rounds_won,
+    };
+    map.set(row.player_id, {
+      ...prev,
+      season_id: -1,
+      ...totals,
+      ...deriveRates(totals),
+    });
+  }
+  return Array.from(map.values());
 }
 
 /**

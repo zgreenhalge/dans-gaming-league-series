@@ -44,7 +44,10 @@ import {
   addNumericFields,
   finalRoundOf,
   finalRoundNumberOf,
+  ordinal,
+  mergeLeaderboardRows,
 } from './util';
+import type { LeaderboardRowWithId } from './types';
 import { mapSlug } from './maps';
 import { test, report } from './test-support/miniTest';
 
@@ -442,6 +445,57 @@ test('formatCountdownRelative: future reads "in …", past reads "… ago"', () 
   assert.equal(formatCountdownRelative('2026-01-01T00:00:05Z', now), 'in 5s');
   assert.equal(formatCountdownRelative('2026-01-02T01:02:03Z', now), 'in 1d 1h 2m 3s');
   assert.equal(formatCountdownRelative('2025-12-31T23:58:00Z', now), '2m 0s ago');
+});
+
+test('ordinal: st / nd / rd / th, with 11-13 always th', () => {
+  assert.deepEqual([1, 2, 3, 4, 10].map(ordinal), ['1st', '2nd', '3rd', '4th', '10th']);
+  assert.deepEqual([11, 12, 13, 14].map(ordinal), ['11th', '12th', '13th', '14th']);
+  assert.deepEqual([21, 22, 23, 101, 111, 112].map(ordinal), ['21st', '22nd', '23rd', '101st', '111th', '112th']);
+});
+
+function lbRow(playerId: number, overrides: Partial<LeaderboardRowWithId> = {}): LeaderboardRowWithId {
+  return {
+    season_id: 1,
+    player_id: playerId,
+    player_name: `P${playerId}`,
+    matches_played: 2,
+    matches_won: 1,
+    matches_lost: 1,
+    win_rate_percentage: 50,
+    total_kills: 20,
+    total_assists: 4,
+    total_deaths: 10,
+    kd_ratio: 2,
+    total_damage: 2000,
+    total_rounds_played: 40,
+    total_rounds_won: 20,
+    rwr_percentage: 50,
+    overall_adr: 50,
+    kills_in_wins: 10,
+    deaths_in_wins: 5,
+    kills_in_losses: 10,
+    deaths_in_losses: 5,
+    ...overrides,
+  };
+}
+
+test('mergeLeaderboardRows: sums a shared player\'s totals and re-derives their rates; others pass through', () => {
+  const merged = mergeLeaderboardRows(
+    [lbRow(1), lbRow(2)],
+    [lbRow(1, { matches_played: 1, matches_won: 1, matches_lost: 0, total_rounds_played: 10, total_rounds_won: 10, total_damage: 1000, total_kills: 8, total_deaths: 2 })],
+  );
+  assert.equal(merged.length, 2);
+  const p1 = merged.find((r) => r.player_id === 1)!;
+  assert.equal(p1.season_id, -1);
+  assert.equal(p1.matches_played, 3);
+  assert.equal(p1.matches_won, 2);
+  assert.equal(p1.matches_lost, 1);
+  assert.equal(p1.total_rounds_played, 50);
+  assert.equal(p1.total_rounds_won, 30);
+  assert.equal(p1.rwr_percentage, 60);
+  assert.equal(p1.overall_adr, 60);
+  assert.equal(p1.kd_ratio, 28 / 12);
+  assert.deepEqual(merged.find((r) => r.player_id === 2), lbRow(2));
 });
 
 report();

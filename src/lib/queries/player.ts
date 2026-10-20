@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../types';
-import { extractSeasonNumber, compareMatchRefDesc } from '../util';
+import { extractSeasonNumber, compareMatchRefDesc, isPlayedScore } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
 import { asPage, cacheQuery, fetchAllPages, getWeekLookup } from './_shared';
@@ -261,4 +261,30 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     );
 
   return { player: player as Player, history, trophies };
+}
+
+/** True for a history row whose match has a real result — the row counts toward the player's
+ *  record, "Last 5" and match history. A `"0-0"` placeholder, an unscored match, or a row with no
+ *  rounds played is upcoming instead. */
+export function isPlayedHistoryRow(r: PlayerHistoryRow): boolean {
+  return isPlayedScore(r.final_score) && r.rounds_played > 0;
+}
+
+/** The `limit` most recent played rows of `history` (which `getPlayer()` returns newest first) —
+ *  the player page's "Last 5" and the home page's Match history. */
+export function lastPlayed(history: PlayerHistoryRow[], limit: number): PlayerHistoryRow[] {
+  return history.filter(isPlayedHistoryRow).slice(0, limit);
+}
+
+/** The earliest not-yet-played row of `history` — the player page's "Next Match" and the home
+ *  page's. `null` when nothing is upcoming. */
+export function nextUpcoming(history: PlayerHistoryRow[]): PlayerHistoryRow | null {
+  const upcoming = history.filter((r) => !isPlayedHistoryRow(r));
+  return upcoming.length > 0 ? upcoming[upcoming.length - 1] : null;
+}
+
+/** The names of the other team in a history row's match, "A & B" — `TBD` while it has no roster. */
+export function opponentNames(row: PlayerHistoryRow): string {
+  const opponents = row.faction === 'SHIRTS' ? row.skins : row.shirts;
+  return opponents.map((p) => p.player_name).join(' & ') || 'TBD';
 }
