@@ -505,29 +505,34 @@ export function buildSeasonForm(
 
 /**
  * `buildSeasonForm()` for one regular season's played matches (gauntlet and playoff matches are
- * excluded, matching the standings the column sits in).
+ * excluded, matching the standings the column sits in). One paginated `player_match_stats` read
+ * with the match and its week embedded: the embedded `weeks.season_id` filter scopes it to the
+ * season, so no week or match id list is fetched first. Played-ness (`isPlayedScore()`) is applied
+ * after the read since "0-0" placeholders can't be excluded by a column filter.
  */
 export async function getSeasonForm(seasonId: number): Promise<Map<number, boolean[]>> {
-  const weeks = await getWeekLookup([seasonId]);
-  const weekIds = Array.from(weeks.keys());
-  if (weekIds.length === 0) return new Map();
-
-  const matchRows = await batchedIn<{ id: number; week_id: number; match_number: number; final_score: string | null; is_playoff_game: boolean }>(
-    'matches',
-    'week_id',
-    weekIds,
-    'id, week_id, match_number, final_score, is_playoff_game',
+  type FormRow = {
+    match_id: number;
+    player_id: number;
+    is_win: boolean;
+    matches: { match_number: number; final_score: string | null; weeks: { week_number: number } };
+  };
+  const rows = await fetchAllPages<FormRow>((from, to) =>
+    asPage<FormRow>(
+      getAdminClient()
+        .from('player_match_stats')
+        .select('match_id, player_id, is_win, matches!inner(match_number, final_score, is_playoff_game, weeks!inner(season_id, week_number))')
+        .eq('matches.weeks.season_id', seasonId)
+        .eq('matches.is_playoff_game', false)
+        .order('match_id')
+        .order('player_id')
+        .range(from, to),
+    ),
   );
-  const matches = matchRows
-    .filter((m) => !m.is_playoff_game && isPlayedScore(m.final_score))
-    .map((m) => ({ id: m.id, weekNumber: weeks.get(m.week_id)!.week_number, matchNumber: m.match_number }));
-  if (matches.length === 0) return new Map();
-
-  const stats = await batchedIn<{ match_id: number; player_id: number; is_win: boolean }>(
-    'player_match_stats',
-    'match_id',
-    matches.map((m) => m.id),
-    'match_id, player_id, is_win',
-  );
-  return buildSeasonForm(matches, stats);
+  const played = rows.filter((r) => isPlayedScore(r.matches.final_score));
+  const matches = new Map<number, { id: number; weekNumber: number; matchNumber: number }>();
+  for (const r of played) {
+    matches.set(r.match_id, { id: r.match_id, weekNumber: r.matches.weeks.week_number, matchNumber: r.matches.match_number });
+  }
+  return buildSeasonForm([...matches.values()], played);
 }

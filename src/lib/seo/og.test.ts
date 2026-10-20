@@ -28,16 +28,17 @@ async function main() {
   await test('getPlayerMeta(1) — WR/K-D/ADR match deriveRates() for the same totals', async () => {
     const meta = await getPlayerMeta(1);
     assert.notEqual(meta, null);
-    // Alice's player_season_leaderboard row: matches_played 1, matches_won 1, kills 20, deaths 15,
-    // damage 1881, rounds 22.
+    // Alice's player_season_leaderboard row (matches_played 1, matches_won 1, kills 20, deaths 15,
+    // damage 1881, rounds 22) plus her gauntlet match 200 (win, 22 kills, 18 deaths, 2112 damage,
+    // 24 rounds), which the playoff-game read adds on top.
     const rates = deriveRates({
-      matches_played: 1,
-      matches_won: 1,
-      total_kills: 20,
-      total_deaths: 15,
-      total_rounds_played: 22,
+      matches_played: 2,
+      matches_won: 2,
+      total_kills: 42,
+      total_deaths: 33,
+      total_rounds_played: 46,
       total_rounds_won: 0,
-      total_damage: 1881,
+      total_damage: 3993,
     });
     assert.equal(meta!.stats.wr, rates.win_rate_percentage.toFixed(0));
     assert.equal(meta!.stats.kd, rates.kd_ratio.toFixed(2));
