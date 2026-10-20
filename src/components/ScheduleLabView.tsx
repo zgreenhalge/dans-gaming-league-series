@@ -138,7 +138,7 @@ export function ScheduleLabView({
   careerRecords: Record<number, FormatRecord>;
 }) {
   const [selected, setSelected] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
-  const [settings, setSettings] = useState<Settings>({
+  const [chosen, setSettings] = useState<Settings>({
     weeks: 8,
     weekShape: 'match',
     divisions: 1,
@@ -160,6 +160,9 @@ export function ScheduleLabView({
 
   const namesById = useMemo(() => new Map(players.map((p) => [p.playerId, p.name])), [players]);
   const maxDivisions = Math.max(1, Math.floor(selected.size / FORMAT_MIN_DIVISION_SIZE));
+  // The chosen division count, lowered to what the roster supports so the controls and the
+  // generated settings agree when the roster shrinks.
+  const settings: Settings = { ...chosen, divisions: Math.min(chosen.divisions, maxDivisions) };
   // Tier sizes the admin set, as long as they still fit the roster and division count; otherwise even.
   const evenSizes = divisionSizesFor(selected.size, settings.divisions);
   const setSizes = settings.tierSizes;
