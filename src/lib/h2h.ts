@@ -1,4 +1,4 @@
-import { parseScore, compareMatchRefDesc, isPlayedScore } from './util';
+import { parseScore, compareMatchRefDesc, isPlayedScore, deriveKda } from './util';
 import { effectivePickedMap } from './veto';
 
 // ─── H2H aggregation ─────────────────────────────────────────────────────────
@@ -486,6 +486,15 @@ export function computeH2H(
 export function findDuo(duos: DuoStats[], a: number, b: number): DuoStats | undefined {
   const key = h2hPairKey(a, b);
   return duos.find((d) => h2hPairKey(d.playerA, d.playerB) === key);
+}
+
+/** A duo's KDA: the mean of the two players' own KDA, (kills + assists) / deaths each via
+ *  `deriveKda()`, over the games they played together (`aStats` / `bStats`). It is not the pair's
+ *  pooled `combinedKills + combinedAssists` over `combinedDeaths`. Informational only: the Friends
+ *  Rating (`duoBlendedScorer()`) does not use it. */
+export function duoAvgKda(duo: Pick<DuoStats, 'aStats' | 'bStats'>): number {
+  const kda = (s: H2HPlayerStats) => deriveKda({ total_kills: s.kills, total_assists: s.assists, total_deaths: s.deaths });
+  return (kda(duo.aStats) + kda(duo.bStats)) / 2;
 }
 
 /** The rival-record counterpart of `findDuo`. */

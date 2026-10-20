@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
+import { computeH2H, findDuo, findRival, duoAvgKda, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
@@ -432,6 +432,18 @@ test('gauntletRoundsToH2HInput drops unplayed matches and stamps round/season nu
   assert.equal(inputs[0].weekNumber, 2, 'round_number maps into weekNumber');
   assert.equal(inputs[0].seasonNumber, 5);
   assert.equal(inputs[0].isGauntlet, true);
+});
+
+test('duoAvgKda: mean of the two players own (K+A)/D, not the pooled ratio', () => {
+  const a = { kills: 20, assists: 10, deaths: 10, adr: 0, rwr: 0, roundsWon: 0, roundsPlayed: 0 }; // 3
+  const b = { kills: 4, assists: 0, deaths: 2, adr: 0, rwr: 0, roundsWon: 0, roundsPlayed: 0 }; // 2
+  assert.equal(duoAvgKda({ aStats: a, bStats: b }), 2.5); // (3 + 2) / 2; pooled would be 34 / 12
+});
+
+test('duoAvgKda: a player with no deaths counts kills + assists', () => {
+  const a = { kills: 4, assists: 1, deaths: 0, adr: 0, rwr: 0, roundsWon: 0, roundsPlayed: 0 }; // 5
+  const b = { kills: 3, assists: 1, deaths: 2, adr: 0, rwr: 0, roundsWon: 0, roundsPlayed: 0 }; // 2
+  assert.equal(duoAvgKda({ aStats: a, bStats: b }), 3.5);
 });
 
 report();
