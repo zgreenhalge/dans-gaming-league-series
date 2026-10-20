@@ -132,19 +132,40 @@ export interface FormatHalf {
   records: Record<number, FormatRecord> | null;
 }
 
+/** One player's season under a plan. A week's usual load is one game (`'match'` weeks) or two
+ *  (`'group'` weeks): a week above it is a doubleheader, a week below it a bye. */
+export interface FormatPlayerSeason {
+  playerId: number;
+  games: number;
+  doubleheaderWeeks: number;
+  byeWeeks: number;
+  mostGamesInAWeek: number;
+  teammates: number;
+  /** Shirts games minus Skins games. */
+  sideBalance: number;
+  /** Players this one is never a teammate or opponent of all season. */
+  neverMeets: number[];
+}
+
 export interface FormatScorecard {
   games: number;
   gamesPerPlayer: { min: number; max: number };
-  /** Total player-weeks with no game. */
-  idlePlayerWeeks: number;
+  /** Per-player doubleheader and bye weeks, fewest to most. */
+  doubleheaderWeeks: { min: number; max: number };
+  byeWeeks: { min: number; max: number };
+  /** The most games any one player plays in a single week. */
   maxGamesInAWeek: number;
   distinctTeammates: { min: number; max: number; possible: number };
   pairs: number;
   pairsPartnered: number;
   pairsNeverMet: number;
+  /** Players who never meet at least one other player all season. */
+  playersMissingSomeone: number;
   repeatTeammatePairs: number;
   lopsidedGames: number;
   maxSideImbalance: number;
+  /** Every player's own season, in roster order. */
+  players: FormatPlayerSeason[];
 }
 
 export interface FormatPlan {
@@ -812,7 +833,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   }
 
   assignSides(weeks, rand);
-  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), weeks) } };
+  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), weeks, settings.weekShape) } };
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
@@ -831,19 +852,22 @@ function assignSides(weeks: FormatWeek[], rand: () => number): void {
   });
 }
 
-/** The comparison numbers for a plan — what the Schedule Lab shows side by side. */
-function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorecard {
+/** The comparison numbers for a plan — what the Schedule Lab shows side by side — and each
+ * player's own season behind them. */
+function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[], shape: WeekShape): FormatScorecard {
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
   const { teammatePairs, opponentPairs } = collectCoveragePairs(games);
-  const gameCount = new Map<number, number>();
-  const sideBalance = new Map<number, number>();
+  const met = (a: number, b: number) => teammatePairs.has(pairKey(a, b)) || opponentPairs.has(pairKey(a, b));
+  const usualGames = shape === 'match' ? 1 : 2;
   const teammateCount = new Map<string, number>();
+  const season = new Map<number, FormatPlayerSeason>(
+    playerIds.map((id) => [id, { playerId: id, games: 0, doubleheaderWeeks: 0, byeWeeks: 0, mostGamesInAWeek: 0, teammates: 0, sideBalance: 0, neverMeets: [] }]),
+  );
   const teammates = new Map<number, Set<number>>(playerIds.map((id) => [id, new Set()]));
 
   for (const g of games) {
-    for (const id of [...g.shirts, ...g.skins]) gameCount.set(id, (gameCount.get(id) ?? 0) + 1);
-    for (const id of g.shirts) sideBalance.set(id, (sideBalance.get(id) ?? 0) + 1);
-    for (const id of g.skins) sideBalance.set(id, (sideBalance.get(id) ?? 0) - 1);
+    for (const id of g.shirts) season.get(id)!.sideBalance++;
+    for (const id of g.skins) season.get(id)!.sideBalance--;
     for (const [a, b] of [g.shirts, g.skins]) {
       const k = pairKey(a, b);
       teammateCount.set(k, (teammateCount.get(k) ?? 0) + 1);
@@ -851,16 +875,16 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorec
       teammates.get(b)!.add(a);
     }
   }
-
-  let maxGamesInAWeek = 0;
-  let idlePlayerWeeks = 0;
   for (const w of weeks) {
-    const perPlayer = new Map<number, number>();
-    for (const d of w.divisions) {
-      idlePlayerWeeks += d.idlePlayerIds.length;
-      for (const g of d.games) for (const id of [...g.shirts, ...g.skins]) perPlayer.set(id, (perPlayer.get(id) ?? 0) + 1);
+    const thisWeek = new Map<number, number>(playerIds.map((id) => [id, 0]));
+    for (const d of w.divisions) for (const g of d.games) for (const id of [...g.shirts, ...g.skins]) thisWeek.set(id, thisWeek.get(id)! + 1);
+    for (const [id, count] of thisWeek) {
+      const ps = season.get(id)!;
+      ps.games += count;
+      ps.mostGamesInAWeek = Math.max(ps.mostGamesInAWeek, count);
+      if (count > usualGames) ps.doubleheaderWeeks++;
+      if (count < usualGames) ps.byeWeeks++;
     }
-    for (const c of perPlayer.values()) maxGamesInAWeek = Math.max(maxGamesInAWeek, c);
   }
 
   let pairs = 0;
@@ -868,25 +892,32 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorec
   let pairsNeverMet = 0;
   for (let i = 0; i < playerIds.length; i++) {
     for (let j = i + 1; j < playerIds.length; j++) {
+      const [a, b] = [playerIds[i], playerIds[j]];
       pairs++;
-      const k = pairKey(playerIds[i], playerIds[j]);
-      if (teammatePairs.has(k)) pairsPartnered++;
-      if (!teammatePairs.has(k) && !opponentPairs.has(k)) pairsNeverMet++;
+      if (teammatePairs.has(pairKey(a, b))) pairsPartnered++;
+      if (!met(a, b)) {
+        pairsNeverMet++;
+        season.get(a)!.neverMeets.push(b);
+        season.get(b)!.neverMeets.push(a);
+      }
     }
   }
-  const counts = playerIds.map((id) => gameCount.get(id) ?? 0);
-  const distinct = playerIds.map((id) => teammates.get(id)!.size);
+  const players = playerIds.map((id) => ({ ...season.get(id)!, teammates: teammates.get(id)!.size }));
+  const span = (pick: (p: FormatPlayerSeason) => number) => ({ min: Math.min(...players.map(pick)), max: Math.max(...players.map(pick)) });
   return {
     games: games.length,
-    gamesPerPlayer: { min: Math.min(...counts), max: Math.max(...counts) },
-    idlePlayerWeeks,
-    maxGamesInAWeek,
-    distinctTeammates: { min: Math.min(...distinct), max: Math.max(...distinct), possible: playerIds.length - 1 },
+    gamesPerPlayer: span((p) => p.games),
+    doubleheaderWeeks: span((p) => p.doubleheaderWeeks),
+    byeWeeks: span((p) => p.byeWeeks),
+    maxGamesInAWeek: span((p) => p.mostGamesInAWeek).max,
+    distinctTeammates: { ...span((p) => p.teammates), possible: playerIds.length - 1 },
     pairs,
     pairsPartnered,
     pairsNeverMet,
+    playersMissingSomeone: players.filter((p) => p.neverMeets.length > 0).length,
     repeatTeammatePairs: [...teammateCount.values()].filter((c) => c > 1).length,
     lopsidedGames: games.filter((g) => isLopsided(g.shirtsWinProb)).length,
-    maxSideImbalance: balanceCost(sideBalance).worst,
+    maxSideImbalance: balanceCost(new Map(players.map((p) => [p.playerId, p.sideBalance]))).worst,
+    players,
   };
 }

@@ -146,6 +146,23 @@ test('a doubleheader week never replays the same matchup in a 4-player division'
   }
 });
 
+test('every doubleheader pays back a bye, and never-meets match the pair count', () => {
+  for (const p of [plan(13, {}), plan(13, { weekShape: 'group' }), plan(13, { divisions: 2, halfwayShuffle: true })]) {
+    const label = JSON.stringify(p.settings);
+    const sc = p.scorecard;
+    assert.equal(sc.players.length, 13);
+    for (const ps of sc.players) {
+      assert.equal(ps.doubleheaderWeeks, ps.byeWeeks, `${label}: player ${ps.playerId} doubleheaders vs byes`);
+      for (const other of ps.neverMeets) {
+        assert.ok(sc.players.find((q) => q.playerId === other)!.neverMeets.includes(ps.playerId), `${label}: never-meets is symmetric`);
+      }
+    }
+    assert.equal(sc.players.reduce((sum, ps) => sum + ps.neverMeets.length, 0), 2 * sc.pairsNeverMet);
+    assert.equal(sc.playersMissingSomeone, sc.players.filter((ps) => ps.neverMeets.length > 0).length);
+    assert.equal(sc.maxGamesInAWeek, Math.max(...sc.players.map((ps) => ps.mostGamesInAWeek)));
+  }
+});
+
 test('odd groups even out over the season', () => {
   assertSound(plan(13, { weekShape: 'group' }), 13, 16, 3);
 });
