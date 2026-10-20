@@ -149,8 +149,8 @@ export interface FormatScorecard {
   pairs: number;
   pairsPartnered: number;
   pairsNeverMet: number;
-  /** Players who never meet at least one player they share a division with in some half (a
-   *  reachable pair, see `reachablePairs()`) all season. */
+  /** Players who never play with or against at least one other player in the league all season —
+   *  counted over every pair, so a divisions season counts the players its divisions keep apart. */
   playersMissingSomeone: number;
   repeatTeammatePairs: number;
   lopsidedGames: number;
@@ -801,11 +801,11 @@ function assignSides(weeks: FormatWeek[], rand: () => number): void {
   });
 }
 
-/** Every pair of players who share a division in at least one half, keyed by `pairKey()` with the
- * two player ids: the only pairs a plan can make teammates or opponents. `mates` counts each
- * player's distinct reachable division-mates. */
-function reachablePairs(halves: FormatHalf[]): { pairs: Map<string, [number, number]>; mates: Map<number, number> } {
-  const pairs = new Map<string, [number, number]>();
+/** Every pair of players who share a division in at least one half, keyed by `pairKey()`: the only
+ * pairs a plan can make teammates or opponents. `mates` counts each player's distinct reachable
+ * division-mates. */
+function reachablePairs(halves: FormatHalf[]): { pairs: Set<string>; mates: Map<number, number> } {
+  const pairs = new Set<string>();
   const mates = new Map<number, number>();
   for (const half of halves) {
     for (const ids of half.divisions) {
@@ -813,7 +813,7 @@ function reachablePairs(halves: FormatHalf[]): { pairs: Map<string, [number, num
         for (let j = i + 1; j < ids.length; j++) {
           const key = pairKey(ids[i], ids[j]);
           if (pairs.has(key)) continue;
-          pairs.set(key, [ids[i], ids[j]]);
+          pairs.add(key);
           mates.set(ids[i], (mates.get(ids[i]) ?? 0) + 1);
           mates.set(ids[j], (mates.get(ids[j]) ?? 0) + 1);
         }
@@ -862,13 +862,18 @@ function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: Forma
   let pairs = 0;
   let pairsPartnered = 0;
   let pairsNeverMet = 0;
-  const missingSomeone = new Set<number>();
-  for (const [k, [a, b]] of reachable) {
+  for (const k of reachable) {
     pairs++;
     if (teammatePairs.has(k)) pairsPartnered++;
-    if (!teammatePairs.has(k) && !opponentPairs.has(k)) {
-      pairsNeverMet++;
-      missingSomeone.add(a).add(b);
+    if (!teammatePairs.has(k) && !opponentPairs.has(k)) pairsNeverMet++;
+  }
+  // Unlike the pair totals, "missing someone" is league-wide: it counts a player kept apart from
+  // someone by the divisions, not only by the schedule.
+  const missingSomeone = new Set<number>();
+  for (let i = 0; i < playerIds.length; i++) {
+    for (let j = i + 1; j < playerIds.length; j++) {
+      const k = pairKey(playerIds[i], playerIds[j]);
+      if (!teammatePairs.has(k) && !opponentPairs.has(k)) missingSomeone.add(playerIds[i]).add(playerIds[j]);
     }
   }
   const counts = [...gameCount.values()];
