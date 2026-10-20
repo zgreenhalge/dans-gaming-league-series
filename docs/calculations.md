@@ -753,8 +753,8 @@ player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 column. **W-L**, **KDA** and **ADR** come from the player's row of the combined regular and gauntlet
 career leaderboard (`mergeLeaderboardRows()` of `getCareerLeaderboard()` and
 `getGauntletStats().career`, the Statistics page's default view). **KDA** is (kills + assists) per
-death, or kills + assists when there are no deaths (`deriveKda()` in `src/lib/util.ts`) — the stat
-tables show the kills-only K/D (`deriveKd()`). **Match history** lists the last five played matches
+death, or kills + assists when there are no deaths (`deriveKda()` in `src/lib/util.ts`); the KDA
+tile also shows the kills-only K/D (`deriveKd()`) beneath it, the figure the stat tables use. **Match history** lists the last five played matches
 (`lastPlayed()`, `src/lib/queries/player.ts`) with the stored `final_score`, shirts first, as every
 match card shows it. `buildMyStats()` in `src/lib/queries/myStats.ts`.
 

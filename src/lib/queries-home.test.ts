@@ -303,6 +303,7 @@ test('buildMyStats: career EHOG, record, KDA, ADR, next match, recent matches, b
   assert.equal(stats.ehog, 23.4);
   assert.deepEqual(stats.record, { wins: 8, losses: 2 });
   assert.equal(stats.kda, 2.6);
+  assert.equal(stats.kd, 2);
   assert.equal(stats.adr, 80);
   assert.deepEqual(stats.next, { matchId: 9, opponents: 'Carol & Dave', map: 'Harbor', scheduledAt: '2026-10-25T19:30:00Z' });
   assert.deepEqual(stats.recent, [
@@ -325,6 +326,7 @@ test('buildMyStats: a player with no matches has no rating, record, KDA, history
   assert.equal(stats.ehog, null);
   assert.deepEqual(stats.record, { wins: 0, losses: 0 });
   assert.equal(stats.kda, 0);
+  assert.equal(stats.kd, 0);
   assert.equal(stats.adr, 0);
   assert.equal(stats.next, null);
   assert.deepEqual(stats.recent, []);

@@ -20,6 +20,7 @@ function stats(overrides: Partial<MyStats> = {}): MyStats {
     ehog: 23.46,
     record: { wins: 31, losses: 19 },
     kda: 1.4286,
+    kd: 1.1,
     adr: 74.051,
     next: { matchId: 20, opponents: 'Bishop & Pixel', map: 'Harbor', scheduledAt: null },
     recent: [
@@ -38,7 +39,8 @@ describe('MyStatsPanel', () => {
     expect(screen.getByRole('link', { name: 'Rook' })).toHaveAttribute('href', '/players/5');
     expect(screen.getByText('23.5')).toBeInTheDocument();
     expect(screen.getByText('31-19')).toBeInTheDocument();
-    expect(screen.getByText('1.43')).toBeInTheDocument();
+    expect(screen.getByText('1.43', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('1.10 K/D')).toBeInTheDocument();
     expect(screen.getByText('74.05')).toBeInTheDocument();
   });
 
@@ -48,7 +50,7 @@ describe('MyStatsPanel', () => {
   });
 
   test('a player with no played matches or rating shows dashes instead of the figures', () => {
-    render(<MyStatsPanel stats={stats({ ehog: null, record: { wins: 0, losses: 0 }, kda: 0, adr: 0, recent: [], next: null })} />);
+    render(<MyStatsPanel stats={stats({ ehog: null, record: { wins: 0, losses: 0 }, kda: 0, kd: 0, adr: 0, recent: [], next: null })} />);
     expect(screen.getAllByText('—')).toHaveLength(4);
   });
 

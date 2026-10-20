@@ -44,7 +44,7 @@ function H2HRow({
  * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/myStats.ts`).
  */
 export function MyStatsPanel({ stats }: { stats: MyStats }) {
-  const { playerId, playerName, ehog, record, kda, adr, next, recent, bestFriend, worstNightmare } = stats;
+  const { playerId, playerName, ehog, record, kda, kd, adr, next, recent, bestFriend, worstNightmare } = stats;
   const played = record.wins + record.losses > 0;
 
   return (
@@ -63,7 +63,16 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
             valueStyle: ehog != null ? { color: ehogColorFor(ehog) } : undefined,
           },
           { label: 'W-L', title: 'Career match record', value: played ? `${record.wins}-${record.losses}` : '—' },
-          { label: 'KDA', title: 'Career (kills + assists) per death', value: played ? kda.toFixed(2) : '—' },
+          {
+            label: 'KDA',
+            title: 'Career (kills + assists) per death; K/D is kills per death',
+            value: played ? (
+              <>
+                {kda.toFixed(2)}
+                <span className="block mt-1 font-mono text-[9px] font-normal text-[var(--color-text-secondary)]">{kd.toFixed(2)} K/D</span>
+              </>
+            ) : '—',
+          },
           { label: 'ADR', title: 'Career average damage per round', value: played ? adr.toFixed(2) : '—' },
         ]}
       />
