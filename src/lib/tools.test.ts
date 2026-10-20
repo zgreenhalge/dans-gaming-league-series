@@ -23,6 +23,7 @@ test('tool links and breadcrumbs', () => {
   const lab = getTool('schedule-lab');
   assert.equal(toolHref(lab.slug), '/tools/schedule-lab');
   assert.deepEqual(toolCrumbs(lab).map((c) => c.label), ['DGLS', 'Tools', 'Schedule Lab']);
+  assert.deepEqual(toolCrumbs().map((c) => c.label), ['DGLS', 'Tools']);
   assert.throws(() => getTool('nope'));
 });
 

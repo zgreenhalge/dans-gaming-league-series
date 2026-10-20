@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   buildFormatPlan,
-  describeFormatSettings,
   divisionSizesFor,
   formatIssues,
+  isLopsided,
   FORMAT_MAX_WEEKS,
   FORMAT_MIN_DIVISION_SIZE,
   FORMAT_MIN_WEEKS,
@@ -29,16 +29,15 @@ import SectionLabel from './SectionLabel';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { RemoveXButton } from './RemoveXButton';
 
 type Settings = Omit<SeasonFormatSettings, 'seed'>;
 
+/** A generated plan, identified by its seed (each Generate uses the next one). */
 interface Preview {
-  id: number;
-  label: string;
-  playerCount: number;
+  plan: FormatPlan;
   /** The season whose records a win-rate draft ranked by; null for any other draft. */
   draftSeasonLabel: string | null;
-  plan: FormatPlan;
 }
 
 const WEEK_SHAPES: { value: WeekShape; label: string }[] = [
@@ -63,11 +62,13 @@ const HALFWAY_REDRAFTS: { value: HalfwayRedraft; label: string }[] = [
 const CAREER = 'career';
 
 const MAX_PREVIEWS = 6;
+const SELECT_CLS =
+  'font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]';
 const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.round((0.5 + LOPSIDED_MARGIN) * 100)}%`;
 
 /** Scorecard rows of the comparison table, in display order. */
 const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string }[] = [
-  { label: 'Players', value: (p) => String(p.playerCount) },
+  { label: 'Players', value: (p) => String(playerCount(p)) },
   { label: 'Games each', value: (p) => range(p.plan.scorecard.gamesPerPlayer) },
   { label: 'Most games in a week', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
   { label: 'Weeks sat out', title: 'Total player-weeks with no game, league-wide', value: (p) => String(p.plan.scorecard.idlePlayerWeeks) },
@@ -95,10 +96,23 @@ function range({ min, max }: { min: number; max: number }): string {
   return min === max ? String(min) : `${min}–${max}`;
 }
 
-/** A preview's settings line, naming the season a win-rate draft ranked by. */
-function previewSummary(p: Preview): string {
-  const summary = describeFormatSettings(p.plan.settings);
-  return p.draftSeasonLabel ? `${summary} · ${p.draftSeasonLabel} records` : summary;
+const previewId = (p: Preview) => p.plan.settings.seed;
+const previewLetter = (p: Preview) => String.fromCharCode(65 + ((previewId(p) - 1) % 26));
+const playerCount = (p: Preview) => p.plan.halves[0].divisions.flat().length;
+const labelOf = <T extends string>(options: { value: T; label: string }[], value: T) => options.find((o) => o.value === value)!.label;
+
+/** A preview's settings line, e.g. "8 weeks · 1 match a week · 2 divisions (snake, EHOG), halfway
+ * re-draft: most new pairings", naming the season a win-rate draft ranked by. */
+function previewSummary({ plan: { settings: s }, draftSeasonLabel }: Preview): string {
+  const parts = [`${s.weeks} weeks`, `${labelOf(WEEK_SHAPES, s.weekShape)} a week`];
+  if (s.divisions > 1) {
+    const order = labelOf(DRAFT_ORDERS, s.draftOrder).toLowerCase() + (s.draftOrder === 'tiered' && s.tierSizes ? ` ${s.tierSizes.join('/')}` : '');
+    const halfway = s.halfwayShuffle ? `, halfway re-draft: ${labelOf(HALFWAY_REDRAFTS, s.halfwayRedraft).toLowerCase()}` : '';
+    parts.push(`${s.divisions} divisions (${order}, ${labelOf(DRAFT_BASES, s.draftBasis)})${halfway}`);
+  }
+  if (!s.ehogBalance) parts.push('no EHOG balancing');
+  if (draftSeasonLabel) parts.push(`${draftSeasonLabel} records`);
+  return parts.join(' · ');
 }
 
 /** How a half's divisions were drafted, e.g. "snake draft by EHOG", "tiered re-draft by simulated
@@ -112,10 +126,6 @@ function halfDraftLabel(half: FormatHalf, order: DraftOrder, seasonLabel: string
     'first-half-win-rate': 'by simulated first-half win rate',
   }[half.draftedBy];
   return `${order} ${half.draftedBy === 'first-half-win-rate' ? 're-draft' : 'draft'} ${basis}`;
-}
-
-function previewLabel(index: number): string {
-  return String.fromCharCode(65 + (index % 26));
 }
 
 export function ScheduleLabView({
@@ -148,7 +158,7 @@ export function ScheduleLabView({
   const [generated, setGenerated] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  const namesById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
+  const namesById = useMemo(() => new Map(players.map((p) => [p.playerId, p.name])), [players]);
   const maxDivisions = Math.max(1, Math.floor(selected.size / FORMAT_MIN_DIVISION_SIZE));
   // Tier sizes the admin set, as long as they still fit the roster and division count; otherwise even.
   const evenSizes = divisionSizesFor(selected.size, settings.divisions);
@@ -163,7 +173,7 @@ export function ScheduleLabView({
     next[next.length - 1] = selected.size - next.slice(0, -1).reduce((a, v) => a + v, 0);
     update({ tierSizes: next });
   };
-  const shown = previews.find((p) => p.id === shownId) ?? null;
+  const shown = previews.find((p) => previewId(p) === shownId) ?? null;
 
   const update = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }));
   const togglePlayer = (id: number) =>
@@ -182,7 +192,7 @@ export function ScheduleLabView({
         : draftSource === CAREER
           ? { label: 'All regular seasons', records: careerRecords }
           : (rosters.find((r) => r.seasonId === draftSource) ?? null);
-    const roster = players.filter((p) => selected.has(p.id)).map((p) => ({ ...p, record: source?.records[p.id] ?? null }));
+    const roster = players.filter((p) => selected.has(p.playerId)).map((p) => ({ ...p, record: source?.records[p.playerId] ?? null }));
     setGenerated(seed);
     setBusy(true);
     // Yield one frame so the busy state paints before the (synchronous) search runs.
@@ -190,8 +200,7 @@ export function ScheduleLabView({
       const result = buildFormatPlan(roster, { ...effective, seed });
       setBusy(false);
       if (!result.ok) return;
-      const preview = { id: seed, label: previewLabel(seed - 1), playerCount: roster.length, draftSeasonLabel: source?.label ?? null, plan: result.plan };
-      setPreviews((prev) => [...prev, preview].slice(-MAX_PREVIEWS));
+      setPreviews((prev) => [...prev, { plan: result.plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
       setShownId(seed);
     }, 30);
   }
@@ -203,7 +212,7 @@ export function ScheduleLabView({
           <SectionLabel>Roster · {selected.size} selected</SectionLabel>
           <select
             aria-label="Load a season's roster"
-            className="font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] mb-2"
+            className={`${SELECT_CLS} mb-2`}
             value=""
             onChange={(e) => {
               const roster = rosters.find((r) => r.seasonId === Number(e.target.value));
@@ -225,13 +234,13 @@ export function ScheduleLabView({
         </div>
         <div className="flex flex-wrap gap-1.5">
           {players.map((p) => {
-            const on = selected.has(p.id);
+            const on = selected.has(p.playerId);
             return (
               <button
-                key={p.id}
+                key={p.playerId}
                 type="button"
                 aria-pressed={on}
-                onClick={() => togglePlayer(p.id)}
+                onClick={() => togglePlayer(p.playerId)}
                 className={`font-mono text-[12px] px-2.5 py-1 border transition-colors ${
                   on
                     ? 'border-[var(--color-site-accent)] text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)]'
@@ -239,7 +248,7 @@ export function ScheduleLabView({
                 }`}
               >
                 {p.name}
-                <span className="ml-1.5 text-[10px] text-[var(--color-text-secondary)]">{Math.round(p.ehog)}</span>
+                <span className="ml-1.5 text-[10px] text-[var(--color-text-secondary)]">{Math.round(p.ehogRating)}</span>
               </button>
             );
           })}
@@ -260,7 +269,7 @@ export function ScheduleLabView({
               {settings.draftBasis === 'win-rate' && (
                 <select
                   aria-label="Season whose win rates the draft ranks by"
-                  className="font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]"
+                  className={SELECT_CLS}
                   value={draftSource}
                   onChange={(e) => setDraftSource(e.target.value === CAREER ? CAREER : Number(e.target.value))}
                 >
@@ -327,23 +336,19 @@ export function ScheduleLabView({
               <tr>
                 <Th sticky />
                 {previews.map((p) => (
-                  <Th key={p.id} align="left" className={`min-w-[150px] ${p.id === shownId ? 'text-[var(--color-site-accent)]' : ''}`}>
+                  <Th key={previewId(p)} align="left" className={`min-w-[150px] ${previewId(p) === shownId ? 'text-[var(--color-site-accent)]' : ''}`}>
                     <div className="flex items-start justify-between gap-2">
-                      <button type="button" className="text-left hover:underline" onClick={() => setShownId(p.id)}>
-                        <span className="font-display text-[14px]">{p.label}</span>
+                      <button type="button" className="text-left hover:underline" onClick={() => setShownId(previewId(p))}>
+                        <span className="font-display text-[14px]">{previewLetter(p)}</span>
                         <span className="block font-normal text-[var(--color-text-secondary)]">{previewSummary(p)}</span>
                       </button>
-                      <button
-                        type="button"
-                        aria-label={`Remove preview ${p.label}`}
-                        className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                      <RemoveXButton
+                        label={`Remove preview ${previewLetter(p)}`}
                         onClick={() => {
-                          setPreviews((prev) => prev.filter((q) => q.id !== p.id));
-                          if (shownId === p.id) setShownId(null);
+                          setPreviews((prev) => prev.filter((q) => q !== p));
+                          if (shownId === previewId(p)) setShownId(null);
                         }}
-                      >
-                        ×
-                      </button>
+                      />
                     </div>
                   </Th>
                 ))}
@@ -356,7 +361,7 @@ export function ScheduleLabView({
                     {row.label}
                   </Td>
                   {previews.map((p) => (
-                    <Td key={p.id} align="left" className={p.id === shownId ? 'bg-[var(--color-bg-secondary)]' : ''}>
+                    <Td key={previewId(p)} align="left" className={previewId(p) === shownId ? 'bg-[var(--color-bg-secondary)]' : ''}>
                       {row.value(p)}
                     </Td>
                   ))}
@@ -405,7 +410,9 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
   );
 }
 
-function PlanSchedule({ preview, namesById }: { preview: Preview; namesById: Map<number, string> }) {
+// Memoized: the schedule can run to hundreds of rows, and its inputs don't change when the controls
+// above it do.
+const PlanSchedule = memo(function PlanSchedule({ preview, namesById }: { preview: Preview; namesById: Map<number, string> }) {
   const { plan } = preview;
   const name = (id: number) => namesById.get(id) ?? `#${id}`;
   const multiDivision = plan.settings.divisions > 1;
@@ -413,7 +420,7 @@ function PlanSchedule({ preview, namesById }: { preview: Preview; namesById: Map
   return (
     <section className="flex flex-col gap-8">
       <div>
-        <SectionLabel>Preview {preview.label} schedule</SectionLabel>
+        <SectionLabel>Preview {previewLetter(preview)} schedule</SectionLabel>
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview)}</div>
       </div>
       {plan.halves.map((half) => (
@@ -476,18 +483,17 @@ function PlanSchedule({ preview, namesById }: { preview: Preview; namesById: Map
       ))}
     </section>
   );
-}
+});
 
 function GameLine({ game, name }: { game: FormatGame; name: (id: number) => string }) {
   const pct = Math.round(game.shirtsWinProb * 100);
-  const lopsided = Math.abs(game.shirtsWinProb - 0.5) > LOPSIDED_MARGIN;
   return (
     <div className="grid grid-cols-[1fr_auto_1fr_auto] items-baseline gap-2 font-mono text-[12px]">
       <span className="truncate">{game.shirts.map(name).join(' + ')}</span>
       <span className="text-[10px] text-[var(--color-text-secondary)]">vs</span>
       <span className="truncate">{game.skins.map(name).join(' + ')}</span>
       <span
-        className={`text-[11px] tabular-nums ${lopsided ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-text-secondary)]'}`}
+        className={`text-[11px] tabular-nums ${isLopsided(game.shirtsWinProb) ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-text-secondary)]'}`}
         title="Shirts’ predicted win chance (EHOG)"
       >
         {pct}%

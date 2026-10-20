@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
-import { TOOLS, toolHref } from '@/lib/tools';
+import { TOOLS, toolCrumbs, toolHref } from '@/lib/tools';
 
 export const metadata: Metadata = {
   title: 'Tools',
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function ToolsPage() {
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Tools' }]} />
+      <TopbarShell crumbs={toolCrumbs()} />
       <main className="max-w-[900px] mx-auto px-4 sm:px-6 pb-16">
         <h1 className="mt-8 mb-6 font-display text-[28px] font-semibold leading-tight">Tools</h1>
         <div className="grid gap-3 sm:grid-cols-2">

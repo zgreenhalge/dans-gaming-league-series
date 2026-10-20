@@ -23,13 +23,10 @@ export function toolHref(slug: string): string {
   return `/tools/${slug}`;
 }
 
-/** Breadcrumbs for a tool page: DGLS › Tools › <tool>. */
-export function toolCrumbs(tool: Tool) {
-  return [
-    { label: 'DGLS', href: '/' },
-    { label: 'Tools', href: '/tools' },
-    { label: tool.name },
-  ];
+/** Breadcrumbs for a tool page (DGLS › Tools › <tool>), or for the `/tools` index without one. */
+export function toolCrumbs(tool?: Tool) {
+  if (!tool) return [{ label: 'DGLS', href: '/' }, { label: 'Tools' }];
+  return [{ label: 'DGLS', href: '/' }, { label: 'Tools', href: '/tools' }, { label: tool.name }];
 }
 
 export function getTool(slug: string): Tool {
