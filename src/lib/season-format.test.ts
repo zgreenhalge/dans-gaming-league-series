@@ -12,7 +12,6 @@ import { fromEhog, SIGMA_DEFAULT } from './ehog';
 import {
   buildFormatPlan,
   formatIssues,
-  groupSizes,
   draftDivisions,
   type FormatPlan,
   type FormatPlayer,
@@ -86,24 +85,14 @@ test('draftDivisions deals a ranking as a snake, straight or in tiers', () => {
   assert.deepEqual(draftDivisions(thirteen, [4, 9], 'tiered'), [[1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11, 12, 13]]);
 });
 
-test('groupSizes uses groups of 4 and folds the remainder into one group of 5-7', () => {
-  assert.deepEqual(groupSizes(7), [7]);
-  assert.deepEqual(groupSizes(10), [4, 6]);
-  assert.deepEqual(groupSizes(13), [4, 4, 5]);
-  assert.deepEqual(groupSizes(16), [4, 4, 4, 4]);
-});
-
 test('formatIssues refuses divisions smaller than a 2v2', () => {
   assert.equal(formatIssues(7, { ...BASE, divisions: 2 }).length, 1);
   assert.deepEqual(formatIssues(8, { ...BASE, divisions: 2 }), []);
   assert.equal(formatIssues(3, BASE).length, 1);
 });
 
-test('formatIssues refuses odd-group seasons with an odd number of weeks per half', () => {
-  assert.equal(formatIssues(13, { ...BASE, weekShape: 'group', weeks: 7 }).length, 1);
-  assert.equal(formatIssues(13, { ...BASE, weekShape: 'group', weeks: 6, divisions: 2, halfwayShuffle: true }).length, 1);
-  assert.deepEqual(formatIssues(12, { ...BASE, weekShape: 'group', weeks: 7 }), []);
-  assert.deepEqual(formatIssues(13, { ...BASE, weekShape: 'group', weeks: 8 }), []);
+test('formatIssues accepts group seasons of any roster size and length', () => {
+  for (const n of [7, 10, 13]) for (const weeks of [5, 7, 8]) assert.deepEqual(formatIssues(n, { ...BASE, weekShape: 'group', weeks }), [], `n=${n} weeks=${weeks}`);
 });
 
 test('one league, one match a week: equal games and everyone meets everyone', () => {
@@ -115,22 +104,34 @@ test('one league, one match a week: equal games and everyone meets everyone', ()
   }
 });
 
-test('one league, a group a week: two games a week, everyone partners everyone at 10 players', () => {
-  const p = plan(10, { weekShape: 'group' });
-  assertSound(p, 10, 16, 2);
-  assert.equal(p.scorecard.pairsPartnered, 45);
+/** Every group in a group-week plan is four players playing exactly two games with different
+ *  team splits, and each player's week is a bye (0), one group (2) or two groups (4). */
+function assertPods(p: FormatPlan) {
   for (const w of p.weeks) {
     for (const d of w.divisions) {
-      assert.deepEqual(d.idlePlayerIds, [], `week ${w.week}: nobody sits out a group week`);
       const byGroup = new Map<number, string[]>();
+      const members = new Map<number, Set<number>>();
+      const perPlayer = new Map<number, number>();
       for (const g of d.games) {
+        members.set(g.group!, new Set([...(members.get(g.group!) ?? []), ...g.shirts, ...g.skins]));
+        for (const id of [...g.shirts, ...g.skins]) perPlayer.set(id, (perPlayer.get(id) ?? 0) + 1);
         const key = [[...g.shirts].sort().join('+'), [...g.skins].sort().join('+')].sort().join(' v ');
         const seen = byGroup.get(g.group!) ?? [];
         assert.ok(!seen.includes(key), `week ${w.week}: group ${g.group} replays the same teams`);
         byGroup.set(g.group!, [...seen, key]);
       }
+      for (const [grp, games] of byGroup) assert.equal(games.length, 2, `week ${w.week}: group ${grp} plays ${games.length} games`);
+      for (const [grp, ids] of members) assert.equal(ids.size, 4, `week ${w.week}: group ${grp} has ${ids.size} players`);
+      for (const [id, c] of perPlayer) assert.ok(c === 2 || c === 4, `week ${w.week}: player ${id} plays ${c} games`);
     }
   }
+}
+
+test('one league, a group a week: groups of 4, everyone partners everyone at 10 players', () => {
+  const p = plan(10, { weekShape: 'group' });
+  assertSound(p, 10, 16, 4);
+  assertPods(p);
+  assert.equal(p.scorecard.pairsPartnered, 45);
 });
 
 test('a doubleheader week never replays the same matchup in a 4-player division', () => {
@@ -163,8 +164,14 @@ test('every doubleheader pays back a bye, and never-meets match the pair count',
   }
 });
 
-test('odd groups even out over the season', () => {
-  assertSound(plan(13, { weekShape: 'group' }), 13, 16, 3);
+test('group weeks give leftover players a bye, paid back by a second group another week', () => {
+  for (const n of [7, 13]) {
+    const p = plan(n, { weekShape: 'group' });
+    assertSound(p, n, 16, 4);
+    assertPods(p);
+    assert.ok(p.scorecard.byeWeeks.max > 0, `n=${n}: a roster not divisible by 4 has byes`);
+    for (const ps of p.scorecard.players) assert.equal(ps.doubleheaderWeeks, ps.byeWeeks);
+  }
 });
 
 test('two divisions with a halfway shuffle re-snake the second half', () => {

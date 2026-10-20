@@ -8,8 +8,9 @@
  *
  * Settings (`SeasonFormatSettings`):
  * - `weeks` — season length.
- * - `weekShape` — `'match'`: each player plays about one 2v2 match a week; `'group'`: each week
- *   players meet in groups of 4–7 and play two games each back to back (see `groupGames()`).
+ * - `weekShape` — `'match'`: each player plays about one 2v2 match a week; `'group'`: each player
+ *   is in about one group a week — four players playing two games back to back with two different
+ *   team splits (the gauntlet's pod).
  * - `divisions` — how many divisions the roster is drafted into; matches stay inside a division.
  * - `draftBasis` / `draftOrder` — how divisions are drafted: players are valued (`draftValues()`)
  *   by EHOG, by a win-loss record the caller supplies (`FormatPlayer.record`, e.g. a past season's
@@ -28,10 +29,11 @@
  *   `LOPSIDED_MARGIN`). EHOG only ever shapes who plays whom and which division a player starts
  *   in; standings stay Wins → RWR% → ADR (`canonicalSort()`).
  *
- * Every player plays the same number of games: a player who sits out a week has a doubleheader
- * somewhere else (`matchPhaseShape()`), and odd-sized groups alternate a longer and a shorter week
- * (`groupGames()`). Settings that can't keep that promise are refused with a reason by
- * `formatIssues()` rather than producing an uneven plan.
+ * Every player plays the same number of games. A week holds whole matches or groups of 4, so when a
+ * division doesn't divide by 4 the weeks alternate: a week with one fewer leaves the leftover
+ * players a bye, and a week with one more seats some players in a second match or group — a
+ * doubleheader — that pays a bye back (`unitsPerWeek()`). Settings that can't keep that promise are
+ * refused with a reason by `formatIssues()` rather than producing an uneven plan.
  *
  * Search: each (half, division) is a simulated-annealing search over which player fills which slot
  * of a fixed week template, and which of a game's three possible 2v2 splits is played. The cost
@@ -194,77 +196,39 @@ const SPLITS: [[number, number], [number, number]][] = [
   [[0, 3], [1, 2]],
 ];
 
-/** Groups a division is split into each week: as many groups of 4 as possible, with the remainder
- * folded into one group of 5, 6 or 7. */
-export function groupSizes(size: number): number[] {
-  const fours = Math.floor(size / 4);
-  const rest = size % 4;
-  if (rest === 0) return Array.from({ length: fours }, () => 4);
-  return [...Array.from({ length: fours - 1 }, () => 4), 4 + rest];
-}
-
-/** A group's games over its own slots. Every slot plays twice, except in groups of 5 and 7, where
- * the total can't split evenly: a "long" week gives two slots a third game and a "short" week gives
- * two slots a single game, so alternating them evens out at two games a week. A group's games share
- * players, so they're played back to back. */
-function groupGames(size: number, long: boolean): number[][] {
-  switch (size) {
-    case 4:
-      return [[0, 1, 2, 3], [0, 1, 2, 3]];
-    case 5:
-      return long ? [[0, 1, 2, 3], [0, 1, 2, 4], [0, 1, 3, 4]] : [[0, 1, 2, 3], [0, 1, 2, 4]];
-    case 6:
-      return [[0, 1, 2, 3], [0, 2, 4, 5], [1, 3, 4, 5]];
-    case 7:
-      return long
-        ? [[0, 1, 2, 3], [4, 5, 6, 0], [1, 2, 4, 5], [3, 6, 0, 1]]
-        : [[0, 1, 2, 3], [4, 5, 6, 0], [1, 2, 4, 5]];
-    default:
-      throw new Error(`groupGames: no group of ${size}`);
-  }
-}
-
-function groupWeekTemplate(size: number, long: boolean): WeekTemplate {
+/** One week of a division: `units` groups of four slots, filled round-robin over the slots, so slots
+ * at the start of the cycle get a second unit (a doubleheader) whenever the week holds more than
+ * `size / 4` units, and slots at the end get none (a bye) when it holds fewer. A `'match'` unit is
+ * one game; a `'group'` unit is two games over the same four slots (the search picks two different
+ * team splits), played back to back. */
+function weekTemplate(size: number, units: number, shape: WeekShape): WeekTemplate {
   const games: number[][] = [];
-  const group: number[] = [];
-  let offset = 0;
-  groupSizes(size).forEach((s, gi) => {
-    for (const g of groupGames(s, long)) {
-      games.push(g.map((slot) => slot + offset));
-      group.push(gi);
+  const group: (number | null)[] = [];
+  let next = 0;
+  for (let u = 0; u < units; u++) {
+    const unit: number[] = [];
+    while (unit.length < 4) unit.push(next++ % size);
+    for (let g = 0; g < (shape === 'group' ? 2 : 1); g++) {
+      games.push(unit);
+      group.push(shape === 'group' ? u : null);
     }
-    offset += s;
-  });
+  }
   return { games, group };
 }
 
-/** `matches` games filled round-robin over the slots, so slots at the start of the cycle get a
- * second game (a doubleheader) whenever the week holds more than `size / 4` matches, and slots at
- * the end get none (an idle week) when it holds fewer. */
-function matchWeekTemplate(size: number, matches: number): WeekTemplate {
-  const games: number[][] = [];
-  let next = 0;
-  for (let i = 0; i < matches; i++) {
-    const game: number[] = [];
-    while (game.length < 4) game.push(next++ % size);
-    games.push(game);
-  }
-  return { games, group: games.map(() => null) };
-}
-
-/** The games-per-player target for a `'match'` half: the smallest count, at least one per week, that
- * every division can split into whole 2v2 matches (players × games must be a multiple of 4). Shared
+/** Matches or groups per player in a half: the smallest count, at least one per week, that every
+ * division can split into whole units of four (players × units must be a multiple of 4). Shared
  * across divisions so standings stay comparable league-wide. */
-function matchGamesPerPlayer(divisionSizes: number[], weeks: number): number {
-  let g = weeks;
-  while (divisionSizes.some((s) => (s * g) % 4 !== 0)) g++;
-  return g;
+function unitsPerPlayer(divisionSizes: number[], weeks: number): number {
+  let u = weeks;
+  while (divisionSizes.some((s) => (s * u) % 4 !== 0)) u++;
+  return u;
 }
 
-/** Matches per week for one division's `'match'` half: the total spread as evenly as the weeks
- * allow, with the extra matches placed evenly through the half rather than bunched at the start. */
-function matchPhaseShape(size: number, weeks: number, gamesPerPlayer: number): number[] {
-  const total = (size * gamesPerPlayer) / 4;
+/** Matches or groups per week for one division's half: the total spread as evenly as the weeks
+ * allow, with the extra units placed evenly through the half rather than bunched at the start. */
+function unitsPerWeek(size: number, weeks: number, perPlayer: number): number[] {
+  const total = (size * perPlayer) / 4;
   const base = Math.floor(total / weeks);
   const extra = total % weeks;
   const counts = Array.from({ length: weeks }, () => base);
@@ -273,11 +237,11 @@ function matchPhaseShape(size: number, weeks: number, gamesPerPlayer: number): n
 }
 
 function halfTemplates(size: number, weeks: number, shape: WeekShape, divisionSizes: number[]): { templates: WeekTemplate[]; gamesPerPlayer: number } {
-  if (shape === 'group') {
-    return { templates: Array.from({ length: weeks }, (_, i) => groupWeekTemplate(size, i % 2 === 0)), gamesPerPlayer: 2 * weeks };
-  }
-  const gamesPerPlayer = matchGamesPerPlayer(divisionSizes, weeks);
-  return { templates: matchPhaseShape(size, weeks, gamesPerPlayer).map((m) => matchWeekTemplate(size, m)), gamesPerPlayer };
+  const perPlayer = unitsPerPlayer(divisionSizes, weeks);
+  return {
+    templates: unitsPerWeek(size, weeks, perPlayer).map((units) => weekTemplate(size, units, shape)),
+    gamesPerPlayer: perPlayer * (shape === 'group' ? 2 : 1),
+  };
 }
 
 /** Division sizes for `n` players in `k` divisions, as even as possible, earlier divisions taking
@@ -344,23 +308,14 @@ export function formatIssues(playerCount: number, settings: SeasonFormatSettings
     return issues;
   }
 
-  const halves = halfLengths(settings);
-  if (settings.weekShape === 'group') {
-    const oddGroups = sizes.some((s) => groupSizes(s).some((g) => g % 2 === 1));
-    if (oddGroups && halves.some((w) => w % 2 === 1)) {
-      issues.push(
-        `A division of ${sizes.join('/')} needs a group of 5 or 7, which alternates 3-game and 1-game weeks — that needs an even number of weeks${halves.length > 1 ? ' in each half' : ''} for games to even out.`,
-      );
-    }
-  } else {
-    for (const w of halves) {
-      const g = matchGamesPerPlayer(sizes, w);
-      for (const s of sizes) {
-        const busiest = Math.max(...matchPhaseShape(s, w, g));
-        if (busiest * 4 > s * 2) {
-          issues.push(`A division of ${s} can't fit ${g} games each into ${w} weeks without someone playing 3 in a week.`);
-          return issues;
-        }
+  const unit = settings.weekShape === 'group' ? 'groups' : 'matches';
+  for (const w of halfLengths(settings)) {
+    const u = unitsPerPlayer(sizes, w);
+    for (const s of sizes) {
+      // A week of more than size / 2 units would put someone in three of them.
+      if (Math.max(...unitsPerWeek(s, w, u)) * 4 > s * 2) {
+        issues.push(`A division of ${s} can't fit ${u} ${unit} each into ${w} weeks without someone in 3 ${unit} in a week.`);
+        return issues;
       }
     }
   }
