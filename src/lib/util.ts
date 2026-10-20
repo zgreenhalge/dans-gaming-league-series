@@ -500,6 +500,13 @@ export function deriveKd(totals: { total_kills: number; total_deaths: number }):
   return totals.total_deaths > 0 ? totals.total_kills / totals.total_deaths : totals.total_kills;
 }
 
+/** KDA — kills plus assists per death, or just kills plus assists when there are no deaths (the
+ * `deriveKd()` zero-death convention). Informational: no ranking or rating reads it. */
+export function deriveKda(totals: { total_kills: number; total_assists: number; total_deaths: number }): number {
+  const involvement = totals.total_kills + totals.total_assists;
+  return totals.total_deaths > 0 ? involvement / totals.total_deaths : involvement;
+}
+
 /**
  * Derives the four canonical leaderboard rates from summed totals — `rwr_percentage`/`overall_adr`
  * (two of the three `canonicalSort` keys, alongside `matches_won` from the raw totals) via

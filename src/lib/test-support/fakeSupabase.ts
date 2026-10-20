@@ -50,6 +50,9 @@ const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
     weeks: { kind: 'one', fk: 'week_id', table: 'weeks' },
     player_match_stats: { kind: 'many', fk: 'match_id', table: 'player_match_stats' },
   },
+  player_match_stats: {
+    matches: { kind: 'one', fk: 'match_id', table: 'matches' },
+  },
   weeks: {
     seasons: { kind: 'one', fk: 'season_id', table: 'seasons' },
     matches: { kind: 'many', fk: 'week_id', table: 'matches' },
@@ -163,8 +166,29 @@ interface OrderSpec {
   ascending: boolean;
 }
 
-function matchFilter(row: Row, f: Filter): boolean {
-  const rv = row[f.col];
+/**
+ * A filter column's value on `row`. A dotted column (`'matches.weeks.season_id'`) walks to-one
+ * embeds through `FK_MAP`, the way PostgREST filters on an embedded resource; a missing link
+ * resolves to `undefined`, so an `!inner` embed's filter drops the row like the real join does.
+ */
+function filterValue(table: string, row: Row, col: string, db: FakeDb): unknown {
+  const path = col.split('.');
+  let currentTable = table;
+  let current: Row | undefined = row;
+  for (const key of path.slice(0, -1)) {
+    const mapping = FK_MAP[currentTable]?.[key];
+    if (!mapping || mapping.kind !== 'one') {
+      throw new Error(`fakeSupabase: no to-one FK_MAP entry for "${currentTable}.${key}" (filter "${col}")`);
+    }
+    current = (db[mapping.table] ?? []).find((r) => r.id === current?.[mapping.fk]);
+    currentTable = mapping.table;
+    if (!current) return undefined;
+  }
+  return current[path[path.length - 1]];
+}
+
+function matchFilter(row: Row, f: Filter, table: string, db: FakeDb): boolean {
+  const rv = filterValue(table, row, f.col, db);
   switch (f.op) {
     case 'eq':
       return rv === f.val;
@@ -409,7 +433,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   }
 
   private matchesRow(row: Row): boolean {
-    if (!this.filters.every((f) => matchFilter(row, f))) return false;
+    if (!this.filters.every((f) => matchFilter(row, f, this.table, this.db))) return false;
     if (this.orClauses) return this.orClauses.some((c) => matchOrClause(row, c));
     return true;
   }

@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { GauntletPreviewView } from '@/components/GauntletPreviewView';
 import { getGauntletPreviewData } from '@/lib/queries';
 import { getTool, toolCrumbs } from '@/lib/tools';
@@ -21,7 +23,11 @@ export default async function GauntletPreviewPage() {
       <TopbarShell crumbs={toolCrumbs(tool)} />
       <main className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
         <h1 className="mt-8 mb-6 font-display text-[28px] font-semibold leading-tight">{tool.name}</h1>
-        <GauntletPreviewView seasons={seasons} />
+        <Suspense>
+          <UrlStateProvider>
+            <GauntletPreviewView seasons={seasons} />
+          </UrlStateProvider>
+        </Suspense>
       </main>
     </div>
   );

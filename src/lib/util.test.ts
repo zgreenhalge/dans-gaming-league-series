@@ -25,6 +25,7 @@ import {
   deriveRates,
   deriveRwr,
   deriveAdr,
+  deriveKda,
   parseRouteId,
   weekWindow,
   matchLabel,
@@ -145,6 +146,12 @@ test('deriveRates: zero-guards (no division by zero, KD falls back to kills)', (
   assert.equal(r.kd_ratio, 5); // deaths === 0 → kills, not Infinity
   assert.equal(r.rwr_percentage, 0);
   assert.equal(r.overall_adr, 0);
+});
+
+// --- deriveKda: (kills + assists) per death, with the deriveKd zero-death convention.
+test('deriveKda: (kills + assists) / deaths, and kills + assists when there are no deaths', () => {
+  assert.equal(deriveKda({ total_kills: 20, total_assists: 10, total_deaths: 15 }), 2);
+  assert.equal(deriveKda({ total_kills: 5, total_assists: 3, total_deaths: 0 }), 8);
 });
 
 // --- deriveRwr / deriveAdr: deriveRates' narrower siblings, for callers without the full

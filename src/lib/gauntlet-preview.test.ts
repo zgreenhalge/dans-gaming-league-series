@@ -36,8 +36,8 @@ test('every supported count builds a preview with one summary row per seed', () 
     assert.equal(preview.games, buildGauntletBracket(n).games);
     assert.equal(preview.pods.length, preview.plan.pods.length);
     assert.equal(preview.pods.filter((p) => p.is_final).length, 1);
-    const relegated = preview.seeds.filter((s) => s.fate === 'relegated').map((s) => s.seed);
-    assert.deepEqual(relegated, preview.plan.drops);
+    const wontQualify = preview.seeds.filter((s) => s.fate === 'wontQualify').map((s) => s.seed);
+    assert.deepEqual(wontQualify, preview.plan.drops);
   }
 });
 
@@ -57,14 +57,14 @@ test('the preview bracket is the plan rendered without names, equal to planToPre
   }
 });
 
-test('N=13: seed 1 has a bye to the final, seeds 2-13 play round 1, none relegated', () => {
+test('N=13: seed 1 has a bye to the final, seeds 2-13 play round 1, everyone qualifies', () => {
   const { seeds } = buildGauntletPreview(13);
   assert.deepEqual(seeds[0], { seed: 1, name: null, fate: 'bye', entry: 'The Final' });
   assert.ok(seeds.slice(1).every((s) => s.fate === 'plays' && s.entry.startsWith('Round 1 Group ')));
 });
 
-test('N=16 relegates seeds 14-16; N=7 is a ladder with no byes until the final', () => {
-  assert.deepEqual(buildGauntletPreview(16).seeds.filter((s) => s.fate === 'relegated').map((s) => s.seed), [14, 15, 16]);
+test('N=16: seeds 14-16 won\'t qualify; N=7 is a ladder with no byes until the final', () => {
+  assert.deepEqual(buildGauntletPreview(16).seeds.filter((s) => s.fate === 'wontQualify').map((s) => s.seed), [14, 15, 16]);
   const ladder = buildGauntletPreview(7).seeds;
   assert.equal(ladder.filter((s) => s.fate === 'bye').length, 1);
   assert.equal(ladder[0].fate, 'bye');

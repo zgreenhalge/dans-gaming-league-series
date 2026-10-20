@@ -42,7 +42,7 @@ export function seedNamesFor(standings: readonly PreviewStanding[], qualifierCou
   return names;
 }
 
-export type SeedFate = 'bye' | 'plays' | 'relegated';
+export type SeedFate = 'bye' | 'plays' | 'wontQualify';
 
 export interface SeedSummaryRow {
   seed: number;
@@ -77,7 +77,7 @@ export function buildGauntletPreview(qualifierCount: number, standings: readonly
     const seed = i + 1;
     const placement = placements.get(seed)!;
     const name = seedNames.get(seed) ?? null;
-    if (!placement.qualifies) return { seed, name, fate: 'relegated', entry: 'Not in the bracket' };
+    if (!placement.qualifies) return { seed, name, fate: 'wontQualify', entry: 'Not in the bracket' };
     const pod = podsByPlacement.get(`${placement.round}:${placement.podIndex}`)!;
     const entry = groupLabel(pod);
     return { seed, name, fate: placement.isBye ? 'bye' : 'plays', entry: entry.charAt(0).toUpperCase() + entry.slice(1) };

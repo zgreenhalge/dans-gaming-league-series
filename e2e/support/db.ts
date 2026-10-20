@@ -118,13 +118,20 @@ export interface TestMatch {
   playerIds: number[];
 }
 
+export interface PlayedMatchOptions {
+  /** The season's lifecycle status: `ACTIVE` (the default) is a running season, `ARCHIVED` a
+   *  finished one — the home page's between-seasons state has only the latter. */
+  status?: 'ACTIVE' | 'ARCHIVED';
+}
+
 /** A played, single-week regular season with one fully-scored 2v2 match, its `player_match_stats`
  *  roster, and the `player_match_sabremetrics`/`match_kills` rows a played match's demo-parse
  *  pipeline would have produced — enough for the match page's Advanced Stats tab
  *  (`SabremetricsLeaderboardView`, gated on `getMatchSabremetrics()` returning rows) to actually
  *  render during a test, the exact tab issue #480 exists to catch a missing page-level provider
  *  under. */
-export async function seedPlayedMatchWithSabremetrics(): Promise<TestMatch> {
+export async function seedPlayedMatchWithSabremetrics(options: PlayedMatchOptions = {}): Promise<TestMatch> {
+  const { status = 'ACTIVE' } = options;
   const supabase = adminClient();
   const { mapNames, playerIds } = await fetchMapsAndPlayers(supabase, 1, 4);
   const [map] = mapNames;
@@ -134,7 +141,7 @@ export async function seedPlayedMatchWithSabremetrics(): Promise<TestMatch> {
     .from('seasons')
     .insert({
       name: `E2E ${Date.now()} Smoke Season`,
-      status: 'ACTIVE',
+      status,
       is_gauntlet: false,
       map_pool: [map],
       target_win_rounds: 13,

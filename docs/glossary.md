@@ -202,7 +202,7 @@ so you don't have to reverse-engineer them from scratch each time.
   (`src/lib/tools.ts`). Operational pages that act on real systems, like Scrim, stay outside it.
 - **Gauntlet Preview** — the `/tools/gauntlet-preview` tool: pick a qualifier count (optionally a
   regular season's standings for named seeds) and see the bracket and per-seed outcome (bye, plays in,
-  relegated) before any season gets there. A thin layer over `buildGauntletBracket()` and
+  won't qualify) before any season gets there. A thin layer over `buildGauntletBracket()` and
   `projectGauntletSeeding()` — see [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.

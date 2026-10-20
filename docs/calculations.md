@@ -686,7 +686,7 @@ feeding the same `gauntletSeeding` prop on `LeaderboardTable`:
   `src/lib/gauntlet-bracket.ts`, which maps seeds to placements; `SeasonTabView.tsx` zips that
   against the current standings (already in canonical-sort order) to key it by `player_id`.
   The Gauntlet Preview tool (`/tools/gauntlet-preview`) shows the same projection for any qualifier
-  count, one row per seed: bye, plays in (with the round and group it enters), or relegated
+  count, one row per seed: bye, plays in (with the round and group it enters), or won't qualify
   (`buildGauntletPreview()`, `src/lib/gauntlet-preview.ts`).
 
 Once the regular season itself is archived, medal tinting (`showMedals`) still only takes over when
@@ -705,6 +705,12 @@ Metrics derived from pairing-specific data
 - `maxWinRate` = Highest winRate of any duo in the league
 - `rwr` = Rounds won by duo / Rounds played by duo
 - `maxRwr` = Highest rwr of any duo in the league
+
+Kills do not enter the Friends Rating. `H2HSection`'s Best Friends rows show a **KDA** column for
+context (`duoAvgKda()`, `src/lib/h2h.ts`): the mean of the two players' own KDA, (kills + assists) /
+deaths via `deriveKda()` (just kills + assists when a player has no deaths), over the games they
+played together. It is not the pair's pooled kills + assists over pooled deaths. The compact home
+Top duos rows omit it.
 
 **Rival Rating** = 0.5 * (games / maxGames)² + 0.3 * (1 - winDiff / maxWinDiff)² + 0.2 * (1 - roundDiffPerGame / maxRoundDiff)²
 

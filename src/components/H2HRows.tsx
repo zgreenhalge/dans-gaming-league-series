@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { DuoStats, H2HStats } from '@/lib/h2h';
+import { duoAvgKda, type DuoStats, type H2HStats } from '@/lib/h2h';
 import { winRatePct } from '@/lib/util';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
@@ -61,7 +61,7 @@ function RowShell({
 const HEAD_CLS = 'tracked text-[8px] text-[var(--color-text-secondary)]';
 
 function duoCols(compact: boolean): string {
-  return compact ? 'grid-cols-[28px_34px_44px]' : 'grid-cols-[28px_34px_44px_88px]';
+  return compact ? 'grid-cols-[28px_34px_44px]' : 'grid-cols-[28px_34px_44px_36px_88px]';
 }
 
 /** Column labels above a list of `DuoRow`s. */
@@ -73,6 +73,11 @@ export function DuoHeader({ compact = false }: { compact?: boolean }) {
         <span className={`${HEAD_CLS} text-center`}>Rating</span>
         <span className={`${HEAD_CLS} text-right`}>Games</span>
         <span className={`${HEAD_CLS} text-right`}>W-L</span>
+        {!compact && (
+          <span className={`${HEAD_CLS} text-right`} title="Average of the two players' KDA, (kills + assists) / deaths, together. Not part of the Friends Rating.">
+            KDA
+          </span>
+        )}
         {!compact && <span className={`${HEAD_CLS} text-right`}>Rounds W-L</span>}
       </div>
     </div>
@@ -80,7 +85,8 @@ export function DuoHeader({ compact = false }: { compact?: boolean }) {
 }
 
 /** A ranked duo: place, both avatars, "A & B", then rating, games, W-L (with win rate) and — unless
- *  `compact` — rounds W-L (with round win rate). */
+ *  `compact` — the pair's average KDA (`duoAvgKda()`) and rounds W-L (with round win rate). The KDA
+ *  is a preview only; the rating tooltip says it is not part of the Friends Rating. */
 export function DuoRow({
   rank,
   duo,
@@ -112,7 +118,7 @@ export function DuoRow({
       <span className="font-display font-semibold text-[11px] flex-1 truncate">{a.name} &amp; {b.name}</span>
       <div className={`grid ${duoCols(compact)} gap-x-2 shrink-0 items-center`}>
         <div className="flex justify-center">
-          <RatingCircle value={rating} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={breakdown} />
+          <RatingCircle value={rating} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={`${breakdown} · KDA is not part of the rating`} />
         </div>
         <div className="flex flex-col items-end">
           <span className="display-numeral text-[13px] text-right">{duo.gamesPlayed}</span>
@@ -122,6 +128,12 @@ export function DuoRow({
           <span className="display-numeral text-[13px] text-right">{duo.wins}–{duo.gamesPlayed - duo.wins}</span>
           <span className="font-mono text-[8px] text-[var(--color-text-secondary)] text-right">{wr}%</span>
         </div>
+        {!compact && (
+          <div className="flex flex-col items-end">
+            <span className="display-numeral text-[13px] text-right">{duoAvgKda(duo).toFixed(2)}</span>
+            <span className="font-mono text-[8px] text-right">&nbsp;</span>
+          </div>
+        )}
         {!compact && (
           <div className="flex flex-col items-end">
             <span className="display-numeral text-[13px] inline-block w-[58px] text-right">{duo.roundsWon}–{duo.roundsPlayed - duo.roundsWon}</span>

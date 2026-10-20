@@ -2,7 +2,8 @@
 
 `e2e/` holds Playwright coverage for DGLS's highest-risk multi-stage flows — sequences that span
 more than one request/response and can't be locked down by a `queries-*.test.ts`-style unit test
-alone (`season-schedule.spec.ts`) — plus one deliberately shallow smoke spec
+alone (`season-schedule.spec.ts`), and the home page composed end to end — signed out, signed in,
+and between seasons (`home.spec.ts`) — plus one deliberately shallow smoke spec
 (`page-smoke.spec.ts`) that visits every top-level page type, clicks through each page's tabs, and
 asserts the app never falls back to the route error boundary. The smoke spec exists for a
 different failure mode than the flow specs: a page that forgot to wrap a client component in a
@@ -88,6 +89,14 @@ invoked from test code instead of the app) in a `test.beforeEach`, and tears it 
 touched (`matches`/`weeks` if the test got as far as confirming, the draft tables if it didn't, then
 the roster and the season row) when it's done — belt-and-suspenders on top of the fact that the whole
 database itself is disposable.
+
+`home.spec.ts` seeds `seedPlayedMatchWithSabremetrics()` (`status: 'ACTIVE'` for a running season,
+`'ARCHIVED'` for the between-seasons state, where the home page shows the latest finished season's
+standings and no Upcoming Games). The home page reads the whole league and is server-rendered, so the
+signed-in test logs in on another page and then loads `/` fresh: the dev login only updates the
+client session. Its Top duos / Hottest Rivalries data comes from `getCareerH2HDataCached()`, a
+60-second `unstable_cache`, so a home visit made before any match exists can hide those panels for
+up to a minute; the signed-in test reloads until they appear.
 
 ## CI placement
 
