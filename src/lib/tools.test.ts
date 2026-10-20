@@ -24,7 +24,15 @@ test('tool links and breadcrumbs', () => {
   assert.equal(toolHref(lab.slug), '/tools/schedule-lab');
   assert.deepEqual(toolCrumbs(lab).map((c) => c.label), ['DGLS', 'Tools', 'Schedule Lab']);
   assert.deepEqual(toolCrumbs().map((c) => c.label), ['DGLS', 'Tools']);
+  assert.equal(toolHref(getTool('win-probability').slug), '/tools/win-probability');
   assert.throws(() => getTool('nope'));
+});
+
+test('Gauntlet Preview is registered with its own crumbs', () => {
+  const preview = getTool('gauntlet-preview');
+  assert.equal(toolHref(preview.slug), '/tools/gauntlet-preview');
+  assert.deepEqual(toolCrumbs(preview).map((c) => c.label), ['DGLS', 'Tools', 'Gauntlet Preview']);
+  assert.equal(toolCrumbs(preview)[1].href, '/tools');
 });
 
 report();

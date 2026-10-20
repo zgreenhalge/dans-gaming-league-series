@@ -1,8 +1,7 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  buildFormatPlan,
   divisionSizesFor,
   formatIssues,
   isLopsided,
@@ -16,19 +15,23 @@ import {
   type FormatHalf,
   type FormatPlan,
   type FormatRecord,
+  type FormatResult,
   type HalfwayRedraft,
   type SeasonFormatSettings,
   type WeekShape,
 } from '@/lib/season-format';
+import type { FormatWorkerRequest } from '@/lib/season-format.worker';
 import type { ScheduleLabPlayer, ScheduleLabRoster } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import TabBar from './TabBar';
 import Th from './Th';
 import { StatTable, Td, Tr } from './StatTable';
 import SectionLabel from './SectionLabel';
+import { Stepper } from './Stepper';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SELECT_CLS } from './formStyles';
 import { RemoveXButton } from './RemoveXButton';
 
 type Settings = Omit<SeasonFormatSettings, 'seed'>;
@@ -62,8 +65,6 @@ const HALFWAY_REDRAFTS: { value: HalfwayRedraft; label: string }[] = [
 const CAREER = 'career';
 
 const MAX_PREVIEWS = 6;
-const SELECT_CLS =
-  'font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]';
 const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.round((0.5 + LOPSIDED_MARGIN) * 100)}%`;
 
 /** Scorecard rows of the comparison table, in display order. */
@@ -147,7 +148,7 @@ export function ScheduleLabView({
   careerRecords: Record<number, FormatRecord>;
 }) {
   const [selected, setSelected] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
-  const [settings, setSettings] = useState<Settings>({
+  const [chosen, setSettings] = useState<Settings>({
     weeks: 8,
     weekShape: 'match',
     divisions: 1,
@@ -166,9 +167,16 @@ export function ScheduleLabView({
   const [shownId, setShownId] = useState<number | null>(null);
   const [generated, setGenerated] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [workerError, setWorkerError] = useState<string | null>(null);
+  // The worker running the current Generate, if any; terminating it cancels the search.
+  const workerRef = useRef<Worker | null>(null);
+  useEffect(() => () => workerRef.current?.terminate(), []);
 
   const namesById = useMemo(() => new Map(players.map((p) => [p.playerId, p.name])), [players]);
   const maxDivisions = Math.max(1, Math.floor(selected.size / FORMAT_MIN_DIVISION_SIZE));
+  // The chosen division count, lowered to what the roster supports so the controls and the
+  // generated settings agree when the roster shrinks.
+  const settings: Settings = { ...chosen, divisions: Math.min(chosen.divisions, maxDivisions) };
   // Tier sizes the admin set, as long as they still fit the roster and division count; otherwise even.
   const evenSizes = divisionSizesFor(selected.size, settings.divisions);
   const setSizes = settings.tierSizes;
@@ -205,14 +213,42 @@ export function ScheduleLabView({
     const roster = players.filter((p) => selected.has(p.playerId)).map((p) => ({ ...p, record: source?.records[p.playerId] ?? null }));
     setGenerated(seed);
     setBusy(true);
-    // Yield one frame so the busy state paints before the (synchronous) search runs.
-    setTimeout(() => {
-      const result = buildFormatPlan(roster, { ...effective, seed });
-      setBusy(false);
-      if (!result.ok) return;
-      setPreviews((prev) => [...prev, { plan: result.plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
-      setShownId(seed);
-    }, 30);
+    setWorkerError(null);
+    // The annealing search runs off the main thread so the page stays responsive and can cancel.
+    try {
+      const worker = new Worker(new URL('../lib/season-format.worker.ts', import.meta.url));
+      workerRef.current = worker;
+      worker.onmessage = (e: MessageEvent<FormatResult>) => {
+        stopWorker();
+        if (!e.data.ok) {
+          setWorkerError(e.data.issues.join(' '));
+          return;
+        }
+        const plan = e.data.plan;
+        setPreviews((prev) => [...prev, { plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
+        setShownId(seed);
+      };
+      worker.onerror = () => {
+        stopWorker();
+        setWorkerError('Generating the preview failed.');
+      };
+      const request: FormatWorkerRequest = { players: roster, settings: { ...effective, seed } };
+      worker.postMessage(request);
+    } catch {
+      stopWorker();
+      setWorkerError('Generating the preview failed.');
+    }
+  }
+
+  function stopWorker() {
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    setBusy(false);
+  }
+
+  function cancel() {
+    stopWorker();
+    setGenerated((g) => g - 1);
   }
 
   return (
@@ -329,10 +365,18 @@ export function ScheduleLabView({
           <Choice label="Halfway re-draft by" options={HALFWAY_REDRAFTS} value={settings.halfwayRedraft} onChange={(halfwayRedraft) => update({ halfwayRedraft })} />
         )}
         <div className="flex flex-col gap-2">
-          <button type="button" className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`} disabled={busy || issues.length > 0} onClick={generate}>
-            {busy ? 'Generating…' : 'Generate preview'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`} disabled={busy || issues.length > 0} onClick={generate}>
+              {busy ? 'Generating…' : 'Generate preview'}
+            </button>
+            {busy && (
+              <button type="button" className={ADMIN_SMALL_BUTTON_CLS} onClick={cancel}>
+                Cancel
+              </button>
+            )}
+          </div>
           <ErrorText error={issues} size={11} />
+          <ErrorText error={workerError} size={11} />
         </div>
       </section>
 
@@ -398,24 +442,6 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
           </button>
         ))}
       </TabBar>
-    </div>
-  );
-}
-
-function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
-  const btn = 'w-8 h-8 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-40';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="tracked text-[10px] text-[var(--color-text-secondary)]">{label}</span>
-      <div className="flex items-center gap-2">
-        <button type="button" aria-label={`Fewer ${label.toLowerCase()}`} className={btn} disabled={value <= min} onClick={() => onChange(value - 1)}>
-          −
-        </button>
-        <span className="font-mono text-[14px] w-6 text-center">{value}</span>
-        <button type="button" aria-label={`More ${label.toLowerCase()}`} className={btn} disabled={value >= max} onClick={() => onChange(value + 1)}>
-          +
-        </button>
-      </div>
     </div>
   );
 }

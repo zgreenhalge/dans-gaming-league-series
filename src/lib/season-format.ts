@@ -149,7 +149,8 @@ export interface FormatScorecard {
   pairs: number;
   pairsPartnered: number;
   pairsNeverMet: number;
-  /** Players who never meet at least one other player all season. */
+  /** Players who never meet at least one player they share a division with in some half (a
+   *  reachable pair, see `reachablePairs()`) all season. */
   playersMissingSomeone: number;
   repeatTeammatePairs: number;
   lopsidedGames: number;
@@ -781,7 +782,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   }
 
   assignSides(weeks, rand);
-  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), weeks, settings.weekShape) } };
+  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), halves, weeks, settings.weekShape) } };
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
@@ -800,8 +801,33 @@ function assignSides(weeks: FormatWeek[], rand: () => number): void {
   });
 }
 
-/** The comparison numbers for a plan — what the Schedule Lab shows side by side. */
-function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[], shape: WeekShape): FormatScorecard {
+/** Every pair of players who share a division in at least one half, keyed by `pairKey()` with the
+ * two player ids: the only pairs a plan can make teammates or opponents. `mates` counts each
+ * player's distinct reachable division-mates. */
+function reachablePairs(halves: FormatHalf[]): { pairs: Map<string, [number, number]>; mates: Map<number, number> } {
+  const pairs = new Map<string, [number, number]>();
+  const mates = new Map<number, number>();
+  for (const half of halves) {
+    for (const ids of half.divisions) {
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const key = pairKey(ids[i], ids[j]);
+          if (pairs.has(key)) continue;
+          pairs.set(key, [ids[i], ids[j]]);
+          mates.set(ids[i], (mates.get(ids[i]) ?? 0) + 1);
+          mates.set(ids[j], (mates.get(ids[j]) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  return { pairs, mates };
+}
+
+/** The comparison numbers for a plan — what the Schedule Lab shows side by side. `pairs` and
+ * `distinctTeammates.possible` count only reachable pairs (see `reachablePairs()`), so plans with
+ * different division counts are measured against what each can actually achieve. */
+function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: FormatWeek[], shape: WeekShape): FormatScorecard {
+  const { pairs: reachable, mates: reachableMates } = reachablePairs(halves);
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
   const { teammatePairs, opponentPairs } = collectCoveragePairs(games);
   const gameCount = new Map<number, number>(playerIds.map((id) => [id, 0]));
@@ -837,16 +863,12 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[], shape: WeekSh
   let pairsPartnered = 0;
   let pairsNeverMet = 0;
   const missingSomeone = new Set<number>();
-  for (let i = 0; i < playerIds.length; i++) {
-    for (let j = i + 1; j < playerIds.length; j++) {
-      const [a, b] = [playerIds[i], playerIds[j]];
-      const k = pairKey(a, b);
-      pairs++;
-      if (teammatePairs.has(k)) pairsPartnered++;
-      if (!teammatePairs.has(k) && !opponentPairs.has(k)) {
-        pairsNeverMet++;
-        missingSomeone.add(a).add(b);
-      }
+  for (const [k, [a, b]] of reachable) {
+    pairs++;
+    if (teammatePairs.has(k)) pairsPartnered++;
+    if (!teammatePairs.has(k) && !opponentPairs.has(k)) {
+      pairsNeverMet++;
+      missingSomeone.add(a).add(b);
     }
   }
   const counts = [...gameCount.values()];
@@ -857,7 +879,7 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[], shape: WeekSh
     doubleheaderWeeks,
     byeWeeks,
     maxGamesInAWeek,
-    distinctTeammates: { min: Math.min(...distinct), max: Math.max(...distinct), possible: playerIds.length - 1 },
+    distinctTeammates: { min: Math.min(...distinct), max: Math.max(...distinct), possible: Math.max(0, ...reachableMates.values()) },
     pairs,
     pairsPartnered,
     pairsNeverMet,

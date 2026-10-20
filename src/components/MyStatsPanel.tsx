@@ -7,6 +7,7 @@ import EmptyState from './EmptyState';
 import { NextMatchLink } from './NextMatchLink';
 import { WLChip } from './WLChip';
 import { PlayerName } from './PlayerName';
+import { PanelLink } from './PanelHeader';
 import StatTileGrid from './StatTileGrid';
 
 const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
@@ -40,7 +41,7 @@ function H2HRow({
 /**
  * The home page's My Stats panel for a signed-in player: career rank, W-L and ADR, their next
  * match, best friend and worst nightmare (each linking to the career H2H matchup), and their last
- * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/home.ts`).
+ * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/myStats.ts`).
  */
 export function MyStatsPanel({ stats }: { stats: MyStats }) {
   const { playerId, playerName, rank, record, adr, next, recent, bestFriend, worstNightmare } = stats;
@@ -89,12 +90,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
       <div className="mt-4 border-t border-[var(--color-border-secondary)] pt-3">
         <div className="flex items-baseline justify-between mb-2">
           <span className={LABEL_CLS}>Match history</span>
-          <Link
-            href={`/players/${playerId}?tab=matches`}
-            className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-site-accent)] transition-colors"
-          >
-            View all →
-          </Link>
+          <PanelLink href={`/players/${playerId}?tab=matches`}>View all →</PanelLink>
         </div>
         {recent.length === 0 ? (
           <EmptyState message="No recent matches" />

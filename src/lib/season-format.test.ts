@@ -307,6 +307,35 @@ test('divisions without a shuffle keep one seeding all season', () => {
   assert.equal(p.halves.length, 1);
 });
 
+test('the scorecard counts only pairs that share a division in some half', () => {
+  const fixed = plan(12, { weeks: 4, divisions: 2 });
+  assert.equal(fixed.scorecard.distinctTeammates.possible, 5);
+  assert.equal(fixed.scorecard.pairs, 30);
+  assert.ok(fixed.scorecard.distinctTeammates.max <= 5);
+  assert.ok(fixed.scorecard.pairsPartnered <= 30 && fixed.scorecard.pairsNeverMet <= 30);
+
+  const redrafted = plan(12, { weeks: 4, divisions: 2, halfwayShuffle: true, halfwayRedraft: 'new-pairings' });
+  const reachable = new Set<string>();
+  for (const half of redrafted.halves) {
+    for (const ids of half.divisions) for (const a of ids) for (const b of ids) if (a < b) reachable.add(`${a}:${b}`);
+  }
+  assert.equal(redrafted.scorecard.pairs, reachable.size);
+  assert.ok(redrafted.scorecard.pairs > 30 && redrafted.scorecard.pairs <= 66);
+  assert.ok(redrafted.scorecard.distinctTeammates.possible > 5 && redrafted.scorecard.distinctTeammates.possible <= 11);
+  assert.ok(redrafted.scorecard.distinctTeammates.max <= redrafted.scorecard.distinctTeammates.possible);
+
+  const single = plan(12, { weeks: 4 });
+  assert.equal(single.scorecard.distinctTeammates.possible, 11);
+  assert.equal(single.scorecard.pairs, 66);
+});
+
+test('a plan survives a structured-clone round trip unchanged, as it does through the worker', () => {
+  const roster = players(8);
+  const settings = { ...BASE, weeks: 4 };
+  const result = buildFormatPlan(structuredClone(roster), structuredClone(settings));
+  assert.deepEqual(structuredClone(result), buildFormatPlan(roster, settings));
+});
+
 test('the same players, settings and seed produce the same plan', () => {
   const a = plan(9, { weeks: 4 });
   const b = plan(9, { weeks: 4 });
