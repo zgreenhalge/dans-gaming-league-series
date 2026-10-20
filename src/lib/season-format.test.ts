@@ -255,6 +255,13 @@ test('the scorecard counts only pairs that share a division in some half', () =>
   assert.equal(single.scorecard.pairs, 66);
 });
 
+test('a plan survives a structured-clone round trip unchanged, as it does through the worker', () => {
+  const roster = players(8);
+  const settings = { ...BASE, weeks: 4 };
+  const result = buildFormatPlan(structuredClone(roster), structuredClone(settings));
+  assert.deepEqual(structuredClone(result), buildFormatPlan(roster, settings));
+});
+
 test('the same players, settings and seed produce the same plan', () => {
   const a = plan(9, { weeks: 4 });
   const b = plan(9, { weeks: 4 });

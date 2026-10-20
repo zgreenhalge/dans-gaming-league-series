@@ -55,7 +55,7 @@ Data and shaping are split: `getWeekView()` / `getGauntletStageData()` (`src/lib
 
 ### Schedule Lab (fixed-length season formats)
 
-The round-robin generator (`buildSeasonSchedule()`, `season-schedule.ts`) makes every pair partner exactly once, so a season's length is set by its roster: N players need N−1 or N weeks. `buildFormatPlan()` (`src/lib/season-format.ts`) is the fixed-length alternative: the admin picks the length and the planner covers as much of the league as that length allows. It is pure — players with their EHOG state in, a plan and a scorecard out — and `/tools/schedule-lab` (`ScheduleLabView`) runs it in the browser on `getScheduleLabData()` (`queries/schedule-lab.ts`), so previews can be generated and compared freely without touching the database.
+The round-robin generator (`buildSeasonSchedule()`, `season-schedule.ts`) makes every pair partner exactly once, so a season's length is set by its roster: N players need N−1 or N weeks. `buildFormatPlan()` (`src/lib/season-format.ts`) is the fixed-length alternative: the admin picks the length and the planner covers as much of the league as that length allows. It is pure — players with their EHOG state in, a plan and a scorecard out — and `/tools/schedule-lab` (`ScheduleLabView`) runs it in the browser on `getScheduleLabData()` (`queries/schedule-lab.ts`), so previews can be generated and compared freely without touching the database. The search runs in a Web Worker (`src/lib/season-format.worker.ts`, started by `ScheduleLabView`), so the page stays responsive while it runs and Cancel terminates the worker; the worker calls the same `buildFormatPlan()`, so a seed yields the same plan as a main-thread call.
 
 Settings (`SeasonFormatSettings`):
 
