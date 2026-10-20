@@ -1,60 +1,60 @@
 {
   "players": [
     {
-      "id": 1,
-      "name": "Alice",
+      "playerId": 1,
       "mu": 27,
       "sigma": 6.8,
-      "ehog": 1450
+      "ehogRating": 1450,
+      "name": "Alice"
     },
     {
-      "id": 2,
-      "name": "Bob",
+      "playerId": 2,
       "mu": 25.3,
       "sigma": 7.1,
-      "ehog": 1380
+      "ehogRating": 1380,
+      "name": "Bob"
     },
     {
-      "id": 3,
-      "name": "Carol",
+      "playerId": 3,
       "mu": 23.6,
       "sigma": 7.4,
-      "ehog": 1290
+      "ehogRating": 1290,
+      "name": "Carol"
     },
     {
-      "id": 4,
-      "name": "Dave",
+      "playerId": 4,
       "mu": 23.9,
       "sigma": 7.3,
-      "ehog": 1310
+      "ehogRating": 1310,
+      "name": "Dave"
     },
     {
-      "id": 5,
-      "name": "Erin",
+      "playerId": 5,
       "mu": 22.5,
       "sigma": 7.8,
-      "ehog": 1200
+      "ehogRating": 1200,
+      "name": "Erin"
     },
     {
-      "id": 6,
-      "name": "Frank",
-      "mu": 19.654007982690917,
+      "playerId": 6,
+      "mu": null,
       "sigma": 8.3333333333,
-      "ehog": 33
+      "ehogRating": 1250,
+      "name": "Frank"
     },
     {
-      "id": 7,
-      "name": "Grace",
+      "playerId": 7,
       "mu": 19.654007982690917,
       "sigma": 8.3333333333,
-      "ehog": 33
+      "ehogRating": 33,
+      "name": "Grace"
     },
     {
-      "id": 8,
-      "name": "Heidi",
+      "playerId": 8,
       "mu": 19.654007982690917,
       "sigma": 8.3333333333,
-      "ehog": 33
+      "ehogRating": 33,
+      "name": "Heidi"
     }
   ],
   "rosters": [
@@ -69,24 +69,7 @@
         6,
         7
       ],
-      "records": {
-        "1": {
-          "wins": 0,
-          "losses": 0
-        },
-        "5": {
-          "wins": 0,
-          "losses": 0
-        },
-        "6": {
-          "wins": 0,
-          "losses": 0
-        },
-        "7": {
-          "wins": 0,
-          "losses": 0
-        }
-      }
+      "records": {}
     },
     {
       "seasonId": 1,
@@ -117,22 +100,6 @@
         "4": {
           "wins": 0,
           "losses": 1
-        },
-        "5": {
-          "wins": 0,
-          "losses": 0
-        },
-        "6": {
-          "wins": 0,
-          "losses": 0
-        },
-        "7": {
-          "wins": 0,
-          "losses": 0
-        },
-        "8": {
-          "wins": 0,
-          "losses": 0
         }
       }
     }
@@ -153,22 +120,6 @@
     "4": {
       "wins": 0,
       "losses": 1
-    },
-    "5": {
-      "wins": 0,
-      "losses": 0
-    },
-    "6": {
-      "wins": 0,
-      "losses": 0
-    },
-    "7": {
-      "wins": 0,
-      "losses": 0
-    },
-    "8": {
-      "wins": 0,
-      "losses": 0
     }
   }
 }

@@ -21,7 +21,7 @@ test('getScheduleLabData: every player with ratings, regular-season rosters newe
   assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
   const ids = data.rosters.map((r) => r.seasonId);
   assert.deepEqual(ids, [...ids].sort((a, b) => b - a));
-  const known = new Set(data.players.map((p) => p.id));
+  const known = new Set(data.players.map((p) => p.playerId));
   for (const r of data.rosters) for (const id of r.playerIds) assert.ok(known.has(id), `roster player ${id} is in the player list`);
   matchesSnapshot('getScheduleLabData', data);
 });
