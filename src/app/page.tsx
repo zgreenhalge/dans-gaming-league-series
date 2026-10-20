@@ -135,7 +135,7 @@ export default async function Home() {
         {/* One grid, so My Stats is a single element: first on a phone (above the games and
             standings) and top of the right-hand column on a wide screen, where the games and
             standings column spans the rail's two rows. */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_1fr]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_1fr]">
           <div className="min-w-0 lg:col-start-2 lg:row-start-1">
             {myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />}
           </div>

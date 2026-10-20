@@ -216,7 +216,7 @@ standard is the two densities above applied to that string.
 **Ranked pair rows.** `DuoRow` / `RivalRow` (with `DuoHeader` / `RivalHeader`, `src/components/H2HRows.tsx`)
 are the one row for a ranked duo or rivalry: `H2HSection`'s Best Friends / Closest Rivals cards render them as
 selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Rivalries as links (`href`).
-`compact` drops the round figures and a rivalry's avatars for a narrow card.
+`compact` drops a duo's rounds column and a rivalry's avatars for a narrow card.
 
 **Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
 `MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it

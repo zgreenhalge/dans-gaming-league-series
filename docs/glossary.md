@@ -172,7 +172,7 @@ so you don't have to reverse-engineer them from scratch each time.
   [`calculations.md`](./calculations.md#home-page). Signed out, the panel is a blurred placeholder
   with a Login prompt.
 - **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating,
-  games and W-L for a duo; matches won on each side for a rivalry), the title linking to the Statistics
+  games and W-L for a duo; matches and rounds won on each side for a rivalry), the title linking to the Statistics
   H2H tab and each row to that pair's H2H matchup (`/statistics?tab=h2h&a=…&b=…`, `&type=opponent` for a
   rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads).
 - **Form** — a player's last five results in the standings' season, newest first, as `W`/`L` (the

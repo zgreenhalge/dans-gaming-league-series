@@ -7,8 +7,7 @@ import RatingCircle from './RatingCircle';
 // The ranked-pair rows of `H2HSection`'s Best Friends / Closest Rivals cards, shared with the home
 // page's Top duos / Hottest Rivalries so the two read the same. A row is either a link (`href`, the
 // home page) or a button-like row that selects the pair (`onSelect` / `onHover`, `H2HSection`).
-// `compact` drops the columns that don't fit a narrow card — the round figures and, for a rivalry,
-// the avatars.
+// `compact` drops what doesn't fit a narrow card — a duo's rounds column and a rivalry's avatars.
 
 export interface PlayerRef {
   id: number;
@@ -136,7 +135,7 @@ export function DuoRow({
 
 function rivalCols(compact: boolean): string {
   return compact
-    ? 'grid-cols-[1fr_38px_38px_38px_1fr]'
+    ? 'grid-cols-[1fr_32px_32px_38px_32px_32px_1fr]'
     : 'grid-cols-[28px_1fr_38px_38px_38px_38px_38px_1fr_28px]';
 }
 
@@ -147,11 +146,11 @@ export function RivalHeader({ compact = false }: { compact?: boolean }) {
     <div className={`grid ${rivalCols(compact)} items-center gap-2 px-3.5 pt-2`}>
       {!compact && <span />}
       <span />
-      {!compact && <span className={`${HEAD_CLS} text-center`}>Rounds</span>}
+      <span className={`${HEAD_CLS} text-center`}>Rounds</span>
       <span className={`${HEAD_CLS} text-center`}>Won</span>
       <span className={rating}>Rating</span>
       <span className={`${HEAD_CLS} text-center`}>Won</span>
-      {!compact && <span className={`${HEAD_CLS} text-center`}>Rounds</span>}
+      <span className={`${HEAD_CLS} text-center`}>Rounds</span>
       <span />
       {!compact && <span />}
     </div>
@@ -159,7 +158,7 @@ export function RivalHeader({ compact = false }: { compact?: boolean }) {
 }
 
 /** A ranked rivalry: the two players on either side of rounds won, matches won and the rating.
- *  `compact` drops the avatars and the round figures. The higher figure of each pair is accented. */
+ *  `compact` drops the avatars. The higher figure of each pair is accented. */
 export function RivalRow({
   rival,
   rating,
@@ -188,17 +187,13 @@ export function RivalRow({
     <RowShell className={`grid ${rivalCols(compact)} items-center gap-2 px-3.5 py-2`} action={action}>
       {!compact && <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="sm" />}
       <span className="font-display font-semibold text-[11px] truncate">{a.name}</span>
-      {!compact && (
-        <span className={`display-numeral text-[12px] text-center${tone(aRoundsHigher, bRoundsHigher)}`}>{rival.aStats.roundsWon}</span>
-      )}
+      <span className={`display-numeral text-[12px] text-center${tone(aRoundsHigher, bRoundsHigher)}`}>{rival.aStats.roundsWon}</span>
       <span className={`display-numeral text-[12px] text-center${tone(aWinsHigher, bWinsHigher)}`}>{rival.aWins}</span>
       <div className="flex items-center justify-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)] self-stretch -my-2">
         <RatingCircle value={rating} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={breakdown} />
       </div>
       <span className={`display-numeral text-[12px] text-center${tone(bWinsHigher, aWinsHigher)}`}>{rival.bWins}</span>
-      {!compact && (
-        <span className={`display-numeral text-[12px] text-center${tone(bRoundsHigher, aRoundsHigher)}`}>{rival.bStats.roundsWon}</span>
-      )}
+      <span className={`display-numeral text-[12px] text-center${tone(bRoundsHigher, aRoundsHigher)}`}>{rival.bStats.roundsWon}</span>
       <span className="font-display font-semibold text-[11px] text-right truncate">{b.name}</span>
       {!compact && <PlayerAvatar name={b.name} imageUrl={b.steam_avatar_url} size="sm" />}
     </RowShell>

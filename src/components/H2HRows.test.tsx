@@ -2,7 +2,7 @@
 /**
  * Component tests for `H2HRows.tsx`: the ranked duo / rivalry rows shared by `H2HSection` and the
  * home page. A row is a link when given an `href` and a selectable row (click selects, hover
- * previews) otherwise; `compact` drops the round figures and a rivalry's avatars.
+ * previews) otherwise; `compact` drops a duo's rounds column and a rivalry's avatars.
  *
  * Run:  npx vitest run src/components/H2HRows.test.tsx
  */
@@ -29,6 +29,8 @@ const RIVAL: H2HStats = {
   mapBreakdown: [],
   matches: [],
 };
+
+const withAvatar = (p: typeof alice) => ({ ...p, steam_avatar_url: 'https://example.com/a.jpg' });
 
 describe('DuoRow', () => {
   const props = { rank: 1, duo: duoStats(), rating: 88, breakdown: 'tip', a: alice, b: bob };
@@ -108,16 +110,18 @@ describe('RivalRow', () => {
     expect(screen.getByText('3')).toHaveClass('text-[var(--color-text-secondary)]');
   });
 
-  test('compact leaves out the round figures', () => {
-    render(
+  test('compact keeps the round figures and drops only the avatars', () => {
+    const { container } = render(
       <>
         <RivalHeader compact />
-        <RivalRow {...props} compact />
+        <RivalRow {...props} a={withAvatar(alice)} b={withAvatar(bob)} compact />
       </>,
     );
-    expect(screen.queryByText('55')).toBeNull();
-    expect(screen.queryByText('Rounds')).toBeNull();
+    expect(screen.getByText('55')).toBeInTheDocument();
+    expect(screen.getByText('51')).toBeInTheDocument();
+    expect(screen.getAllByText('Rounds')).toHaveLength(2);
     expect(screen.getByText('4')).toBeInTheDocument();
+    expect(container.querySelectorAll('img')).toHaveLength(0);
   });
 
   test('with an href the row is a link; without one a click selects', async () => {
