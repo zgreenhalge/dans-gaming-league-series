@@ -9,40 +9,37 @@ import { Stepper } from './Stepper';
 import SectionLabel from './SectionLabel';
 import Th from './Th';
 import { StatTable, Td, Tr } from './StatTable';
-import { SELECT_CLS } from './formStyles';
+import { SeasonFilter, useSeasonFilter } from './SeasonFilter';
 
 const DEFAULT_QUALIFIERS = 12;
 
 const FATE_LABEL: Record<SeedFate, string> = { bye: 'Bye to the final', plays: 'Plays in', wontQualify: "Won't qualify" };
 
 export function GauntletPreviewView({ seasons }: { seasons: GauntletPreviewSeason[] }) {
-  const [seasonId, setSeasonId] = useState<number | null>(null);
-  const [qualifiers, setQualifiers] = useState(DEFAULT_QUALIFIERS);
+  // Only regular seasons are offered (seeds always come from one), so the Regular/Gauntlet
+  // checkboxes are hidden and `selectedSeason: 'all'` means no season is loaded: numbered seeds.
+  const filterSeasons = useMemo(() => seasons.map((s) => ({ id: s.seasonId, name: s.label, is_gauntlet: false })), [seasons]);
+  const filter = useSeasonFilter({ regularSeasons: filterSeasons });
+  const [qualifierOverride, setQualifierOverride] = useState<number | null>(null);
 
-  const season = seasons.find((s) => s.seasonId === seasonId) ?? null;
+  const season = seasons.find((s) => s.seasonId === filter.selectedSeason) ?? null;
+  // Loading a season sets the count to its player count (clamped); the stepper then overrides it.
+  const qualifiers = qualifierOverride ?? (season ? qualifierCountFor(season.standings) : DEFAULT_QUALIFIERS);
   const preview = useMemo(() => buildGauntletPreview(qualifiers, season?.standings ?? []), [qualifiers, season]);
 
-  function loadSeason(value: string) {
-    const next = seasons.find((s) => s.seasonId === Number(value)) ?? null;
-    setSeasonId(next?.seasonId ?? null);
-    if (next) setQualifiers(qualifierCountFor(next.standings));
+  function selectSeason(next: number | 'all') {
+    setQualifierOverride(null);
+    filter.setSelectedSeason(next);
   }
 
   return (
     <div className="flex flex-col gap-10">
       <section className="flex flex-wrap items-end gap-x-8 gap-y-4">
-        <Stepper label="Qualifiers" value={qualifiers} min={GAUNTLET_MIN_QUALIFIERS} max={GAUNTLET_MAX_QUALIFIERS} onChange={setQualifiers} />
+        <Stepper label="Qualifiers" value={qualifiers} min={GAUNTLET_MIN_QUALIFIERS} max={GAUNTLET_MAX_QUALIFIERS} onChange={setQualifierOverride} />
         {seasons.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Seed names</span>
-            <select aria-label="Load a regular season's standings for named seeds" className={`${SELECT_CLS} h-8`} value={seasonId ?? ''} onChange={(e) => loadSeason(e.target.value)}>
-              <option value="">Numbered seeds only</option>
-              {seasons.map((s) => (
-                <option key={s.seasonId} value={s.seasonId}>
-                  {s.label} standings ({s.standings.length})
-                </option>
-              ))}
-            </select>
+            <SeasonFilter filter={filter} seasons={filterSeasons} onSeasonChange={selectSeason} showRegular={false} showGauntlet={false} className="flex h-8 items-center" />
           </div>
         )}
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)] h-8 flex items-center">
