@@ -8,7 +8,7 @@ import SectionLabel from './SectionLabel';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import { InfoTooltip } from './InfoTooltip';
-import { SELECT_CLS } from './adminButtonStyles';
+import { SELECT_CLS } from './formStyles';
 
 const PROVISIONAL_NOTE =
   'One or more players are early in their rating history, so these predictions carry extra uncertainty.';

@@ -9,7 +9,7 @@ import { Stepper } from './Stepper';
 import SectionLabel from './SectionLabel';
 import Th from './Th';
 import { StatTable, Td, Tr } from './StatTable';
-import { SELECT_CLS } from './adminButtonStyles';
+import { SELECT_CLS } from './formStyles';
 
 const DEFAULT_QUALIFIERS = 12;
 

@@ -30,7 +30,8 @@ import SectionLabel from './SectionLabel';
 import { Stepper } from './Stepper';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, SELECT_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SELECT_CLS } from './formStyles';
 import { RemoveXButton } from './RemoveXButton';
 
 type Settings = Omit<SeasonFormatSettings, 'seed'>;
@@ -205,21 +206,29 @@ export function ScheduleLabView({
     setBusy(true);
     setWorkerError(null);
     // The annealing search runs off the main thread so the page stays responsive and can cancel.
-    const worker = new Worker(new URL('../lib/season-format.worker.ts', import.meta.url));
-    workerRef.current = worker;
-    worker.onmessage = (e: MessageEvent<FormatResult>) => {
-      stopWorker();
-      if (!e.data.ok) return;
-      const plan = e.data.plan;
-      setPreviews((prev) => [...prev, { plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
-      setShownId(seed);
-    };
-    worker.onerror = () => {
+    try {
+      const worker = new Worker(new URL('../lib/season-format.worker.ts', import.meta.url));
+      workerRef.current = worker;
+      worker.onmessage = (e: MessageEvent<FormatResult>) => {
+        stopWorker();
+        if (!e.data.ok) {
+          setWorkerError(e.data.issues.join(' '));
+          return;
+        }
+        const plan = e.data.plan;
+        setPreviews((prev) => [...prev, { plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
+        setShownId(seed);
+      };
+      worker.onerror = () => {
+        stopWorker();
+        setWorkerError('Generating the preview failed.');
+      };
+      const request: FormatWorkerRequest = { players: roster, settings: { ...effective, seed } };
+      worker.postMessage(request);
+    } catch {
       stopWorker();
       setWorkerError('Generating the preview failed.');
-    };
-    const request: FormatWorkerRequest = { players: roster, settings: { ...effective, seed } };
-    worker.postMessage(request);
+    }
   }
 
   function stopWorker() {

@@ -812,7 +812,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   }
 
   assignSides(weeks, rand);
-  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(halves, weeks) } };
+  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), halves, weeks) } };
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
@@ -856,8 +856,7 @@ function reachablePairs(halves: FormatHalf[]): { pairs: Set<string>; mates: Map<
 /** The comparison numbers for a plan — what the Schedule Lab shows side by side. `pairs` and
  * `distinctTeammates.possible` count only reachable pairs (see `reachablePairs()`), so plans with
  * different division counts are measured against what each can actually achieve. */
-function scoreFormatPlan(halves: FormatHalf[], weeks: FormatWeek[]): FormatScorecard {
-  const playerIds = halves[0].divisions.flat();
+function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: FormatWeek[]): FormatScorecard {
   const { pairs: reachable, mates: reachableMates } = reachablePairs(halves);
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
   const { teammatePairs, opponentPairs } = collectCoveragePairs(games);
