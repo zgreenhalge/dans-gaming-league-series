@@ -812,7 +812,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   }
 
   assignSides(weeks, rand);
-  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), weeks) } };
+  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), halves, weeks) } };
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
@@ -831,8 +831,33 @@ function assignSides(weeks: FormatWeek[], rand: () => number): void {
   });
 }
 
-/** The comparison numbers for a plan — what the Schedule Lab shows side by side. */
-function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorecard {
+/** Every pair of players who share a division in at least one half, keyed by `pairKey()`: the only
+ * pairs a plan can make teammates or opponents. `mates` counts each player's distinct reachable
+ * division-mates. */
+function reachablePairs(halves: FormatHalf[]): { pairs: Set<string>; mates: Map<number, number> } {
+  const pairs = new Set<string>();
+  const mates = new Map<number, number>();
+  for (const half of halves) {
+    for (const ids of half.divisions) {
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const key = pairKey(ids[i], ids[j]);
+          if (pairs.has(key)) continue;
+          pairs.add(key);
+          mates.set(ids[i], (mates.get(ids[i]) ?? 0) + 1);
+          mates.set(ids[j], (mates.get(ids[j]) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  return { pairs, mates };
+}
+
+/** The comparison numbers for a plan — what the Schedule Lab shows side by side. `pairs` and
+ * `distinctTeammates.possible` count only reachable pairs (see `reachablePairs()`), so plans with
+ * different division counts are measured against what each can actually achieve. */
+function scoreFormatPlan(playerIds: number[], halves: FormatHalf[], weeks: FormatWeek[]): FormatScorecard {
+  const { pairs: reachable, mates: reachableMates } = reachablePairs(halves);
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
   const { teammatePairs, opponentPairs } = collectCoveragePairs(games);
   const gameCount = new Map<number, number>();
@@ -866,13 +891,10 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorec
   let pairs = 0;
   let pairsPartnered = 0;
   let pairsNeverMet = 0;
-  for (let i = 0; i < playerIds.length; i++) {
-    for (let j = i + 1; j < playerIds.length; j++) {
-      pairs++;
-      const k = pairKey(playerIds[i], playerIds[j]);
-      if (teammatePairs.has(k)) pairsPartnered++;
-      if (!teammatePairs.has(k) && !opponentPairs.has(k)) pairsNeverMet++;
-    }
+  for (const k of reachable) {
+    pairs++;
+    if (teammatePairs.has(k)) pairsPartnered++;
+    if (!teammatePairs.has(k) && !opponentPairs.has(k)) pairsNeverMet++;
   }
   const counts = playerIds.map((id) => gameCount.get(id) ?? 0);
   const distinct = playerIds.map((id) => teammates.get(id)!.size);
@@ -881,7 +903,7 @@ function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorec
     gamesPerPlayer: { min: Math.min(...counts), max: Math.max(...counts) },
     idlePlayerWeeks,
     maxGamesInAWeek,
-    distinctTeammates: { min: Math.min(...distinct), max: Math.max(...distinct), possible: playerIds.length - 1 },
+    distinctTeammates: { min: Math.min(...distinct), max: Math.max(...distinct), possible: Math.max(0, ...reachableMates.values()) },
     pairs,
     pairsPartnered,
     pairsNeverMet,

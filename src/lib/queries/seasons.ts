@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import type { Player, Season } from '../types';
-import { allMatchesPlayed, findPairedSeason, isPlayedScore } from '../util';
+import { allMatchesPlayed, extractSeasonNumber, findPairedSeason, isPlayedScore } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
 import { batchedIn, cacheQuery } from './_shared';
@@ -41,6 +41,56 @@ export const getSeasons = cacheQuery(async (client?: SupabaseClient): Promise<Se
 export async function getActiveRegularSeason(client?: SupabaseClient): Promise<Season | null> {
   const seasons = await getSeasons(client);
   return seasons.find((s) => !s.is_gauntlet && s.status === 'ACTIVE') ?? null;
+}
+
+/** The season behind the home page's standings and what to say about it. */
+export interface HomeStandingsSeason {
+  season: Season;
+  /** The season is running (`ACTIVE`); otherwise it is the latest finished one. */
+  live: boolean;
+  /** The season's paired gauntlet when it is running, so the panel can point at it. */
+  gauntlet: Season | null;
+}
+
+/** Which seasons the home page's panels read. */
+export interface HomeSeasons {
+  /** The first active regular season; the Upcoming Games source. */
+  regular: Season | null;
+  /** The first active gauntlet with the hub season id its pages hang off (its paired regular
+   *  season, else the gauntlet itself); the Upcoming Games source when `regular` is `null`. */
+  gauntlet: { season: Season; hubId: number } | null;
+  /** The standings source: `regular`, else the most recently finished regular season (highest
+   *  season number), else `null` — a league whose only seasons are upcoming has no standings. */
+  standings: HomeStandingsSeason | null;
+}
+
+/** Resolves "which season is current" for the home page once, so the games and the standings
+ *  share one rule. */
+export function resolveHomeSeasons(seasons: Season[]): HomeSeasons {
+  const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
+  const gauntlets = seasons.filter((s) => s.is_gauntlet);
+
+  const regular = regularSeasons.find((s) => s.status === 'ACTIVE') ?? null;
+  const activeGauntlet = gauntlets.find((s) => s.status === 'ACTIVE');
+  const gauntlet = activeGauntlet
+    ? { season: activeGauntlet, hubId: findPairedSeason(activeGauntlet.name, regularSeasons)?.id ?? activeGauntlet.id }
+    : null;
+
+  const standingsSeason =
+    regular ??
+    regularSeasons
+      .filter((s) => s.status === 'ARCHIVED')
+      .sort((a, b) => (extractSeasonNumber(b.name) ?? b.id) - (extractSeasonNumber(a.name) ?? a.id))[0];
+  let standings: HomeStandingsSeason | null = null;
+  if (standingsSeason) {
+    const paired = findPairedSeason(standingsSeason.name, gauntlets);
+    standings = {
+      season: standingsSeason,
+      live: standingsSeason.status === 'ACTIVE',
+      gauntlet: paired?.status === 'ACTIVE' ? paired : null,
+    };
+  }
+  return { regular, gauntlet, standings };
 }
 
 /** True if the season has a schedule (at least one week/match exists) and every match in it has a

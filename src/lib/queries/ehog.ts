@@ -273,3 +273,17 @@ export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSig
     return { playerId: pid, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehogRating: DEFAULT_EHOG };
   });
 }
+
+export interface RatedPlayer extends PlayerMuSigma {
+  name: string;
+}
+
+/** Every player in `playersById` with their current EHOG state (`getPlayerRatings()`, including its
+ *  seed-rating and default fallbacks), sorted by name — the player list the Schedule Lab and the
+ *  win-probability calculator (`/tools/*`) both start from. */
+export async function getRatedPlayers(playersById: Map<number, { name: string }>): Promise<RatedPlayer[]> {
+  const ratings = await getPlayerRatings([...playersById.keys()]);
+  return ratings
+    .map((r) => ({ ...r, name: playersById.get(r.playerId)!.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

@@ -1,6 +1,6 @@
 /**
- * Tests for the home page's data layer: `queries/home.ts` (`getHomeGames`, `pickStandingsSeason`,
- * `buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` (`queries/leaderboard.ts`),
+ * Tests for the home page's data layer: `queries/home.ts` (`getHomeGames`), `queries/seasons.ts` (`resolveHomeSeasons`),
+ * `queries/myStats.ts` (`buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` (`queries/leaderboard.ts`),
  * `rankDuos` / `rankRivals` / `bestFriendOf` / `worstNightmareOf` (`queries/h2h.ts`),
  * `findCurrentGauntletRound` (`queries/gauntlet.ts`) and the history-row helpers in
  * `queries/player.ts`. The DB-backed functions run against the shared fixture league; the pure ones
@@ -35,9 +35,9 @@ import {
   lastPlayed,
   nextUpcoming,
   opponentNames,
-  pickStandingsSeason,
   rankDuos,
   rankRivals,
+  resolveHomeSeasons,
   worstNightmareOf,
   type GauntletRound,
   type H2HStats,
@@ -316,10 +316,12 @@ test('buildMyStats: a player with no matches has no rank, record, history or mat
   assert.equal(stats.worstNightmare, null);
 });
 
-// ─── pickStandingsSeason ─────────────────────────────────────────────────────
+// ─── resolveHomeSeasons (standings) ──────────────────────────────────────────
 
-test('pickStandingsSeason: the active regular season, live, with its running gauntlet', () => {
-  const picked = pickStandingsSeason([
+const standingsOf = (seasons: Parameters<typeof resolveHomeSeasons>[0]) => resolveHomeSeasons(seasons).standings;
+
+test('resolveHomeSeasons standings: the active regular season, live, with its running gauntlet', () => {
+  const picked = standingsOf([
     season({ id: 1, name: 'Season 3' }),
     season({ id: 2, name: 'Season 4', status: 'ACTIVE' }),
     season({ id: 3, name: 'Season 4 Gauntlet', status: 'ACTIVE', is_gauntlet: true }),
@@ -330,8 +332,8 @@ test('pickStandingsSeason: the active regular season, live, with its running gau
   assert.equal(picked?.gauntlet?.id, 3);
 });
 
-test('pickStandingsSeason: with nothing active, the latest finished regular season by season number', () => {
-  const picked = pickStandingsSeason([
+test('resolveHomeSeasons standings: with nothing active, the latest finished regular season by season number', () => {
+  const picked = standingsOf([
     season({ id: 9, name: 'Season 2' }),
     season({ id: 3, name: 'Season 10' }),
     season({ id: 5, name: 'Season 3 Gauntlet', is_gauntlet: true }),
@@ -342,14 +344,14 @@ test('pickStandingsSeason: with nothing active, the latest finished regular seas
   assert.equal(picked?.gauntlet, null);
 });
 
-test('pickStandingsSeason: a finished season whose gauntlet is not running has no gauntlet pointer; none at all is null', () => {
-  const picked = pickStandingsSeason([
+test('resolveHomeSeasons standings: a finished season whose gauntlet is not running has no gauntlet pointer; none at all is null', () => {
+  const picked = standingsOf([
     season({ id: 1, name: 'Season 1' }),
     season({ id: 2, name: 'Season 1 Gauntlet', is_gauntlet: true }),
   ]);
   assert.equal(picked?.gauntlet, null);
-  assert.equal(pickStandingsSeason([season({ id: 1, name: 'Season 1', status: 'UPCOMING' })]), null);
-  assert.equal(pickStandingsSeason([]), null);
+  assert.equal(standingsOf([season({ id: 1, name: 'Season 1', status: 'UPCOMING' })]), null);
+  assert.equal(standingsOf([]), null);
 });
 
 // ─── Games: week / round links ───────────────────────────────────────────────
@@ -426,7 +428,7 @@ test('buildGauntletHomeGames: links hang off the hub season; every unplayed brac
 
 test('getHomeGames: the active regular season of the fixture league', async () => {
   const seasons = await getSeasons();
-  const games = await getHomeGames(seasons);
+  const games = await getHomeGames(resolveHomeSeasons(seasons));
   matchesSnapshot('getHomeGames', games);
   assert.ok(games);
   assert.equal(games.scheduleHref, '/seasons/3?tab=schedule');
@@ -434,7 +436,7 @@ test('getHomeGames: the active regular season of the fixture league', async () =
 
 test('getHomeGames: null when no season is active', async () => {
   const seasons = (await getSeasons()).map((s) => ({ ...s, status: 'ARCHIVED' as const }));
-  assert.equal(await getHomeGames(seasons), null);
+  assert.equal(await getHomeGames(resolveHomeSeasons(seasons)), null);
 });
 
 test('getMyStats: assembled from the career leaderboard, player history and career H2H', async () => {

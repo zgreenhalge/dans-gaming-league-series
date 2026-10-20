@@ -63,6 +63,9 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 
 - **`.wl-chip` / `.wl-chip--{win,loss,pending}` / `.wl-chip--sm`** — the canonical W/L/pending badge.
   Don't build ad-hoc colored pill markup for match results — use these.
+- **`<StatusPill>`** (`src/components/StatusPill.tsx`) — the small bordered Live / Final / Gauntlet
+  pill: `variant="live"` (green, pulsing dot), `"neutral"` (grey) or `"amber"`; `href` makes it a link.
+  `StageStatusTag`, `SeasonStatusTag`, the seasons list and `HomeStandingsPanel` all render it.
 - **`.form-square` / `.form-dot`** (`--w` / `--l` modifiers) — recent-form history indicators
   (squares for emphasis, dots for compact inline use)
 - **`.player-name-me`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the
@@ -221,7 +224,12 @@ selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Riv
 **Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
 `MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it
 summarizes (a week or round page, the season, the Schedule tab), with a small `tracked` secondary link
-on the right ("All games →", "View all →") where there is a longer list to go to. A scheduled-game row
+on the right ("All games →", "View all →") where there is a longer list to go to. The shared
+**`PanelHeader`** (`src/components/PanelHeader.tsx`) draws that strip — `title`, `titleHref`, a `right`
+slot, and `children` beside the title for pills (`align="center"` for a pill row, `baseline` otherwise)
+— and **`PanelLink`** is the secondary link (`hover="primary"` for one that sits on a plain page rather
+than a panel, as in `PlayerView`'s stats tab). `UpcomingGamesPanel`'s `GameBlock`, `HomeStandingsPanel`,
+`MyStatsPanel` and `PlayerView` use them; don't re-type the class strings. A scheduled-game row
 ends in a *date block* — the weekday over a large day number, in the site accent — then the time and a
 countdown; the block appears only for a row that has a time. A list-only panel with nothing to list
 (Upcoming Games, To Be Scheduled, Top duos, Hottest Rivalries) is omitted; standings and Match history,

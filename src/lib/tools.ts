@@ -17,6 +17,16 @@ export const TOOLS: Tool[] = [
     name: 'Schedule Lab',
     summary: 'Generate regular-season schedules for any roster and format, and compare them side by side.',
   },
+  {
+    slug: 'win-probability',
+    name: 'Win Probability',
+    summary: "Pick any four players into a 2v2 and see each side's EHOG win probability.",
+  },
+  {
+    slug: 'gauntlet-preview',
+    name: 'Gauntlet Preview',
+    summary: 'See the gauntlet bracket any number of qualifiers produces: pods, byes, relegations and the final.',
+  },
 ];
 
 export function toolHref(slug: string): string {

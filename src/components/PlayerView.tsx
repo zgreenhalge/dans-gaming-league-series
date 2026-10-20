@@ -28,6 +28,7 @@ import Th from './Th';
 import SortableTh from './SortableTh';
 import { CompactTable, CompactTh, CompactTr, CompactTd } from './CompactTable';
 import { StatTable, Tr, Td, NameTd, MapCell } from './StatTable';
+import { PanelLink } from './PanelHeader';
 
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
@@ -394,12 +395,9 @@ export default function PlayerView({
             <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
               {isCareer ? 'Career' : 'Season'} stats
             </span>
-            <Link
-              href="/statistics"
-              className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            >
+            <PanelLink href="/statistics" hover="primary">
               View all →
-            </Link>
+            </PanelLink>
           </div>
           <StatTileGrid
             columns="grid-cols-4 sm:grid-cols-5 lg:grid-cols-10"

@@ -226,3 +226,12 @@ The rating math is ~10 lines in each language. The guard against drift is:
 2. **Parity test** — `ehog/test_parity.py` generates fixtures from the Python engine; `ehog/test_parity.ts` verifies the TS predictor matches within float tolerance (1e-8).
 
 If you change the math in `ehog/engine.py`, mirror it in `src/lib/ehog.ts`, regenerate fixtures, and run both tests.
+
+### Win probability calculator
+
+`/tools/win-probability` is the same prediction as a sandbox: pick two players per side from every
+rated player (`getRatedPlayers()`, `queries/ehog.ts` — the player list the Schedule Lab also uses,
+with `getPlayerRatings()`'s seed-rating and default fallbacks) and `evaluateMatchup()`
+(`src/lib/win-probability.ts`) returns the shirts-win probability from `predictWinProbability()` plus
+`isProvisional()`. `rankSplits()` evaluates all three ways to split the four players into 2v2 teams
+and lists them most even first. A provisional player gets the same hedging note as the pre-match bar.

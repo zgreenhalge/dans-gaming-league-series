@@ -6,7 +6,7 @@ import {
   getAllLeaderboards,
   getSeasonForm,
   getHomeGames,
-  pickStandingsSeason,
+  resolveHomeSeasons,
   getMyStats,
   getCareerH2HDataCached,
   getPlayerRosterSeasonIds,
@@ -81,7 +81,8 @@ export default async function Home() {
 
   // Games (Upcoming Games + To Be Scheduled) come from the active regular season, else the active
   // gauntlet; standings from the active regular season, else the latest finished one.
-  const standings = pickStandingsSeason(seasons);
+  const home = resolveHomeSeasons(seasons);
+  const { standings } = home;
 
   // Survey / superlatives banners for the signed-in player: only seasons with something open, and
   // only those the player played (the views are null otherwise).
@@ -91,7 +92,7 @@ export default async function Home() {
 
   const [myStats, games, form, feedbackViews] = await Promise.all([
     currentPlayerId != null ? getMyStats(currentPlayerId, h2h) : null,
-    getHomeGames(seasons),
+    getHomeGames(home),
     standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
     Promise.all(
       feedbackSeasons.map(async (s) => {

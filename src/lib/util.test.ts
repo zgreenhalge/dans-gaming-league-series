@@ -36,6 +36,7 @@ import {
   firstName,
   winRatePct,
   compareMatchRefDesc,
+  compareWithinSeasonDesc,
   avgOf,
   formatEhogDelta,
   fmtUtcShort,
@@ -321,6 +322,14 @@ test('compareMatchRefDesc: ties break by week desc, then match number desc', () 
     matchRef({ weekNumber: 2, matchNumber: 1 }),
   ].sort(compareMatchRefDesc);
   assert.equal(sorted[0].weekNumber, 2);
+});
+test('compareWithinSeasonDesc: week desc, then match number desc', () => {
+  const sorted = [
+    matchRef({ weekNumber: 1, matchNumber: 3 }),
+    matchRef({ weekNumber: 2, matchNumber: 1 }),
+    matchRef({ weekNumber: 2, matchNumber: 2 }),
+  ].sort(compareWithinSeasonDesc);
+  assert.deepEqual(sorted.map((m) => [m.weekNumber, m.matchNumber]), [[2, 2], [2, 1], [1, 3]]);
 });
 
 // --- avgOf / formatEhogDelta ---
