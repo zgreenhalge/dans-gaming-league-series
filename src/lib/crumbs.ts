@@ -30,6 +30,11 @@ export function gauntletScheduleHref(hubSeasonId: number): string {
   return `${gauntletHref(hubSeasonId)}&tab=schedule`;
 }
 
+/** The Statistics page's H2H tab — the career-wide H2H overview. */
+export function careerH2HHref(): string {
+  return '/statistics?tab=h2h';
+}
+
 /** A pair's H2H matchup on a page that renders `H2HSection` — `basePath` is `/statistics` (career)
  *  or a season hub (`seasonHref()`). Writes the `a`/`b`/`type` params `useH2HPairUrlState()` reads:
  *  names, with `type` omitted for the default `'partner'`. */

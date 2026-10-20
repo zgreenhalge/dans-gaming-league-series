@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import {
   buildCrumbs,
+  careerH2HHref,
   gauntletHref,
   gauntletLink,
   groupHref,
@@ -126,4 +127,8 @@ test('h2hPairHref: names in a, b; type only for opponents (partner is the defaul
 
 test('h2hPairHref: names are URL-encoded', () => {
   assert.equal(h2hPairHref('/statistics', 'A & B', 'C D', 'partner'), '/statistics?tab=h2h&a=A+%26+B&b=C+D');
+});
+
+test('careerH2HHref: the Statistics page\'s H2H tab', () => {
+  assert.equal(careerH2HHref(), '/statistics?tab=h2h');
 });

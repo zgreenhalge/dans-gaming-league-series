@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `TopPairsPanels.tsx`: Top duos and Hottest Rivalries each list the top three
- * career pairs, best first, every row linking to that pair's career H2H matchup (`type=opponent`
- * for rivalries), and render nothing when there are no pairs.
+ * career pairs, best first, with a stats preview per row (rating, games and W-L for a duo; matches
+ * won on each side for a rivalry). The title links to the career H2H tab and every row to that
+ * pair's career H2H matchup (`type=opponent` for rivalries); both render nothing when there are no
+ * pairs.
  *
  * Run:  npx vitest run src/components/TopPairsPanels.test.tsx
  */
 
 import { describe, expect, test } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { HottestRivalriesPanel, TopDuosPanel, TOP_PAIRS_LIMIT } from './TopPairsPanels';
 import type { H2HData } from '@/lib/h2h';
 import { duoStats } from '@/lib/test-support/h2hFixtures';
@@ -49,17 +51,30 @@ const DATA: H2HData = {
 };
 
 describe('TopDuosPanel', () => {
+  test('the title links to the career H2H tab', () => {
+    render(<TopDuosPanel data={DATA} />);
+    expect(screen.getByRole('link', { name: 'Top duos' })).toHaveAttribute('href', '/statistics?tab=h2h');
+  });
+
   test('lists the top three duos, best first, each linking to its career partner matchup', () => {
     render(<TopDuosPanel data={DATA} />);
-    expect(screen.getByText('Top duos')).toBeInTheDocument();
-    const rows = screen.getAllByRole('link');
+    const rows = screen.getAllByRole('link').filter((l) => l.getAttribute('href')?.includes('&a='));
     expect(rows).toHaveLength(TOP_PAIRS_LIMIT);
     expect(rows[0]).toHaveAttribute('href', '/statistics?tab=h2h&a=P1&b=P2');
     expect(rows[0]).toHaveTextContent('P1 & P2');
-    expect(rows[0]).toHaveTextContent('10 games · 9-1');
     expect(rows[1]).toHaveAttribute('href', '/statistics?tab=h2h&a=P3&b=P4');
     expect(rows[2]).toHaveAttribute('href', '/statistics?tab=h2h&a=P4&b=P5');
     expect(screen.queryByText('P2 & P5')).toBeNull();
+  });
+
+  test('each row previews games, W-L and win rate — and leaves out the round figures that do not fit', () => {
+    render(<TopDuosPanel data={DATA} />);
+    const first = screen.getAllByRole('link').find((l) => l.getAttribute('href')?.includes('&a=P1'))!;
+    expect(within(first).getByText('10')).toBeInTheDocument();
+    expect(within(first).getByText('9–1')).toBeInTheDocument();
+    expect(within(first).getByText('90%')).toBeInTheDocument();
+    expect(screen.queryByText('Rounds W-L')).toBeNull();
+    expect(screen.getByText('Rating')).toBeInTheDocument();
   });
 
   test('renders nothing without a pair that has played', () => {
@@ -69,14 +84,25 @@ describe('TopDuosPanel', () => {
 });
 
 describe('HottestRivalriesPanel', () => {
+  test('the title links to the career H2H tab', () => {
+    render(<HottestRivalriesPanel data={DATA} />);
+    expect(screen.getByRole('link', { name: 'Hottest Rivalries' })).toHaveAttribute('href', '/statistics?tab=h2h');
+  });
+
   test('lists the top three rivalries, each linking to its career opponent matchup', () => {
     render(<HottestRivalriesPanel data={DATA} />);
-    expect(screen.getByText('Hottest Rivalries')).toBeInTheDocument();
-    const rows = screen.getAllByRole('link');
+    const rows = screen.getAllByRole('link').filter((l) => l.getAttribute('href')?.includes('&a='));
     expect(rows).toHaveLength(TOP_PAIRS_LIMIT);
     expect(rows[0]).toHaveAttribute('href', '/statistics?tab=h2h&a=P1&b=P2&type=opponent');
-    expect(rows[0]).toHaveTextContent('P1 vs P2');
-    expect(rows[0]).toHaveTextContent('10 meetings · 5-5');
+    expect(rows[0]).toHaveTextContent('P1');
+    expect(rows[0]).toHaveTextContent('P2');
+  });
+
+  test('each row previews the matches each player won on either side of the rating', () => {
+    render(<HottestRivalriesPanel data={DATA} />);
+    const second = screen.getAllByRole('link').find((l) => l.getAttribute('href')?.includes('&a=P1&b=P3'))!;
+    expect(within(second).getAllByText('3')).toHaveLength(2);
+    expect(screen.getAllByText('Won')).toHaveLength(2);
   });
 
   test('renders nothing without a rivalry', () => {
@@ -86,7 +112,7 @@ describe('HottestRivalriesPanel', () => {
 
   test('a pair whose player is missing from the roster is skipped', () => {
     render(<HottestRivalriesPanel data={{ ...DATA, players: PLAYERS.filter((p) => p.id !== 1) }} />);
-    expect(screen.queryByText('P1 vs P2')).toBeNull();
-    expect(screen.getAllByRole('link').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: /P1/ })).toBeNull();
+    expect(screen.getAllByRole('link').length).toBeGreaterThan(1);
   });
 });
