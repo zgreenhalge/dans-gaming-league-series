@@ -191,7 +191,7 @@ so you don't have to reverse-engineer them from scratch each time.
     averages). The **halfway re-draft** either re-drafts by first-half win rate in the same order —
     with tiers, that is promotion and relegation — or picks the split with the most new pairings.
   - **Group week** — instead of about one match a week, each player is in about one group: four
-    players playing two games back to back with two different team splits (the gauntlet's pod).
+    players playing two games back to back with two different team splits.
     When a division doesn't divide by 4, some weeks give the leftover players a bye and others
     seat a few players in a second group, so everyone's total stays equal. A gauntlet pod's shape,
     with no advancement attached.

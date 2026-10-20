@@ -13,6 +13,7 @@ import {
   buildFormatPlan,
   formatIssues,
   draftDivisions,
+  WEEK_UNIT,
   type FormatPlan,
   type FormatPlayer,
   type SeasonFormatSettings,
@@ -40,37 +41,60 @@ const BASE: SeasonFormatSettings = {
   seed: 1,
 };
 
+// Plans are deterministic and only read by the assertions, so tests share one build per input.
+const planCache = new Map<string, FormatPlan>();
+
 function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
+  const key = JSON.stringify({ roster, settings });
+  const cached = planCache.get(key);
+  if (cached) return cached;
   const result = buildFormatPlan(roster, { ...BASE, ...settings });
   if (!result.ok) throw new Error(`expected a plan, got issues: ${result.issues.join(' ')}`);
+  planCache.set(key, result.plan);
   return result.plan;
 }
+
+/** Each player's per-week game counts across a plan. */
+function weeklyGames(p: FormatPlan): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  p.weeks.forEach((w, wi) => {
+    for (const d of w.divisions) {
+      for (const g of d.games) {
+        for (const id of [...g.shirts, ...g.skins]) {
+          const weeks = out.get(id) ?? Array.from({ length: p.weeks.length }, () => 0);
+          weeks[wi]++;
+          out.set(id, weeks);
+        }
+      }
+    }
+  });
+  return out;
+}
+
 
 /** Structural checks every plan must pass. */
 function assertSound(p: FormatPlan, n: number, gamesEach: number, maxPerWeek: number) {
   const label = JSON.stringify(p.settings);
   assert.equal(p.weeks.length, p.settings.weeks, `${label}: week count`);
-  const games = new Map<number, number>();
-  for (const w of p.weeks) {
+  const weekly = weeklyGames(p);
+  p.weeks.forEach((w, wi) => {
     const half = p.halves.find((h) => w.week >= h.firstWeek && w.week <= h.lastWeek)!;
-    const perWeek = new Map<number, number>();
     for (const d of w.divisions) {
       const members = new Set(half.divisions[d.division - 1]);
       for (const g of d.games) {
         const seated = [...g.shirts, ...g.skins];
         assert.equal(new Set(seated).size, 4, `${label} week ${w.week}: a player is seated twice in one game`);
-        for (const id of seated) {
-          assert.ok(members.has(id), `${label} week ${w.week}: player ${id} plays outside their division`);
-          games.set(id, (games.get(id) ?? 0) + 1);
-          perWeek.set(id, (perWeek.get(id) ?? 0) + 1);
-        }
+        for (const id of seated) assert.ok(members.has(id), `${label} week ${w.week}: player ${id} plays outside their division`);
         assert.ok(g.shirtsWinProb > 0 && g.shirtsWinProb < 1, `${label}: win probability out of range`);
       }
-      for (const id of d.idlePlayerIds) assert.ok(!perWeek.has(id), `${label} week ${w.week}: idle player ${id} also plays`);
+      for (const id of d.idlePlayerIds) assert.equal(weekly.get(id)![wi], 0, `${label} week ${w.week}: idle player ${id} also plays`);
     }
-    for (const [id, c] of perWeek) assert.ok(c <= maxPerWeek, `${label} week ${w.week}: player ${id} plays ${c} games`);
+  });
+  for (let id = 1; id <= n; id++) {
+    const weeks = weekly.get(id) ?? [];
+    assert.equal(weeks.reduce((a, c) => a + c, 0), gamesEach, `${label}: player ${id} games`);
+    assert.ok(Math.max(0, ...weeks) <= maxPerWeek, `${label}: player ${id} plays ${Math.max(...weeks)} games in a week`);
   }
-  for (let id = 1; id <= n; id++) assert.equal(games.get(id) ?? 0, gamesEach, `${label}: player ${id} games`);
   assert.deepEqual(p.scorecard.gamesPerPlayer, { min: gamesEach, max: gamesEach });
   assert.ok(p.scorecard.maxSideImbalance <= 2, `${label}: side imbalance ${p.scorecard.maxSideImbalance}`);
 }
@@ -95,6 +119,14 @@ test('formatIssues accepts group seasons of any roster size and length', () => {
   for (const n of [7, 10, 13]) for (const weeks of [5, 7, 8]) assert.deepEqual(formatIssues(n, { ...BASE, weekShape: 'group', weeks }), [], `n=${n} weeks=${weeks}`);
 });
 
+test('formatIssues refuses a 4-player division two groups in one week', () => {
+  // Divisions of 5 and 4 over 5 weeks need 8 groups each, so the 4-player division would play two
+  // groups — four games over only three possible team splits — in some week.
+  assert.equal(formatIssues(9, { ...BASE, weekShape: 'group', divisions: 2, weeks: 5 }).length, 1);
+  assert.deepEqual(formatIssues(9, { ...BASE, weekShape: 'match', divisions: 2, weeks: 5 }), []);
+  assert.deepEqual(formatIssues(8, { ...BASE, weekShape: 'group', divisions: 2, weeks: 5 }), []);
+});
+
 test('one league, one match a week: equal games and everyone meets everyone', () => {
   for (const n of [7, 13]) {
     const p = plan(n, {});
@@ -107,14 +139,13 @@ test('one league, one match a week: equal games and everyone meets everyone', ()
 /** Every group in a group-week plan is four players playing exactly two games with different
  *  team splits, and each player's week is a bye (0), one group (2) or two groups (4). */
 function assertPods(p: FormatPlan) {
+  for (const [id, weeks] of weeklyGames(p)) for (const c of weeks) assert.ok(c === 0 || c === 2 || c === 4, `player ${id} plays ${c} games in a week`);
   for (const w of p.weeks) {
     for (const d of w.divisions) {
       const byGroup = new Map<number, string[]>();
       const members = new Map<number, Set<number>>();
-      const perPlayer = new Map<number, number>();
       for (const g of d.games) {
         members.set(g.group!, new Set([...(members.get(g.group!) ?? []), ...g.shirts, ...g.skins]));
-        for (const id of [...g.shirts, ...g.skins]) perPlayer.set(id, (perPlayer.get(id) ?? 0) + 1);
         const key = [[...g.shirts].sort().join('+'), [...g.skins].sort().join('+')].sort().join(' v ');
         const seen = byGroup.get(g.group!) ?? [];
         assert.ok(!seen.includes(key), `week ${w.week}: group ${g.group} replays the same teams`);
@@ -122,7 +153,6 @@ function assertPods(p: FormatPlan) {
       }
       for (const [grp, games] of byGroup) assert.equal(games.length, 2, `week ${w.week}: group ${grp} plays ${games.length} games`);
       for (const [grp, ids] of members) assert.equal(ids.size, 4, `week ${w.week}: group ${grp} has ${ids.size} players`);
-      for (const [id, c] of perPlayer) assert.ok(c === 2 || c === 4, `week ${w.week}: player ${id} plays ${c} games`);
     }
   }
 }
@@ -147,27 +177,10 @@ test('a doubleheader week never replays the same matchup in a 4-player division'
   }
 });
 
-/** Each player's per-week game counts across a plan. */
-function weeklyGames(p: FormatPlan): Map<number, number[]> {
-  const out = new Map<number, number[]>();
-  p.weeks.forEach((w, wi) => {
-    for (const d of w.divisions) {
-      for (const g of d.games) {
-        for (const id of [...g.shirts, ...g.skins]) {
-          const weeks = out.get(id) ?? Array.from({ length: p.weeks.length }, () => 0);
-          weeks[wi]++;
-          out.set(id, weeks);
-        }
-      }
-    }
-  });
-  return out;
-}
-
 test('every doubleheader pays back a bye, and the scorecard counts the weeks they fall in', () => {
   for (const p of [plan(13, {}), plan(13, { weekShape: 'group' }), plan(13, { divisions: 2, halfwayShuffle: true })]) {
     const label = JSON.stringify(p.settings);
-    const usual = p.settings.weekShape === 'match' ? 1 : 2;
+    const usual = WEEK_UNIT[p.settings.weekShape].games;
     const perPlayer = weeklyGames(p);
     for (const [id, weeks] of perPlayer) {
       assert.equal(weeks.filter((c) => c > usual).length, weeks.filter((c) => c < usual).length, `${label}: player ${id} doubleheaders vs byes`);
@@ -177,7 +190,6 @@ test('every doubleheader pays back a bye, and the scorecard counts the weeks the
     assert.equal(p.scorecard.doubleheaderWeeks, weeksWhere((c) => c > usual));
     assert.equal(p.scorecard.byeWeeks, weeksWhere((c) => c < usual));
     assert.equal(p.scorecard.maxGamesInAWeek, Math.max(...all.flat()));
-    assert.ok(p.scorecard.playersMissingSomeone <= Math.min(13, 2 * p.scorecard.pairsNeverMet));
   }
 });
 
