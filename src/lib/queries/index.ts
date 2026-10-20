@@ -7,6 +7,7 @@ export * from './season-schedule-draft';
 export * from './schedule';
 export * from './schedule-lab';
 export * from './win-probability';
+export * from './gauntlet-preview';
 export * from './match';
 export * from './admin';
 export * from './player';

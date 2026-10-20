@@ -198,6 +198,10 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Tools** — the `/tools` section: open sandbox pages anyone can use, with no sign-in and no side
   effects (each only reads league data and computes in the browser), listed in `TOOLS`
   (`src/lib/tools.ts`). Operational pages that act on real systems, like Scrim, stay outside it.
+- **Gauntlet Preview** — the `/tools/gauntlet-preview` tool: pick a qualifier count (optionally a
+  regular season's standings for named seeds) and see the bracket and per-seed outcome (bye, plays in,
+  relegated) before any season gets there. A thin layer over `buildGauntletBracket()` and
+  `projectGauntletSeeding()` — see [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
@@ -238,6 +242,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
 | Fixed-length season planner + Schedule Lab | `src/lib/season-format.ts`, `src/lib/queries/schedule-lab.ts`, `src/components/ScheduleLabView.tsx`, `src/app/tools/schedule-lab/` |
 | Win Probability tool (any-four-players 2v2 odds, best split) | `src/lib/win-probability.ts`, `src/lib/queries/win-probability.ts`, `src/components/WinProbabilityCalculator.tsx`, `src/app/tools/win-probability/` |
+| Gauntlet Preview tool | `src/lib/gauntlet-preview.ts`, `src/lib/queries/gauntlet-preview.ts`, `src/components/GauntletPreviewView.tsx`, `src/app/tools/gauntlet-preview/` |
 | Tools section (open sandbox pages) | `src/lib/tools.ts` (`TOOLS` registry, links, breadcrumbs), `src/app/tools/` |
 | Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
 | Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts` (survey questions, validation, summary), `src/lib/superlatives.ts` (superlatives validation, tally), `src/lib/feedback-rules.ts` (`isFeedbackLocked()`, `Validated`), `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/lib/feedback-lifecycle.ts` (shared open/close, reset and answer-save handlers; the lock rule is `isFeedbackLocked()` in `feedback-rules.ts`), `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/survey/[id]/`, `src/app/admin/seasons/superlatives/[id]/` (via `resolveFeedbackAdminSeason()`, `src/lib/feedback-page.ts`), `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `Feedback*.tsx` (banner, player editor, admin controls, form frame, reset control) / `feedbackRequest.ts` / `RemoveXButton.tsx` |
