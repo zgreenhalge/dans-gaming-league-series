@@ -24,7 +24,7 @@ import { test, report } from './test-support/miniTest';
 function players(n: number): FormatPlayer[] {
   return Array.from({ length: n }, (_, i) => {
     const ehog = 90 - (75 * i) / Math.max(1, n - 1);
-    return { id: i + 1, mu: fromEhog(ehog, SIGMA_DEFAULT), sigma: SIGMA_DEFAULT, ehog };
+    return { playerId: i + 1, mu: fromEhog(ehog, SIGMA_DEFAULT), sigma: SIGMA_DEFAULT, ehogRating: ehog };
   });
 }
 
@@ -144,7 +144,7 @@ test('two divisions with a halfway shuffle re-snake the second half', () => {
   const [first, second] = p.halves;
   assert.equal(first.draftedBy, 'ehog');
   assert.equal(first.records, null);
-  assert.deepEqual(first.divisions, draftDivisions(players(13).map((pl) => pl.id), [7, 6], 'snake'));
+  assert.deepEqual(first.divisions, draftDivisions(players(13).map((pl) => pl.playerId), [7, 6], 'snake'));
   assert.equal(second.draftedBy, 'first-half-win-rate');
   assert.equal(second.firstWeek, 5);
   assert.ok(second.records, 'second half carries the simulated first-half records');
@@ -154,7 +154,7 @@ test('two divisions with a halfway shuffle re-snake the second half', () => {
 
 test('a win-rate draft ranks by the supplied records, a player without one at 50%', () => {
   // Reverse the EHOG order through records: player 8 has the best record, player 1 the worst.
-  const roster = players(8).map((p) => ({ ...p, record: p.id === 4 ? null : { wins: p.id, losses: 8 - p.id } }));
+  const roster = players(8).map((p) => ({ ...p, record: p.playerId === 4 ? null : { wins: p.playerId, losses: 8 - p.playerId } }));
   const p = plan(8, { divisions: 2, weeks: 4, draftBasis: 'win-rate', draftOrder: 'tiered' }, roster);
   // Win rates: 8 → 100%, 7 → 88%, 6 → 75%, 5 → 63%, then 4 (no record, 50%) ties nobody.
   assert.deepEqual(p.halves[0].divisions, [[8, 7, 6, 5], [4, 3, 2, 1]]);
@@ -194,8 +194,8 @@ test('formatIssues checks tier sizes against the roster and the 4-player floor',
 
 test('a balanced draft evens out division EHOG averages at least as well as a snake', () => {
   // Uneven gaps between ratings, so a plain snake isn't already the best split.
-  const roster = players(12).map((p, i) => ({ ...p, ehog: [95, 90, 60, 58, 50, 49, 40, 30, 29, 20, 15, 12][i] }));
-  const average = (ids: number[]) => ids.reduce((sum, id) => sum + roster[id - 1].ehog, 0) / ids.length;
+  const roster = players(12).map((p, i) => ({ ...p, ehogRating: [95, 90, 60, 58, 50, 49, 40, 30, 29, 20, 15, 12][i] }));
+  const average = (ids: number[]) => ids.reduce((sum, id) => sum + roster[id - 1].ehogRating, 0) / ids.length;
   const spread = (divs: number[][]) => Math.max(...divs.map(average)) - Math.min(...divs.map(average));
   const balanced = plan(12, { divisions: 3, draftOrder: 'balanced', weeks: 4 }, roster);
   const snake = plan(12, { divisions: 3, draftOrder: 'snake', weeks: 4 }, roster);

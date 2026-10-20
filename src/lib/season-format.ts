@@ -43,7 +43,8 @@
  */
 
 import { predictWinProbability, type PlayerRating } from './ehog';
-import { mulberry32, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
+import { snakeGroups } from './gauntlet-bracket';
+import { collectCoveragePairs, mulberry32, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
 
 export type WeekShape = 'match' | 'group';
 /** What players are ranked by before they're dealt into divisions. */
@@ -73,25 +74,28 @@ export interface FormatRecord {
   losses: number;
 }
 
-export interface FormatPlayer {
-  id: number;
-  mu: number;
-  sigma: number;
-  ehog: number;
+/** A player to plan for: their EHOG state (`PlayerRating`, as `getPlayerRatings()` returns it) plus
+ *  the record a win-rate draft ranks by. */
+export interface FormatPlayer extends PlayerRating {
   /** The record a `'win-rate'` draft ranks by; a player without one ranks at `UNKNOWN_WIN_RATE`. */
   record?: FormatRecord | null;
 }
 
 export const FORMAT_MIN_WEEKS = 2;
 export const FORMAT_MAX_WEEKS = 16;
-export const FORMAT_MIN_PLAYERS = 4;
-export const FORMAT_MAX_PLAYERS = 24;
+const FORMAT_MIN_PLAYERS = 4;
+const FORMAT_MAX_PLAYERS = 24;
 /** A division needs at least one full 2v2. */
 export const FORMAT_MIN_DIVISION_SIZE = 4;
 /** A game counts as lopsided when either side's predicted win probability is above 0.5 + this. */
 export const LOPSIDED_MARGIN = 0.25;
+
+/** True when a game's predicted win probability is outside the even range (`LOPSIDED_MARGIN`). */
+export function isLopsided(winProb: number): boolean {
+  return Math.abs(winProb - 0.5) > LOPSIDED_MARGIN;
+}
 /** Where a `'win-rate'` draft ranks a player with no record (a new player): the middle. */
-export const UNKNOWN_WIN_RATE = 0.5;
+const UNKNOWN_WIN_RATE = 0.5;
 
 export interface FormatGame {
   /** 1-based group number within the division's week (`'group'` shape), else null. */
@@ -362,11 +366,8 @@ export function draftDivisions(rankedIds: number[], sizes: number[], order: Excl
     });
     return divisions;
   }
-  rankedIds.forEach((id, i) => {
-    const row = Math.floor(i / k);
-    const col = i % k;
-    divisions[order === 'snake' && row % 2 === 1 ? k - 1 - col : col].push(id);
-  });
+  if (order === 'snake') return snakeGroups(rankedIds, k);
+  rankedIds.forEach((id, i) => divisions[i % k].push(id));
   return divisions;
 }
 
@@ -374,20 +375,20 @@ export function draftDivisions(rankedIds: number[], sizes: number[], order: Excl
  * a player without one at `UNKNOWN_WIN_RATE`. Null for `random`, which has no value to rank by. */
 function draftValues(players: FormatPlayer[], basis: DraftBasis, records: Map<number, FormatRecord>): Map<number, number> | null {
   if (basis === 'random') return null;
-  if (basis === 'ehog') return new Map(players.map((p) => [p.id, p.ehog]));
+  if (basis === 'ehog') return new Map(players.map((p) => [p.playerId, p.ehogRating]));
   return new Map(
     players.map((p) => {
-      const r = records.get(p.id);
-      return [p.id, r && r.wins + r.losses > 0 ? r.wins / (r.wins + r.losses) : UNKNOWN_WIN_RATE];
+      const r = records.get(p.playerId);
+      return [p.playerId, r && r.wins + r.losses > 0 ? r.wins / (r.wins + r.losses) : UNKNOWN_WIN_RATE];
     }),
   );
 }
 
 /** Player ids best first by `values`, EHOG breaking ties; shuffled (seeded) when there are none. */
 function rankByValues(players: FormatPlayer[], values: Map<number, number> | null, rand: () => number): number[] {
-  const ids = players.map((p) => p.id);
+  const ids = players.map((p) => p.playerId);
   if (!values) return shuffled(ids, rand);
-  const ehog = new Map(players.map((p) => [p.id, p.ehog]));
+  const ehog = new Map(players.map((p) => [p.playerId, p.ehogRating]));
   return ids.sort((a, b) => values.get(b)! - values.get(a)! || ehog.get(b)! - ehog.get(a)!);
 }
 
@@ -408,7 +409,7 @@ function improveBySwaps(divisions: number[][], score: (divs: number[][]) => numb
   const position = new Map(order.map((id, i) => [id, i]));
   const sortBack = (divs: number[][]) => divs.map((d) => [...d].sort((a, b) => position.get(a)! - position.get(b)!));
 
-  let best = { divs: divisions.map((d) => [...d]), score: score(divisions) };
+  let best: { divs: number[][]; score: number } | null = null;
   for (let restart = 0; restart <= SWAP_RESTARTS; restart++) {
     let divs: number[][];
     if (restart === 0) {
@@ -438,13 +439,13 @@ function improveBySwaps(divisions: number[][], score: (divs: number[][]) => numb
         }
       }
     }
-    if (current > best.score + 1e-9) best = { divs: divs.map((d) => [...d]), score: current };
+    if (!best || current > best.score + 1e-9) best = { divs: divs.map((d) => [...d]), score: current };
   }
-  return sortBack(best.divs);
+  return sortBack(best!.divs);
 }
 
 /** The even-sized split whose divisions' average `values` are closest, searched from a snake. */
-export function balanceDivisions(rankedIds: number[], k: number, values: Map<number, number>, rand: () => number): number[][] {
+function balanceDivisions(rankedIds: number[], k: number, values: Map<number, number>, rand: () => number): number[][] {
   const start = draftDivisions(rankedIds, divisionSizesFor(rankedIds.length, k), 'snake');
   return improveBySwaps(start, (divs) => -averageSpread(divs, values), rand);
 }
@@ -496,33 +497,36 @@ interface HalfSearchResult {
   splits: number[][];
 }
 
-/** Cache marker for a not-yet-computed probability — outside [0, 1], and unlike NaN it can't
- * collide with a computed result. */
-const UNCOMPUTED = -1;
+/** One number per matchup — both teams, independent of team order and seat order. */
+function matchupKey(a: number, b: number, c: number, d: number, n: number): number {
+  const t1 = pairIndex(a, b, n);
+  const t2 = pairIndex(c, d, n);
+  return t1 < t2 ? t1 * n * n + t2 : t2 * n * n + t1;
+}
 
-class WinProbTable {
-  private readonly cache: Float64Array;
-  constructor(private readonly ratings: PlayerRating[]) {
-    const pairs = ratings.length * ratings.length;
-    this.cache = new Float64Array(pairs * pairs).fill(UNCOMPUTED);
-  }
-  /** Probability that team (a, b) beats team (c, d). */
-  get(a: number, b: number, c: number, d: number): number {
-    const n = this.ratings.length;
-    const i = (a * n + b) * n * n + c * n + d;
-    let p = this.cache[i];
-    if (p === UNCOMPUTED) {
-      p = predictWinProbability([this.ratings[a], this.ratings[b]], [this.ratings[c], this.ratings[d]]);
-      this.cache[i] = p;
+type WinProb = (a: number, b: number, c: number, d: number) => number;
+
+/** `predictWinProbability()` by league index — the probability team (a, b) beats team (c, d) —
+ * memoized once per matchup, whichever team or seat order asks for it. */
+function memoWinProb(players: PlayerRating[]): WinProb {
+  const n = players.length;
+  const cache = new Map<number, number>();
+  return (a, b, c, d) => {
+    const key = matchupKey(a, b, c, d, n);
+    let p = cache.get(key);
+    if (p === undefined) {
+      p = predictWinProbability([players[a], players[b]], [players[c], players[d]]);
+      cache.set(key, pairIndex(a, b, n) < pairIndex(c, d, n) ? p : 1 - p);
+      return p;
     }
-    return p;
-  }
+    return pairIndex(a, b, n) < pairIndex(c, d, n) ? p : 1 - p;
+  };
 }
 
 function searchHalf(
   input: HalfSearchInput,
   n: number,
-  winProb: WinProbTable,
+  winProb: WinProb,
   ehogBalance: boolean,
   rand: () => number,
 ): HalfSearchResult {
@@ -552,18 +556,12 @@ function searchHalf(
       const o = opps[i];
       return (m > 1 ? WEIGHT.repeatTeammate * (m - 1) : 0) + (o > 2 ? WEIGHT.repeatOpponent * (o - 2) : 0) + (m + o === 0 ? WEIGHT.unmet : 0);
     };
-    const bumpMate = (a: number, b: number, s: number) => {
+    /** Adds `s` to a pair's teammate (`mates`) or opponent (`opps`) count; returns the cost change. */
+    const bump = (counts: Int16Array, a: number, b: number, s: number) => {
       const i = a * n + b;
       const before = pairTerm(i);
-      mates[i] += s;
-      mates[b * n + a] += s;
-      return pairTerm(i) - before;
-    };
-    const bumpOpp = (a: number, b: number, s: number) => {
-      const i = a * n + b;
-      const before = pairTerm(i);
-      opps[i] += s;
-      opps[b * n + a] += s;
+      counts[i] += s;
+      counts[b * n + a] += s;
       return pairTerm(i) - before;
     };
     const bumpGames = (p: number, s: number) => {
@@ -575,21 +573,16 @@ function searchHalf(
     /** Adds (s = 1) or removes (s = -1) one game's contribution; returns the cost change. */
     const applyGame = (w: number, g: number, s: number) => {
       const a = player(w, g, 0), b = player(w, g, 1), c = player(w, g, 2), d = player(w, g, 3);
-      let delta = bumpMate(a, b, s) + bumpMate(c, d, s);
-      delta += bumpOpp(a, c, s) + bumpOpp(a, d, s) + bumpOpp(b, c, s) + bumpOpp(b, d, s);
+      let delta = bump(mates, a, b, s) + bump(mates, c, d, s);
+      delta += bump(opps, a, c, s) + bump(opps, a, d, s) + bump(opps, b, c, s) + bump(opps, b, d, s);
       delta += bumpGames(a, s) + bumpGames(b, s) + bumpGames(c, s) + bumpGames(d, s);
       if (ehogBalance) {
-        const excess = Math.abs(winProb.get(a, b, c, d) - 0.5) - LOPSIDED_MARGIN;
+        const excess = Math.abs(winProb(a, b, c, d) - 0.5) - LOPSIDED_MARGIN;
         if (excess > 0) delta += s * WEIGHT.lopsided * excess * 100;
       }
       return delta;
     };
-    /** Both teams as one number, independent of team order and seat order. */
-    const gameKey = (w: number, g: number) => {
-      const t1 = pairIndex(player(w, g, 0), player(w, g, 1), n);
-      const t2 = pairIndex(player(w, g, 2), player(w, g, 3), n);
-      return t1 < t2 ? t1 * n * n + t2 : t2 * n * n + t1;
-    };
+    const gameKey = (w: number, g: number) => matchupKey(player(w, g, 0), player(w, g, 1), player(w, g, 2), player(w, g, 3), n);
     /** Exact rematches (the same two teams twice in one week) inside the groups `gameIdx` touch —
      * only possible inside a group, since separate groups share no players. */
     const rematches = (w: number, gameIdx: number[]) => {
@@ -601,8 +594,8 @@ function searchHalf(
         const grp = t.group[gi]!;
         if (seen.includes(grp)) continue;
         seen.push(grp);
-        const idx = groupGameIdx[w].get(grp)!;
-        for (let x = 0; x < idx.length; x++) for (let y = x + 1; y < idx.length; y++) if (gameKey(w, idx[x]) === gameKey(w, idx[y])) count++;
+        const keys = groupGameIdx[w].get(grp)!.map((g) => gameKey(w, g));
+        for (let x = 0; x < keys.length; x++) for (let y = x + 1; y < keys.length; y++) if (keys[x] === keys[y]) count++;
       }
       return WEIGHT.rematch * count;
     };
@@ -618,8 +611,10 @@ function searchHalf(
       cost += rematches(w, all);
     }
 
-    for (let it = 0; it < iterations; it++) {
-      const temperature = 20 * Math.pow(0.0005, it / iterations);
+    // Cools geometrically from 20 to 0.01 over the run.
+    const cooling = Math.pow(0.0005, 1 / iterations);
+    let temperature = 20;
+    for (let it = 0; it < iterations; it++, temperature *= cooling) {
       const w = Math.floor(rand() * weeks);
       const t = templates[w];
 
@@ -639,7 +634,7 @@ function searchHalf(
         if (x === y) continue;
         const gx = slotGames[w][x];
         const gy = slotGames[w][y];
-        touched = gy.length === 0 ? gx : gx.length === 0 ? gy : mergeUnique(gx, gy);
+        touched = mergeUnique(gx, gy);
         if (touched.length === 0) continue;
       } else {
         g0 = Math.floor(rand() * t.games.length);
@@ -699,6 +694,17 @@ function shuffled(items: number[], rand: () => number): number[] {
 // ---------------------------------------------------------------------------------------------
 // Plan assembly
 
+/** Counts a played game — team (a, b) against team (c, d), by league index — into `counts`. */
+function recordGame(counts: PairCounts, n: number, a: number, b: number, c: number, d: number): void {
+  const add = (arr: Int16Array, x: number, y: number) => {
+    arr[x * n + y]++;
+    arr[y * n + x]++;
+  };
+  add(counts.mates, a, b);
+  add(counts.mates, c, d);
+  for (const x of [a, b]) for (const y of [c, d]) add(counts.opps, x, y);
+}
+
 /** A simulated record per player over `games`: each game's winner is drawn from its predicted
  * win probability. Stands in for real first-half results when a plan reshuffles at the halfway
  * point before any game has been played. */
@@ -724,9 +730,8 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   if (issues.length > 0) return { ok: false, issues };
 
   const n = players.length;
-  const ratings: PlayerRating[] = players.map((p) => ({ playerId: p.id, mu: p.mu, sigma: p.sigma, ehogRating: p.ehog }));
-  const winProb = new WinProbTable(ratings);
-  const indexById = new Map(players.map((p, i) => [p.id, i]));
+  const winProb = memoWinProb(players);
+  const indexById = new Map(players.map((p, i) => [p.playerId, i]));
   const rand = mulberry32(settings.seed * 104729 + n);
   const history: PairCounts = { mates: new Int16Array(n * n), opps: new Int16Array(n * n) };
   const sizes = divisionSizes(n, settings);
@@ -744,12 +749,12 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
         const i = indexById.get(a)! * n + indexById.get(b)!;
         return history.mates[i] + history.opps[i] > 0;
       };
-      divisions = mostNewPairings(halves[0].divisions, met, new Map(players.map((p) => [p.id, p.ehog])), rand);
+      divisions = mostNewPairings(halves[0].divisions, met, new Map(players.map((p) => [p.playerId, p.ehogRating])), rand);
     } else {
       let basis: DraftBasis;
       if (h === 0) {
         draftedBy = basis = settings.draftBasis;
-        records = new Map(players.flatMap((p) => (p.record ? [[p.id, p.record] as const] : [])));
+        if (basis === 'win-rate') records = new Map(players.flatMap((p) => (p.record ? [[p.playerId, p.record] as const] : [])));
       } else {
         // The halfway re-draft values players by first-half win rate (simulated — see
         // simulateRecords()), in the season's draft order.
@@ -757,13 +762,12 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
         basis = 'win-rate';
         records = simulateRecords(weeks.flatMap((w) => w.divisions.flatMap((d) => d.games)), rand);
       }
-      const values = draftValues(players, basis, records);
+      const values = draftValues(players, basis, records ?? new Map());
       const ranked = rankByValues(players, values, rand);
       divisions =
         settings.draftOrder === 'balanced' && values
           ? balanceDivisions(ranked, settings.divisions, values, rand)
           : draftDivisions(ranked, sizes, settings.draftOrder === 'balanced' ? 'snake' : settings.draftOrder);
-      if (basis !== 'win-rate') records = null;
     }
     halves.push({
       half: h + 1,
@@ -786,25 +790,18 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
           const [[a, b], [c, d2]] = SPLITS[result.splits[w][g]];
           const [pa, pb, pc, pd] = [slot[a], slot[b], slot[c], slot[d2]].map((s) => result.slots[w][s]);
           for (const p of [pa, pb, pc, pd]) playing.add(p);
-          history.mates[pa * n + pb]++;
-          history.mates[pb * n + pa]++;
-          history.mates[pc * n + pd]++;
-          history.mates[pd * n + pc]++;
-          for (const x of [pa, pb]) for (const y of [pc, pd]) {
-            history.opps[x * n + y]++;
-            history.opps[y * n + x]++;
-          }
+          recordGame(history, n, pa, pb, pc, pd);
           return {
             group: t.group[g] === null ? null : t.group[g]! + 1,
-            shirts: [players[pa].id, players[pb].id],
-            skins: [players[pc].id, players[pd].id],
-            shirtsWinProb: winProb.get(pa, pb, pc, pd),
+            shirts: [players[pa].playerId, players[pb].playerId],
+            skins: [players[pc].playerId, players[pd].playerId],
+            shirtsWinProb: winProb(pa, pb, pc, pd),
           };
         });
         halfWeeksOut[w].divisions.push({
           division: d + 1,
           games,
-          idlePlayerIds: members.filter((m) => !playing.has(m)).map((m) => players[m].id),
+          idlePlayerIds: members.filter((m) => !playing.has(m)).map((m) => players[m].playerId),
         });
       });
     });
@@ -813,7 +810,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
   }
 
   assignSides(weeks, rand);
-  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.id), weeks) } };
+  return { ok: true, plan: { settings, halves, weeks, scorecard: scoreFormatPlan(players.map((p) => p.playerId), weeks) } };
 }
 
 /** Labels each game's teams shirts/skins with `optimizeSideBalance()`, the search the round-robin
@@ -848,14 +845,13 @@ function assignSides(weeks: FormatWeek[], rand: () => number): void {
 }
 
 /** The comparison numbers for a plan — what the Schedule Lab shows side by side. */
-export function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorecard {
+function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): FormatScorecard {
   const games = weeks.flatMap((w) => w.divisions.flatMap((d) => d.games));
+  const { teammatePairs, opponentPairs } = collectCoveragePairs(games);
   const gameCount = new Map<number, number>();
   const sideBalance = new Map<number, number>();
   const teammateCount = new Map<string, number>();
-  const met = new Set<string>();
   const teammates = new Map<number, Set<number>>(playerIds.map((id) => [id, new Set()]));
-  let lopsidedGames = 0;
 
   for (const g of games) {
     for (const id of [...g.shirts, ...g.skins]) gameCount.set(id, (gameCount.get(id) ?? 0) + 1);
@@ -864,12 +860,9 @@ export function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): Forma
     for (const [a, b] of [g.shirts, g.skins]) {
       const k = pairKey(a, b);
       teammateCount.set(k, (teammateCount.get(k) ?? 0) + 1);
-      met.add(k);
       teammates.get(a)!.add(b);
       teammates.get(b)!.add(a);
     }
-    for (const a of g.shirts) for (const b of g.skins) met.add(pairKey(a, b));
-    if (Math.abs(g.shirtsWinProb - 0.5) > LOPSIDED_MARGIN) lopsidedGames++;
   }
 
   let maxGamesInAWeek = 0;
@@ -890,8 +883,8 @@ export function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): Forma
     for (let j = i + 1; j < playerIds.length; j++) {
       pairs++;
       const k = pairKey(playerIds[i], playerIds[j]);
-      if (teammateCount.has(k)) pairsPartnered++;
-      if (!met.has(k)) pairsNeverMet++;
+      if (teammatePairs.has(k)) pairsPartnered++;
+      if (!teammatePairs.has(k) && !opponentPairs.has(k)) pairsNeverMet++;
     }
   }
   const counts = playerIds.map((id) => gameCount.get(id) ?? 0);
@@ -906,21 +899,7 @@ export function scoreFormatPlan(playerIds: number[], weeks: FormatWeek[]): Forma
     pairsPartnered,
     pairsNeverMet,
     repeatTeammatePairs: [...teammateCount.values()].filter((c) => c > 1).length,
-    lopsidedGames,
+    lopsidedGames: games.filter((g) => isLopsided(g.shirtsWinProb)).length,
     maxSideImbalance: Math.max(0, ...playerIds.map((id) => Math.abs(sideBalance.get(id) ?? 0))),
   };
-}
-
-/** A one-line summary of a plan's settings, e.g. "8 weeks · 1 match a week · 2 divisions, halfway
- * shuffle" — how the Schedule Lab labels a preview. */
-export function describeFormatSettings(settings: SeasonFormatSettings): string {
-  const parts = [`${settings.weeks} weeks`, settings.weekShape === 'match' ? '1 match a week' : '1 group a week'];
-  if (settings.divisions > 1) {
-    const basis = { ehog: 'EHOG', 'win-rate': 'win rate', random: 'random' }[settings.draftBasis];
-    const order = settings.draftOrder === 'tiered' && settings.tierSizes ? `tiered ${settings.tierSizes.join('/')}` : settings.draftOrder;
-    const halfway = !reshuffles(settings) ? '' : settings.halfwayRedraft === 'new-pairings' ? ', halfway re-draft for new pairings' : ', halfway re-draft by win rate';
-    parts.push(`${settings.divisions} divisions (${order}, ${basis})${halfway}`);
-  }
-  if (!settings.ehogBalance) parts.push('no EHOG balancing');
-  return parts.join(' · ');
 }
