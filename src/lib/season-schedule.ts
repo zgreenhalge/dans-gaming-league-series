@@ -222,8 +222,11 @@ function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], s
 // A whole season's matches all being simultaneously free to flip (their labels don't affect
 // coverage at all) is enough freedom that a single greedy forward pass can still land far from
 // balanced — optimizeSideBalance() below instead treats the season as one search: repeatedly flip
-// whichever single match's flip reduces the season's total |balance| (seeded by `initialBalance`, a
-// player's real balance carried in from outside this season) the most, until no flip helps.
+// whichever single match's flip reduces the season's sum of squared balances (seeded by
+// `initialBalance`, a player's real balance carried in from outside this season) the most, until no
+// flip helps. Squaring makes one player several sides off cost far more than the same total spread
+// thin, so the climb evens out the worst player rather than just the sum; restarts are then compared
+// by worst player first (see optimizeSideBalance()).
 //
 // A single-flip hill climb from the pairing step's own given orientation gets stuck: the teammate
 // round-robin (`buildTeammateRounds()`) always lists seed 1's team first, and `bestMatchPairing()`
@@ -232,8 +235,7 @@ function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], s
 // much as it hurts the partner, a net-zero move the search never takes) long before the season is
 // actually balanced. Randomizing each match's starting orientation before climbing breaks that
 // structural symmetry; running several random restarts and keeping the best guards against any one
-// restart still landing in a bad optimum. With this league's match-per-season counts (well under 30)
-// this converges in a handful of passes per restart.
+// restart still landing in a bad optimum.
 const BALANCE_SEARCH_RESTARTS = 8;
 
 /** Swaps `m`'s shirts/skins labels in place and updates `balance` to match (each of the 4 players'
@@ -244,23 +246,23 @@ function flipMatch(m: MatchPlan, balance: Map<number, number>): void {
   [m.shirts, m.skins] = [m.skins, m.shirts];
 }
 
-/** The change in total season |balance| that flipping `m` would cause, without actually flipping it
- * — negative means flipping improves the total. */
+/** The change in the season's sum of squared balances that flipping `m` would cause, without actually
+ * flipping it — negative means flipping improves the total. */
 function flipCostDelta(m: MatchPlan, balance: Map<number, number>): number {
   let delta = 0;
   for (const seed of m.shirts) {
     const bal = balance.get(seed) ?? 0;
-    delta += Math.abs(bal - 2) - Math.abs(bal);
+    delta += (bal - 2) ** 2 - bal ** 2;
   }
   for (const seed of m.skins) {
     const bal = balance.get(seed) ?? 0;
-    delta += Math.abs(bal + 2) - Math.abs(bal);
+    delta += (bal + 2) ** 2 - bal ** 2;
   }
   return delta;
 }
 
 /** Commits `teamA` as SHIRTS / `teamB` as SKINS into `balance`, then flips (via `flipMatch()`) if
- * `flipCostDelta()` says the other way round leaves the two teams' combined |balance| smaller — a
+ * `flipCostDelta()` says the other way round leaves the four players' squared balances smaller — a
  * tie keeps `teamA` as SHIRTS. The same cost math `optimizeSideBalance()`'s search uses, applied
  * once instead of hunting for a global optimum: the right choice when only a match or two are ever
  * in play at once and there's no larger season-wide freedom to exploit (gauntlet pod labeling,
@@ -277,11 +279,25 @@ export function chooseSides(
   return m;
 }
 
-/** Total `sum(|balance|)` across every player currently tracked. */
-function totalAbsBalance(balance: Map<number, number>): number {
-  let sum = 0;
-  for (const v of balance.values()) sum += Math.abs(v);
-  return sum;
+/** How far from even a balance map is: the worst single player's |balance|, then the sum of squared
+ * balances as the tiebreak. Compared lexicographically — a lower `worst` always wins. */
+export interface BalanceCost {
+  worst: number;
+  squares: number;
+}
+
+export function balanceCost(balance: Map<number, number>): BalanceCost {
+  let worst = 0;
+  let squares = 0;
+  for (const v of balance.values()) {
+    worst = Math.max(worst, Math.abs(v));
+    squares += v * v;
+  }
+  return { worst, squares };
+}
+
+function isBetterCost(a: BalanceCost, b: BalanceCost): boolean {
+  return a.worst < b.worst || (a.worst === b.worst && a.squares < b.squares);
 }
 
 /** One hill climb to a local optimum, starting from `matches`' current orientation and `balance`'s
@@ -310,9 +326,10 @@ function hillClimbSideBalance(matches: MatchPlan[], balance: Map<number, number>
 
 /** Runs `BALANCE_SEARCH_RESTARTS` independent hill climbs (see the comment above), each from its own
  * randomized starting orientation seeded by `initialBalance`, and leaves `matches` (mutated in place)
- * at whichever restart reached the lowest total `sum(|balance|)`. */
+ * at whichever restart reached the smallest worst-case player |balance| (ties broken by the lower sum
+ * of squared balances). */
 export function optimizeSideBalance(matches: MatchPlan[], initialBalance: Map<number, number>, rand: () => number): void {
-  let best: { cost: number; orientations: MatchPlan[] } | null = null;
+  let best: { cost: BalanceCost; orientations: MatchPlan[] } | null = null;
 
   for (let restart = 0; restart < BALANCE_SEARCH_RESTARTS; restart++) {
     const balance = new Map(initialBalance);
@@ -324,8 +341,8 @@ export function optimizeSideBalance(matches: MatchPlan[], initialBalance: Map<nu
 
     hillClimbSideBalance(matches, balance, rand);
 
-    const cost = totalAbsBalance(balance);
-    if (!best || cost < best.cost) {
+    const cost = balanceCost(balance);
+    if (!best || isBetterCost(cost, best.cost)) {
       best = { cost, orientations: matches.map((m) => ({ shirts: m.shirts, skins: m.skins })) };
     }
   }
