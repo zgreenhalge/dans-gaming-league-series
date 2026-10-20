@@ -541,6 +541,13 @@ export function deriveRates(totals: {
   };
 }
 
+/** Kills plus assists per death, or just kills plus assists when there are no deaths. The home page's
+ * My Stats shows it; the stat tables show `deriveKd()`'s kills-only ratio. */
+export function deriveKda(totals: { total_kills: number; total_assists: number; total_deaths: number }): number {
+  const contributions = totals.total_kills + totals.total_assists;
+  return totals.total_deaths > 0 ? contributions / totals.total_deaths : contributions;
+}
+
 /**
  * Merges two leaderboards (regular and gauntlet) into one row per player: totals are summed and the
  * rate fields re-derived through `deriveRates()`, so a merged row is what a single combined

@@ -1,13 +1,14 @@
 import type { H2HData } from '../h2h';
 import type { LeaderboardRowWithId } from '../types';
-import { canonicalSort, mergeLeaderboardRows } from '../util';
+import { deriveKd, deriveKda, mergeLeaderboardRows } from '../util';
+import { getCurrentEhogRating } from './ehog';
 import { getGauntletStats } from './gauntlet';
 import { bestFriendOf, worstNightmareOf, type PersonalMatchup } from './h2h';
 import { getCareerLeaderboard } from './leaderboard';
 import { getPlayer, lastPlayed, nextUpcoming, opponentNames, type PlayerHistoryRow } from './player';
 
-// The home page's "My Stats" panel: one signed-in player's career standing, upcoming match, recent
-// results and their best friend / worst nightmare. Career-scoped throughout — rank, W-L and ADR
+// The home page's "My Stats" panel: one signed-in player's career figures, upcoming match, recent
+// results and their best friend / worst nightmare. Career-scoped throughout — EHOG, W-L, KDA and ADR
 // come from the regular and gauntlet career leaderboards merged (the Statistics page's default
 // view), matches from the player's full history, and the matchups from the career H2H.
 
@@ -44,10 +45,13 @@ export interface MyStatsPlayer {
 export interface MyStats {
   playerId: number;
   playerName: string;
-  /** 1-based place on the career leaderboard (`canonicalSort()` order); `null` before the player's
-   *  first played match. */
-  rank: number | null;
+  /** Current EHOG rating; `null` before the player has one. */
+  ehog: number | null;
   record: { wins: number; losses: number };
+  /** Career (kills + assists) per death — see `deriveKda()`. */
+  kda: number;
+  /** Career kills per death — see `deriveKd()`. */
+  kd: number;
   adr: number;
   next: MyStatsNextMatch | null;
   /** Newest first, at most `MY_STATS_RECENT_LIMIT`. */
@@ -65,14 +69,13 @@ export function buildMyStats(input: {
   playerId: number;
   playerName: string;
   leaderboard: LeaderboardRowWithId[];
+  ehog: number | null;
   history: PlayerHistoryRow[];
   h2h: H2HData;
 }): MyStats {
-  const { playerId, playerName, leaderboard, history, h2h } = input;
+  const { playerId, playerName, leaderboard, ehog, history, h2h } = input;
 
-  const ranked = [...leaderboard].sort(canonicalSort);
-  const index = ranked.findIndex((r) => r.player_id === playerId);
-  const row = index >= 0 ? ranked[index] : null;
+  const row = leaderboard.find((r) => r.player_id === playerId) ?? null;
 
   const nameOf = new Map(h2h.players.map((p) => [p.id, p.name]));
   const toPlayer = (m: PersonalMatchup | null): MyStatsPlayer | null =>
@@ -83,8 +86,10 @@ export function buildMyStats(input: {
   return {
     playerId,
     playerName,
-    rank: index >= 0 ? index + 1 : null,
+    ehog,
     record: { wins: row?.matches_won ?? 0, losses: row?.matches_lost ?? 0 },
+    kda: row ? deriveKda(row) : 0,
+    kd: row ? deriveKd(row) : 0,
     adr: row?.overall_adr ?? 0,
     next: next
       ? { matchId: next.match_id, opponents: opponentNames(next), map: next.map, scheduledAt: next.scheduled_at }
@@ -104,12 +109,18 @@ export function buildMyStats(input: {
 /** The home page's My Stats data for `playerId`, or `null` when that player doesn't exist. `h2h` is
  *  the career H2H data the page already holds for its Top duos / Hottest Rivalries panels. */
 export async function getMyStats(playerId: number, h2h: H2HData): Promise<MyStats | null> {
-  const [regular, gauntlet, detail] = await Promise.all([getCareerLeaderboard(), getGauntletStats(), getPlayer(playerId)]);
+  const [regular, gauntlet, detail, ehog] = await Promise.all([
+    getCareerLeaderboard(),
+    getGauntletStats(),
+    getPlayer(playerId),
+    getCurrentEhogRating(playerId),
+  ]);
   if (!detail) return null;
   return buildMyStats({
     playerId,
     playerName: detail.player.name,
     leaderboard: mergeLeaderboardRows(regular, gauntlet.career),
+    ehog,
     history: detail.history,
     h2h,
   });

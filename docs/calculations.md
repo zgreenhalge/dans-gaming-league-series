@@ -748,10 +748,13 @@ first, up to five (`FORM_LENGTH`), as `W` / `L`. Only played regular-season matc
 player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 `src/lib/queries/leaderboard.ts`.
 
-**My Stats** — career figures for the signed-in player: **Rank** is the place on the combined
-regular and gauntlet career leaderboard (`mergeLeaderboardRows()` of `getCareerLeaderboard()` and
-`getGauntletStats().career`, the Statistics page's default view) in `canonicalSort()` order; **W-L**
-and **ADR** come from the same merged row. **Match history** lists the last five played matches
+**My Stats** — career figures for the signed-in player. **EHOG** is the current rating
+(`getCurrentEhogRating()`, [`ehog.md`](./ehog.md)), colored by its tier like the leaderboard's EHOG
+column. **W-L**, **KDA** and **ADR** come from the player's row of the combined regular and gauntlet
+career leaderboard (`mergeLeaderboardRows()` of `getCareerLeaderboard()` and
+`getGauntletStats().career`, the Statistics page's default view). **KDA** is (kills + assists) per
+death, or kills + assists when there are no deaths (`deriveKda()` in `src/lib/util.ts`) — the stat
+tables show the kills-only K/D (`deriveKd()`). **Match history** lists the last five played matches
 (`lastPlayed()`, `src/lib/queries/player.ts`) with the stored `final_score`, shirts first, as every
 match card shows it. `buildMyStats()` in `src/lib/queries/myStats.ts`.
 

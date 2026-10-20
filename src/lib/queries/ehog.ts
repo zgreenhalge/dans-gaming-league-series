@@ -68,13 +68,20 @@ export interface EhogPlayerData {
   history: EhogRatingPoint[];
 }
 
+/** A player's current EHOG rating, or `null` before they have one. */
+export async function getCurrentEhogRating(playerId: number): Promise<number | null> {
+  const { data, error } = await getAdminClient()
+    .from('player_current_ratings')
+    .select('ehog_v1')
+    .eq('player_id', playerId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.ehog_v1 ?? null;
+}
+
 export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerData> {
-  const [currentRes, historyRes] = await Promise.all([
-    getAdminClient()
-      .from('player_current_ratings')
-      .select('ehog_v1')
-      .eq('player_id', playerId)
-      .maybeSingle(),
+  const [currentRating, historyRes] = await Promise.all([
+    getCurrentEhogRating(playerId),
     getAdminClient()
       .from('player_rating_history')
       .select('match_id, sequence_index, ehog_rating, rating_delta')
@@ -82,10 +89,8 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
       .eq('formula_version', 'ehog_v1')
       .order('sequence_index', { ascending: true }),
   ]);
-  if (currentRes.error) throw currentRes.error;
   if (historyRes.error) throw historyRes.error;
 
-  const currentRating: number | null = currentRes.data?.ehog_v1 ?? null;
   const rows = historyRes.data ?? [];
 
   if (rows.length === 0) return { currentRating, history: [] };
