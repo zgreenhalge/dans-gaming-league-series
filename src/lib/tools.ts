@@ -17,6 +17,11 @@ export const TOOLS: Tool[] = [
     name: 'Schedule Lab',
     summary: 'Generate regular-season schedules for any roster and format, and compare them side by side.',
   },
+  {
+    slug: 'win-probability',
+    name: 'Win Probability',
+    summary: "Pick any four players into a 2v2 and see each side's EHOG win probability.",
+  },
 ];
 
 export function toolHref(slug: string): string {
