@@ -7,7 +7,7 @@ import {
   getGauntletRounds,
   getUpcomingGauntletGames,
 } from './gauntlet';
-import { resolveHomeSeasons, type HomeSeasons } from './seasons';
+import type { HomeSeasons } from './seasons';
 import { findCurrentWeek, getSeasonSchedule, getUpcomingGames, type UpcomingGameRow } from './schedule';
 
 // The home page's Upcoming Games data. Which season is current comes from `resolveHomeSeasons()`
@@ -55,13 +55,8 @@ export function buildGauntletHomeGames(hubSeasonId: number, rounds: GauntletRoun
 
 /** The home page's games for already-resolved seasons: the active regular season's, else the active
  *  gauntlet's; `null` when neither is active. */
-export async function getHomeGamesFor(home: HomeSeasons): Promise<HomeGames | null> {
+export async function getHomeGames(home: HomeSeasons): Promise<HomeGames | null> {
   if (home.regular) return buildRegularHomeGames(home.regular, await getSeasonSchedule(home.regular.id));
   if (!home.gauntlet) return null;
   return buildGauntletHomeGames(home.gauntlet.hubId, await getGauntletRounds(home.gauntlet.season.id));
-}
-
-/** `getHomeGamesFor()` for a raw season list, resolved with `resolveHomeSeasons()`. */
-export async function getHomeGames(seasons: Season[]): Promise<HomeGames | null> {
-  return getHomeGamesFor(resolveHomeSeasons(seasons));
 }

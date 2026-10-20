@@ -30,7 +30,7 @@ import SectionLabel from './SectionLabel';
 import { Stepper } from './Stepper';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, SELECT_CLS } from './adminButtonStyles';
 import { RemoveXButton } from './RemoveXButton';
 
 type Settings = Omit<SeasonFormatSettings, 'seed'>;
@@ -64,8 +64,6 @@ const HALFWAY_REDRAFTS: { value: HalfwayRedraft; label: string }[] = [
 const CAREER = 'career';
 
 const MAX_PREVIEWS = 6;
-const SELECT_CLS =
-  'font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]';
 const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.round((0.5 + LOPSIDED_MARGIN) * 100)}%`;
 
 /** Scorecard rows of the comparison table, in display order. */
@@ -209,30 +207,29 @@ export function ScheduleLabView({
     // The annealing search runs off the main thread so the page stays responsive and can cancel.
     const worker = new Worker(new URL('../lib/season-format.worker.ts', import.meta.url));
     workerRef.current = worker;
-    const finish = () => {
-      worker.terminate();
-      workerRef.current = null;
-      setBusy(false);
-    };
     worker.onmessage = (e: MessageEvent<FormatResult>) => {
-      finish();
+      stopWorker();
       if (!e.data.ok) return;
       const plan = e.data.plan;
       setPreviews((prev) => [...prev, { plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
       setShownId(seed);
     };
     worker.onerror = () => {
-      finish();
+      stopWorker();
       setWorkerError('Generating the preview failed.');
     };
     const request: FormatWorkerRequest = { players: roster, settings: { ...effective, seed } };
     worker.postMessage(request);
   }
 
-  function cancel() {
+  function stopWorker() {
     workerRef.current?.terminate();
     workerRef.current = null;
     setBusy(false);
+  }
+
+  function cancel() {
+    stopWorker();
     setGenerated((g) => g - 1);
   }
 

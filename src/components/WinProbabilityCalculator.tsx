@@ -8,9 +8,8 @@ import SectionLabel from './SectionLabel';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import { InfoTooltip } from './InfoTooltip';
+import { SELECT_CLS } from './adminButtonStyles';
 
-const SELECT_CLS =
-  'font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]';
 const PROVISIONAL_NOTE =
   'One or more players are early in their rating history, so these predictions carry extra uncertainty.';
 

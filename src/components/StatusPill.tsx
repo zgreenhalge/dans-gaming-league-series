@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-export type StatusPillVariant = 'live' | 'neutral' | 'amber';
+type StatusPillVariant = 'live' | 'neutral' | 'amber';
 
 const BASE_CLS = 'inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold border shrink-0';
 
@@ -13,24 +13,21 @@ const VARIANT_CLS: Record<StatusPillVariant, string> = {
 
 /**
  * The small bordered status pill: green `live` (with a pulsing dot), grey `neutral` ("Final") or
- * `amber` ("Gauntlet live"). `dot` overrides whether the pulsing dot shows (default: only the
- * `live` variant has it). `href` renders the pill as a link.
+ * `amber` ("Gauntlet live"). `href` renders the pill as a link.
  */
 export function StatusPill({
   variant,
-  dot = variant === 'live',
   href,
   children,
 }: {
   variant: StatusPillVariant;
-  dot?: boolean;
   href?: string;
   children: ReactNode;
 }) {
   const cls = `${BASE_CLS} ${VARIANT_CLS[variant]}`;
   const content = (
     <>
-      {dot && <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />}
+      {variant === 'live' && <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />}
       {children}
     </>
   );

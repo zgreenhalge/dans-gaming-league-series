@@ -93,11 +93,6 @@ export function resolveHomeSeasons(seasons: Season[]): HomeSeasons {
   return { regular, gauntlet, standings };
 }
 
-/** The home standings' season: `resolveHomeSeasons(seasons).standings`. */
-export function pickStandingsSeason(seasons: Season[]): HomeStandingsSeason | null {
-  return resolveHomeSeasons(seasons).standings;
-}
-
 /** True if the season has a schedule (at least one week/match exists) and every match in it has a
  * played score. A season with no matches yet is never "fully played". The shared ground truth for
  * "is this season actually done" — deliberately independent of `seasons.status`, which tracks the

@@ -9,10 +9,9 @@ import { Stepper } from './Stepper';
 import SectionLabel from './SectionLabel';
 import Th from './Th';
 import { StatTable, Td, Tr } from './StatTable';
+import { SELECT_CLS } from './adminButtonStyles';
 
 const DEFAULT_QUALIFIERS = 12;
-const SELECT_CLS =
-  'font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]';
 
 const FATE_LABEL: Record<SeedFate, string> = { bye: 'Bye to the final', plays: 'Plays in', relegated: 'Relegated' };
 
