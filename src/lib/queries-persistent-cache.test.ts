@@ -74,6 +74,15 @@ describe('persistentQuery', () => {
     expect(store.size).toBe(0);
   });
 
+  test('trailing undefined arguments are dropped before the function and the key', async () => {
+    const read = vi.fn(async (...args: unknown[]) => args.length);
+    const cached = persistentQuery('trim', read);
+    await cached(1, undefined);
+    await cached(1);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith(1);
+  });
+
   test('plain-data arguments (options objects, arrays) are part of the key', async () => {
     const read = vi.fn(async (_id: number, opts?: { week?: number }, ids?: number[]) => [opts, ids]);
     const cached = persistentQuery('plain', read);
@@ -152,6 +161,9 @@ describe('cached reads match uncached reads', () => {
     ['getCareerH2HDataCached', () => q.getCareerH2HDataCached()],
     ['getMatch(100)', () => q.getMatch(100)],
     ['getMapIndex', () => q.getMapIndex()],
+    ['getSurveyForSeason(1)', () => q.getSurveyForSeason(1)],
+    ['getSuperlativePoll(1)', () => q.getSuperlativePoll(1)],
+    ['getSeasonPlayedPlayers(1)', () => q.getSeasonPlayedPlayers(1)],
   ];
 
   test.each(reads)('%s', async (_name, read) => {

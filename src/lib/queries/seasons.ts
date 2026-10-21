@@ -266,8 +266,8 @@ const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[
  *  `getSeasonParticipants()`, which also counts a rostered player whose matches are still unplayed;
  *  this is the "took part" signal the post-season survey and superlatives vote gate on. Sorted by
  *  player name. */
-export const getSeasonPlayedPlayers = persistentQuery('getSeasonPlayedPlayers', async (seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> => {
-  const [playerIds, resolvedPlayersById] = await Promise.all([getSeasonPlayedPlayerIds(seasonId), playersById ?? getPlayersById()]);
+export const getSeasonPlayedPlayers = persistentQuery('getSeasonPlayedPlayers', async (seasonId: number): Promise<SeasonRosterEntry[]> => {
+  const [playerIds, resolvedPlayersById] = await Promise.all([getSeasonPlayedPlayerIds(seasonId), getPlayersById()]);
   const entries: SeasonRosterEntry[] = [];
   for (const playerId of playerIds) {
     const player = resolvedPlayersById.get(playerId);
