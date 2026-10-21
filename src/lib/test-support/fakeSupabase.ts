@@ -526,7 +526,11 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
 export type RpcHandler = (args: Record<string, unknown>, db: FakeDb) => unknown | Promise<unknown>;
 
 export class FakeSupabaseClient {
-  constructor(private db: FakeDb, private rpcHandlers: Record<string, RpcHandler> = {}) {}
+  /** Every fake db carries the `data_version` row the persistent read cache keys on, so a test can
+   *  run with the cache engaged without declaring it. */
+  constructor(private db: FakeDb, private rpcHandlers: Record<string, RpcHandler> = {}) {
+    db.data_version ??= [{ id: 1, version: 1 }];
+  }
   from<T = Row>(table: string): FakeQueryBuilder<T> {
     return new FakeQueryBuilder<T>(table, this.db);
   }

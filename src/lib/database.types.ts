@@ -153,6 +153,21 @@ export type Database = {
         }
         Relationships: []
       }
+      data_version: {
+        Row: {
+          id: number
+          version: number
+        }
+        Insert: {
+          id?: number
+          version?: number
+        }
+        Update: {
+          id?: number
+          version?: number
+        }
+        Relationships: []
+      }
       gauntlet_pod_slots: {
         Row: {
           id: number

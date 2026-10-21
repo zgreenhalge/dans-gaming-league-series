@@ -35,6 +35,18 @@
       "map": null,
       "final_score": null,
       "scheduled_at": null,
+      "skins_pick": null,
+      "shirts_pick": null,
+      "skins_starting_side": null,
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null,
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio"
+      ],
+      "replay_status": "none",
       "shirts": [
         {
           "player_id": 1,
@@ -110,19 +122,7 @@
           "rounds_won": 0,
           "rounds_played": 0
         }
-      ],
-      "skins_pick": null,
-      "shirts_pick": null,
-      "skins_starting_side": null,
-      "shirts_ban": null,
-      "shirts_ban2": null,
-      "skins_ban1": null,
-      "skins_ban2": null,
-      "is_playoff_game": false,
-      "map_pool": [
-        "Foroglio"
-      ],
-      "replay_status": "none"
+      ]
     },
     {
       "kills": 0,
@@ -146,6 +146,20 @@
       "map": null,
       "final_score": null,
       "scheduled_at": "2026-01-15T19:00:00.000Z",
+      "skins_pick": null,
+      "shirts_pick": null,
+      "skins_starting_side": null,
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null,
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio",
+        "Cobblestone",
+        "Vertigo"
+      ],
+      "replay_status": "none",
       "shirts": [
         {
           "player_id": 5,
@@ -221,21 +235,7 @@
           "rounds_won": 0,
           "rounds_played": 0
         }
-      ],
-      "skins_pick": null,
-      "shirts_pick": null,
-      "skins_starting_side": null,
-      "shirts_ban": null,
-      "shirts_ban2": null,
-      "skins_ban1": null,
-      "skins_ban2": null,
-      "is_playoff_game": false,
-      "map_pool": [
-        "Foroglio",
-        "Cobblestone",
-        "Vertigo"
-      ],
-      "replay_status": "none"
+      ]
     },
     {
       "kills": 8,
@@ -259,6 +259,16 @@
       "map": "Vertigo",
       "final_score": "13-5",
       "scheduled_at": null,
+      "skins_pick": "Vertigo",
+      "shirts_pick": "Vertigo",
+      "skins_starting_side": "CT",
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null,
+      "is_playoff_game": true,
+      "map_pool": null,
+      "replay_status": "ready",
       "shirts": [
         {
           "player_id": 3,
@@ -334,17 +344,7 @@
           "rounds_won": 5,
           "rounds_played": 18
         }
-      ],
-      "skins_pick": "Vertigo",
-      "shirts_pick": "Vertigo",
-      "skins_starting_side": "CT",
-      "shirts_ban": null,
-      "shirts_ban2": null,
-      "skins_ban1": null,
-      "skins_ban2": null,
-      "is_playoff_game": true,
-      "map_pool": null,
-      "replay_status": "ready"
+      ]
     }
   ],
   "trophies": []

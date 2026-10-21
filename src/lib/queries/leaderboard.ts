@@ -1,9 +1,9 @@
-import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
+import { persistentQuery } from './_persistentCache';
 
 
 function n(v: number | null | undefined): number {
@@ -46,12 +46,12 @@ interface PerPlayerStats {
 /**
  * Fetches the three shared tables (weeks, matches, player_match_stats) once
  * and returns both derived outputs, replacing two back-to-back triple-fetches
- * with a single shared fetch. Wrapped in React's `cache()` (#507) so every
- * caller within one render pass — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
+ * with a single shared fetch. Wrapped in `persistentQuery()` so every
+ * caller — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
  * `getAllLeaderboards()` — shares this one full `player_match_stats`/`matches` read
  * rather than each re-scanning both tables independently.
  */
-const getSeasonBaseData = cache(async (): Promise<{
+const getSeasonBaseData = persistentQuery('getSeasonBaseData', async (): Promise<{
   perPlayerStats: Map<string, PerPlayerStats>;
   rosterBySeason: Map<number, Set<number>>;
 }> => {
@@ -75,7 +75,7 @@ const getSeasonBaseData = cache(async (): Promise<{
           .range(from, to),
       ),
     ),
-    // cache()-wrapped and shared with resolveMatchSeasons()/every other unplayed-inclusive caller,
+    // persistentQuery()-wrapped and shared with resolveMatchSeasons()/every other unplayed-inclusive caller,
     // rather than this function's own `matches`/`weeks` read.
     resolveAllMatches(),
   ]);
@@ -122,10 +122,10 @@ const getSeasonBaseData = cache(async (): Promise<{
 });
 
 /** The raw, unfiltered `player_season_leaderboard` table, without the `player_match_stats`
- *  augmentation `getAllLeaderboards()` adds. `cache()`-wrapped so `getCareerLeaderboard()`,
+ *  augmentation `getAllLeaderboards()` adds. `persistentQuery()`-wrapped so `getCareerLeaderboard()`,
  *  `getAllLeaderboards()`, `getScheduleLabData()` and any indirect caller of them (e.g.
  *  `getAllSeasonMedalists()`) share one read instead of each re-scanning the view. */
-export const getRawSeasonLeaderboardRows = cache(async (): Promise<LeaderboardRow[]> => {
+export const getRawSeasonLeaderboardRows = persistentQuery('getRawSeasonLeaderboardRows', async (): Promise<LeaderboardRow[]> => {
   const { data, error } = await getAdminClient().from('player_season_leaderboard').select('*');
   if (error) throw error;
   return (data ?? []) as LeaderboardRow[];
@@ -160,9 +160,9 @@ function zeroStatRows(
   }));
 }
 
-export async function getSeasonLeaderboard(
+export const getSeasonLeaderboard = persistentQuery('getSeasonLeaderboard', async (
   seasonId: number,
-): Promise<LeaderboardRowWithId[]> {
+): Promise<LeaderboardRowWithId[]> => {
   const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
     getAdminClient()
       .from('player_season_leaderboard')
@@ -199,7 +199,7 @@ export async function getSeasonLeaderboard(
   const unseenIds = new Set([...rosterIds].filter((id) => !playedIds.has(id)));
   if (unseenIds.size > 0) result.push(...zeroStatRows(seasonId, unseenIds, playersById));
   return result.sort(canonicalSort);
-}
+});
 
 /**
  * The names of a season's players who have played, in standings order — `getSeasonLeaderboard()`'s
@@ -207,7 +207,7 @@ export async function getSeasonLeaderboard(
  * non-playoff matches, which is all `canonicalSort()` needs beyond the view's own columns. Rostered
  * players who haven't played yet aren't listed.
  */
-export async function getSeasonStandingNames(seasonId: number): Promise<string[]> {
+export const getSeasonStandingNames = persistentQuery('getSeasonStandingNames', async (seasonId: number): Promise<string[]> => {
   const rowsQuery = getAdminClient().from('player_season_leaderboard').select('*').eq('season_id', seasonId);
   const statsQuery = resolveAllMatches().then((matches) =>
     batchedIn<{ player_id: number; rounds_won: number | null }>(
@@ -230,7 +230,7 @@ export async function getSeasonStandingNames(seasonId: number): Promise<string[]
     })
     .sort(canonicalSort)
     .map((r) => r.player_name);
-}
+});
 
 /**
  * Each player's real running (SHIRTS count − SKINS count) across every played match, regular season
@@ -290,7 +290,7 @@ export async function getSideBalance(
  * skipping rows with no rounds played (S3 placeholder rows). K/D and ADR
  * are re-derived from totals so the math stays correct.
  */
-export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
+export const getCareerLeaderboard = persistentQuery('getCareerLeaderboard', async (): Promise<LeaderboardRowWithId[]> => {
   const [rows, { perPlayerStats: perPlayer, rosterBySeason }, playersById, { data: seasonRows, error: sErr }] = await Promise.all([
     getRawSeasonLeaderboardRows(),
     getSeasonBaseData(),
@@ -422,10 +422,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     });
   }
   return out.sort(canonicalSort);
-}
+});
 
 /** Returns leaderboards for every season, keyed by season_id. */
-export const getAllLeaderboards = cache(async (): Promise<
+export const getAllLeaderboards = persistentQuery('getAllLeaderboards', async (): Promise<
   Map<number, LeaderboardRowWithId[]>
 > => {
   const [rows, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
@@ -510,7 +510,7 @@ export function buildSeasonForm(
  * season, so no week or match id list is fetched first. Played-ness (`isPlayedScore()`) is applied
  * after the read since "0-0" placeholders can't be excluded by a column filter.
  */
-export async function getSeasonForm(seasonId: number): Promise<Map<number, boolean[]>> {
+export const getSeasonForm = persistentQuery('getSeasonForm', async (seasonId: number): Promise<Map<number, boolean[]>> => {
   type FormRow = {
     match_id: number;
     player_id: number;
@@ -535,4 +535,4 @@ export async function getSeasonForm(seasonId: number): Promise<Map<number, boole
     matches.set(r.match_id, { id: r.match_id, weekNumber: r.matches.weeks.week_number, matchNumber: r.matches.match_number });
   }
   return buildSeasonForm([...matches.values()], played);
-}
+});

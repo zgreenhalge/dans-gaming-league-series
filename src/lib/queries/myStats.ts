@@ -5,12 +5,12 @@ import { getCurrentEhogRating } from './ehog';
 import { getGauntletStats } from './gauntlet';
 import { bestFriendOf, worstNightmareOf, type PersonalMatchup } from './h2h';
 import { getCareerLeaderboard } from './leaderboard';
-import { getPlayer, lastPlayed, nextUpcoming, opponentNames, type PlayerHistoryRow } from './player';
+import { getPlayerRecent, lastPlayed, nextUpcoming, opponentNames, type PlayerHistoryRow } from './player';
 
 // The home page's "My Stats" panel: one signed-in player's career figures, upcoming match, recent
 // results and their best friend / worst nightmare. Career-scoped throughout — EHOG, W-L, KDA and ADR
 // come from the regular and gauntlet career leaderboards merged (the Statistics page's default
-// view), matches from the player's full history, and the matchups from the career H2H.
+// view), matches from the player's recent history, and the matchups from the career H2H.
 
 /** How many results the panel's Match history lists. */
 const MY_STATS_RECENT_LIMIT = 5;
@@ -62,7 +62,7 @@ export interface MyStats {
 
 /**
  * Assembles a player's `MyStats` from already-fetched inputs — the pure core of `getMyStats()`.
- * `history` is `getPlayer()`'s newest-first `PlayerHistoryRow[]`; `leaderboard` the career
+ * `history` is the player's newest-first `PlayerHistoryRow[]`; `leaderboard` the career
  * leaderboard; `h2h` the career H2H data.
  */
 export function buildMyStats(input: {
@@ -112,7 +112,7 @@ export async function getMyStats(playerId: number, h2h: H2HData): Promise<MyStat
   const [regular, gauntlet, detail, ehog] = await Promise.all([
     getCareerLeaderboard(),
     getGauntletStats(),
-    getPlayer(playerId),
+    getPlayerRecent(playerId, MY_STATS_RECENT_LIMIT),
     getCurrentEhogRating(playerId),
   ]);
   if (!detail) return null;

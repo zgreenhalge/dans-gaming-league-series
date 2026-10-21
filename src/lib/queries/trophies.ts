@@ -5,6 +5,7 @@ import { getSeasons } from './seasons';
 import { getAllLeaderboards } from './leaderboard';
 import { getGauntletSeasonLeaderboard } from './gauntlet';
 import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import { persistentQuery } from './_persistentCache';
 
 
 export interface TrophyStatLine {
@@ -43,7 +44,7 @@ function toTrophyStats(r: LeaderboardRowWithId): TrophyStatLine {
  * matching LeaderboardTable's medal logic. Gauntlets: champion + runners-up from
  * a fully-played final round, matching GauntletStandings.
  */
-export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]>> {
+export const getAllSeasonMedalists = persistentQuery('getAllSeasonMedalists', async (): Promise<Map<number, TrophyEntry[]>> => {
   const [seasons, leaderboards] = await Promise.all([getSeasons(), getAllLeaderboards()]);
 
   const out = new Map<number, TrophyEntry[]>();
@@ -184,4 +185,4 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
   }
 
   return out;
-}
+});

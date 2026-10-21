@@ -15,6 +15,7 @@ import { getAllMatchRounds } from './rounds';
 import { getAllMatchKills } from './kills';
 import { getAllWeaponClassStats, getAllEconomyStats } from './weaponStats';
 import type { SeasonStatsView } from './seasons';
+import { persistentQuery } from './_persistentCache';
 
 export type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod };
 
@@ -68,11 +69,12 @@ function aggToRow(
  * Aggregates stats from all gauntlet seasons (is_gauntlet = true).
  * The leaderboard view excludes playoff games, so we compute directly from
  * player_match_stats.
+ * Persisted by `persistentQuery()`, so every page reading it shares one read per data version.
  */
-export async function getGauntletStats(): Promise<{
+export const getGauntletStats = persistentQuery('getGauntletStats', async (): Promise<{
   career: LeaderboardRowWithId[];
   bySeason: Record<number, LeaderboardRowWithId[]>;
-}> {
+}> => {
   const { data: gauntletSeasons, error: gsErr } = await getAdminClient()
     .from('seasons')
     .select('id')
@@ -214,7 +216,7 @@ export async function getGauntletStats(): Promise<{
     .sort(canonicalSort);
 
   return { career, bySeason };
-}
+});
 
 /** Groups a round's matches by `pod_index` — the shared first step behind every "which games belong
  * to the same pod" derivation (pod-thread publishing, pod-aware event-sync). Matches with no
@@ -457,29 +459,28 @@ export interface GauntletSeasonLightView {
  *  fetched lazily, client-side, only once one of those two sub-tabs is actually opened — see
  *  `getGauntletSeasonStatsView()` below and `SeasonTabView`. `leaderboard` is derived from `rounds`
  *  (`deriveGauntletSeasonLeaderboard()`) rather than a second `getGauntletSeasonLeaderboard()`
- *  round trip over the same matches. `seasonNumber`/`playersById` are accepted rather than
- *  re-resolved here since every caller (the page's own initial render, the lazy tab-switch route)
- *  already has both in hand. */
-export async function getGauntletSeasonLightView(
+ *  round trip over the same matches. `seasonNumber` is accepted rather than re-resolved here since
+ *  every caller (the page's own initial render, the lazy tab-switch route) already has it in hand. */
+export const getGauntletSeasonLightView = persistentQuery('getGauntletSeasonLightView', async (
   seasonId: number,
   seasonNumber: number | null,
-  playersById: Map<number, Player>,
-): Promise<GauntletSeasonLightView> {
-  const [rounds, ehogRatings, hasAdvancedStats] = await Promise.all([
+): Promise<GauntletSeasonLightView> => {
+  const [rounds, ehogRatings, hasAdvancedStats, playersById] = await Promise.all([
     getGauntletRounds(seasonId),
     getSeasonEhogRatings(seasonId),
     hasSeasonSabremetrics(seasonId),
+    getPlayersById(),
   ]);
   const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
   // Computed from `rounds` — already fetched above — instead of a second, redundant getH2HData()
   // round-trip over the same matches (see #441).
   const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, seasonNumber), playersById);
   return { rounds, leaderboard, h2hData, ehogRatings, hasAdvancedStats };
-}
+});
 
 /** The Gauntlet tab's Stats/Advanced Stats sub-tab fields — see `GauntletSeasonLightView`'s own
  *  doc comment for why these are split out and fetched separately, lazily. */
-export async function getGauntletSeasonStatsView(seasonId: number): Promise<SeasonStatsView> {
+export const getGauntletSeasonStatsView = persistentQuery('getGauntletSeasonStatsView', async (seasonId: number): Promise<SeasonStatsView> => {
   const [sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     getAllSabremetrics(seasonId),
     getAllMatchRounds(seasonId),
@@ -488,7 +489,7 @@ export async function getGauntletSeasonStatsView(seasonId: number): Promise<Seas
     getAllEconomyStats(seasonId),
   ]);
   return { sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
-}
+});
 
 /** A fully materialized pod, as `getGauntletPodForMatch()` resolves it from one of its games. */
 export interface GauntletPodRef {
@@ -507,10 +508,10 @@ export interface GauntletPodRef {
  * `getGauntletPodSibling()`) — both of a pod's games share one `player_match_stats` roster
  * reshuffled across two factions, so they're always scheduled and played as a pair. Takes an optional
  * `client` for callers outside a Next.js request that already hold one (a GitHub Actions script). */
-export async function getGauntletPodForMatch(
+export const getGauntletPodForMatch = persistentQuery('getGauntletPodForMatch', async (
   matchId: number,
   client?: SupabaseClient,
-): Promise<GauntletPodRef | null> {
+): Promise<GauntletPodRef | null> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db
     .from('gauntlet_pods')
@@ -521,7 +522,7 @@ export async function getGauntletPodForMatch(
     .maybeSingle();
   if (error) throw error;
   return data as GauntletPodRef | null;
-}
+});
 
 export interface GauntletPodSibling {
   matchId: number;
@@ -558,7 +559,7 @@ export async function getGauntletPodSibling(
  * covers the persisted-but-unseeded shape (`GauntletBracketDiagram`'s empty-state preview) and lets
  * the diagram trace each pod's advancement source (`source_pod_id`) across rounds regardless of
  * play progress. Returns `[]` for a gauntlet with no pods at all yet. */
-export async function getGauntletBracketShape(gauntletSeasonId: number): Promise<BracketPod[]> {
+export const getGauntletBracketShape = persistentQuery('getGauntletBracketShape', async (gauntletSeasonId: number): Promise<BracketPod[]> => {
   const { data: podRows, error: podErr } = await getAdminClient()
     .from('gauntlet_pods')
     .select('id, round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
@@ -639,25 +640,25 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
       ),
     };
   });
-}
+});
 
 /** Whether a gauntlet season has any materialized matches yet ("seeded") and whether any of them has
  *  a played score ("started") — the admin console's gauntlet-lifecycle list needs only these two
  *  booleans per season, not the full per-player payload `getGauntletRounds()` builds (which joins
  *  `player_match_stats`/`players` to get there). Reads from `resolveAllMatches()` (`_shared.ts`,
- *  `cache()`-wrapped) rather than its own scoped `weeks`/`matches` query, so every season this is
+ *  `persistentQuery()`-wrapped) rather than its own scoped `weeks`/`matches` query, so every season this is
  *  called for in one render pass (the admin console lists every gauntlet) shares that one read. */
-export async function getGauntletSeasonProgress(seasonId: number): Promise<{ seeded: boolean; started: boolean }> {
+export const getGauntletSeasonProgress = persistentQuery('getGauntletSeasonProgress', async (seasonId: number): Promise<{ seeded: boolean; started: boolean }> => {
   const rows = (await resolveAllMatches()).filter((m) => m.season_id === seasonId);
   return {
     seeded: rows.length > 0,
     started: rows.some((m) => m.played),
   };
-}
+});
 
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number.
  *  Optional `client` per docs/recipes.md's query-helper recipe. */
-export async function getGauntletRounds(seasonId: number, client?: SupabaseClient): Promise<GauntletRound[]> {
+export const getGauntletRounds = persistentQuery('getGauntletRounds', async (seasonId: number, client?: SupabaseClient): Promise<GauntletRound[]> => {
   const db = client ?? getAdminClient();
   // getWeekLookup() carries no ordering guarantee, so sort explicitly here since round_number below
   // is assigned in weekRows iteration order.
@@ -795,7 +796,7 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
     });
   }
   return rounds;
-}
+});
 
 /** Powers the home page's Upcoming Games panel for a gauntlet season — the gauntlet-shaped
  *  counterpart to `getUpcomingGames()` (`schedule.ts`), which relies on regular-season weeks. A
@@ -846,7 +847,7 @@ export type GauntletSummary = {
  * Returns a lightweight summary for every gauntlet season in one bulk fetch.
  * Champion = the player who won both matches in the final round.
  */
-export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSummary>> {
+export const getAllGauntletSummaries = persistentQuery('getAllGauntletSummaries', async (): Promise<Map<number, GauntletSummary>> => {
   const { data: gauntletSeasons } = await getAdminClient()
     .from('seasons')
     .select('id')
@@ -935,4 +936,4 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
   }
 
   return out;
-}
+});

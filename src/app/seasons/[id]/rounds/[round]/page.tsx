@@ -13,8 +13,6 @@ import { buildCrumbs, regularSeasonLink, roundHref, stageHeading } from '@/lib/c
 import { describeMatchups, roundTitle } from '@/lib/seo/stage-meta';
 import { parseRouteId } from '@/lib/util';
 
-export const revalidate = 60;
-
 type Params = { id: string; round: string };
 
 /** Resolves the URL to its gauntlet round. A round is identified by its number within the gauntlet,

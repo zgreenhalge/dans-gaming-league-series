@@ -14,6 +14,7 @@ import type { AccuracyTotals, PlayerWeaponAccuracy, WeaponClassAggregateStat } f
 import { ZERO_WEAPON_CLASS_STAT } from './weaponStats';
 import { resolveSide } from '../parsers/roundSides';
 import { ZERO_UTILITY, type UtilityCounts } from './utility';
+import { persistentQuery } from './_persistentCache';
 
 export { buildPlayerFactionsAndRoster, type PlayerFactionsAndRoster };
 
@@ -99,12 +100,12 @@ function joinKillRows(
 /** One match's recorded kills, joined to player names — the match-page-scoped counterpart of
  *  `getAllMatchKills()` (avoids fetching every match's kills to render one box score). Pass
  *  `playersById` when the caller already fetched it to skip a redundant full `players` table
- *  read — `getPlayersById()` is itself `cache()`-wrapped (#507), so omitting it still collapses
- *  to one read per render pass alongside any sibling caller. */
-export async function getMatchKills(
+ *  read — `getPlayersById()` is itself `persistentQuery()`-wrapped, so omitting it still shares
+ *  one read with any sibling caller. */
+export const getMatchKills = persistentQuery('getMatchKills', async (
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
-): Promise<MatchKillRow[]> {
+): Promise<MatchKillRow[]> => {
   const [killRows, pmsLookup, resolvedPlayersById] = await Promise.all([
     fetchAllPages<RawKillRow>((from, to) =>
       getAdminClient().from('match_kills').select('*').eq('match_id', matchId).range(from, to),
@@ -115,18 +116,18 @@ export async function getMatchKills(
 
   // Not resolved for a single-match fetch — callers here don't need it — so every kill is kept.
   return joinKillRows(killRows, pmsLookup, resolvedPlayersById, () => -1);
-}
+});
 
 /** Every recorded kill (`match_kills`), joined to player names and season. Flat, ungrouped —
  *  callers filter/aggregate from here (kills-by-weapon, killed-by-weapon, favorite weapon, ...),
  *  matching this codebase's fetch-then-aggregate-in-TS query pattern (see `weaponStats.ts`). Pass
  *  `playersById` when the caller already fetched it to skip a redundant full `players` table read;
  *  likewise `pmsRows` for an already-fetched `player_match_stats` read. */
-export async function getAllMatchKills(
+export const getAllMatchKills = persistentQuery('getAllMatchKills', async (
   seasonId?: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
   pmsRows?: PmsRow[] | Promise<PmsRow[]>,
-): Promise<MatchKillRow[]> {
+): Promise<MatchKillRow[]> => {
   const [killRows, pmsLookup, matchSeason, resolvedPlayersById] = await Promise.all([
     fetchAllPages<RawKillRow>((from, to) => getAdminClient().from('match_kills').select('*').range(from, to)),
     fetchPmsLookup(undefined, pmsRows),
@@ -140,7 +141,7 @@ export async function getAllMatchKills(
     if (seasonId != null && sid !== seasonId) return null;
     return sid;
   });
-}
+});
 
 /** Every recorded kill (`match_kills`), resolved to `player_id`s only — no season filter, no name
  *  join. The `deriveKillCreditCounts()` family (headshot/opening-duel/two-K credit) reads nothing

@@ -17,7 +17,6 @@ import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { StatusPill } from '@/components/StatusPill';
 import { seasonTitle, extractSeasonNumber, canonicalSort } from '@/lib/util';
 
-export const revalidate = 60;
 export const metadata = {
   title: 'Seasons',
   description: 'All DGLS seasons — standings, schedules, and match results.',

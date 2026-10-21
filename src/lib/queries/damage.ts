@@ -1,5 +1,6 @@
 import { getAdminClient } from '../supabase-admin';
 import { fetchAllPages, fetchPmsLookup, type PmsRow } from './_shared';
+import { persistentQuery } from './_persistentCache';
 
 /** One `match_damage_events` row, joined to player ids — the match-page-scoped counterpart of
  *  `getMatchKills()` (`queries/kills.ts`), for views that need actual damage dealt between
@@ -50,7 +51,7 @@ function joinDamageRows(rows: RawDamageRow[], pmsLookup: Map<number, PmsRow>): M
 /** One match's recorded damage events (`match_damage_events`), joined to player ids. `damage` is
  *  health actually lost, clamped to what the victim had left that round (see `architecture.md`'s
  *  `match_damage_events` row) — self-damage and teamdamage are kept, not filtered. */
-export async function getMatchDamageEvents(matchId: number): Promise<MatchDamageEventRow[]> {
+export const getMatchDamageEvents = persistentQuery('getMatchDamageEvents', async (matchId: number): Promise<MatchDamageEventRow[]> => {
   const [rows, pmsLookup] = await Promise.all([
     fetchAllPages<RawDamageRow>((from, to) =>
       getAdminClient().from('match_damage_events').select('*').eq('match_id', matchId).range(from, to),
@@ -58,4 +59,4 @@ export async function getMatchDamageEvents(matchId: number): Promise<MatchDamage
     fetchPmsLookup(matchId),
   ]);
   return joinDamageRows(rows, pmsLookup);
-}
+});

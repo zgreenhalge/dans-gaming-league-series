@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRegularSeasonLightView, getGauntletSeasonLightView, getPlayersById } from '@/lib/queries';
+import { getRegularSeasonLightView, getGauntletSeasonLightView } from '@/lib/queries';
 import { parseSeasonKind } from '../season-kind';
 import { parseRouteId } from '@/lib/util';
 
@@ -34,11 +34,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     seasonNumber = parsed;
   }
 
-  const playersById = await getPlayersById();
   const data =
     kind === 'regular'
-      ? await getRegularSeasonLightView(seasonId, seasonNumber, playersById)
-      : await getGauntletSeasonLightView(seasonId, seasonNumber, playersById);
+      ? await getRegularSeasonLightView(seasonId, seasonNumber)
+      : await getGauntletSeasonLightView(seasonId, seasonNumber);
 
   return NextResponse.json(data);
 }
