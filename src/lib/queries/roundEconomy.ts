@@ -1,5 +1,6 @@
 import { getAdminClient } from '../supabase-admin';
 import { fetchAllPages, fetchPmsLookup, type PmsRow } from './_shared';
+import { persistentQuery } from './_persistentCache';
 
 /** One `match_round_economy` row, joined to player ids — the round-grain counterpart of
  *  `getMatchEconomyStats()`'s tier-bucketed aggregate (`queries/weaponStats.ts`), for views that
@@ -38,7 +39,7 @@ function joinRoundEconomyRows(rows: RawRoundEconomyRow[], pmsLookup: Map<number,
 }
 
 /** One match's recorded per-round equipment values (`match_round_economy`), joined to player ids. */
-export async function getMatchRoundEconomy(matchId: number): Promise<MatchRoundEconomyRow[]> {
+export const getMatchRoundEconomy = persistentQuery('getMatchRoundEconomy', async (matchId: number): Promise<MatchRoundEconomyRow[]> => {
   const [rows, pmsLookup] = await Promise.all([
     fetchAllPages<RawRoundEconomyRow>((from, to) =>
       getAdminClient().from('match_round_economy').select('*').eq('match_id', matchId).range(from, to),
@@ -46,4 +47,4 @@ export async function getMatchRoundEconomy(matchId: number): Promise<MatchRoundE
     fetchPmsLookup(matchId),
   ]);
   return joinRoundEconomyRows(rows, pmsLookup);
-}
+});

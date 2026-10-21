@@ -1,4 +1,3 @@
-import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import {
   resolveMatchSeasons, fetchAllPages, asPage, fetchPmsFactionLookup,
@@ -6,6 +5,7 @@ import {
 } from './_shared';
 import type { RoundCondition } from '../types';
 import { deriveNinjaDefuseRounds, type NinjaVictim } from './kills';
+import { persistentQuery } from './_persistentCache';
 
 export { getRoundSides, type RoundSideInfo };
 
@@ -41,7 +41,7 @@ type RawKillVictimRow = { match_id: number; round_number: number; victim_player_
  *  rather than pushed onto every caller. Wrapped in React's `cache()` (#507): `getAllMatchRounds()`
  *  filters this same season-independent computation down to `seasonId` rather than each distinct
  *  `seasonId` re-running its own `match_rounds`/`match_kills` scan. */
-const fetchAllMatchRoundRows = cache(async (): Promise<MatchRoundRow[]> => {
+const fetchAllMatchRoundRows = persistentQuery('fetchAllMatchRoundRows', async (): Promise<MatchRoundRow[]> => {
   const [roundRows, matchSeason, killRows, pmsFactionLookup] = await Promise.all([
     fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').range(from, to)),
     resolveMatchSeasons(),

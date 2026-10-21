@@ -10,6 +10,7 @@ import {
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
+import { persistentQuery } from './_persistentCache';
 
 
 export interface SabremetricMatchRow {
@@ -37,7 +38,7 @@ export interface SabremetricMatchRow {
  *  from `match_rounds` via `deriveRoundsBySide()` — but were never a stored column at all, so
  *  there's nothing to overwrite; they're purely new, the ADR- and round-win-rate-by-side
  *  denominators behind Advanced Stats' Sides sub-tab. */
-export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
+export const getAllSabremetrics = persistentQuery('getAllSabremetrics', async (seasonId?: number): Promise<SabremetricMatchRow[]> => {
   // pmsRows shared as one promise (not fetched again per consumer) so deriveAccuracyTotals()'s and
   // getAllKillCreditFlags()'s own internal `player_match_stats` reads don't duplicate the fetch
   // below already needs — `cache()` (#507) can't collapse this into those functions' own
@@ -119,7 +120,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     });
   }
   return result;
-}
+});
 
 /** Whether a season has at least one match with parsed sabremetrics — the light-weight signal the
  *  season detail page's tab bar needs to decide whether to show "Advanced Stats" at all, without
@@ -128,7 +129,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
  *  non-empty. `matchIdsForSeason()` reuses `resolveMatchSeasons()`'s already-cached map
  *  (`_shared.ts`) rather than a season-scoped query of its own — every caller of this function also
  *  calls `getSeasonEhogRatings()` in the same render pass, which already fetches it. */
-export async function hasSeasonSabremetrics(seasonId: number): Promise<boolean> {
+export const hasSeasonSabremetrics = persistentQuery('hasSeasonSabremetrics', async (seasonId: number): Promise<boolean> => {
   const matchIds = await matchIdsForSeason(seasonId);
   if (matchIds.length === 0) return false;
 
@@ -148,7 +149,7 @@ export async function hasSeasonSabremetrics(seasonId: number): Promise<boolean> 
     .limit(1);
   if (error) throw error;
   return (data ?? []).length > 0;
-}
+});
 
 /** Sums a `SabFieldsWithDerived` stat's CT and T components according to which sides are
  *  included — the shared primitive behind every CT/T side-filter UI: the match page's own
@@ -195,7 +196,7 @@ function sumSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): SabFiel
  * Ships O(players × seasons) instead of O(players × matches) to the client, which is what keeps
  * the player and statistics pages' RSC payload bounded as demo ingestion fills in every match.
  */
-export async function getSabremetricSeasonTotals(seasonId?: number): Promise<SabremetricMatchRow[]> {
+export const getSabremetricSeasonTotals = persistentQuery('getSabremetricSeasonTotals', async (seasonId?: number): Promise<SabremetricMatchRow[]> => {
   const perMatch = await getAllSabremetrics(seasonId);
   const byPlayerSeason = new Map<string, SabremetricMatchRow>();
   for (const row of perMatch) {
@@ -209,7 +210,7 @@ export async function getSabremetricSeasonTotals(seasonId?: number): Promise<Sab
     existing.sab = sumSabFields(existing.sab, row.sab);
   }
   return Array.from(byPlayerSeason.values());
-}
+});
 
 // --- Plus-stat composite (1-scaled: 1.00 = league average) ---
 //

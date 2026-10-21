@@ -4,8 +4,9 @@ import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../ty
 import { extractSeasonNumber, compareMatchRefDesc, isPlayedScore } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { asPage, cacheQuery, fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { effectivePickedMap } from '../veto';
+import { persistentQuery } from './_persistentCache';
 
 
 export interface PlayerHistoryRow extends PlayerMatchStat {
@@ -49,7 +50,7 @@ export interface PlayerNameChange {
 }
 
 /** A player's past renames, most recent first. Empty for a player who has never renamed. */
-export async function getPlayerNameHistory(playerId: number): Promise<PlayerNameChange[]> {
+export const getPlayerNameHistory = persistentQuery('getPlayerNameHistory', async (playerId: number): Promise<PlayerNameChange[]> => {
   const { data, error } = await getAdminClient()
     .from('player_name_history')
     .select('old_name, new_name, changed_at')
@@ -57,13 +58,13 @@ export async function getPlayerNameHistory(playerId: number): Promise<PlayerName
     .order('changed_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as PlayerNameChange[];
-}
+});
 
 /** Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in React's `cache()`
  *  (#507) so every default-`client` caller within one render pass shares one `players` table read
  *  instead of each doing its own full-table fetch — outside a render pass (a script, a non-request context)
  *  `cache()` has no scope to dedup against and this just runs as a plain call. */
-export const getPlayersById = cacheQuery(async (client?: SupabaseClient): Promise<Map<number, Player>> => {
+export const getPlayersById = persistentQuery('getPlayersById', async (client?: SupabaseClient): Promise<Map<number, Player>> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db.from('players').select('*');
   if (error) throw error;
@@ -268,7 +269,7 @@ async function getPlayerRow(playerId: number): Promise<Player | null> {
   return (await getPlayersById()).get(playerId) ?? null;
 }
 
-export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
+export const getPlayer = persistentQuery('getPlayer', async (playerId: number): Promise<PlayerDetail | null> => {
   const player = await getPlayerRow(playerId);
   if (!player) return null;
   const [history, medalists] = await Promise.all([
@@ -276,7 +277,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     getAllSeasonMedalists(),
   ]);
   return { player, history, trophies: medalists.get(playerId) ?? [] };
-}
+});
 
 /** The rows of `history` (newest first) that `lastPlayed(history, limit)` and `nextUpcoming(history)`
  *  pick, still newest first. */
@@ -291,14 +292,14 @@ export function pickRecent<T extends HistoryResult>(history: T[], limit: number)
  * `pickRecent(history, recentLimit)` with rosters for just those matches. Skips the trophy read.
  * `null` when the player doesn't exist.
  */
-export async function getPlayerRecent(
+export const getPlayerRecent = persistentQuery('getPlayerRecent', async (
   playerId: number,
   recentLimit: number,
-): Promise<Pick<PlayerDetail, 'player' | 'history'> | null> {
+): Promise<Pick<PlayerDetail, 'player' | 'history'> | null> => {
   const player = await getPlayerRow(playerId);
   if (!player) return null;
   return { player, history: await attachRosters(pickRecent(await loadPlayerHistory(playerId), recentLimit)) };
-}
+});
 
 /** The fields that decide whether a history row's match has been played. */
 type HistoryResult = Pick<PlayerHistoryRow, 'final_score' | 'rounds_played'>;

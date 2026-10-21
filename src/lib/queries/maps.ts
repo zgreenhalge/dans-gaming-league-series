@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import { heatmapKey, mapHeatmapKey } from '../r2';
 import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
@@ -10,8 +9,9 @@ import { workshopIdFromUrl } from '../workshop';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
 import { getSeasons } from './seasons';
-import { cacheQuery, fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
+import { fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
 import { effectivePickedMap } from '../veto';
+import { persistentQuery } from './_persistentCache';
 
 
 export interface MapPlayerStat {
@@ -66,7 +66,7 @@ export interface MapDetail {
  * Returns all played matches with pick/ban data and per-faction win flags.
  * Used by the statistics page to compute league-wide map pick/ban and side stats.
  */
-export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
+export const getAllMatchesWithPickBan = persistentQuery('getAllMatchesWithPickBan', async (): Promise<MapMatchRow[]> => {
   const { matches, weeks, seasons } = await fetchMapRawData();
 
   const weekById = new Map<number, RawWeek>();
@@ -137,7 +137,7 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
       };
     })
     .filter((r): r is MapMatchRow => r !== null);
-}
+});
 
 type RawMatch = {
   id: number;
@@ -160,7 +160,7 @@ type RawSeason = { id: number; name: string; is_gauntlet: boolean; map_pool: str
 /** `cache()`-wrapped so `getAllMatchesWithPickBan()`, `getMapIndex()`, and `getMapDetail()` collapse
  *  into a single paginated read of `matches`/`seasons` per request, same reasoning as `getMapDetail`
  *  below. */
-const fetchMapRawData = cache(async (): Promise<{
+const fetchMapRawData = persistentQuery('fetchMapRawData', async (): Promise<{
   matches: RawMatch[];
   weeks: RawWeek[];
   seasons: RawSeason[];
@@ -199,7 +199,7 @@ function buildCanonicalNames(matches: RawMatch[], seasons: RawSeason[]): Map<str
   return canonical;
 }
 
-export async function getMapIndex(): Promise<MapIndexEntry[]> {
+export const getMapIndex = persistentQuery('getMapIndex', async (): Promise<MapIndexEntry[]> => {
   const { matches, weeks, seasons } = await fetchMapRawData();
   const canonicalName = buildCanonicalNames(matches, seasons);
 
@@ -360,11 +360,11 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
       statsBySeason,
     };
   }).sort((a, b) => b.pickCount - a.pickCount);
-}
+});
 
 /** Wrapped in React's `cache()` (#507), keyed by `slug`, so `generateMetadata` and the page body
  *  calling this with the same `slug` (`src/app/maps/[slug]/page.tsx`) collapse to one computation. */
-export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null> => {
+export const getMapDetail = persistentQuery('getMapDetail', async (slug: string): Promise<MapDetail | null> => {
   const { matches, weeks, seasons } = await fetchMapRawData();
   const canonicalName = buildCanonicalNames(matches, seasons);
 
@@ -579,7 +579,7 @@ export type MapRow = {
 /** `cache()`-wrapped so the root layout's own read (feeds `MapProvider`) and a page's separate read
  *  of the same table collapse into a single Supabase round trip per request — same reasoning as
  *  `getMapDetail()` below. */
-export const getMapLookup = cacheQuery(async (client?: SupabaseClient): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
+export const getMapLookup = persistentQuery('getMapLookup', async (client?: SupabaseClient): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db.from('maps').select('*');
   if (error) throw error;
@@ -592,14 +592,14 @@ export const getMapLookup = cacheQuery(async (client?: SupabaseClient): Promise<
 
 /** Every map name a season's pool could pick from: the `maps` table plus any name already used in a
  *  season's pool, lowercased and sorted. Feeds the map-pool picker. */
-export async function getKnownMapNames(): Promise<string[]> {
+export const getKnownMapNames = persistentQuery('getKnownMapNames', async (): Promise<string[]> => {
   const [mapLookup, seasons] = await Promise.all([getMapLookup(), getSeasons()]);
   const names = new Set<string>(Object.keys(mapLookup));
   for (const s of seasons) {
     for (const m of s.map_pool ?? []) names.add(m.trim().toLowerCase());
   }
   return Array.from(names).sort();
-}
+});
 
 export interface WorkshopMapOption {
   name: string;
@@ -738,7 +738,7 @@ export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Pro
  *
  * Optional `client` per docs/recipes.md's query-helper recipe.
  */
-export async function getMatchIdsForMap(mapName: string, client?: SupabaseClient): Promise<number[]> {
+export const getMatchIdsForMap = persistentQuery('getMatchIdsForMap', async (mapName: string, client?: SupabaseClient): Promise<number[]> => {
   const db = client ?? getAdminClient();
   const nameLower = mapName.trim().toLowerCase();
   if (!nameLower) return [];
@@ -753,7 +753,7 @@ export async function getMatchIdsForMap(mapName: string, client?: SupabaseClient
         isPlayedScore(m.final_score),
     )
     .map((m) => m.id);
-}
+});
 
 /** Ids of every played match — for the sitemap. */
 export async function getAllPlayedMatchIds(): Promise<number[]> {

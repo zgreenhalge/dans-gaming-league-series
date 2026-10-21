@@ -2,6 +2,7 @@ import { getAdminClient } from '../supabase-admin';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
 import { batchedIn, chunk, SUPABASE_IN_BATCH, matchIdsForSeason } from './_shared';
+import { persistentQuery } from './_persistentCache';
 
 
 // ---------------------------------------------------------------------------
@@ -69,7 +70,7 @@ export interface EhogPlayerData {
 }
 
 /** A player's current EHOG rating, or `null` before they have one. */
-export async function getCurrentEhogRating(playerId: number): Promise<number | null> {
+export const getCurrentEhogRating = persistentQuery('getCurrentEhogRating', async (playerId: number): Promise<number | null> => {
   const { data, error } = await getAdminClient()
     .from('player_current_ratings')
     .select('ehog_v1')
@@ -77,9 +78,9 @@ export async function getCurrentEhogRating(playerId: number): Promise<number | n
     .maybeSingle();
   if (error) throw error;
   return data?.ehog_v1 ?? null;
-}
+});
 
-export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerData> {
+export const getPlayerEhogRating = persistentQuery('getPlayerEhogRating', async (playerId: number): Promise<EhogPlayerData> => {
   const [currentRating, historyRes] = await Promise.all([
     getCurrentEhogRating(playerId),
     getAdminClient()
@@ -106,7 +107,7 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
   }));
 
   return { currentRating, history };
-}
+});
 
 export interface EhogSnapshotRow {
   playerId: number;
@@ -116,7 +117,7 @@ export interface EhogSnapshotRow {
   isGauntlet: boolean;
 }
 
-export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
+export const getAllEhogSnapshots = persistentQuery('getAllEhogSnapshots', async (): Promise<EhogSnapshotRow[]> => {
   const { data, error } = await getAdminClient()
     .from('player_rating_history')
     .select('player_id, ehog_rating, sequence_index, match_id')
@@ -145,9 +146,9 @@ export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
     }
   }
   return Array.from(latest.values());
-}
+});
 
-export async function getSeasonEhogRatings(seasonId: number): Promise<Record<number, number>> {
+export const getSeasonEhogRatings = persistentQuery('getSeasonEhogRatings', async (seasonId: number): Promise<Record<number, number>> => {
   // matchIdsForSeason() reuses resolveMatchSeasons()'s already-cached map (`_shared.ts`) — every
   // caller of this function also calls getAllSabremetrics()/getAllMatchRounds()/etc. in the same
   // render pass, which already fetch it, so this reuses that read instead of its own `weeks`/
@@ -180,7 +181,7 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
   const result: Record<number, number> = {};
   for (const [pid, val] of Object.entries(latest)) result[Number(pid)] = val.rating;
   return result;
-}
+});
 
 export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map<number, Map<number, number>>> {
   if (matchIds.length === 0) return new Map();
@@ -206,7 +207,7 @@ export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map
   return result;
 }
 
-export async function getMatchRatingDeltas(matchId: number): Promise<Map<number, number>> {
+export const getMatchRatingDeltas = persistentQuery('getMatchRatingDeltas', async (matchId: number): Promise<Map<number, number>> => {
   const { data, error } = await getAdminClient()
     .from('player_rating_history')
     .select('player_id, rating_delta, ehog_rating, sequence_index')
@@ -218,7 +219,7 @@ export async function getMatchRatingDeltas(matchId: number): Promise<Map<number,
     map.set(row.player_id, row.rating_delta);
   }
   return map;
-}
+});
 
 export interface PlayerMuSigma {
   playerId: number;

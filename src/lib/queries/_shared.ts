@@ -5,6 +5,7 @@ import { getR2Object } from '../r2';
 import { getAdminClient } from '../supabase-admin';
 import { isPlayedScore } from '../util';
 import type { Faction } from '../types';
+import { persistentQuery } from './_persistentCache';
 
 const SUPABASE_PAGE_SIZE = 1000;
 
@@ -115,7 +116,7 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
 
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
-const getAllWeeks = cacheQuery(async (client?: SupabaseClient): Promise<WeekLookup> => {
+const getAllWeeks = persistentQuery('getAllWeeks', async (client?: SupabaseClient): Promise<WeekLookup> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db.from('weeks').select('id, season_id, week_number');
   if (error) throw error;
@@ -131,7 +132,7 @@ const getAllWeeks = cacheQuery(async (client?: SupabaseClient): Promise<WeekLook
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
  * Optional `client` per docs/recipes.md's query-helper recipe. Scoped and unscoped callers all read
- * through one `cacheQuery()`-wrapped read of every week (a small table) and filter it in memory, so
+ * through one `persistentQuery()`-wrapped read of every week (a small table) and filter it in memory, so
  * a render pass issues a single `weeks` query however its client-less callers scope. A call that
  * passes a `client` reads through that client's own cache entry.
  */
@@ -302,7 +303,7 @@ export interface AllMatchesRow {
  * `cache()` so every caller within one render pass shares this one full-table read instead of each
  * re-querying `matches` with its own scoping/column selection.
  */
-export const resolveAllMatches = cache(async (): Promise<AllMatchesRow[]> => {
+export const resolveAllMatches = persistentQuery('resolveAllMatches', async (): Promise<AllMatchesRow[]> => {
   const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
     getAdminClient().from('matches').select('id, week_id, is_playoff_game, final_score'),
     getWeekLookup(),
