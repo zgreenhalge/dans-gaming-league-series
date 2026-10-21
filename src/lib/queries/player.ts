@@ -127,10 +127,14 @@ type RosterStatRow = {
   rounds_played: number;
 };
 
-/** Fills each of `rows`' `shirts` / `skins` / `shirts_stats` / `skins_stats` from the full
+type HistoryRoster = Pick<PlayerHistoryRow, 'shirts' | 'skins' | 'shirts_stats' | 'skins_stats'>;
+/** A history row before its roster is attached. */
+type HistoryBase = Omit<PlayerHistoryRow, keyof HistoryRoster>;
+
+/** `rows` with `shirts` / `skins` / `shirts_stats` / `skins_stats` filled in from the full
  *  `player_match_stats` of just those rows' matches. */
-async function attachRosters(rows: PlayerHistoryRow[]): Promise<void> {
-  if (rows.length === 0) return;
+async function attachRosters<T extends { match_id: number }>(rows: T[]): Promise<(T & HistoryRoster)[]> {
+  if (rows.length === 0) return [];
   const matchIds = Array.from(new Set(rows.map((r) => r.match_id)));
   const [{ data: allStats, error: aErr }, players] = await Promise.all([
     getAdminClient().from('player_match_stats').select('*').in('match_id', matchIds),
@@ -174,22 +178,20 @@ async function attachRosters(rows: PlayerHistoryRow[]): Promise<void> {
     rosterByMatch.set(st.match_id, entry);
   }
 
-  for (const row of rows) {
+  return rows.map((row) => {
     const roster = rosterByMatch.get(row.match_id);
-    if (!roster) continue;
-    row.shirts = roster.shirts;
-    row.skins = roster.skins;
-    row.shirts_stats = (roster.shirts_stats ?? []) as RosterStat[];
-    row.skins_stats = (roster.skins_stats ?? []) as RosterStat[];
-  }
+    return {
+      ...row,
+      shirts: roster?.shirts ?? [],
+      skins: roster?.skins ?? [],
+      shirts_stats: (roster?.shirts_stats ?? []) as RosterStat[],
+      skins_stats: (roster?.skins_stats ?? []) as RosterStat[],
+    };
+  });
 }
 
-/**
- * A player's match history, newest first. Rosters (a read of every involved match's
- * `player_match_stats`) are attached to all rows, or — with `recentLimit` — only to the rows
- * `getPlayerRecent()` returns: the `recentLimit` newest played matches and the next upcoming one.
- */
-async function loadPlayerHistory(playerId: number, recentLimit?: number): Promise<PlayerHistoryRow[]> {
+/** A player's match history, newest first, before rosters (`attachRosters()`) are attached. */
+async function loadPlayerHistory(playerId: number): Promise<HistoryBase[]> {
   const statRows = await fetchAllPages<PlayerMatchStat>((from, to) =>
     asPage(getAdminClient().from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
   );
@@ -238,10 +240,6 @@ async function loadPlayerHistory(playerId: number, recentLimit?: number): Promis
         map: effectivePickedMap(m),
         final_score: m.final_score,
         scheduled_at: m.scheduled_at,
-        shirts: [] as PlayerHistoryRow['shirts'],
-        skins: [] as PlayerHistoryRow['skins'],
-        shirts_stats: [] as RosterStat[],
-        skins_stats: [] as RosterStat[],
         skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
@@ -254,7 +252,7 @@ async function loadPlayerHistory(playerId: number, recentLimit?: number): Promis
         replay_status: m.replay_status ?? null,
       };
     })
-    .filter((r): r is PlayerHistoryRow => r !== null)
+    .filter((r): r is HistoryBase => r !== null)
     .sort((a, b) =>
       compareMatchRefDesc(
         { seasonNumber: extractSeasonNumber(a.season_name), isGauntlet: a.is_gauntlet, weekNumber: a.week_number, matchNumber: a.match_number },
@@ -262,62 +260,65 @@ async function loadPlayerHistory(playerId: number, recentLimit?: number): Promis
       ),
     );
 
-  if (recentLimit == null) {
-    await attachRosters(history);
-    return history;
-  }
-  const next = nextUpcoming(history);
-  const keep = new Set([...lastPlayed(history, recentLimit), ...(next ? [next] : [])]);
-  const kept = history.filter((r) => keep.has(r));
-  await attachRosters(kept);
-  return kept;
+  return history;
 }
 
+/** One player from the cached `getPlayersById()` read, `null` when the id doesn't exist. */
 async function getPlayerRow(playerId: number): Promise<Player | null> {
-  const { data: player, error } = await getAdminClient().from('players').select('*').eq('id', playerId).maybeSingle();
-  if (error) throw error;
-  return (player ?? null) as Player | null;
+  return (await getPlayersById()).get(playerId) ?? null;
 }
 
 export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
   const player = await getPlayerRow(playerId);
   if (!player) return null;
-  const [history, medalists] = await Promise.all([loadPlayerHistory(playerId), getAllSeasonMedalists()]);
+  const [history, medalists] = await Promise.all([
+    loadPlayerHistory(playerId).then(attachRosters),
+    getAllSeasonMedalists(),
+  ]);
   return { player, history, trophies: medalists.get(playerId) ?? [] };
 }
 
+/** The rows of `history` (newest first) that `lastPlayed(history, limit)` and `nextUpcoming(history)`
+ *  pick, still newest first. */
+export function pickRecent<T extends HistoryResult>(history: T[], limit: number): T[] {
+  const next = nextUpcoming(history);
+  const keep = new Set([...lastPlayed(history, limit), ...(next ? [next] : [])]);
+  return history.filter((r) => keep.has(r));
+}
+
 /**
- * The slice of `getPlayer()` the home page's My Stats panel reads: `player` plus a `history` holding
- * only the `recentLimit` newest played matches and the next upcoming one (still newest first, so
- * `lastPlayed()` and `nextUpcoming()` give the same answers as on the full history), with rosters
- * for just those matches. Skips the trophy read. `null` when the player doesn't exist.
+ * The slice of `getPlayer()` the home page's My Stats panel reads: `player` plus a `history` of
+ * `pickRecent(history, recentLimit)` with rosters for just those matches. Skips the trophy read.
+ * `null` when the player doesn't exist.
  */
 export async function getPlayerRecent(
   playerId: number,
   recentLimit: number,
-): Promise<{ player: Player; history: PlayerHistoryRow[] } | null> {
+): Promise<Pick<PlayerDetail, 'player' | 'history'> | null> {
   const player = await getPlayerRow(playerId);
   if (!player) return null;
-  return { player, history: await loadPlayerHistory(playerId, recentLimit) };
+  return { player, history: await attachRosters(pickRecent(await loadPlayerHistory(playerId), recentLimit)) };
 }
 
+/** The fields that decide whether a history row's match has been played. */
+type HistoryResult = Pick<PlayerHistoryRow, 'final_score' | 'rounds_played'>;
 
 /** True for a history row whose match has a real result — the row counts toward the player's
  *  record, "Last 5" and match history. A `"0-0"` placeholder, an unscored match, or a row with no
  *  rounds played is upcoming instead. */
-export function isPlayedHistoryRow(r: PlayerHistoryRow): boolean {
+export function isPlayedHistoryRow(r: HistoryResult): boolean {
   return isPlayedScore(r.final_score) && r.rounds_played > 0;
 }
 
 /** The `limit` most recent played rows of `history` (which `getPlayer()` returns newest first) —
  *  the player page's "Last 5" and the home page's Match history. */
-export function lastPlayed(history: PlayerHistoryRow[], limit: number): PlayerHistoryRow[] {
+export function lastPlayed<T extends HistoryResult>(history: T[], limit: number): T[] {
   return history.filter(isPlayedHistoryRow).slice(0, limit);
 }
 
 /** The earliest not-yet-played row of `history` (`getPlayer()` returns it newest first) — the home
  *  page's Next Match, and the player page's too. `null` when nothing is upcoming. */
-export function nextUpcoming(history: PlayerHistoryRow[]): PlayerHistoryRow | null {
+export function nextUpcoming<T extends HistoryResult>(history: T[]): T | null {
   const upcoming = history.filter((r) => !isPlayedHistoryRow(r));
   return upcoming.length > 0 ? upcoming[upcoming.length - 1] : null;
 }
