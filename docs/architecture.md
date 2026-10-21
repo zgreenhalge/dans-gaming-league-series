@@ -146,6 +146,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `PATCH` | `/api/seasons/[id]/schedule` | Save a hand-edit to an existing schedule draft — reassigns players within the generated week/match structure (admin only, `UPCOMING` only) |
 | `POST` | `/api/seasons/[id]/schedule/confirm` | Materialize a validated schedule draft into real `weeks`/`matches`/`player_match_stats` (admin only, `UPCOMING` only) |
 | `POST` | `/api/seasons/[id]/schedule/rollback` | Un-confirm a season's real schedule — deletes `weeks` (cascading `matches`/`player_match_stats`) restricted to weeks with no played match yet, leaving any week with a played match untouched (admin only, no season-status restriction) |
+| `GET` | `/api/players/[id]/summary` | A player's career snapshot (`PlayerSummary`: EHOG, W-L, KDA, ADR, last five results) for the player hover card — public |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), Steam link (unlink / set SteamID64), or Discord link (unlink / set snowflake id) (admin only) |
 | `PATCH` | `/api/players/me/name` | Self-service rename — the caller's own display name only, letters/spaces only, once every 7 days |
 | `GET` | `/api/auth/discord/link` | Start the self-service Discord account-linking OAuth2 flow for the signed-in player (session required) |

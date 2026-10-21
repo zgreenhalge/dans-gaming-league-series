@@ -23,6 +23,7 @@ import {
   bestFriendOf,
   buildGauntletHomeGames,
   buildMyStats,
+  buildPlayerSummary,
   buildRegularHomeGames,
   buildSeasonForm,
   findCurrentGauntletRound,
@@ -283,6 +284,7 @@ test('buildMyStats: career EHOG, record, KDA, ADR, next match, recent matches, b
     h2h,
   });
 
+  assert.equal(stats.avatarUrl, null);
   assert.equal(stats.ehog, 23.4);
   assert.deepEqual(stats.record, { wins: 8, losses: 2 });
   assert.equal(stats.kda, 2.6);
@@ -315,6 +317,27 @@ test('buildMyStats: a player with no matches has no rating, record, KDA, history
   assert.deepEqual(stats.recent, []);
   assert.equal(stats.bestFriend, null);
   assert.equal(stats.worstNightmare, null);
+});
+
+// ─── buildPlayerSummary ──────────────────────────────────────────────────────
+
+test('buildPlayerSummary: carries the avatar, caps recent results at five and leaves out unplayed matches', () => {
+  const history = [
+    historyRow({ match_id: 20, final_score: null, rounds_played: 0 }),
+    ...[19, 18, 17, 16, 15, 14].map((id) => historyRow({ match_id: id, final_score: '13-9' })),
+  ];
+  const summary = buildPlayerSummary({
+    playerId: 1,
+    playerName: 'Alice',
+    avatarUrl: 'https://example.test/a.jpg',
+    leaderboard: [leaderboardRow(1, 'Alice', 8, 2, 55, 80)],
+    ehog: 12.5,
+    history,
+  });
+  assert.equal(summary.avatarUrl, 'https://example.test/a.jpg');
+  assert.deepEqual(summary.recent.map((m) => m.matchId), [19, 18, 17, 16, 15]);
+  assert.equal(summary.ehog, 12.5);
+  assert.deepEqual(summary.record, { wins: 8, losses: 2 });
 });
 
 // ─── resolveHomeSeasons (standings) ──────────────────────────────────────────
