@@ -325,6 +325,19 @@ function plusStat(playerVal: number, avgVal: number): number {
   return avgVal > 0 ? playerVal / avgVal : 1;
 }
 
+/** Ceiling for an inverted `+` stat. League-average over player blows up as the player's own rate
+ *  approaches zero (a player who never chokes would be infinite), so it is capped at twice the
+ *  league average — the same 2.00 ceiling `toRatingScale()`-style 0-100 displays clamp to. */
+const INVERTED_PLUS_CAP = 2;
+
+/** `plusStat()` for the "lower raw value is better" stats (Deaths/Round, Choke): league average
+ *  over player, so higher is better like every other `+` stat. A player rate of zero scores the
+ *  cap (flawless), or 1.00 when the league average is zero too (nothing to be better than). */
+function invertedPlusStat(playerVal: number, avgVal: number): number {
+  if (playerVal > 0) return Math.min(avgVal / playerVal, INVERTED_PLUS_CAP);
+  return avgVal > 0 ? INVERTED_PLUS_CAP : 1;
+}
+
 export interface PlusStat {
   kpr: number;
   apr: number;
@@ -334,10 +347,12 @@ export interface PlusStat {
   entry: number;
   kast: number;
   trade: number;
+  tradedDeath: number;
   objective: number;
   utility: number;
   clutch: number;
   choke: number;
+  accuracy: number;
   aim: number;
   spray: number;
 }
@@ -352,7 +367,7 @@ export function chokeScore(a: AggregatedSab): number {
 
 export interface LeagueAverages {
   kpr: number; apr: number; dpr: number; adr: number; kdr: number;
-  entry: number; kast: number; trade: number;
+  entry: number; kast: number; trade: number; tradedDeath: number;
   objective: number; clutch: number; choke: number;
   accuracy: number; headAccuracy: number; counterStrafe: number; spray: number;
   flashAssists: number; utilDamage: number; blockingSmoke: number; teamflash: number;
@@ -372,6 +387,7 @@ export function computeLeagueAverages(all: AggregatedSab[]): LeagueAverages {
     entry: leagueAvgRatio(all, (a) => a.opening_kills, (a) => a.opening_kills + a.opening_deaths, 0.5),
     kast: leagueAvgRatio(all, (a) => a.kast_rounds, rounds),
     trade: leagueAvgRatio(all, (a) => a.trade_kill_successes, (a) => a.trade_kill_attempts),
+    tradedDeath: leagueAvgRatio(all, (a) => a.traded_death_successes, (a) => a.traded_death_attempts),
     objective: leagueAvgRatio(all, (a) => 2 * a.plants + 3 * a.defuses, rounds),
     clutch: leagueAvgRatio(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins, rounds),
     choke: leagueAvgRatio(all, chokeScore, rounds),
@@ -389,11 +405,11 @@ export function computeLeagueAverages(all: AggregatedSab[]): LeagueAverages {
 export function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
   const rp = agg.rounds_played || 1;
 
-  // Aim+ averages three already-normalized ratios (Accuracy+, Head Accuracy+, Counter-Strafe+)
-  // rather than summing raw percentages — they're fairly orthogonal skills on different
+  // Accuracy+ averages three already-normalized ratios (raw Accuracy+, Head Accuracy+,
+  // Counter-Strafe+) rather than summing raw percentages — they're fairly orthogonal skills on different
   // denominators, so there's no principled point-scale to weight them on directly, but each is
   // already "1.00 = league average" once ratio'd, so averaging those is apples-to-apples.
-  const accuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, la.accuracy);
+  const rawAccuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, la.accuracy);
   const headAccuracyPlus = plusStat(
     agg.shots_hit_no_awp > 0 ? agg.headshot_hits_no_awp / agg.shots_hit_no_awp : 0,
     la.headAccuracy,
@@ -402,8 +418,11 @@ export function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusSt
     agg.counter_strafe_shots > 0 ? agg.counter_strafe_good_shots / agg.counter_strafe_shots : 0,
     la.counterStrafe,
   );
+  const sprayPlus = plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, la.spray);
 
-  // Utility+ averages four already-normalized ratios the same way Aim+ does, rather than a
+  const accuracyPlus = 0.35 * rawAccuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus;
+
+  // Utility+ averages four already-normalized ratios the same way Accuracy+ does, rather than a
   // contrived raw-point score (flash assists + util damage/50 + smokes blocking - teamflash) whose
   // league average could land near zero and blow up the ratio. Teamflash duration is "lower is
   // better", so its ratio is folded in inverted (2 - teamflashPlus) to keep it on the same
@@ -419,7 +438,7 @@ export function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusSt
   return {
     kpr: plusStat(agg.kills / rp, la.kpr),
     apr: plusStat(agg.assists / rp, la.apr),
-    dpr: plusStat(agg.deaths / rp, la.dpr),
+    dpr: invertedPlusStat(agg.deaths / rp, la.dpr),
     adr: plusStat(agg.damage / rp, la.adr),
     kdr: plusStat(agg.deaths > 0 ? agg.kills / agg.deaths : agg.kills, la.kdr),
     entry: plusStat(
@@ -433,12 +452,36 @@ export function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusSt
       agg.trade_kill_attempts > 0 ? agg.trade_kill_successes / agg.trade_kill_attempts : 0,
       la.trade,
     ),
+    tradedDeath: plusStat(
+      agg.traded_death_attempts > 0 ? agg.traded_death_successes / agg.traded_death_attempts : 0,
+      la.tradedDeath,
+    ),
     objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, la.objective),
     utility: 0.30 * flashAssistsPlus + 0.30 * utilDamagePlus + 0.20 * blockingSmokePlus
       + 0.20 * (2 - teamflashPlus),
     clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, la.clutch),
-    choke: plusStat(chokeScore(agg) / rp, la.choke),
-    aim: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
-    spray: plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, la.spray),
+    choke: invertedPlusStat(chokeScore(agg) / rp, la.choke),
+    accuracy: accuracyPlus,
+    spray: sprayPlus,
+    // Aim+ blends two already-normalized ratios the same way, weighted toward Accuracy+ since it is
+    // the broader signal (itself a three-way blend) with Spray+ as a secondary contributor.
+    aim: 0.65 * accuracyPlus + 0.35 * sprayPlus,
   };
+}
+
+/** Player Rating (calculations.md "Player Rating"): a 1.00-centered composite of weighted `+`
+ *  deltas, so 1.00 is league average like every input. `Aim+` already blends in `Spray+`, so there
+ *  is no separate `Spray+` term (it would double-count). */
+export function computePlayerRating(p: PlusStat): number {
+  return 1
+    + 0.10 * (p.kpr - 1)
+    + 0.20 * (p.adr - 1)
+    + 0.10 * (p.kdr - 1)
+    + 0.30 * (p.kast - 1)
+    + 0.10 * (p.trade - 1)
+    + 0.10 * (p.clutch - 1)
+    + 0.10 * (p.choke - 1)
+    + 0.10 * (p.objective - 1)
+    + 0.10 * (p.utility - 1)
+    + 0.10 * (p.aim - 1);
 }

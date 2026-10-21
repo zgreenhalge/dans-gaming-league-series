@@ -1,7 +1,7 @@
 /**
  * Regression harness for queries.ts's sabremetrics functions (#63) — getAllSabremetrics,
  * getSabremetricSeasonTotals — plus the shared Plus-stat composite (#163): aggregateRows,
- * chokeScore, computeLeagueAverages, computePlusStats. That composite is the one
+ * chokeScore, computeLeagueAverages, computePlusStats, computePlayerRating. That composite is the one
  * implementation shared by SabremetricsLeaderboardView.tsx and scripts/match-context.ts.
  *
  * Run:  npx vitest run src/lib/queries-sabremetrics.test.ts
@@ -23,6 +23,7 @@ import {
   chokeScore,
   computeLeagueAverages,
   computePlusStats,
+  computePlayerRating,
   type SabremetricStatRow,
 } from './queries';
 import { zeroSabFields as zeroSab, sabremetricStatRow as row } from './test-support/sabFields';
@@ -153,14 +154,63 @@ async function main() {
     assert.ok(Number.isFinite(plus.entry));
   });
 
-  await test('computePlusStats: aim = 0.35*accuracy+ + 0.40*headAccuracy+ + 0.25*counterStrafe+', () => {
+  await test('computePlusStats: accuracy = 0.35*raw accuracy+ + 0.40*headAccuracy+ + 0.25*counterStrafe+, aim = 0.65*accuracy+ + 0.35*spray+', () => {
     const [leagueAgg] = aggregateRows([row({
       player_id: 1, match_id: 100,
-      sab: zeroSab({ shots_fired: 100, shots_hit: 50, shots_hit_no_awp: 50, headshot_hits_no_awp: 25, counter_strafe_shots: 100, counter_strafe_good_shots: 40 }),
+      sab: zeroSab({ shots_fired: 100, shots_hit: 50, shots_hit_no_awp: 50, headshot_hits_no_awp: 25, counter_strafe_shots: 100, counter_strafe_good_shots: 40, spray_shots_fired: 50, spray_shots_hit: 20 }),
     })]);
     const la = computeLeagueAverages([leagueAgg]);
     const plus = computePlusStats(leagueAgg, la);
-    assert.ok(Math.abs(plus.aim - (0.35 * 1 + 0.40 * 1 + 0.25 * 1)) < 1e-9, 'lone player vs its own average -> each ratio is 1');
+    assert.ok(Math.abs(plus.accuracy - 1) < 1e-9, 'lone player vs its own average -> each ratio is 1');
+    assert.ok(Math.abs(plus.aim - 1) < 1e-9);
+  });
+
+  await test('computePlusStats: aim weights accuracy+ 0.65 and spray+ 0.35', () => {
+    // Player A out-sprays B at equal accuracy, so A's Aim+ must exceed B's by 0.35 * the Spray+ gap.
+    const a = aggregateRows([row({ player_id: 1, match_id: 100, sab: zeroSab({ shots_fired: 100, shots_hit: 50, spray_shots_fired: 100, spray_shots_hit: 60 }) })])[0];
+    const b = aggregateRows([row({ player_id: 2, match_id: 200, sab: zeroSab({ shots_fired: 100, shots_hit: 50, spray_shots_fired: 100, spray_shots_hit: 20 }) })])[0];
+    const la = computeLeagueAverages([a, b]);
+    const plusA = computePlusStats(a, la);
+    const plusB = computePlusStats(b, la);
+    assert.equal(plusA.accuracy, plusB.accuracy);
+    assert.ok(Math.abs((plusA.aim - plusB.aim) - 0.35 * (plusA.spray - plusB.spray)) < 1e-9);
+  });
+
+  await test('computePlusStats: dpr and choke are inverted — fewer deaths / chokes score higher', () => {
+    const a = aggregateRows([row({ player_id: 1, match_id: 100, rounds_played: 10, sab: zeroSab({ deaths_ct: 4, clutch_1v1_attempts: 1, clutch_1v1_wins: 1 }) })])[0];
+    const b = aggregateRows([row({ player_id: 2, match_id: 200, rounds_played: 10, sab: zeroSab({ deaths_ct: 8, clutch_1v1_attempts: 3, clutch_1v1_wins: 1 }) })])[0];
+    const la = computeLeagueAverages([a, b]);
+    const plusA = computePlusStats(a, la);
+    const plusB = computePlusStats(b, la);
+    assert.ok(plusA.dpr > 1 && plusB.dpr < 1, 'fewer deaths per round is above average');
+    assert.ok(plusA.dpr > plusB.dpr);
+    assert.ok(plusA.choke > plusB.choke, 'A never blew a clutch, B blew two');
+  });
+
+  await test('computePlusStats: a zero death / choke rate scores the 2.00 cap, not infinity or average', () => {
+    const a = aggregateRows([row({ player_id: 1, match_id: 100, rounds_played: 10, sab: zeroSab({ deaths_ct: 0 }) })])[0];
+    const b = aggregateRows([row({ player_id: 2, match_id: 200, rounds_played: 10, sab: zeroSab({ deaths_ct: 6, clutch_1v1_attempts: 2 }) })])[0];
+    const la = computeLeagueAverages([a, b]);
+    const plus = computePlusStats(a, la);
+    assert.equal(plus.dpr, 2);
+    assert.equal(plus.choke, 2);
+  });
+
+  await test('computePlusStats: tradedDeath is traded-death success rate over the league average', () => {
+    const a = aggregateRows([row({ player_id: 1, match_id: 100, sab: zeroSab({ traded_death_attempts: 4, traded_death_successes: 3 }) })])[0];
+    const b = aggregateRows([row({ player_id: 2, match_id: 200, sab: zeroSab({ traded_death_attempts: 4, traded_death_successes: 1 }) })])[0];
+    const la = computeLeagueAverages([a, b]);
+    assert.ok(Math.abs(computePlusStats(a, la).tradedDeath - 0.75 / 0.5) < 1e-9);
+    assert.ok(Math.abs(computePlusStats(b, la).tradedDeath - 0.25 / 0.5) < 1e-9);
+  });
+
+  await test('computePlayerRating: league-average player is exactly 1.00; weights sum so a uniform +0.5 lifts it by 0.5 * 1.30', () => {
+    const [agg] = aggregateRows([row({ player_id: 1, match_id: 100 })]);
+    const flat = computePlusStats(agg, computeLeagueAverages([agg]));
+    const average = Object.fromEntries(Object.keys(flat).map((k) => [k, 1])) as unknown as typeof flat;
+    assert.equal(computePlayerRating(average), 1);
+    const better = Object.fromEntries(Object.keys(flat).map((k) => [k, 1.5])) as unknown as typeof flat;
+    assert.ok(Math.abs(computePlayerRating(better) - (1 + 0.5 * 1.30)) < 1e-9);
   });
 
   await test('computePlusStats: utility folds teamflash duration in inverted (lower is better)', () => {
