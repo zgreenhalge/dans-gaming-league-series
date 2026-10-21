@@ -46,7 +46,7 @@ export const getAllSabremetrics = persistentQuery('getAllSabremetrics', async (s
   // (`rounds_played`, `faction`) are a different shape than theirs. `faction` is included so the
   // same fetch also feeds deriveSideSplitCounts()'s playerFactions map, rather than a separate
   // `player_match_stats` read. `getPlayersById()` needs no such sharing — it's only read directly
-  // below, and is itself `cache()`-wrapped, so no local promise is needed for it.
+  // below, and is itself `persistentQuery()`-wrapped, so no local promise is needed for it.
   const pmsRowsPromise = fetchAllPages<
     { id: number; player_id: number; match_id: number; rounds_played: number; faction: Faction }
   >(

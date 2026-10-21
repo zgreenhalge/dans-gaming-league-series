@@ -65,12 +65,22 @@ describe('persistentQuery', () => {
     expect(out.byId.get(1)).toBeInstanceOf(Set);
   });
 
-  test('an object argument (a client) reads straight from the database', async () => {
+  test('a client-like argument reads straight from the database', async () => {
+    class FakeClient {}
     const read = vi.fn(async (...args: [object?]) => args.length);
-    await persistentQuery('client', read)({});
-    await persistentQuery('client', read)({});
+    await persistentQuery('client', read)(new FakeClient());
+    await persistentQuery('client', read)(new FakeClient());
     expect(read).toHaveBeenCalledTimes(2);
     expect(store.size).toBe(0);
+  });
+
+  test('plain-data arguments (options objects, arrays) are part of the key', async () => {
+    const read = vi.fn(async (_id: number, opts?: { week?: number }, ids?: number[]) => [opts, ids]);
+    const cached = persistentQuery('plain', read);
+    await cached(1, { week: 2 }, [3]);
+    await cached(1, { week: 2 }, [3]);
+    await cached(1, { week: 3 }, [3]);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 
   test('outside Next the read bypasses the cache and the version read', async () => {
@@ -82,23 +92,22 @@ describe('persistentQuery', () => {
     expect(store.size).toBe(0);
   });
 
-  test('a missing data_version table reads straight from the database', async () => {
-    const missing = { code: 'PGRST205', message: "Could not find the table 'public.data_version'" };
+  test.each([
+    ['a missing table', { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.data_version'" } }],
+    ['a failed read', { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }],
+    ['a table with no row', { data: null, error: null }],
+  ])('%s reads straight from the database and logs', async (_label, result) => {
     __setTestAdminClient({
-      from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: null, error: missing }) }) }) }),
+      from: () => ({ select: () => ({ eq: () => ({ single: async () => result }) }) }),
     } as never);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const read = vi.fn(async () => 1);
-    await persistentQuery('missing', read)();
-    await persistentQuery('missing', read)();
+    await persistentQuery('unreadable', read)();
+    await persistentQuery('unreadable', read)();
     expect(read).toHaveBeenCalledTimes(2);
     expect(store.size).toBe(0);
+    expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
-  });
-
-  test('a data_version table with no row throws', async () => {
-    db.data_version = [];
-    await expect(persistentQuery('nover', async () => 1)()).rejects.toBeTruthy();
   });
 });
 
@@ -108,8 +117,19 @@ describe('encodeCacheValue / decodeCacheValue', () => {
     expect(decodeCacheValue(encodeCacheValue(value))).toEqual(value);
   });
 
-  test('rejects undefined', () => {
-    expect(() => encodeCacheValue(undefined)).toThrow(/undefined/);
+  test('round-trips undefined, NaN and ±Infinity, nested or not', () => {
+    const value = { a: [1, undefined, NaN], b: new Map([[1, Infinity], [2, -Infinity]]), c: undefined };
+    const out = decodeCacheValue<typeof value>(encodeCacheValue(value));
+    expect(out.a[1]).toBeUndefined();
+    expect(out.a[2]).toBeNaN();
+    expect(out.b.get(1)).toBe(Infinity);
+    expect(out.b.get(2)).toBe(-Infinity);
+    expect(decodeCacheValue(encodeCacheValue(undefined))).toBeUndefined();
+  });
+
+  test('a plain object keeps its own keys, even one named like a Map', () => {
+    const value = { __type: 'Map', entries: [[1, 2]] };
+    expect(decodeCacheValue(encodeCacheValue(value))).toEqual(value);
   });
 });
 

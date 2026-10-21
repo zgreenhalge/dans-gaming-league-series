@@ -157,8 +157,8 @@ type RawMatch = {
 type RawWeek = { id: number; season_id: number; week_number: number };
 type RawSeason = { id: number; name: string; is_gauntlet: boolean; map_pool: string[] | null };
 
-/** `cache()`-wrapped so `getAllMatchesWithPickBan()`, `getMapIndex()`, and `getMapDetail()` collapse
- *  into a single paginated read of `matches`/`seasons` per request, same reasoning as `getMapDetail`
+/** `persistentQuery()`-wrapped so `getAllMatchesWithPickBan()`, `getMapIndex()`, and `getMapDetail()` share
+ *  a single paginated read of `matches`/`seasons`, same reasoning as `getMapDetail`
  *  below. */
 const fetchMapRawData = persistentQuery('fetchMapRawData', async (): Promise<{
   matches: RawMatch[];
@@ -362,8 +362,8 @@ export const getMapIndex = persistentQuery('getMapIndex', async (): Promise<MapI
   }).sort((a, b) => b.pickCount - a.pickCount);
 });
 
-/** Wrapped in React's `cache()` (#507), keyed by `slug`, so `generateMetadata` and the page body
- *  calling this with the same `slug` (`src/app/maps/[slug]/page.tsx`) collapse to one computation. */
+/** `persistentQuery()`-wrapped, keyed by `slug`, so `generateMetadata` and the page body calling this
+ *  with the same `slug` (`src/app/maps/[slug]/page.tsx`) share one computation. */
 export const getMapDetail = persistentQuery('getMapDetail', async (slug: string): Promise<MapDetail | null> => {
   const { matches, weeks, seasons } = await fetchMapRawData();
   const canonicalName = buildCanonicalNames(matches, seasons);
@@ -576,9 +576,8 @@ export type MapRow = {
   image_url: string | null;
 };
 
-/** `cache()`-wrapped so the root layout's own read (feeds `MapProvider`) and a page's separate read
- *  of the same table collapse into a single Supabase round trip per request — same reasoning as
- *  `getMapDetail()` below. */
+/** `persistentQuery()`-wrapped so the root layout's own read (feeds `MapProvider`) and a page's separate
+ *  read of the same table share one Supabase read — same reasoning as `getMapDetail()` below. */
 export const getMapLookup = persistentQuery('getMapLookup', async (client?: SupabaseClient): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db.from('maps').select('*');

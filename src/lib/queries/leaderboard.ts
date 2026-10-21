@@ -46,8 +46,8 @@ interface PerPlayerStats {
 /**
  * Fetches the three shared tables (weeks, matches, player_match_stats) once
  * and returns both derived outputs, replacing two back-to-back triple-fetches
- * with a single shared fetch. Wrapped in React's `cache()` (#507) so every
- * caller within one render pass — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
+ * with a single shared fetch. Wrapped in `persistentQuery()` so every
+ * caller — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
  * `getAllLeaderboards()` — shares this one full `player_match_stats`/`matches` read
  * rather than each re-scanning both tables independently.
  */
@@ -75,7 +75,7 @@ const getSeasonBaseData = persistentQuery('getSeasonBaseData', async (): Promise
           .range(from, to),
       ),
     ),
-    // cache()-wrapped and shared with resolveMatchSeasons()/every other unplayed-inclusive caller,
+    // persistentQuery()-wrapped and shared with resolveMatchSeasons()/every other unplayed-inclusive caller,
     // rather than this function's own `matches`/`weeks` read.
     resolveAllMatches(),
   ]);
@@ -122,7 +122,7 @@ const getSeasonBaseData = persistentQuery('getSeasonBaseData', async (): Promise
 });
 
 /** The raw, unfiltered `player_season_leaderboard` table, without the `player_match_stats`
- *  augmentation `getAllLeaderboards()` adds. `cache()`-wrapped so `getCareerLeaderboard()`,
+ *  augmentation `getAllLeaderboards()` adds. `persistentQuery()`-wrapped so `getCareerLeaderboard()`,
  *  `getAllLeaderboards()`, `getScheduleLabData()` and any indirect caller of them (e.g.
  *  `getAllSeasonMedalists()`) share one read instead of each re-scanning the view. */
 export const getRawSeasonLeaderboardRows = persistentQuery('getRawSeasonLeaderboardRows', async (): Promise<LeaderboardRow[]> => {

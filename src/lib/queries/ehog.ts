@@ -183,7 +183,7 @@ export const getSeasonEhogRatings = persistentQuery('getSeasonEhogRatings', asyn
   return result;
 });
 
-export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map<number, Map<number, number>>> {
+export const getBatchMatchRatingDeltas = persistentQuery('getBatchMatchRatingDeltas', async (matchIds: number[]): Promise<Map<number, Map<number, number>>> => {
   if (matchIds.length === 0) return new Map();
   // Chunks are independent requests — run them together rather than waiting on one before the next.
   const pages = await Promise.all(
@@ -205,7 +205,7 @@ export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map
     inner.set(r.player_id, r.rating_delta);
   }
   return result;
-}
+});
 
 export const getMatchRatingDeltas = persistentQuery('getMatchRatingDeltas', async (matchId: number): Promise<Map<number, number>> => {
   const { data, error } = await getAdminClient()
@@ -230,7 +230,7 @@ export interface PlayerMuSigma {
 
 const LATEST_RATING_CONCURRENCY = 20;
 
-export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSigma[]> {
+export const getPlayerRatings = persistentQuery('getPlayerRatings', async (playerIds: number[]): Promise<PlayerMuSigma[]> => {
   if (playerIds.length === 0) return [];
   // One `order by sequence_index desc limit 1` read per player (served by the
   // (player_id, formula_version, sequence_index) index), issued `LATEST_RATING_CONCURRENCY` at a
@@ -278,7 +278,7 @@ export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSig
     }
     return { playerId: pid, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehogRating: DEFAULT_EHOG };
   });
-}
+});
 
 export interface RatedPlayer extends PlayerMuSigma {
   name: string;

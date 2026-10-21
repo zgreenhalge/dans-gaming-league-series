@@ -120,9 +120,7 @@ in.
    `getSeasons()` share one entry, and a call that does pass a `client` skips the persistent cache
    (`getSeasons()`, `getSeason()`, `getPlayersById()`, `getMapLookup()`). A cache key is an array
    argument's identity, not its contents, so `getWeekLookup()` caches one read of every week and
-   filters it for a `seasonIds` scope instead of caching per array. `cacheQuery()` (`_shared.ts`) is
-   the same trailing-`undefined` handling over React's `cache()` alone, for a read that must stay
-   uncached across requests.
+   filters it for a `seasonIds` scope instead of caching per array.
 6. If the new helper needs season pairing (regular ↔ gauntlet), use `findPairedSeason()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
    `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs or compare

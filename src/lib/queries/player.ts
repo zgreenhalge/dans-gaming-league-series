@@ -60,10 +60,10 @@ export const getPlayerNameHistory = persistentQuery('getPlayerNameHistory', asyn
   return (data ?? []) as PlayerNameChange[];
 });
 
-/** Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in React's `cache()`
- *  (#507) so every default-`client` caller within one render pass shares one `players` table read
- *  instead of each doing its own full-table fetch — outside a render pass (a script, a non-request context)
- *  `cache()` has no scope to dedup against and this just runs as a plain call. */
+/** Optional `client` per docs/recipes.md's query-helper recipe. Wrapped in `persistentQuery()`
+ *  so every default-`client` caller shares one `players` table read instead of each doing its own
+ *  full-table fetch; a call that passes a `client` (a script, a non-request context) reads straight
+ *  from the database. */
 export const getPlayersById = persistentQuery('getPlayersById', async (client?: SupabaseClient): Promise<Map<number, Player>> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db.from('players').select('*');
@@ -264,13 +264,8 @@ async function loadPlayerHistory(playerId: number): Promise<HistoryBase[]> {
   return history;
 }
 
-/** One player from the cached `getPlayersById()` read, `null` when the id doesn't exist. */
-async function getPlayerRow(playerId: number): Promise<Player | null> {
-  return (await getPlayersById()).get(playerId) ?? null;
-}
-
 export const getPlayer = persistentQuery('getPlayer', async (playerId: number): Promise<PlayerDetail | null> => {
-  const player = await getPlayerRow(playerId);
+  const player = (await getPlayersById()).get(playerId);
   if (!player) return null;
   const [history, medalists] = await Promise.all([
     loadPlayerHistory(playerId).then(attachRosters),
@@ -296,7 +291,7 @@ export const getPlayerRecent = persistentQuery('getPlayerRecent', async (
   playerId: number,
   recentLimit: number,
 ): Promise<Pick<PlayerDetail, 'player' | 'history'> | null> => {
-  const player = await getPlayerRow(playerId);
+  const player = (await getPlayersById()).get(playerId);
   if (!player) return null;
   return { player, history: await attachRosters(pickRecent(await loadPlayerHistory(playerId), recentLimit)) };
 });

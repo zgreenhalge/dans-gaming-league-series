@@ -350,8 +350,8 @@ export const getMatchSabremetrics = persistentQuery('getMatchSabremetrics', asyn
   // `player_match_stats` fetch it would otherwise make internally via `fetchPmsLookup()` — `cache()`
   // (#507) can't collapse this into that call since this read's columns (`faction`, no `match_id`)
   // are a different shape than `fetchPmsLookup()`'s own. `getPlayersById()`/`getMatchKills()` need
-  // no such sharing — both are themselves `cache()`-wrapped, so calling each once below already
-  // collapses to one `players` read without a local promise to thread through.
+  // no such sharing — both are themselves `persistentQuery()`-wrapped, so calling each once below already
+  // shares one `players` read without a local promise to thread through.
   const pmsForUtility = pms.map((r) => ({ id: r.id, player_id: r.player_id, match_id: matchId }));
   const [{ data: sabRows }, players, kills, accuracyTotals, roundSides, throws] = await Promise.all([
     getAdminClient().from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),

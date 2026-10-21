@@ -69,7 +69,7 @@ function aggToRow(
  * Aggregates stats from all gauntlet seasons (is_gauntlet = true).
  * The leaderboard view excludes playoff games, so we compute directly from
  * player_match_stats.
- * `cache()`-wrapped so the home page's My Stats and the Statistics page share one read per request.
+ * Persisted by `persistentQuery()`, so every page reading it shares one read per data version.
  */
 export const getGauntletStats = persistentQuery('getGauntletStats', async (): Promise<{
   career: LeaderboardRowWithId[];
@@ -646,7 +646,7 @@ export const getGauntletBracketShape = persistentQuery('getGauntletBracketShape'
  *  a played score ("started") — the admin console's gauntlet-lifecycle list needs only these two
  *  booleans per season, not the full per-player payload `getGauntletRounds()` builds (which joins
  *  `player_match_stats`/`players` to get there). Reads from `resolveAllMatches()` (`_shared.ts`,
- *  `cache()`-wrapped) rather than its own scoped `weeks`/`matches` query, so every season this is
+ *  `persistentQuery()`-wrapped) rather than its own scoped `weeks`/`matches` query, so every season this is
  *  called for in one render pass (the admin console lists every gauntlet) shares that one read. */
 export const getGauntletSeasonProgress = persistentQuery('getGauntletSeasonProgress', async (seasonId: number): Promise<{ seeded: boolean; started: boolean }> => {
   const rows = (await resolveAllMatches()).filter((m) => m.season_id === seasonId);

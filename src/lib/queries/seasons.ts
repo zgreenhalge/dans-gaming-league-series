@@ -21,9 +21,9 @@ export interface SeasonRosterEntry {
   discord_id: string | null;
 }
 
-/** Optional `client` per docs/recipes.md's query-helper recipe. `cache()`-wrapped so the root
- *  layout's own read (feeds `SideNav`) and a page's separate read of the same table collapse into a
- *  single Supabase round trip per request — same reasoning as `getSeason()` below. */
+/** Optional `client` per docs/recipes.md's query-helper recipe. `persistentQuery()`-wrapped so
+ *  the root layout's own read (feeds `SideNav`) and a page's separate read of the same table share one
+ *  Supabase read — same reasoning as `getSeason()` below. */
 export const getSeasons = persistentQuery('getSeasons', async (client?: SupabaseClient): Promise<Season[]> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db
@@ -107,8 +107,8 @@ export async function isSeasonFullyPlayed(seasonId: number, client?: SupabaseCli
   return allMatchesPlayed(await getMatchScoresForWeeks(db, weekIds));
 }
 
-/** `cache()`-wrapped so a route that reads it from both `generateMetadata` and the page component
- *  (e.g. `seasons/[id]/page.tsx`) collapses into a single Supabase round trip per request. */
+/** `persistentQuery()`-wrapped so a route that reads it from both `generateMetadata` and the page
+ *  component (e.g. `seasons/[id]/page.tsx`) shares one Supabase read. */
 export const getSeason = persistentQuery('getSeason', async (id: number, client?: SupabaseClient): Promise<Season | null> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db
@@ -121,20 +121,19 @@ export const getSeason = persistentQuery('getSeason', async (id: number, client?
 });
 
 /** Find the gauntlet season paired to a regular season (`findPairedSeason()`'s rule). Reads through the
- *  `cache()`-wrapped `getSeasons()` rather than its own query, so repeat lookups in the same request
- *  (e.g. one per row in `getAdminMatches()`) collapse into the single round trip already made
- *  elsewhere in that request instead of adding their own. */
-export const getLinkedGauntlet = persistentQuery('getLinkedGauntlet', async (regularSeasonName: string, client?: SupabaseClient): Promise<Season | null> => {
+ *  persistent `getSeasons()` rather than its own query, so repeat lookups (e.g. one per row in
+ *  `getAdminMatches()`) share the read already made elsewhere instead of adding their own. */
+export async function getLinkedGauntlet(regularSeasonName: string, client?: SupabaseClient): Promise<Season | null> {
   const seasons = await getSeasons(client);
   return findPairedSeason(regularSeasonName, seasons.filter((s) => s.is_gauntlet));
-});
+}
 
 /** Find the regular season paired to a gauntlet season (`findPairedSeason()`'s rule). Same
  *  `getSeasons()`-backed reasoning as `getLinkedGauntlet()` above. */
-export const getLinkedRegularSeason = persistentQuery('getLinkedRegularSeason', async (gauntletName: string, client?: SupabaseClient): Promise<Season | null> => {
+export async function getLinkedRegularSeason(gauntletName: string, client?: SupabaseClient): Promise<Season | null> {
   const seasons = await getSeasons(client);
   return findPairedSeason(gauntletName, seasons.filter((s) => !s.is_gauntlet));
-});
+}
 
 /** Where a season's sub-pages live: the *hub* is the regular season every public season link points
  *  at (a gauntlet season id redirects there), and `gauntlet` is its paired gauntlet if one exists.

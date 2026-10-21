@@ -100,8 +100,8 @@ function joinKillRows(
 /** One match's recorded kills, joined to player names — the match-page-scoped counterpart of
  *  `getAllMatchKills()` (avoids fetching every match's kills to render one box score). Pass
  *  `playersById` when the caller already fetched it to skip a redundant full `players` table
- *  read — `getPlayersById()` is itself `cache()`-wrapped (#507), so omitting it still collapses
- *  to one read per render pass alongside any sibling caller. */
+ *  read — `getPlayersById()` is itself `persistentQuery()`-wrapped, so omitting it still shares
+ *  one read with any sibling caller. */
 export const getMatchKills = persistentQuery('getMatchKills', async (
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
