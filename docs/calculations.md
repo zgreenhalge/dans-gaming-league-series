@@ -753,7 +753,9 @@ A win as the pre-match underdog adds `1 - 2p` to its side's upset score, where `
 pre-match win probability (a favourite's win, a loss, or a game with no stored prediction adds 0).
 Only the weaker side's score counts, so a rivalry earns upset points when both players land upsets
 on each other. Squaring the evenness means a rivalry only rates highly when the record is close: a
-lopsided one is scaled down hard whatever its volume, and a single meeting (never even) rates 0.
+lopsided one is scaled down hard whatever its volume, and a single meeting (never even) rates 0
+(`rivalEvenness()`, `src/lib/h2h.ts`). `aUpsetWins` / `bUpsetWins` count the meetings each side won
+as the underdog, the figure the matchup view shows beside the score-weighted upsets term.
 
 ### Pairing rankings and personal matchups
 
