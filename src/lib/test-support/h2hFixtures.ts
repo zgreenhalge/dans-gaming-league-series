@@ -29,6 +29,8 @@ export function duoStats(overrides: Partial<DuoStats> = {}): DuoStats {
     bestMap: null,
     mapBreakdown: [],
     matches: [],
+    winsAboveExpected: 0,
+    adrLift: 0,
     ...overrides,
   };
 }
@@ -77,6 +79,7 @@ export function h2hMatchRow(overrides: Partial<MapMatchRow> = {}): MapMatchRow {
     is_gauntlet: false,
     is_playoff_game: false,
     final_score: '13-9',
+    pre_match_win_prob: null,
     shirts_stats: [],
     skins_stats: [],
     skins_pick: null,

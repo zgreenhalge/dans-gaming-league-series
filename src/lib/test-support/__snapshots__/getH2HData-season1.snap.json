@@ -95,7 +95,9 @@
             }
           ]
         }
-      ]
+      ],
+      "winsAboveExpected": 0.44999999999999996,
+      "adrLift": 0
     },
     {
       "playerA": 3,
@@ -192,7 +194,9 @@
             }
           ]
         }
-      ]
+      ],
+      "winsAboveExpected": -0.44999999999999996,
+      "adrLift": 0
     }
   ],
   "rivals": [
@@ -285,7 +289,9 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0
     },
     {
       "playerA": 1,
@@ -376,7 +382,9 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0
     },
     {
       "playerA": 2,
@@ -467,7 +475,9 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0
     },
     {
       "playerA": 2,
@@ -558,7 +568,9 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0
     }
   ],
   "players": [

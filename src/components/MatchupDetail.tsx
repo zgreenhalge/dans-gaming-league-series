@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
+import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/queries';
 import { rateGradientColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
@@ -249,7 +250,7 @@ export function DuoDetail({
 
   const hero = (
     <>
-      <RatingCircle value={circleValue} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="lg" title={ratingBreakdown ?? "50% games played together² · 30% win rate² · 20% round win rate²"} />
+      <RatingCircle value={circleValue} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="lg" title={ratingBreakdown ?? FRIENDS_RATING_SUMMARY} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center">
           <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="md" />
@@ -387,7 +388,7 @@ export function RivalDetail({
   const mapImg = rival.lastMap ? (maps[mapSlug(rival.lastMap)]?.image_url ?? null) : null;
 
   const circleValue = rivalryRating ?? 50;
-  const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" title={ratingBreakdown ?? "50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"} />;
+  const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" title={ratingBreakdown ?? RIVAL_RATING_SUMMARY} />;
 
   const scoreBars = (
     <div className="flex h-8 overflow-hidden">

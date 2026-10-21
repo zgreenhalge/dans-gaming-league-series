@@ -6,7 +6,7 @@ import H2HMatrix, { type H2HPair } from './H2HMatrix';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { findDuo, findRival } from '@/lib/h2h';
 import type { H2HData } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals, FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/queries';
 import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
 import RatingCircle from './RatingCircle';
 
@@ -99,11 +99,11 @@ export default function H2HSection({
             <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">
               <span
                 className="font-display font-bold text-[13px]"
-                title="50% games played together² · 30% win rate² · 20% round win rate²"
+                title={FRIENDS_RATING_SUMMARY}
               >
                 Best Friends
               </span>
-              <LeagueAvgCircle value={avgFriendshipRating} colorStart="white" colorEnd="var(--color-accent-green-fill)" title="50% games played together² · 30% win rate² · 20% round win rate²" />
+              <LeagueAvgCircle value={avgFriendshipRating} colorStart="white" colorEnd="var(--color-accent-green-fill)" title={FRIENDS_RATING_SUMMARY} />
             </div>
             <DuoHeader />
             <div>
@@ -136,11 +136,11 @@ export default function H2HSection({
             <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">
               <span
                 className="font-display font-bold text-[13px]"
-                title="50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"
+                title={RIVAL_RATING_SUMMARY}
               >
                 Closest Rivals
               </span>
-              <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" title="50% times faced² · 30% game outcome closeness² · 20% avg round closeness²" />
+              <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" title={RIVAL_RATING_SUMMARY} />
             </div>
             <RivalHeader />
             <div>

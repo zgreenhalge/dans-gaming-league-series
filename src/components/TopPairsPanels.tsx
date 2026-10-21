@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { careerH2HHref, h2hPairHref } from '@/lib/crumbs';
 import type { H2HData } from '@/lib/queries';
-import { duoBreakdownScorer, rankDuos, rankRivals, rivalBreakdownScorer } from '@/lib/queries';
+import { duoBreakdownScorer, rankDuos, rankRivals, rivalBreakdownScorer, FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/queries';
 import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
 
 /** How many pairs each home-page list shows. */
@@ -36,7 +36,7 @@ export function TopDuosPanel({ data }: { data: H2HData }) {
   const breakdown = duoBreakdownScorer(data.duos);
   const player = new Map(data.players.map((p) => [p.id, p]));
   return (
-    <PairsCard title="Top duos" tooltip="50% games played together² · 30% win rate² · 20% round win rate²">
+    <PairsCard title="Top duos" tooltip={FRIENDS_RATING_SUMMARY}>
       <DuoHeader compact />
       {ranked.map(({ duo, rating }, i) => {
         const a = player.get(duo.playerA);
@@ -69,7 +69,7 @@ export function HottestRivalriesPanel({ data }: { data: H2HData }) {
   const breakdown = rivalBreakdownScorer(data.rivals);
   const player = new Map(data.players.map((p) => [p.id, p]));
   return (
-    <PairsCard title="Hottest Rivalries" tooltip="50% times faced² · 30% game outcome closeness² · 20% avg round closeness²">
+    <PairsCard title="Hottest Rivalries" tooltip={RIVAL_RATING_SUMMARY}>
       <RivalHeader compact />
       {ranked.map(({ rival, rating }) => {
         const a = player.get(rival.playerA);

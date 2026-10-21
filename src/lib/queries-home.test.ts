@@ -63,6 +63,8 @@ function rival(playerA: number, playerB: number, aWins: number, bWins: number): 
     bStats: { ...PLAYER_STATS, roundsWon: 13 * bWins },
     mapBreakdown: [],
     matches: [],
+    aUpsetScore: 0,
+    bUpsetScore: 0,
   };
 }
 
@@ -99,6 +101,7 @@ function historyRow(overrides: Partial<PlayerHistoryRow> & { match_id: number })
     is_gauntlet: false,
     map: 'Foroglio',
     final_score: '13-9',
+    pre_match_win_prob: null,
     scheduled_at: null,
     shirts: [{ player_id: 1, player_name: 'Alice' }, { player_id: 2, player_name: 'Bob' }],
     skins: [{ player_id: 3, player_name: 'Carol' }, { player_id: 4, player_name: 'Dave' }],
@@ -408,6 +411,7 @@ function gauntletMatch(id: number, finalScore: string | null, scheduledAt: strin
     id,
     match_number: id,
     final_score: finalScore,
+    pre_match_win_prob: null,
     scheduled_at: scheduledAt,
     skins_pick: null,
     shirts_pick: null,

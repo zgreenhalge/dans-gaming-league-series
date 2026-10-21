@@ -30,6 +30,8 @@ function rival(playerA: number, playerB: number, aWins: number, bWins: number): 
     bStats: { ...STATS, roundsWon: 13 * bWins },
     mapBreakdown: [],
     matches: [],
+    aUpsetScore: 0,
+    bUpsetScore: 0,
   };
 }
 

@@ -80,7 +80,7 @@ export default function H2HMatrix({
             <span className="inline-block w-2 h-2" style={{ background: friendColor(0.75) }} />
             Stronger friends ↗
           </span>
-          <span className="font-mono text-[8px] text-[var(--color-text-secondary)] flex items-center gap-1.5" title="More games + closer record = More notable rivals">
+          <span className="font-mono text-[8px] text-[var(--color-text-secondary)] flex items-center gap-1.5" title="More meetings + an even record + upsets by both sides = more notable rivals">
             <span className="inline-block w-2 h-2" style={{ background: rivalColor(0.75) }} />
             Closer rivals ↙
           </span>

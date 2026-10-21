@@ -80,65 +80,160 @@ function resolveH2HSeasonIds(
   return ids;
 }
 
+// ─── Friends and Rival ratings ───────────────────────────────────────────────
+//
+// Each rating is a sum of weighted terms (points out of 100) divided by the league's best pair's
+// sum, so the best pair reads 100. See "Narrative Metrics" in docs/calculations.md for the formulas
+// and the reasoning behind each term. The term functions below are the single source of the maths:
+// the scorers rank with them and the breakdown scorers print them.
+
+/** Pairs this far from the league's most-played pair are shrunk toward zero: a term's confidence in
+ *  a pair is `g / (g + RATING_K)`, so one lucky game can't outrank a long history. */
+const RATING_K = 16;
+
+/** Friends Rating weights, in points out of 100. */
+const FRIENDS_WEIGHTS = { games: 25, winRate: 15, rwr: 15, odds: 30, lift: 15 };
+/** The Friends Rating's terms and weights in one line, for the rating tooltips and card headers. */
+export const FRIENDS_RATING_SUMMARY =
+  `${FRIENDS_WEIGHTS.games}% games together · ${FRIENDS_WEIGHTS.winRate}% win rate · ${FRIENDS_WEIGHTS.rwr}% round win rate · `
+  + `${FRIENDS_WEIGHTS.odds}% wins above the pre-match odds · ${FRIENDS_WEIGHTS.lift}% ADR above their usual · scaled so the best duo is 100`;
+/** A duo's odds term is full at this many wins above expectation per game (after shrinking). */
+const ODDS_FULL = 0.15;
+/** A duo's lift term is full at this ADR gain over its players' ADR elsewhere (after shrinking). */
+const LIFT_FULL = 0.1;
+
+/** Rival Rating weights, in points out of 100. */
+const RIVAL_WEIGHTS = { meetings: 30, winCloseness: 20, roundCloseness: 20, upsets: 30 };
+/** The Rival Rating's terms and weights in one line, for the rating tooltips and card headers. */
+export const RIVAL_RATING_SUMMARY =
+  `${RIVAL_WEIGHTS.meetings}% meetings · ${RIVAL_WEIGHTS.winCloseness}% closeness of the win record · ${RIVAL_WEIGHTS.roundCloseness}% closeness of rounds · `
+  + `${RIVAL_WEIGHTS.upsets}% upsets by both sides · scaled by how even the record is² · best rivalry is 100`;
+/** A rivalry's upset term is full at this much mutual upset score per meeting (after shrinking). */
+const UPSET_FULL = 0.05;
+
+const confidence = (games: number) => games / (games + RATING_K);
+/** `value / max`, 0 when there is no max to compare to. */
+const fractionOf = (value: number, max: number) => (max > 0 ? value / max : 0);
+/** `value` as a 0–1 fraction of `full`, never below 0. */
+const capped = (value: number, full: number) => Math.min(1, Math.max(0, value) / full);
+const sumOf = (terms: Record<string, number>) => Object.values(terms).reduce((total, v) => total + v, 0);
+
+export interface FriendsTerms { games: number; winRate: number; rwr: number; odds: number; lift: number }
+
 /**
- * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in docs/glossary.md.
- * Computes normalisation maxes once across `duos` then returns a closure. Shared by
- * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
- * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Best Friends").
+ * Returns each Friends Rating term as weighted points for a duo, normalised against the league's
+ * `duos`. Computes the league maxes once, then returns a closure.
  */
-export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
+function duoTermsScorer(duos: DuoStats[]): (d: DuoStats) => FriendsTerms {
   const eligible = duos.filter((d) => d.gamesPlayed > 0);
   const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
-  const maxWinRate = Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed));
-  const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
-  return (d) =>
-    0.5 * (d.gamesPlayed / maxGames) ** 2 +
-    0.3 * ((d.wins / d.gamesPlayed) / maxWinRate) ** 2 +
-    0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr) ** 2;
+  const maxWinRate = Math.max(0, ...eligible.map((d) => d.wins / d.gamesPlayed));
+  const maxRwr = Math.max(0, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
+  const w = FRIENDS_WEIGHTS;
+  return (d) => {
+    if (d.gamesPlayed === 0) return { games: 0, winRate: 0, rwr: 0, odds: 0, lift: 0 };
+    const g = d.gamesPlayed;
+    // Win rate and round win rate are scaled by how settled the pair's sample is relative to the
+    // most-played duo, so only the games term lifts a pair with a thin history.
+    const settled = confidence(g) / confidence(maxGames);
+    return {
+      games: w.games * (g / maxGames),
+      winRate: w.winRate * settled * fractionOf(d.wins / g, maxWinRate),
+      rwr: w.rwr * settled * fractionOf(winRatePct(d.roundsWon, d.roundsPlayed), maxRwr),
+      odds: w.odds * capped(d.winsAboveExpected / (g + RATING_K), ODDS_FULL),
+      lift: w.lift * capped(d.adrLift * confidence(g), LIFT_FULL),
+    };
+  };
+}
+
+export interface RivalTerms { meetings: number; winCloseness: number; roundCloseness: number; upsets: number; evenness: number }
+
+/**
+ * Returns each Rival Rating term as weighted points for a rivalry, normalised against the league's
+ * `rivals`, plus its `evenness` (1 for an even record, toward 0 as it turns lopsided). Computes the
+ * league maxes once, then returns a closure.
+ */
+function rivalTermsScorer(rivals: H2HStats[]): (r: H2HStats) => RivalTerms {
+  const eligible = rivals.filter((r) => r.meetings > 0);
+  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
+  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
+  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
+  const w = RIVAL_WEIGHTS;
+  return (r) => {
+    if (r.meetings === 0) return { meetings: 0, winCloseness: 0, roundCloseness: 0, upsets: 0, evenness: 0 };
+    const m = r.meetings;
+    const winDiff = Math.abs(r.aWins - r.bWins);
+    const roundDiff = Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / m;
+    const settled = confidence(m) / confidence(maxMeetings);
+    // An upset only counts as a rivalry when both sides land them: the weaker side sets the score.
+    const mutualUpsets = 2 * Math.min(r.aUpsetScore, r.bUpsetScore);
+    return {
+      meetings: w.meetings * (m / maxMeetings),
+      winCloseness: w.winCloseness * settled * (1 - winDiff / maxWinDiff),
+      roundCloseness: w.roundCloseness * settled * (1 - roundDiff / maxRoundDiff),
+      upsets: w.upsets * capped(mutualUpsets / (m + RATING_K), UPSET_FULL),
+      evenness: 1 - winDiff / m,
+    };
+  };
+}
+
+/** A rivalry's points before rescaling: its terms, scaled by the square of how even its record is. */
+const rivalPoints = (t: RivalTerms) => (t.meetings + t.winCloseness + t.roundCloseness + t.upsets) * t.evenness ** 2;
+
+/** A pair's points divided by the best pair's, or 0 when no pair has any points. */
+function relativeToBest<T>(items: T[], points: (item: T) => number): (item: T) => number {
+  const best = Math.max(0, ...items.map(points));
+  return (item) => (best > 0 ? points(item) / best : 0);
+}
+
+/**
+ * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in docs/glossary.md.
+ * The score is 0–1: a duo's weighted terms (`duoTermsScorer()`) over the best duo's. Shared by
+ * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
+ * IMPORTANT: if you change weights here, update `duoBreakdownScorer()` and docs/calculations.md.
+ */
+export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
+  const terms = duoTermsScorer(duos);
+  const points = (d: DuoStats) => sumOf({ ...terms(d) });
+  return relativeToBest(duos.filter((d) => d.gamesPlayed > 0), points);
 }
 
 /**
  * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in docs/glossary.md.
- * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
- * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
- * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals" and "Best Friends").
+ * The score is 0–1: a rivalry's weighted terms (`rivalTermsScorer()`) scaled by its evenness, over
+ * the best rivalry's. Shared by `H2HSection` (ranking) and `H2HMatrix` (cell coloring).
+ * IMPORTANT: if you change weights here, update `rivalBreakdownScorer()` and docs/calculations.md.
  */
 export function rivalBlendedScorer(rivals: H2HStats[]): (r: H2HStats) => number {
-  const eligible = rivals.filter((r) => r.meetings > 0);
-  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
-  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
-  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
-  return (r) =>
-    0.5 * (r.meetings / maxMeetings) ** 2 +
-    0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) ** 2 +
-    0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxRoundDiff) ** 2;
+  const terms = rivalTermsScorer(rivals);
+  return relativeToBest(rivals.filter((r) => r.meetings > 0), (r) => rivalPoints(terms(r)));
 }
 
-/** Returns a closure that formats the per-component breakdown of the friend score as a tooltip string. */
+/** Returns a closure that formats the per-term breakdown of the friend score as a tooltip string:
+ *  each term's points out of its weight, and the total against the best duo's. */
 export function duoBreakdownScorer(duos: DuoStats[]): (d: DuoStats) => string {
-  const eligible = duos.filter((d) => d.gamesPlayed > 0);
-  const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
-  const maxWinRate = Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed));
-  const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
+  const terms = duoTermsScorer(duos);
+  const points = (d: DuoStats) => sumOf({ ...terms(d) });
+  const best = Math.max(0, ...duos.filter((d) => d.gamesPlayed > 0).map(points));
+  const w = FRIENDS_WEIGHTS;
   return (d) => {
-    const games   = Math.round(0.5 * (d.gamesPlayed / maxGames) ** 2 * 100);
-    const winRate = Math.round(0.3 * ((d.wins / d.gamesPlayed) / maxWinRate) ** 2 * 100);
-    const rwr     = Math.round(0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr) ** 2 * 100);
-    return `Games ${games}/50 · Win rate ${winRate}/30 · Rounds ${rwr}/20`;
+    const t = terms(d);
+    return `Games ${Math.round(t.games)}/${w.games} · Win rate ${Math.round(t.winRate)}/${w.winRate} · Rounds ${Math.round(t.rwr)}/${w.rwr}`
+      + ` · Odds ${Math.round(t.odds)}/${w.odds} · ADR lift ${Math.round(t.lift)}/${w.lift} · Total ${Math.round(points(d))} of best ${Math.round(best)}`;
   };
 }
 
-/** Returns a closure that formats the per-component breakdown of the rival score as a tooltip string. */
+/** Returns a closure that formats the per-term breakdown of the rival score as a tooltip string:
+ *  each term's points out of its weight, the evenness scaling, and the total against the best
+ *  rivalry's. */
 export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => string {
-  const eligible = rivals.filter((r) => r.meetings > 0);
-  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
-  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
-  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
+  const terms = rivalTermsScorer(rivals);
+  const best = Math.max(0, ...rivals.filter((r) => r.meetings > 0).map((r) => rivalPoints(terms(r))));
+  const w = RIVAL_WEIGHTS;
   return (r) => {
-    const meetings  = Math.round(0.5 * (r.meetings / maxMeetings) ** 2 * 100);
-    const closeness = Math.round(0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) ** 2 * 100);
-    const rounds    = Math.round(0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxRoundDiff) ** 2 * 100);
-    return `Meetings ${meetings}/50 · Closeness ${closeness}/30 · Rounds ${rounds}/20`;
+    const t = terms(r);
+    return `Meetings ${Math.round(t.meetings)}/${w.meetings} · Closeness ${Math.round(t.winCloseness)}/${w.winCloseness} · Rounds ${Math.round(t.roundCloseness)}/${w.roundCloseness}`
+      + ` · Upsets ${Math.round(t.upsets)}/${w.upsets} · Evenness ×${(t.evenness ** 2).toFixed(2)} · Total ${Math.round(rivalPoints(t))} of best ${Math.round(best)}`;
   };
 }
 
@@ -244,7 +339,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
 
   const { data: matches, error: mErr } = await getAdminClient()
     .from('matches')
-    .select('id, week_id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side')
+    .select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, skins_starting_side')
     .in('week_id', [...weekLookup.keys()]);
   if (mErr) throw mErr;
 
@@ -253,6 +348,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     week_id: number;
     match_number: number;
     final_score: string | null;
+    pre_match_win_prob: number | null;
     shirts_pick: string | null;
     skins_pick: string | null;
     skins_starting_side: 'CT' | 'T' | null;
@@ -303,6 +399,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
       seasonNumber: seasonNumberById.get(seasonId) ?? null,
       isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,
       map: effectivePickedMap(m),
+      shirtsWinProb: m.pre_match_win_prob,
       pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
       startingSide: m.skins_starting_side,
       finalScore: m.final_score,

@@ -6,6 +6,7 @@
         "id": 200,
         "match_number": 1,
         "final_score": "13-11",
+        "pre_match_win_prob": null,
         "scheduled_at": null,
         "skins_pick": "Foroglio",
         "shirts_pick": "Foroglio",

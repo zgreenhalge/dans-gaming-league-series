@@ -669,14 +669,14 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
   const weekIds = weekRows.map((w) => w.id);
 
   // Narrowed to the columns this function actually reads (below) — `matches` also carries several
-  // JSON/text columns (`round_history`, ban pairs, `pre_match_win_prob*`, etc.) never used here.
+  // JSON/text columns (`round_history`, ban pairs, etc.) never used here.
   type GauntletMatchRow = Pick<
     Match,
-    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'skins_pick' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
+    'id' | 'match_number' | 'final_score' | 'pre_match_win_prob' | 'scheduled_at' | 'skins_pick' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
   >;
   const { data: matchData, error: mErr } = await db
     .from('matches')
-    .select('id, match_number, final_score, scheduled_at, skins_pick, shirts_pick, skins_starting_side, is_feature_match, week_id')
+    .select('id, match_number, final_score, pre_match_win_prob, scheduled_at, skins_pick, shirts_pick, skins_starting_side, is_feature_match, week_id')
     .in('week_id', weekIds)
     .order('match_number');
   if (mErr) throw mErr;
@@ -777,6 +777,7 @@ export async function getGauntletRounds(seasonId: number, client?: SupabaseClien
         id: m.id,
         match_number: m.match_number,
         final_score: m.final_score,
+        pre_match_win_prob: m.pre_match_win_prob,
         scheduled_at: m.scheduled_at,
         skins_pick: m.skins_pick,
         shirts_pick: m.shirts_pick,

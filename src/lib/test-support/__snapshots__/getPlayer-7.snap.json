@@ -34,6 +34,7 @@
       "is_gauntlet": false,
       "map": null,
       "final_score": null,
+      "pre_match_win_prob": null,
       "scheduled_at": null,
       "shirts": [
         {
@@ -145,6 +146,7 @@
       "is_gauntlet": false,
       "map": null,
       "final_score": null,
+      "pre_match_win_prob": null,
       "scheduled_at": "2026-01-15T19:00:00.000Z",
       "shirts": [
         {
@@ -258,6 +260,7 @@
       "is_gauntlet": true,
       "map": "Vertigo",
       "final_score": "13-5",
+      "pre_match_win_prob": null,
       "scheduled_at": null,
       "shirts": [
         {

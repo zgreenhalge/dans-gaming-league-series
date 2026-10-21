@@ -17,6 +17,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   is_gauntlet: boolean;
   map: string | null;
   final_score: string | null;
+  pre_match_win_prob: number | null;
   scheduled_at: string | null;
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
@@ -235,6 +236,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         is_gauntlet: se.is_gauntlet,
         map: effectivePickedMap(m),
         final_score: m.final_score,
+        pre_match_win_prob: m.pre_match_win_prob,
         scheduled_at: m.scheduled_at,
         shirts: roster.shirts,
         skins: roster.skins,

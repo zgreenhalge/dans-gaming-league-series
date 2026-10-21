@@ -28,6 +28,8 @@ const RIVAL: H2HStats = {
   bStats: { ...STATS, roundsWon: 51 },
   mapBreakdown: [],
   matches: [],
+    aUpsetScore: 0,
+    bUpsetScore: 0,
 };
 
 const withAvatar = (p: typeof alice) => ({ ...p, steam_avatar_url: 'https://example.com/a.jpg' });
@@ -46,10 +48,10 @@ describe('DuoRow', () => {
     expect(screen.getByText('88')).toBeInTheDocument();
   });
 
-  test('shows the average KDA and says it is not part of the rating', () => {
+  test('shows the average KDA and says it is context only', () => {
     render(<DuoRow {...props} />);
     expect(screen.getByText('1.67')).toBeInTheDocument(); // each fixture player: (20 + 5) / 15
-    expect(screen.getByTitle(/KDA is not part of the rating/)).toBeInTheDocument();
+    expect(screen.getByTitle(/KDA is shown for context only/)).toBeInTheDocument();
   });
 
   test('compact leaves out the rounds column and its header', () => {
