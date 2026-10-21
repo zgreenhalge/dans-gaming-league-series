@@ -6,7 +6,7 @@ import {
   isPlayedScore,
   winRatePct,
 } from '../util';
-import { computeH2H, resolveH2HPickedBy, type DuoStats, type H2HStats, type H2HData, type H2HMatchInput } from '../h2h';
+import { computeH2H, rivalEvenness, resolveH2HPickedBy, type DuoStats, type H2HStats, type H2HData, type H2HMatchInput } from '../h2h';
 import { mapSlug } from '../maps';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
@@ -172,7 +172,7 @@ function rivalTermsScorer(rivals: H2HStats[]): (r: H2HStats) => RivalTerms {
       winCloseness: w.winCloseness * settled * (1 - winDiff / maxWinDiff),
       roundCloseness: w.roundCloseness * settled * (1 - roundDiff / maxRoundDiff),
       upsets: w.upsets * capped(mutualUpsets / (m + RATING_K), UPSET_FULL),
-      evenness: 1 - winDiff / m,
+      evenness: rivalEvenness(r),
     };
   };
 }

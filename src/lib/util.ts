@@ -420,6 +420,22 @@ export function winRatePct(wins: number, gamesPlayed: number): number {
   return gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 100) : 0;
 }
 
+/** `n` to `decimals` places with an explicit `+` when positive (`+1.5`, `-0.4`, `0.0`), rounded
+ *  first so a value that displays as zero never shows a sign. */
+export function formatSigned(n: number, decimals: number): string {
+  const rounded = Number(n.toFixed(decimals));
+  return `${rounded > 0 ? '+' : ''}${rounded.toFixed(decimals)}`;
+}
+
+/** Green for a positive value, red for a negative one, `undefined` (the default text color) for
+ *  zero — judged at `decimals` places so it matches what `formatSigned()` shows. */
+export function signedColor(n: number, decimals: number): string | undefined {
+  const rounded = Number(n.toFixed(decimals));
+  if (rounded > 0) return 'var(--color-accent-green-fg)';
+  if (rounded < 0) return 'var(--color-accent-red-fg)';
+  return undefined;
+}
+
 /** T→white→CT color-mix for a 0-100 rate — white at 50, deepening to T-orange toward 0 and CT-blue toward 100. Used for round win rate. */
 export function rateGradientColor(rate: number): string {
   const t = Math.max(0, Math.min(100, rate));

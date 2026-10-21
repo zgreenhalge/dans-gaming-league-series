@@ -65,6 +65,8 @@ function rival(playerA: number, playerB: number, aWins: number, bWins: number): 
     matches: [],
     aUpsetScore: 0,
     bUpsetScore: 0,
+    aUpsetWins: 0,
+    bUpsetWins: 0,
   };
 }
 

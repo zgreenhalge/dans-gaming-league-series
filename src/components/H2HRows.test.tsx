@@ -28,8 +28,10 @@ const RIVAL: H2HStats = {
   bStats: { ...STATS, roundsWon: 51 },
   mapBreakdown: [],
   matches: [],
-    aUpsetScore: 0,
-    bUpsetScore: 0,
+  aUpsetScore: 0,
+  bUpsetScore: 0,
+  aUpsetWins: 0,
+  bUpsetWins: 0,
 };
 
 const withAvatar = (p: typeof alice) => ({ ...p, steam_avatar_url: 'https://example.com/a.jpg' });
@@ -54,6 +56,19 @@ describe('DuoRow', () => {
     expect(screen.getByTitle(/KDA is shown for context only/)).toBeInTheDocument();
   });
 
+  test('shows wins above the pre-match odds with a sign, and dims it under three games together', () => {
+    const { rerender } = render(
+      <>
+        <DuoHeader />
+        <DuoRow {...props} duo={duoStats({ gamesPlayed: 5, winsAboveExpected: 1.46 })} />
+      </>,
+    );
+    expect(screen.getByText('vs Odds')).toBeInTheDocument();
+    expect(screen.getByText('+1.5').parentElement).not.toHaveClass('opacity-50');
+    rerender(<DuoRow {...props} duo={duoStats({ gamesPlayed: 2, winsAboveExpected: -0.4 })} />);
+    expect(screen.getByText('-0.4').parentElement).toHaveClass('opacity-50');
+  });
+
   test('compact leaves out the rounds column and its header', () => {
     const { rerender } = render(
       <>
@@ -71,6 +86,7 @@ describe('DuoRow', () => {
     expect(screen.queryByText('Rounds W-L')).toBeNull();
     expect(screen.queryByText('40–30')).toBeNull();
     expect(screen.queryByText('KDA')).toBeNull();
+    expect(screen.queryByText('vs Odds')).toBeNull();
     expect(screen.queryByText('1.67')).toBeNull();
     expect(screen.getByText('3–2')).toBeInTheDocument();
   });
@@ -112,6 +128,14 @@ describe('RivalRow', () => {
     expect(screen.getByText('51')).toBeInTheDocument();
     expect(screen.getByText('91')).toBeInTheDocument();
     expect(screen.getAllByText('Rounds')).toHaveLength(2);
+  });
+
+  test('dims the rating of an uneven rivalry and says why, but not an even one', () => {
+    const { rerender } = render(<RivalRow {...props} rival={{ ...RIVAL, meetings: 7, aWins: 6, bWins: 1 }} />);
+    expect(screen.getByTitle(/Uneven record/)).toHaveClass('opacity-40');
+    rerender(<RivalRow {...props} />); // 4-3 over 7 meetings
+    expect(screen.queryByTitle(/Uneven record/)).toBeNull();
+    expect(screen.getByTitle('tip')).not.toHaveClass('opacity-40');
   });
 
   test('accents the higher figure of each pair', () => {

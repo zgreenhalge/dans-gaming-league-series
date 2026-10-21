@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { duoAvgKda, type DuoStats, type H2HStats } from '@/lib/h2h';
-import { winRatePct } from '@/lib/util';
+import { duoAvgKda, isUnevenRivalry, MIN_GAMES_FOR_PERFORMANCE, type DuoStats, type H2HStats } from '@/lib/h2h';
+import { formatSigned, signedColor, winRatePct } from '@/lib/util';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
@@ -61,7 +61,7 @@ function RowShell({
 const HEAD_CLS = 'tracked text-[8px] text-[var(--color-text-secondary)]';
 
 function duoCols(compact: boolean): string {
-  return compact ? 'grid-cols-[28px_34px_44px]' : 'grid-cols-[28px_34px_44px_36px_88px]';
+  return compact ? 'grid-cols-[28px_34px_44px]' : 'grid-cols-[28px_34px_44px_40px_36px_88px]';
 }
 
 /** Column labels above a list of `DuoRow`s. */
@@ -73,6 +73,11 @@ export function DuoHeader({ compact = false }: { compact?: boolean }) {
         <span className={`${HEAD_CLS} text-center`}>Rating</span>
         <span className={`${HEAD_CLS} text-right`}>Games</span>
         <span className={`${HEAD_CLS} text-right`}>W-L</span>
+        {!compact && (
+          <span className={`${HEAD_CLS} text-right`} title="Wins above the pre-match odds: the duo's wins minus the wins the odds predicted. Dimmed under 3 games together.">
+            vs Odds
+          </span>
+        )}
         {!compact && (
           <span className={`${HEAD_CLS} text-right`} title="Average of the two players' KDA, (kills + assists) / deaths, together. Shown for context; the Friends Rating's performance term uses ADR, not KDA.">
             KDA
@@ -128,6 +133,12 @@ export function DuoRow({
           <span className="display-numeral text-[13px] text-right">{duo.wins}–{duo.gamesPlayed - duo.wins}</span>
           <span className="font-mono text-[8px] text-[var(--color-text-secondary)] text-right">{wr}%</span>
         </div>
+        {!compact && (
+          <div className={`flex flex-col items-end${duo.gamesPlayed < MIN_GAMES_FOR_PERFORMANCE ? ' opacity-50' : ''}`}>
+            <span className="display-numeral text-[13px] text-right" style={{ color: signedColor(duo.winsAboveExpected, 1) }}>{formatSigned(duo.winsAboveExpected, 1)}</span>
+            <span className="font-mono text-[8px] text-right">&nbsp;</span>
+          </div>
+        )}
         {!compact && (
           <div className="flex flex-col items-end">
             <span className="display-numeral text-[13px] text-right">{duoAvgKda(duo).toFixed(2)}</span>
@@ -188,6 +199,7 @@ export function RivalRow({
   b: PlayerRef;
   compact?: boolean;
 }) {
+  const uneven = isUnevenRivalry(rival);
   const aWinsHigher = rival.aWins > rival.bWins;
   const bWinsHigher = rival.bWins > rival.aWins;
   const aRoundsHigher = rival.aStats.roundsWon > rival.bStats.roundsWon;
@@ -202,7 +214,7 @@ export function RivalRow({
       <span className={`display-numeral text-[12px] text-center${tone(aRoundsHigher, bRoundsHigher)}`}>{rival.aStats.roundsWon}</span>
       <span className={`display-numeral text-[12px] text-center${tone(aWinsHigher, bWinsHigher)}`}>{rival.aWins}</span>
       <div className="flex items-center justify-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)] self-stretch -my-2">
-        <RatingCircle value={rating} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={breakdown} />
+        <RatingCircle value={rating} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={uneven ? `${breakdown} · Uneven record` : breakdown} dimmed={uneven} />
       </div>
       <span className={`display-numeral text-[12px] text-center${tone(bWinsHigher, aWinsHigher)}`}>{rival.bWins}</span>
       <span className={`display-numeral text-[12px] text-center${tone(bRoundsHigher, aRoundsHigher)}`}>{rival.bStats.roundsWon}</span>

@@ -124,6 +124,27 @@ export interface H2HStats {
   aUpsetScore: number;
   /** `aUpsetScore` for playerB's team. */
   bUpsetScore: number;
+  /** How many of these meetings playerA's team won as the pre-match underdog. */
+  aUpsetWins: number;
+  /** How many of these meetings playerB's team won as the pre-match underdog. */
+  bUpsetWins: number;
+}
+
+/** How even a rivalry's record is: 1 for a level record, toward 0 as it turns lopsided (0 for a
+ *  single meeting or none). The Rival Rating is scaled by its square. */
+export function rivalEvenness(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): number {
+  return r.meetings > 0 ? 1 - Math.abs(r.aWins - r.bWins) / r.meetings : 0;
+}
+
+/** A duo needs this many games together before its wins above the odds and ADR lift read as more
+ *  than noise; the UI dims them below it. */
+export const MIN_GAMES_FOR_PERFORMANCE = 3;
+
+/** A rivalry less even than this reads as lopsided, and its rating is shown dimmed. */
+export const UNEVEN_RIVALRY_BELOW = 0.5;
+
+export function isUnevenRivalry(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): boolean {
+  return rivalEvenness(r) < UNEVEN_RIVALRY_BELOW;
 }
 
 export interface H2HData {
@@ -251,6 +272,8 @@ interface H2HRivalAgg {
   bWins: number;
   aUpsetScore: number;
   bUpsetScore: number;
+  aUpsetWins: number;
+  bUpsetWins: number;
   aStats: H2HRivalPlayerAgg;
   bStats: H2HRivalPlayerAgg;
   mapTotals: Map<string, H2HMapAgg>;
@@ -289,7 +312,12 @@ function teamWinProb(shirtsWinProb: number | null, faction: 'SHIRTS' | 'SKINS'):
  *  below even the win probability was, doubled (0 to 1); a favourite's win, a loss, or a game with
  *  no stored prediction counts 0. */
 function upsetScore(won: boolean, winProb: number | null): number {
-  return won && winProb != null && winProb < 0.5 ? 1 - 2 * winProb : 0;
+  return isUpsetWin(won, winProb) && winProb != null ? 1 - 2 * winProb : 0;
+}
+
+/** Whether a result is a win as the pre-match underdog. */
+function isUpsetWin(won: boolean, winProb: number | null): boolean {
+  return won && winProb != null && winProb < 0.5;
 }
 
 /** A player's ADR in the games they played with a given partner, as a fraction above their ADR in
@@ -334,7 +362,7 @@ export function computeH2H(
     const key = h2hPairKey(a, b);
     let agg = rivalAgg.get(key);
     if (!agg) {
-      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aUpsetScore: 0, bUpsetScore: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
+      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aUpsetScore: 0, bUpsetScore: 0, aUpsetWins: 0, bUpsetWins: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
       rivalAgg.set(key, agg);
     }
     return agg;
@@ -441,8 +469,12 @@ export function computeH2H(
         const bRow = aRow === x ? y : x;
         if (aRow.is_win) agg.aWins += 1;
         else agg.bWins += 1;
-        agg.aUpsetScore += upsetScore(aRow.is_win, teamWinProb(m.shirtsWinProb, aRow.faction));
-        agg.bUpsetScore += upsetScore(bRow.is_win, teamWinProb(m.shirtsWinProb, bRow.faction));
+        const aWinProb = teamWinProb(m.shirtsWinProb, aRow.faction);
+        const bWinProb = teamWinProb(m.shirtsWinProb, bRow.faction);
+        agg.aUpsetScore += upsetScore(aRow.is_win, aWinProb);
+        agg.bUpsetScore += upsetScore(bRow.is_win, bWinProb);
+        if (isUpsetWin(aRow.is_win, aWinProb)) agg.aUpsetWins += 1;
+        if (isUpsetWin(bRow.is_win, bWinProb)) agg.bUpsetWins += 1;
 
         for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
           statAgg.games += 1;
@@ -524,6 +556,8 @@ export function computeH2H(
       matches: sortedMatches,
       aUpsetScore: r.aUpsetScore,
       bUpsetScore: r.bUpsetScore,
+      aUpsetWins: r.aUpsetWins,
+      bUpsetWins: r.bUpsetWins,
     };
   });
 

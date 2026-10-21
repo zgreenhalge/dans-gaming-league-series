@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, findDuo, findRival, duoAvgKda, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
+import { computeH2H, findDuo, findRival, duoAvgKda, rivalEvenness, isUnevenRivalry, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
@@ -487,6 +487,17 @@ test('upset scores: an underdog win counts how far below even the odds were, dou
   const rival = findRival(result.rivals, 1, 2)!;
   near(rival.aUpsetScore, 0.6);
   near(rival.bUpsetScore, 0.4);
+  assert.equal(rival.aUpsetWins, 1);
+  assert.equal(rival.bUpsetWins, 1);
+});
+
+test('rivalEvenness: 1 for a level record, toward 0 as it turns lopsided, 0 with no meetings; uneven below one half', () => {
+  assert.equal(rivalEvenness({ meetings: 4, aWins: 2, bWins: 2 }), 1);
+  assert.equal(rivalEvenness({ meetings: 10, aWins: 4, bWins: 6 }), 0.8);
+  assert.equal(rivalEvenness({ meetings: 1, aWins: 1, bWins: 0 }), 0);
+  assert.equal(rivalEvenness({ meetings: 0, aWins: 0, bWins: 0 }), 0);
+  assert.equal(isUnevenRivalry({ meetings: 4, aWins: 3, bWins: 1 }), false); // exactly one half
+  assert.equal(isUnevenRivalry({ meetings: 5, aWins: 4, bWins: 1 }), true);
 });
 
 test('adrLift: mean of each player\'s ADR with the partner over their ADR in every other game', () => {

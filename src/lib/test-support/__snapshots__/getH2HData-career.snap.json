@@ -601,7 +601,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 1,
@@ -694,7 +696,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -787,7 +791,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -880,7 +886,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 1,
@@ -973,7 +981,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 1,
@@ -1066,7 +1076,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -1159,7 +1171,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -1252,7 +1266,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 3,
@@ -1345,7 +1361,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 3,
@@ -1438,7 +1456,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 4,
@@ -1531,7 +1551,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 4,
@@ -1624,7 +1646,9 @@
         }
       ],
       "aUpsetScore": 0,
-      "bUpsetScore": 0
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     }
   ],
   "players": [

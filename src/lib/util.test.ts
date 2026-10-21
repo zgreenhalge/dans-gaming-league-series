@@ -48,6 +48,8 @@ import {
   finalRoundNumberOf,
   ordinal,
   mergeLeaderboardRows,
+  formatSigned,
+  signedColor,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
 import { mapSlug } from './maps';
@@ -512,6 +514,21 @@ test('mergeLeaderboardRows: sums a shared player\'s totals and re-derives their 
   assert.equal(p1.overall_adr, 60);
   assert.equal(p1.kd_ratio, 28 / 12);
   assert.deepEqual(merged.find((r) => r.player_id === 2), lbRow(2));
+});
+
+test('formatSigned: explicit plus when positive, rounded first so a zero never shows a sign', () => {
+  assert.equal(formatSigned(1.46, 1), '+1.5');
+  assert.equal(formatSigned(-0.44, 1), '-0.4');
+  assert.equal(formatSigned(0, 1), '0.0');
+  assert.equal(formatSigned(-0.04, 1), '0.0');
+  assert.equal(formatSigned(4.4, 0), '+4');
+});
+
+test('signedColor: green above zero, red below, none at zero, judged at the displayed precision', () => {
+  assert.equal(signedColor(0.5, 1), 'var(--color-accent-green-fg)');
+  assert.equal(signedColor(-0.5, 1), 'var(--color-accent-red-fg)');
+  assert.equal(signedColor(0, 1), undefined);
+  assert.equal(signedColor(-0.04, 1), undefined);
 });
 
 report();

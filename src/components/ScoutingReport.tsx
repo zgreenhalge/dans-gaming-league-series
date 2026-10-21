@@ -30,6 +30,8 @@ function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
     bWins: rival.aWins,
     aUpsetScore: rival.bUpsetScore,
     bUpsetScore: rival.aUpsetScore,
+    aUpsetWins: rival.bUpsetWins,
+    bUpsetWins: rival.aUpsetWins,
     lastMap: rival.lastMap,
     aStats: rival.bStats,
     bStats: rival.aStats,

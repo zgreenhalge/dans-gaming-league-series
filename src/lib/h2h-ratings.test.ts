@@ -41,6 +41,8 @@ function rival(wins: [number, number], overrides: Partial<H2HStats> = {}): H2HSt
     matches: [],
     aUpsetScore: 0,
     bUpsetScore: 0,
+    aUpsetWins: 0,
+    bUpsetWins: 0,
     ...overrides,
   };
 }
