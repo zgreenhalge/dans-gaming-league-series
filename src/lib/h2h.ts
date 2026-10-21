@@ -87,6 +87,13 @@ export interface DuoStats {
   bestMap: string | null;
   mapBreakdown: H2HMapStat[];
   matches: DuoMatchSummary[];
+  /** Wins minus the wins the pre-match odds predicted, `Σ(is_win − P(the duo's team wins))` over
+   *  their games: positive when the pair beat the odds. A game with no stored prediction adds 0. */
+  winsAboveExpected: number;
+  /** How far the pair's ADR together sits above each player's own ADR in every other game of the
+   *  selection: the mean of the two players' `ADR together / ADR elsewhere − 1`. A player with no
+   *  other games counts 0. */
+  adrLift: number;
 }
 
 /** A player's aggregated performance across their meetings with a given rival. */
@@ -111,6 +118,39 @@ export interface H2HStats {
   bStats: H2HPlayerStats;
   mapBreakdown: H2HMapStat[];
   matches: RivalMatchSummary[];
+  /** Upset wins by playerA's team over these meetings: each win as the pre-match underdog adds how
+   *  far below even the team's win probability was, doubled (`1 − 2p`, 0 for a favourite's win or
+   *  a game with no stored prediction). */
+  aUpsetScore: number;
+  /** `aUpsetScore` for playerB's team. */
+  bUpsetScore: number;
+  /** How many of these meetings playerA's team won as the pre-match underdog. */
+  aUpsetWins: number;
+  /** How many of these meetings playerB's team won as the pre-match underdog. */
+  bUpsetWins: number;
+}
+
+/** How even a rivalry's record is: 1 for a level record, toward 0 as it turns lopsided (0 for a
+ *  single meeting or none). The Rival Rating is scaled by its square. */
+export function rivalEvenness(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): number {
+  return r.meetings > 0 ? 1 - Math.abs(r.aWins - r.bWins) / r.meetings : 0;
+}
+
+/** A duo needs this many games together before its wins above the odds and ADR lift read as more
+ *  than noise; the UI dims them below it. */
+export const MIN_GAMES_FOR_PERFORMANCE = 3;
+
+/** A rivalry less even than this reads as lopsided, and its rating is shown dimmed. */
+const UNEVEN_RIVALRY_BELOW = 0.5;
+
+export function isUnevenRivalry(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): boolean {
+  return rivalEvenness(r) < UNEVEN_RIVALRY_BELOW;
+}
+
+/** The note a dimmed rivalry rating carries (`RatingCircle`'s `dimmedReason`); `undefined` for a
+ *  rivalry that is even enough to show at full strength. */
+export function unevenRivalryNote(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): string | undefined {
+  return isUnevenRivalry(r) ? 'Uneven record' : undefined;
 }
 
 export interface H2HData {
@@ -140,6 +180,9 @@ export interface H2HMatchInput {
   seasonNumber: number | null;
   isGauntlet: boolean;
   map: string | null;
+  /** The pre-match probability that SHIRTS win (`matches.pre_match_win_prob`); `null` when the
+   *  match has no stored prediction. */
+  shirtsWinProb: number | null;
   /** Who picked the played map — see "Who picked" in docs/glossary.md. `null` for gauntlet matches (no veto data). */
   pickedBy: 'SHIRTS' | 'SKINS' | null;
   /** Skins' starting side for the played map. `null` for gauntlet matches (no veto data). */
@@ -220,6 +263,7 @@ interface H2HDuoAgg {
   deaths: number;
   roundsWon: number;
   roundsPlayed: number;
+  winsAboveExpected: number;
   aStats: H2HRivalPlayerAgg;
   bStats: H2HRivalPlayerAgg;
   mapTotals: Map<string, H2HMapAgg>;
@@ -232,6 +276,10 @@ interface H2HRivalAgg {
   meetings: number;
   aWins: number;
   bWins: number;
+  aUpsetScore: number;
+  bUpsetScore: number;
+  aUpsetWins: number;
+  bUpsetWins: number;
   aStats: H2HRivalPlayerAgg;
   bStats: H2HRivalPlayerAgg;
   mapTotals: Map<string, H2HMapAgg>;
@@ -259,6 +307,30 @@ function bestH2HMapFor(mapTotals: Map<string, { games: number; wins: number }>):
   return tied ? null : bestMap;
 }
 
+/** A team's pre-match win probability, from the probability that SHIRTS win. `null` when the match
+ *  has no stored prediction. */
+function teamWinProb(shirtsWinProb: number | null, faction: 'SHIRTS' | 'SKINS'): number | null {
+  if (shirtsWinProb == null) return null;
+  return faction === 'SHIRTS' ? shirtsWinProb : 1 - shirtsWinProb;
+}
+
+/** What a result adds to a rivalry's upset score: a win as the pre-match underdog counts for how far
+ *  below even the win probability was, doubled (0 to 1); a favourite's win, a loss, or a game with
+ *  no stored prediction counts 0. */
+function upsetScore(won: boolean, winProb: number | null): number {
+  return won && winProb != null && winProb < 0.5 ? 1 - 2 * winProb : 0;
+}
+
+/** A player's ADR in the games they played with a given partner, as a fraction above their ADR in
+ *  every other game they played (`totals` covers all of them). 0 when they played no other games. */
+function adrGain(together: H2HRivalPlayerAgg, totals: { games: number; adrSum: number } | undefined): number {
+  if (!totals) return 0;
+  const otherGames = totals.games - together.games;
+  if (together.games === 0 || otherGames <= 0) return 0;
+  const otherAdr = (totals.adrSum - together.adrSum) / otherGames;
+  return otherAdr > 0 ? together.adrSum / together.games / otherAdr - 1 : 0;
+}
+
 /**
  * Computes head-to-head relationship data — partner records (`duos`) and
  * opponent records (`rivals`) — from a set of already-resolved played matches.
@@ -273,13 +345,15 @@ export function computeH2H(
   const duoAgg = new Map<string, H2HDuoAgg>();
   const rivalAgg = new Map<string, H2HRivalAgg>();
   const playerIds = new Set<number>();
+  // Every game each player played in the selection, for `adrGain()`'s "ADR in every other game".
+  const playerTotals = new Map<number, { games: number; adrSum: number }>();
 
   function getDuo(x: H2HRosterRow, y: H2HRosterRow): H2HDuoAgg {
     const [a, b] = x.player_id < y.player_id ? [x.player_id, y.player_id] : [y.player_id, x.player_id];
     const key = h2hPairKey(a, b);
     let agg = duoAgg.get(key);
     if (!agg) {
-      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
+      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, winsAboveExpected: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
       duoAgg.set(key, agg);
     }
     return agg;
@@ -290,7 +364,7 @@ export function computeH2H(
     const key = h2hPairKey(a, b);
     let agg = rivalAgg.get(key);
     if (!agg) {
-      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
+      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aUpsetScore: 0, bUpsetScore: 0, aUpsetWins: 0, bUpsetWins: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
       rivalAgg.set(key, agg);
     }
     return agg;
@@ -308,7 +382,13 @@ export function computeH2H(
   for (const m of matches) {
     const roster = m.roster;
     if (roster.length === 0) continue;
-    for (const r of roster) playerIds.add(r.player_id);
+    for (const r of roster) {
+      playerIds.add(r.player_id);
+      const totals = playerTotals.get(r.player_id) ?? { games: 0, adrSum: 0 };
+      totals.games += 1;
+      totals.adrSum += r.adr;
+      playerTotals.set(r.player_id, totals);
+    }
 
     // Partner/opponent grouping is purely faction-based: two players are
     // partners if they share a `faction` (SHIRTS/SKINS) in a match, opponents
@@ -333,6 +413,8 @@ export function computeH2H(
           agg.games += 1;
           if (x.is_win) agg.wins += 1;
           else agg.losses += 1;
+          const duoWinProb = teamWinProb(m.shirtsWinProb, x.faction);
+          if (duoWinProb != null) agg.winsAboveExpected += (x.is_win ? 1 : 0) - duoWinProb;
           agg.adrSum += x.adr + y.adr;
           agg.kills += x.kills + y.kills;
           agg.assists += (x.assists ?? 0) + (y.assists ?? 0);
@@ -389,6 +471,14 @@ export function computeH2H(
         const bRow = aRow === x ? y : x;
         if (aRow.is_win) agg.aWins += 1;
         else agg.bWins += 1;
+        const aWinProb = teamWinProb(m.shirtsWinProb, aRow.faction);
+        const bWinProb = teamWinProb(m.shirtsWinProb, bRow.faction);
+        const aUpset = upsetScore(aRow.is_win, aWinProb);
+        const bUpset = upsetScore(bRow.is_win, bWinProb);
+        agg.aUpsetScore += aUpset;
+        agg.bUpsetScore += bUpset;
+        if (aUpset > 0) agg.aUpsetWins += 1;
+        if (bUpset > 0) agg.bUpsetWins += 1;
 
         for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
           statAgg.games += 1;
@@ -451,6 +541,8 @@ export function computeH2H(
     bestMap: bestH2HMapFor(d.mapTotals),
     mapBreakdown: finalizeMapBreakdown(d.mapTotals),
     matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
+    winsAboveExpected: d.winsAboveExpected,
+    adrLift: (adrGain(d.aStats, playerTotals.get(d.a)) + adrGain(d.bStats, playerTotals.get(d.b))) / 2,
   }));
 
   const rivals: H2HStats[] = [...rivalAgg.values()].map((r) => {
@@ -466,6 +558,10 @@ export function computeH2H(
       bStats: finalizeH2HPlayerStats(r.bStats),
       mapBreakdown: finalizeMapBreakdown(r.mapTotals),
       matches: sortedMatches,
+      aUpsetScore: r.aUpsetScore,
+      bUpsetScore: r.bUpsetScore,
+      aUpsetWins: r.aUpsetWins,
+      bUpsetWins: r.bUpsetWins,
     };
   });
 
@@ -491,7 +587,7 @@ export function findDuo(duos: DuoStats[], a: number, b: number): DuoStats | unde
 /** A duo's KDA: the mean of the two players' own KDA, (kills + assists) / deaths each via
  *  `deriveKda()`, over the games they played together (`aStats` / `bStats`). It is not the pair's
  *  pooled `combinedKills + combinedAssists` over `combinedDeaths`. Informational only: the Friends
- *  Rating (`duoBlendedScorer()`) does not use it. */
+ *  Rating (`duoBlendedScorer()`) measures a pair's performance by ADR, not KDA. */
 export function duoAvgKda(duo: Pick<DuoStats, 'aStats' | 'bStats'>): number {
   const kda = (s: H2HPlayerStats) => deriveKda({ total_kills: s.kills, total_assists: s.assists, total_deaths: s.deaths });
   return (kda(duo.aStats) + kda(duo.bStats)) / 2;
@@ -523,6 +619,7 @@ interface _H2HSourceMatch {
   season_number: number | null;
   is_gauntlet: boolean;
   final_score: string | null;
+  pre_match_win_prob: number | null;
   skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
@@ -555,6 +652,7 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
     seasonNumber: m.season_number,
     isGauntlet: m.is_gauntlet,
     map: effectivePickedMap(m),
+    shirtsWinProb: m.pre_match_win_prob,
     pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
     startingSide: m.skins_starting_side,
     finalScore: m.final_score,
@@ -569,6 +667,7 @@ interface _SeasonSourceMatch {
   id: number;
   match_number: number;
   final_score: string | null;
+  pre_match_win_prob: number | null;
   skins_pick: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
@@ -592,6 +691,7 @@ function seasonMatchToH2HInput(
     seasonNumber,
     isGauntlet,
     map: effectivePickedMap(m),
+    shirtsWinProb: m.pre_match_win_prob,
     pickedBy: resolveH2HPickedBy(m.shirts_pick, m.skins_pick),
     startingSide: m.skins_starting_side,
     finalScore: m.final_score,

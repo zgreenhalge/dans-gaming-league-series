@@ -13,26 +13,9 @@ import { describe, expect, test } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { HottestRivalriesPanel, TopDuosPanel, TOP_PAIRS_LIMIT } from './TopPairsPanels';
 import type { H2HData } from '@/lib/h2h';
-import { duoStats } from '@/lib/test-support/h2hFixtures';
+import { duoStats, rivalStats as rival } from '@/lib/test-support/h2hFixtures';
 
 const PLAYERS = [1, 2, 3, 4, 5].map((id) => ({ id, name: `P${id}`, steam_avatar_url: null }));
-const STATS = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
-
-function rival(playerA: number, playerB: number, aWins: number, bWins: number): H2HData['rivals'][number] {
-  return {
-    playerA,
-    playerB,
-    meetings: aWins + bWins,
-    aWins,
-    bWins,
-    lastMap: null,
-    aStats: { ...STATS, roundsWon: 13 * aWins },
-    bStats: { ...STATS, roundsWon: 13 * bWins },
-    mapBreakdown: [],
-    matches: [],
-  };
-}
-
 const DATA: H2HData = {
   players: PLAYERS,
   // P1&P2 are far ahead; P3&P4 and P4&P5 trail; P2&P5 is the fourth and must be cut.

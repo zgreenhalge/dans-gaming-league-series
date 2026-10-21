@@ -11,24 +11,15 @@ import { describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
-import { duoStats, H2H_PLAYERS } from '@/lib/test-support/h2hFixtures';
+import { duoStats, H2H_PLAYER_STATS, H2H_PLAYERS, rivalStats } from '@/lib/test-support/h2hFixtures';
 import type { H2HStats } from '@/lib/h2h';
 
 const [alice, bob] = H2H_PLAYERS;
 
-const STATS = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
-const RIVAL: H2HStats = {
-  playerA: 1,
-  playerB: 2,
-  meetings: 7,
-  aWins: 4,
-  bWins: 3,
-  lastMap: null,
-  aStats: { ...STATS, roundsWon: 55 },
-  bStats: { ...STATS, roundsWon: 51 },
-  mapBreakdown: [],
-  matches: [],
-};
+const RIVAL: H2HStats = rivalStats(1, 2, 4, 3, {
+  aStats: { ...H2H_PLAYER_STATS, roundsWon: 55 },
+  bStats: { ...H2H_PLAYER_STATS, roundsWon: 51 },
+});
 
 const withAvatar = (p: typeof alice) => ({ ...p, steam_avatar_url: 'https://example.com/a.jpg' });
 
@@ -46,10 +37,23 @@ describe('DuoRow', () => {
     expect(screen.getByText('88')).toBeInTheDocument();
   });
 
-  test('shows the average KDA and says it is not part of the rating', () => {
+  test('shows the average KDA and says it is context only', () => {
     render(<DuoRow {...props} />);
     expect(screen.getByText('1.67')).toBeInTheDocument(); // each fixture player: (20 + 5) / 15
-    expect(screen.getByTitle(/KDA is not part of the rating/)).toBeInTheDocument();
+    expect(screen.getByTitle(/KDA is shown for context only/)).toBeInTheDocument();
+  });
+
+  test('shows wins above the pre-match odds with a sign, and dims it under three games together', () => {
+    const { rerender } = render(
+      <>
+        <DuoHeader />
+        <DuoRow {...props} duo={duoStats({ gamesPlayed: 5, winsAboveExpected: 1.46 })} />
+      </>,
+    );
+    expect(screen.getByText('vs Odds')).toBeInTheDocument();
+    expect(screen.getByText('+1.5').parentElement).not.toHaveClass('opacity-50');
+    rerender(<DuoRow {...props} duo={duoStats({ gamesPlayed: 2, winsAboveExpected: -0.4 })} />);
+    expect(screen.getByText('-0.4').parentElement).toHaveClass('opacity-50');
   });
 
   test('compact leaves out the rounds column and its header', () => {
@@ -69,6 +73,7 @@ describe('DuoRow', () => {
     expect(screen.queryByText('Rounds W-L')).toBeNull();
     expect(screen.queryByText('40–30')).toBeNull();
     expect(screen.queryByText('KDA')).toBeNull();
+    expect(screen.queryByText('vs Odds')).toBeNull();
     expect(screen.queryByText('1.67')).toBeNull();
     expect(screen.getByText('3–2')).toBeInTheDocument();
   });
@@ -110,6 +115,14 @@ describe('RivalRow', () => {
     expect(screen.getByText('51')).toBeInTheDocument();
     expect(screen.getByText('91')).toBeInTheDocument();
     expect(screen.getAllByText('Rounds')).toHaveLength(2);
+  });
+
+  test('dims the rating of an uneven rivalry and says why, but not an even one', () => {
+    const { rerender } = render(<RivalRow {...props} rival={rivalStats(1, 2, 6, 1)} />);
+    expect(screen.getByTitle('tip · Uneven record')).toHaveClass('opacity-50');
+    rerender(<RivalRow {...props} />); // 4-3 over 7 meetings
+    expect(screen.queryByTitle(/Uneven record/)).toBeNull();
+    expect(screen.getByTitle('tip')).not.toHaveClass('opacity-50');
   });
 
   test('accents the higher figure of each pair', () => {

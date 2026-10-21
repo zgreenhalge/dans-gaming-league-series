@@ -38,6 +38,7 @@ export interface MapMatchRow {
   is_gauntlet: boolean;
   is_playoff_game: boolean;
   final_score: string | null;
+  pre_match_win_prob: number | null;
   shirts_stats: MapPlayerStat[];
   skins_stats: MapPlayerStat[];
   skins_pick: string | null;
@@ -124,6 +125,7 @@ export const getAllMatchesWithPickBan = persistentQuery('getAllMatchesWithPickBa
         is_gauntlet: season.is_gauntlet,
         is_playoff_game: m.is_playoff_game,
         final_score: m.final_score,
+        pre_match_win_prob: m.pre_match_win_prob,
         shirts_stats: roster.shirts,
         skins_stats: roster.skins,
         skins_pick: m.skins_pick,
@@ -144,6 +146,7 @@ type RawMatch = {
   week_id: number;
   match_number: number;
   final_score: string | null;
+  pre_match_win_prob: number | null;
   shirts_pick: string | null;
   skins_pick: string | null;
   shirts_ban: string | null;
@@ -168,7 +171,7 @@ const fetchMapRawData = persistentQuery('fetchMapRawData', async (): Promise<{
   const [matches, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
-        asPage(getAdminClient().from('matches').select('id, week_id, match_number, final_score, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
+        asPage(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
       ),
       getWeekLookup(),
       getAdminClient().from('seasons').select('id, name, is_gauntlet, map_pool'),
@@ -479,6 +482,7 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
         is_gauntlet: season.is_gauntlet,
         is_playoff_game: m.is_playoff_game,
         final_score: m.final_score,
+        pre_match_win_prob: m.pre_match_win_prob,
         shirts_stats: roster.shirts,
         skins_stats: roster.skins,
         skins_pick: m.skins_pick,

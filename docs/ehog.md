@@ -144,7 +144,8 @@ matches that don't already have one (`write_pre_match_win_probs()` in `engine.py
 once a match has a stored prediction it's frozen, so later formula or constant retunes (like a
 `MOV_M_MIN` change) never rewrite what was expected *at the time*. `pre_match_win_prob_formula_version`
 rides alongside it so a future formula version is distinguishable from matches predicted under an
-earlier one. `ehog/backfill.py`'s dry-run/calibration modes never touch this column — only the live
+earlier one. The H2H Friends and Rival ratings read the frozen value as each team's odds going into
+a match (`winsAboveExpected` and the upset scores, [`calculations.md`](./calculations.md) Narrative Metrics). `ehog/backfill.py`'s dry-run/calibration modes never touch this column — only the live
 recompute does.
 
 ### Win probability UI

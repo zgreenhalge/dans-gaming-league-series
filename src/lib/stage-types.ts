@@ -61,6 +61,7 @@ export interface GauntletMatch {
   id: number;
   match_number: number;
   final_score: string | null;
+  pre_match_win_prob: number | null;
   scheduled_at: string | null;
   skins_pick: string | null;
   shirts_pick: string | null;

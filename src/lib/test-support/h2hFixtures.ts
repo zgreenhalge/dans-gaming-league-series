@@ -1,4 +1,4 @@
-import type { DuoStats, H2HData } from '@/lib/h2h';
+import type { DuoStats, H2HData, H2HStats } from '@/lib/h2h';
 import type { MapMatchRow, MapPlayerStat } from '@/lib/queries';
 
 /** Two named players sharing an id/name/avatar shape, for tests that need real (non-empty) H2H data
@@ -8,10 +8,34 @@ export const H2H_PLAYERS = [
   { id: 2, name: 'Bob', steam_avatar_url: null },
 ];
 
+/** One player's aggregated stat line, the default for both sides of `duoStats()` / `rivalStats()`. */
+export const H2H_PLAYER_STATS = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
+
+/** A rivalry between `playerA` and `playerB` with the given matches won on each side (13 rounds won
+ * per match) — override only the fields a given test cares about. */
+export function rivalStats(playerA = 1, playerB = 2, aWins = 4, bWins = 3, overrides: Partial<H2HStats> = {}): H2HStats {
+  return {
+    playerA,
+    playerB,
+    meetings: aWins + bWins,
+    aWins,
+    bWins,
+    lastMap: null,
+    aStats: { ...H2H_PLAYER_STATS, roundsWon: 13 * aWins },
+    bStats: { ...H2H_PLAYER_STATS, roundsWon: 13 * bWins },
+    mapBreakdown: [],
+    matches: [],
+    aUpsetScore: 0,
+    bUpsetScore: 0,
+    aUpsetWins: 0,
+    bUpsetWins: 0,
+    ...overrides,
+  };
+}
+
 /** A single duo's aggregated record for `H2H_PLAYERS`' Alice+Bob pair — override only the fields a
  * given test cares about. */
 export function duoStats(overrides: Partial<DuoStats> = {}): DuoStats {
-  const playerStats = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
   return {
     playerA: 1,
     playerB: 2,
@@ -24,11 +48,13 @@ export function duoStats(overrides: Partial<DuoStats> = {}): DuoStats {
     combinedDeaths: 30,
     roundsWon: 40,
     roundsPlayed: 70,
-    aStats: playerStats,
-    bStats: playerStats,
+    aStats: H2H_PLAYER_STATS,
+    bStats: H2H_PLAYER_STATS,
     bestMap: null,
     mapBreakdown: [],
     matches: [],
+    winsAboveExpected: 0,
+    adrLift: 0,
     ...overrides,
   };
 }
@@ -77,6 +103,7 @@ export function h2hMatchRow(overrides: Partial<MapMatchRow> = {}): MapMatchRow {
     is_gauntlet: false,
     is_playoff_game: false,
     final_score: '13-9',
+    pre_match_win_prob: null,
     shirts_stats: [],
     skins_stats: [],
     skins_pick: null,

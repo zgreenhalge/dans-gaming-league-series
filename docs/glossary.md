@@ -159,14 +159,14 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`H2HSection.tsx`) and the home page's Top duos / Hottest Rivalries rank pairs (both through
   `rankDuos()`/`rankRivals()`), and how the `H2HMatrix` colors its cells. Shared via
-  `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
-  Each metric that feeds the score (games played, wins, round win rate, meetings,
-  win-difference) lives on its own scale — raw counts can run into the dozens, rates top
-  out at 100, differences shrink toward 0 as a rivalry gets closer. To combine them into
-  one weighted sum, each metric is normalized against the *best value seen for that metric
-  across all eligible pairs* (e.g. `maxRwr` = the highest round win rate anyone posted),
-  turning every term into a 0–1 "how close to the best?" fraction before the weights
-  (0.5 / 0.3 / 0.2, etc.) are applied. `Math.max(1, ...)` guards the empty-data case.
+  `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/h2h-ratings.ts`.
+  Each term lives on its own scale — raw counts can run into the dozens, rates top out at 100,
+  differences shrink toward 0 as a rivalry gets closer, and performance terms can be negative. To
+  combine them into one weighted sum, each term is turned into a 0–1 fraction (of the best value
+  any eligible pair posted, or of a fixed full-marks value for the odds, lift and upset terms)
+  before its weight is applied, and the sum is divided by the best pair's so the top pair reads
+  100. Games together and meetings are terms in their own right; thin samples are shrunk toward
+  zero. Formulas and weights: "Narrative Metrics" in [`calculations.md`](./calculations.md).
 - **My Stats** — the home page's panel for the signed-in player: EHOG, career W-L, KDA (kills +
   assists per death, unlike the stat tables' K/D) and ADR, Next Match, **Best friend** (their
   highest-rated partner), **Worst nightmare** (the opponent they've lost to most) and Match history. Career-scoped, not season-scoped. Definitions in

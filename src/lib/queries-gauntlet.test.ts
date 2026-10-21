@@ -39,6 +39,7 @@ function gauntletMatchStub(id: number, matchNumber: number, finalScore: string |
     id,
     match_number: matchNumber,
     final_score: finalScore,
+    pre_match_win_prob: null,
     scheduled_at: scheduledAt,
     skins_pick: null,
     shirts_pick: null,

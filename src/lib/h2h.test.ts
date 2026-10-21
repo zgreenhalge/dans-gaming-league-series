@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, findDuo, findRival, duoAvgKda, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
+import { computeH2H, findDuo, findRival, duoAvgKda, rivalEvenness, isUnevenRivalry, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
@@ -39,6 +39,7 @@ function match(overrides: Partial<H2HMatchInput> & { matchId: number; roster: H2
     seasonNumber: 1,
     isGauntlet: false,
     map: 'de_test',
+    shirtsWinProb: null,
     pickedBy: null,
     startingSide: null,
     finalScore: '13-9',
@@ -184,6 +185,7 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
       season_number: 3,
       is_gauntlet: false,
       final_score: '13-7',
+      pre_match_win_prob: 0.7,
       skins_pick: null,
       shirts_pick: 'de_overpass',
       skins_starting_side: 'CT' as const,
@@ -202,6 +204,7 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
   assert.equal(inputs[0].map, 'de_overpass', 'falls back to shirts_pick when skins_pick is null');
   assert.equal(inputs[0].pickedBy, 'SHIRTS', 'shirts_pick set means shirts picked');
   assert.equal(inputs[0].startingSide, 'CT');
+  assert.equal(inputs[0].shirtsWinProb, 0.7);
   assert.equal(inputs[0].roster.length, 4);
 
   const result = computeH2H(inputs, players);
@@ -384,6 +387,7 @@ function seasonSourceMatch(overrides: {
     id: overrides.id,
     match_number: overrides.match_number ?? 1,
     final_score: overrides.final_score !== undefined ? overrides.final_score : '13-9',
+    pre_match_win_prob: null,
     skins_pick: null,
     shirts_pick: 'de_test',
     skins_starting_side: null as 'CT' | 'T' | null,
@@ -432,6 +436,96 @@ test('gauntletRoundsToH2HInput drops unplayed matches and stamps round/season nu
   assert.equal(inputs[0].weekNumber, 2, 'round_number maps into weekNumber');
   assert.equal(inputs[0].seasonNumber, 5);
   assert.equal(inputs[0].isGauntlet, true);
+});
+
+// --- Performance inputs to the Friends and Rival ratings ---
+const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≉ ${expected}`);
+
+test('winsAboveExpected: sums each duo game as result minus the duo team\'s win probability, skipping games with no prediction', () => {
+  const duoGame = (matchId: number, faction: 'SHIRTS' | 'SKINS', won: boolean, shirtsWinProb: number | null) =>
+    match({
+      matchId,
+      shirtsWinProb,
+      roster: [
+        stat({ player_id: 1, faction, is_win: won }),
+        stat({ player_id: 2, faction, is_win: won }),
+        stat({ player_id: 3, faction: faction === 'SHIRTS' ? 'SKINS' : 'SHIRTS', is_win: !won }),
+        stat({ player_id: 4, faction: faction === 'SHIRTS' ? 'SKINS' : 'SHIRTS', is_win: !won }),
+      ],
+    });
+  const result = computeH2H(
+    [
+      duoGame(1, 'SHIRTS', true, 0.25), // won as shirts at 25%: +0.75
+      duoGame(2, 'SKINS', false, 0.4), // lost as skins at 60%: −0.6
+      duoGame(3, 'SHIRTS', true, null), // no stored prediction: 0
+    ],
+    players,
+  );
+  near(findDuo(result.duos, 1, 2)!.winsAboveExpected, 0.15);
+  near(findDuo(result.duos, 3, 4)!.winsAboveExpected, -0.15); // the opposing pair mirrors it
+});
+
+test('upset scores: an underdog win counts how far below even the odds were, doubled; a favourite\'s win counts 0', () => {
+  const meeting = (matchId: number, shirtsWinProb: number, shirtsWon: boolean) =>
+    match({
+      matchId,
+      shirtsWinProb,
+      roster: [
+        stat({ player_id: 1, faction: 'SHIRTS', is_win: shirtsWon }),
+        stat({ player_id: 2, faction: 'SKINS', is_win: !shirtsWon }),
+      ],
+    });
+  const result = computeH2H(
+    [
+      meeting(1, 0.2, true), // player 1's team wins at 20%: 1 − 0.4 = 0.6
+      meeting(2, 0.4, false), // player 2's team wins at 60%: a favourite, 0
+      meeting(3, 0.7, false), // player 2's team wins at 30%: 1 − 0.6 = 0.4
+      meeting(4, 0.8, true), // player 1's team wins at 80%: a favourite, 0
+    ],
+    players,
+  );
+  const rival = findRival(result.rivals, 1, 2)!;
+  near(rival.aUpsetScore, 0.6);
+  near(rival.bUpsetScore, 0.4);
+  assert.equal(rival.aUpsetWins, 1);
+  assert.equal(rival.bUpsetWins, 1);
+});
+
+test('rivalEvenness: 1 for a level record, toward 0 as it turns lopsided, 0 with no meetings; uneven below one half', () => {
+  assert.equal(rivalEvenness({ meetings: 4, aWins: 2, bWins: 2 }), 1);
+  assert.equal(rivalEvenness({ meetings: 10, aWins: 4, bWins: 6 }), 0.8);
+  assert.equal(rivalEvenness({ meetings: 1, aWins: 1, bWins: 0 }), 0);
+  assert.equal(rivalEvenness({ meetings: 0, aWins: 0, bWins: 0 }), 0);
+  assert.equal(isUnevenRivalry({ meetings: 4, aWins: 3, bWins: 1 }), false); // exactly one half
+  assert.equal(isUnevenRivalry({ meetings: 5, aWins: 4, bWins: 1 }), true);
+});
+
+test('adrLift: mean of each player\'s ADR with the partner over their ADR in every other game', () => {
+  const result = computeH2H(
+    [
+      // Match 1: 1 and 2 partner (ADR 100 and 90) against 3 and 4.
+      match({ matchId: 1, roster: [
+        stat({ player_id: 1, faction: 'SHIRTS', adr: 100 }), stat({ player_id: 2, faction: 'SHIRTS', adr: 90 }),
+        stat({ player_id: 3, faction: 'SKINS', adr: 80, is_win: false }), stat({ player_id: 4, faction: 'SKINS', adr: 80, is_win: false }),
+      ] }),
+      // Match 2: 1 and 3 partner, 2 and 4 partner (1 plays at ADR 80 and 2 at ADR 70 away from each other).
+      match({ matchId: 2, roster: [
+        stat({ player_id: 1, faction: 'SHIRTS', adr: 80 }), stat({ player_id: 3, faction: 'SHIRTS', adr: 80 }),
+        stat({ player_id: 2, faction: 'SKINS', adr: 70, is_win: false }), stat({ player_id: 4, faction: 'SKINS', adr: 80, is_win: false }),
+      ] }),
+    ],
+    players,
+  );
+  near(findDuo(result.duos, 1, 2)!.adrLift, (100 / 80 - 1 + (90 / 70 - 1)) / 2);
+});
+
+test('adrLift is 0 for a player whose every game was with the partner', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS', adr: 120 }), stat({ player_id: 2, faction: 'SHIRTS', adr: 120 }),
+    stat({ player_id: 3, faction: 'SKINS', adr: 50, is_win: false }), stat({ player_id: 4, faction: 'SKINS', adr: 50, is_win: false }),
+  ];
+  const result = computeH2H([match({ matchId: 1, roster })], players);
+  assert.equal(findDuo(result.duos, 1, 2)!.adrLift, 0);
 });
 
 test('duoAvgKda: mean of the two players own (K+A)/D, not the pooled ratio', () => {

@@ -176,7 +176,7 @@ function gm(id: number, matchNumber: number, podIndex: number, rule: 'single' | 
     rounds_won: 0, rounds_played: 0,
   });
   return {
-    id, match_number: matchNumber, final_score: score, scheduled_at: null, skins_pick: null, shirts_pick: null, skins_starting_side: null,
+    id, match_number: matchNumber, final_score: score, pre_match_win_prob: null, scheduled_at: null, skins_pick: null, shirts_pick: null, skins_starting_side: null,
     is_feature_match: false, pod_index: podIndex, advance_rule: rule,
     shirts_stats: [stat(a, 'SHIRTS'), stat(b, 'SHIRTS')], skins_stats: [stat(c, 'SKINS'), stat(d, 'SKINS')],
   };

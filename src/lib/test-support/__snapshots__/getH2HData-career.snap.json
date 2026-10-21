@@ -146,7 +146,9 @@
             }
           ]
         }
-      ]
+      ],
+      "winsAboveExpected": 0.44999999999999996,
+      "adrLift": 0
     },
     {
       "playerA": 3,
@@ -304,7 +306,9 @@
             }
           ]
         }
-      ]
+      ],
+      "winsAboveExpected": -0.44999999999999996,
+      "adrLift": 0
     },
     {
       "playerA": 5,
@@ -401,7 +405,9 @@
             }
           ]
         }
-      ]
+      ],
+      "winsAboveExpected": 0,
+      "adrLift": 0
     },
     {
       "playerA": 7,
@@ -498,7 +504,9 @@
             }
           ]
         }
-      ]
+      ],
+      "winsAboveExpected": 0,
+      "adrLift": 0
     }
   ],
   "rivals": [
@@ -591,7 +599,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 1,
@@ -682,7 +694,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -773,7 +789,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -864,7 +884,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 1,
@@ -955,7 +979,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 1,
@@ -1046,7 +1074,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -1137,7 +1169,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 2,
@@ -1228,7 +1264,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 3,
@@ -1319,7 +1359,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 3,
@@ -1410,7 +1454,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 4,
@@ -1501,7 +1549,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     },
     {
       "playerA": 4,
@@ -1592,7 +1644,11 @@
             }
           ]
         }
-      ]
+      ],
+      "aUpsetScore": 0,
+      "bUpsetScore": 0,
+      "aUpsetWins": 0,
+      "bUpsetWins": 0
     }
   ],
   "players": [

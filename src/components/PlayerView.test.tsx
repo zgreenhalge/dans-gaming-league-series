@@ -50,6 +50,7 @@ function historyRow(overrides: Partial<PlayerHistoryRow> = {}): PlayerHistoryRow
     is_gauntlet: false,
     map: 'de_dust2',
     final_score: '13-9',
+    pre_match_win_prob: null,
     scheduled_at: null,
     shirts: [{ player_id: 1, player_name: 'Alice' }],
     skins: [{ player_id: 2, player_name: 'Bob' }],

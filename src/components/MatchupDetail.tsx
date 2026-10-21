@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
-import { rateGradientColor, winRatePct } from '@/lib/util';
+import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/h2h-ratings';
+import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, rivalEvenness, unevenRivalryNote } from '@/lib/h2h';
+import { formatSigned, rateGradientColor, signedColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
@@ -21,9 +23,9 @@ export function EmptyPanel({ label }: { label: string }) {
   );
 }
 
-function StatCell({ label, children, color, title }: { label: string; children: React.ReactNode; color?: string; title?: string }) {
+function StatCell({ label, children, color, title, dim = false }: { label: string; children: React.ReactNode; color?: string; title?: string; dim?: boolean }) {
   return (
-    <div className="border-l-2 border-[var(--color-border-primary)] pl-2.5" title={title}>
+    <div className={`border-l-2 border-[var(--color-border-primary)] pl-2.5${dim ? ' opacity-50' : ''}`} title={title}>
       <div className="tracked text-[8px] text-[var(--color-text-secondary)]">{label}</div>
       <div className="font-display text-[16px] font-bold mt-1" style={color ? { color } : undefined}>
         {children}
@@ -249,7 +251,7 @@ export function DuoDetail({
 
   const hero = (
     <>
-      <RatingCircle value={circleValue} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="lg" title={ratingBreakdown ?? "50% games played together² · 30% win rate² · 20% round win rate²"} />
+      <RatingCircle value={circleValue} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="lg" title={ratingBreakdown ?? FRIENDS_RATING_SUMMARY} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center">
           <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="md" />
@@ -323,6 +325,26 @@ export function DuoDetail({
           <StatCell label="Comb. Deaths"  title={`${a.name}: ${duo.aStats.deaths}\n${b.name}: ${duo.bStats.deaths}`}>{duo.combinedDeaths}</StatCell>
         </div>
 
+        <div className="grid grid-cols-3 gap-2.5 mt-2.5">
+          <StatCell
+            label="vs Odds"
+            dim={duo.gamesPlayed < MIN_GAMES_FOR_PERFORMANCE}
+            color={signedColor(duo.winsAboveExpected, 1)}
+            title={`Won ${duo.wins} of ${duo.gamesPlayed}: ${formatSigned(duo.winsAboveExpected, 1)} wins against what the pre-match odds predicted`}
+          >
+            {formatSigned(duo.winsAboveExpected, 1)}
+          </StatCell>
+          <StatCell
+            label="ADR lift"
+            dim={duo.gamesPlayed < MIN_GAMES_FOR_PERFORMANCE}
+            color={signedColor(duo.adrLift * 100, 0)}
+            title="Both players' ADR together against their own ADR in every other game, averaged"
+          >
+            {formatSigned(duo.adrLift * 100, 0)}%
+          </StatCell>
+          <StatCell label="KDA" title="Average of the two players' KDA, (kills + assists) / deaths, together">{duoAvgKda(duo).toFixed(2)}</StatCell>
+        </div>
+
         {!minimal && <MapIntelTable rows={duo.mapBreakdown} />}
 
         {!minimal && duo.matches.length > 0 && (
@@ -387,7 +409,16 @@ export function RivalDetail({
   const mapImg = rival.lastMap ? (maps[mapSlug(rival.lastMap)]?.image_url ?? null) : null;
 
   const circleValue = rivalryRating ?? 50;
-  const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" title={ratingBreakdown ?? "50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"} />;
+  const rivalCircle = (
+    <RatingCircle
+      value={circleValue}
+      colorStart="black"
+      colorEnd="var(--color-accent-red-fg)"
+      size="lg"
+      title={ratingBreakdown ?? RIVAL_RATING_SUMMARY}
+      dimmedReason={rivalryRating != null ? unevenRivalryNote(rival) : undefined}
+    />
+  );
 
   const scoreBars = (
     <div className="flex h-8 overflow-hidden">
@@ -485,6 +516,15 @@ export function RivalDetail({
         </div>
 
         <div className="mt-3.5">{statsTable}</div>
+
+        <div className="grid grid-cols-2 gap-2.5 mt-3.5">
+          <StatCell label="Upsets" title={`Meetings won as the pre-match underdog: ${a.name} ${rival.aUpsetWins}, ${b.name} ${rival.bUpsetWins}`}>
+            {rival.aUpsetWins}–{rival.bUpsetWins}
+          </StatCell>
+          <StatCell label="Evenness" title="1 minus the win difference over meetings; the rating is scaled by its square">
+            {Math.round(rivalEvenness(rival) * 100)}%
+          </StatCell>
+        </div>
 
         <MapIntelTable rows={rival.mapBreakdown} aLabel={a.name} bLabel={b.name} />
 

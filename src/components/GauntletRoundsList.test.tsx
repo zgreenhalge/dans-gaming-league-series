@@ -20,6 +20,7 @@ function gauntletMatch(overrides: Partial<GauntletMatch> & { id: number }): Gaun
   return {
     match_number: 1,
     final_score: null,
+    pre_match_win_prob: null,
     scheduled_at: null,
     skins_pick: null,
     shirts_pick: null,
