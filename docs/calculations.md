@@ -699,29 +699,61 @@ wins over medal tinting when both are available.
 
 Metrics derived from pairing-specific data
 
-**Friends Rating** = 0.5 * (games / maxGames)² + 0.3 * (winRate / maxWinRate)² + 0.2 * (rwr / maxRwr)²
+Both ratings are a weighted sum of terms, in points out of 100, divided by the best pair's sum in
+the league, so the best pair reads 100 (`duoBlendedScorer()` / `rivalBlendedScorer()`,
+`src/lib/queries/h2h.ts`). The breakdown tooltips (`duoBreakdownScorer()` /
+`rivalBreakdownScorer()`) print each term's points against its weight and the pair's total against
+the best pair's, from the same term functions the ratings use.
 
-- `games` = Number of games played by the duo
-- `maxGames` = Highest games of any duo in the league
-- `winRate` = Games won by duo / Games played by duo
-- `maxWinRate` = Highest winRate of any duo in the league
-- `rwr` = Rounds won by duo / Rounds played by duo
-- `maxRwr` = Highest rwr of any duo in the league
+Two ideas run through both:
 
-Kills do not enter the Friends Rating. `H2HSection`'s Best Friends rows show a **KDA** column for
-context (`duoAvgKda()`, `src/lib/h2h.ts`): the mean of the two players' own KDA, (kills + assists) /
-deaths via `deriveKda()` (just kills + assists when a player has no deaths), over the games they
-played together. It is not the pair's pooled kills + assists over pooled deaths. The compact home
-Top duos rows omit it.
+- **Volume counts.** Games together (or meetings) is a term in its own right, so a pair that has
+  played many games ranks above one that has played once or twice.
+- **Thin samples are shrunk.** Confidence in a pair is `g / (g + K)` with `K = 16`. The win-rate,
+  round-win-rate and closeness terms are scaled by that confidence relative to the most-played
+  pair's, and the odds, lift and upset terms use `g + K` as their divisor, so one lucky game cannot
+  outrank a long history.
 
-**Rival Rating** = 0.5 * (games / maxGames)² + 0.3 * (1 - winDiff / maxWinDiff)² + 0.2 * (1 - roundDiffPerGame / maxRoundDiff)²
+**Friends Rating** = 25 games + 15 win rate + 15 round win rate + 30 odds + 15 lift, over the best duo's
 
-- `games` = Number of games played by the duo
-- `maxGames` = Highest games of any duo in the league
-- `winDiff` = |aWins - bWins|
-- `maxWinDiff` = Highest winDiff of any rivals in the league
-- `roundDiffPerGame` = |aRoundsWon - bRoundsWon| / games
-- `maxRoundDiff` = Highest roundDiffPerGame of any rivals in the league
+- `games` = 25 * games / maxGames
+- `winRate` = 15 * settled * (winRate / maxWinRate), where `winRate` = games won / games played
+- `rwr` = 15 * settled * (rwr / maxRwr), where `rwr` = rounds won / rounds played
+- `settled` = confidence(games) / confidence(maxGames)
+- `odds` = 30 * min(1, max(0, winsAboveExpected / (games + K)) / 0.15)
+- `lift` = 15 * min(1, max(0, adrLift * confidence(games)) / 0.10)
+- every `max…` is the highest value of any duo in the league
+
+`winsAboveExpected` is the duo's wins minus the wins their pre-match odds predicted: the sum over
+their games of (1 if they won, else 0) minus their team's pre-match win probability, the frozen
+`matches.pre_match_win_prob` ([`ehog.md`](./ehog.md)). A game with no stored prediction adds 0.
+`adrLift` is the mean of the two players' ADR in the games they played together over their own ADR
+in every other game of the selection, minus 1 (a player with no other games counts 0). A negative
+`odds` or `lift` earns 0 rather than subtracting.
+
+`H2HSection`'s Best Friends rows show a **KDA** column for context (`duoAvgKda()`,
+`src/lib/h2h.ts`): the mean of the two players' own KDA, (kills + assists) / deaths via
+`deriveKda()` (just kills + assists when a player has no deaths), over the games they played
+together. It is not the pair's pooled kills + assists over pooled deaths, and it is not part of the
+rating, whose performance term uses ADR. The compact home Top duos rows omit it.
+
+**Rival Rating** = (30 meetings + 20 win closeness + 20 round closeness + 30 upsets) * evenness², over the best rivalry's
+
+- `meetings` = 30 * meetings / maxMeetings
+- `winCloseness` = 20 * settled * (1 - winDiff / maxWinDiff), where `winDiff` = |aWins - bWins|
+- `roundCloseness` = 20 * settled * (1 - roundDiffPerGame / maxRoundDiff), where `roundDiffPerGame`
+  = |aRoundsWon - bRoundsWon| / meetings
+- `settled` = confidence(meetings) / confidence(maxMeetings)
+- `upsets` = 30 * min(1, (2 * min(aUpsetScore, bUpsetScore) / (meetings + K)) / 0.05)
+- `evenness` = 1 - winDiff / meetings
+- every `max…` is the highest value of any rivalry in the league (`maxWinDiff` and `maxRoundDiff`
+  are at least 1)
+
+A win as the pre-match underdog adds `1 - 2p` to its side's upset score, where `p` is that team's
+pre-match win probability (a favourite's win, a loss, or a game with no stored prediction adds 0).
+Only the weaker side's score counts, so a rivalry earns upset points when both players land upsets
+on each other. Squaring the evenness means a rivalry only rates highly when the record is close: a
+lopsided one is scaled down hard whatever its volume, and a single meeting (never even) rates 0.
 
 ### Pairing rankings and personal matchups
 
