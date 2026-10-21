@@ -42,7 +42,7 @@ export interface PlayerSummary {
 
 /**
  * Assembles a player's `PlayerSummary` from already-fetched inputs — the pure core of
- * `getPlayerSummary()`. `history` is `getPlayer()`'s newest-first `PlayerHistoryRow[]`;
+ * `getPlayerSummary()`. `history` is the player's newest-first `PlayerHistoryRow[]`;
  * `leaderboard` the career leaderboard.
  */
 export function buildPlayerSummary(input: {

@@ -38,7 +38,7 @@ export interface MyStats extends PlayerSummary {
 
 /**
  * Assembles a player's `MyStats` from already-fetched inputs — the pure core of `getMyStats()`.
- * `history` is `getPlayer()`'s newest-first `PlayerHistoryRow[]`; `leaderboard` the career
+ * `history` is the player's newest-first `PlayerHistoryRow[]`; `leaderboard` the career
  * leaderboard; `h2h` the career H2H data.
  */
 export function buildMyStats(input: {
