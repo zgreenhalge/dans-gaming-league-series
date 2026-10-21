@@ -3,7 +3,7 @@ import type { LeaderboardRowWithId } from '../types';
 import { deriveKd, deriveKda, mergeLeaderboardRows } from '../util';
 import { getCurrentEhogRating } from './ehog';
 import { getGauntletStats } from './gauntlet';
-import { bestFriendOf, worstNightmareOf, type PersonalMatchup } from './h2h';
+import { bestFriendOf, worstNightmareOf, type PersonalMatchup } from '../h2h-ratings';
 import { getCareerLeaderboard } from './leaderboard';
 import { getPlayer, lastPlayed, nextUpcoming, opponentNames, type PlayerHistoryRow } from './player';
 

@@ -26,7 +26,7 @@ export default function RatingCircle({
   const c = 2 * Math.PI * r;
   const stroke = `color-mix(in srgb, ${colorEnd} ${value}%, ${colorStart})`;
   return (
-    <div className={`relative shrink-0${dimmedReason ? ' opacity-50' : ''}`} title={dimmedReason ? `${title} · ${dimmedReason}` : title} style={{ width: px, height: px }}>
+    <div className={`relative shrink-0${dimmedReason ? ' opacity-50' : ''}`} title={[title, dimmedReason].filter(Boolean).join(' · ') || undefined} style={{ width: px, height: px }}>
       <svg width={px} height={px}>
         <circle cx={px / 2} cy={px / 2} r={r} stroke="rgba(255,255,255,0.1)" strokeWidth={sw} fill="none" />
         <circle

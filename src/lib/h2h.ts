@@ -473,10 +473,12 @@ export function computeH2H(
         else agg.bWins += 1;
         const aWinProb = teamWinProb(m.shirtsWinProb, aRow.faction);
         const bWinProb = teamWinProb(m.shirtsWinProb, bRow.faction);
-        agg.aUpsetScore += upsetScore(aRow.is_win, aWinProb);
-        agg.bUpsetScore += upsetScore(bRow.is_win, bWinProb);
-        if (upsetScore(aRow.is_win, aWinProb) > 0) agg.aUpsetWins += 1;
-        if (upsetScore(bRow.is_win, bWinProb) > 0) agg.bUpsetWins += 1;
+        const aUpset = upsetScore(aRow.is_win, aWinProb);
+        const bUpset = upsetScore(bRow.is_win, bWinProb);
+        agg.aUpsetScore += aUpset;
+        agg.bUpsetScore += bUpset;
+        if (aUpset > 0) agg.aUpsetWins += 1;
+        if (bUpset > 0) agg.bUpsetWins += 1;
 
         for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
           statAgg.games += 1;

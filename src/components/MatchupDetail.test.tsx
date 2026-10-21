@@ -23,7 +23,7 @@ describe('DuoDetail', () => {
     expect(screen.getByText('+1.5')).toBeInTheDocument();
     expect(screen.getByText('+10%')).toBeInTheDocument();
     expect(screen.getByText('1.67')).toBeInTheDocument();
-    expect(screen.getByTitle('Won 4; the pre-match odds predicted 2.5')).toBeInTheDocument();
+    expect(screen.getByTitle('Won 4 of 5: +1.5 wins against what the pre-match odds predicted')).toBeInTheDocument();
   });
 
   test('dims the odds and lift cells under three games together', () => {

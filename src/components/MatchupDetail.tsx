@@ -330,7 +330,7 @@ export function DuoDetail({
             label="vs Odds"
             dim={duo.gamesPlayed < MIN_GAMES_FOR_PERFORMANCE}
             color={signedColor(duo.winsAboveExpected, 1)}
-            title={`Won ${duo.wins}; the pre-match odds predicted ${(duo.wins - duo.winsAboveExpected).toFixed(1)}`}
+            title={`Won ${duo.wins} of ${duo.gamesPlayed}: ${formatSigned(duo.winsAboveExpected, 1)} wins against what the pre-match odds predicted`}
           >
             {formatSigned(duo.winsAboveExpected, 1)}
           </StatCell>

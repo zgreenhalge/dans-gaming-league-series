@@ -1,7 +1,7 @@
 'use client';
 
 import type { DuoStats, H2HStats } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer } from '@/lib/h2h-ratings';
 import { firstName } from '@/lib/util';
 import type { H2HPairType } from '@/lib/h2hPairParams';
 

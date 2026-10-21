@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Th from './Th';
 import { StatTable, Tr, Td, PlayerCell } from './StatTable';
 import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/h2h-ratings';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import { avgOf, factionColor, tabCls } from '@/lib/util';

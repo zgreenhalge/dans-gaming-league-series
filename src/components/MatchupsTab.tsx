@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
-import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/queries';
+import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/h2h-ratings';
 import { unevenRivalryNote } from '@/lib/h2h';
 import EmptyState from './EmptyState';
 import Th from './Th';
