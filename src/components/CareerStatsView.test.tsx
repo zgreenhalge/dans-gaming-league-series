@@ -10,7 +10,7 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
@@ -18,7 +18,7 @@ import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow } from '@/lib/test-support/leaderboardFixtures';
 import { H2H_PLAYERS, h2hPlayerStat, h2hMatchRow } from '@/lib/test-support/h2hFixtures';
 import CareerStatsView from './CareerStatsView';
-import type { MapMatchRow } from '@/lib/queries';
+import type { MapMatchRow, StatisticsDetail } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 vi.mock('next-auth/react', () => createNextAuthMock());
@@ -27,6 +27,13 @@ beforeEach(() => {
   resetNextNavigationMock();
   nextNavigationMock.setPathname('/statistics');
 });
+
+/** Renders the view and lets its streamed `detail` promise resolve before the test looks at it. */
+async function renderView(props: ReturnType<typeof baseProps>) {
+  await act(async () => {
+    renderWithUrlState(<CareerStatsView {...props} />);
+  });
+}
 
 function baseProps(overrides: {
   players?: { id: number; name: string; steam_avatar_url: string | null }[];
@@ -44,19 +51,33 @@ function baseProps(overrides: {
       { id: 1, name: 'Alice', steam_avatar_url: null },
       { id: 2, name: 'Bob', steam_avatar_url: null },
     ],
-    allMatches: overrides.allMatches ?? [],
+    detail: Promise.resolve<StatisticsDetail>({
+      allMatches: overrides.allMatches ?? [],
+      allSabremetrics: [],
+      allMatchRounds: [],
+      allMatchKills: [],
+      allWeaponClassStats: [],
+      allEconomyStats: [],
+    }),
   };
 }
 
 describe('CareerStatsView — tab state', () => {
-  test('reads the active tab from the URL, including tabs other than h2h', () => {
+  test('reads the active tab from the URL, including tabs other than h2h', async () => {
     nextNavigationMock.setSearchParams('tab=stats');
-    renderWithUrlState(<CareerStatsView {...baseProps()} />);
+    await renderView(baseProps());
+    await screen.findByRole('tab', { name: 'Stats' });
     expect(screen.getByRole('tab', { name: 'Stats' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  test('renders the Leaderboard tab while the detail data is still loading', async () => {
+    await renderView({ ...baseProps(), detail: new Promise<StatisticsDetail>(() => {}) });
+    expect(screen.getByRole('tab', { name: 'Leaderboard' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
   test('clicking a tab pushes the URL', async () => {
-    renderWithUrlState(<CareerStatsView {...baseProps()} />);
+    await renderView(baseProps());
     await userEvent.click(screen.getByRole('tab', { name: 'Advanced Stats' }));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -68,7 +89,7 @@ describe('CareerStatsView — tab state', () => {
 describe('CareerStatsView — season filter', () => {
   test('toggling regular/gauntlet writes only `reg`/`gnt`, in one navigation, leaving `season` in the URL', async () => {
     nextNavigationMock.setSearchParams('tab=leaderboard&season=1');
-    renderWithUrlState(<CareerStatsView {...baseProps()} />);
+    await renderView(baseProps());
     await userEvent.click(screen.getByText('Regular Season'));
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -78,10 +99,10 @@ describe('CareerStatsView — season filter', () => {
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/statistics?tab=leaderboard&season=1&reg=0');
   });
 
-  test('a `season` id no longer valid under the current include-flags falls back to "Career" without rewriting the URL', () => {
+  test('a `season` id no longer valid under the current include-flags falls back to "Career" without rewriting the URL', async () => {
     // `season=1` names a regular season, but `reg=0` excludes regular seasons.
     nextNavigationMock.setSearchParams('tab=leaderboard&reg=0&season=1');
-    renderWithUrlState(<CareerStatsView {...baseProps()} />);
+    await renderView(baseProps());
     expect(screen.getByRole('combobox')).toHaveValue('all');
     expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
     expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
@@ -89,24 +110,23 @@ describe('CareerStatsView — season filter', () => {
 });
 
 describe('CareerStatsView — H2H initial pair', () => {
-  test('resolves `a`/`b`/`type` from the URL into the H2H tab', () => {
+  test('resolves `a`/`b`/`type` from the URL into the H2H tab', async () => {
     nextNavigationMock.setSearchParams('tab=h2h&a=Alice&b=Bob&type=opponent');
-    renderWithUrlState(<CareerStatsView {...baseProps()} />);
-    expect(screen.getByRole('tab', { name: 'H2H' })).toHaveAttribute('aria-selected', 'true');
+    await renderView(baseProps());
+    expect(await screen.findByRole('tab', { name: 'H2H' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('ignores an `a`/`b` pair naming a player that does not exist', () => {
+  test('ignores an `a`/`b` pair naming a player that does not exist', async () => {
     nextNavigationMock.setSearchParams('tab=h2h&a=Nobody&b=Bob');
     // Renders without throwing — urlInitialPair falls back to null.
-    renderWithUrlState(<CareerStatsView {...baseProps()} />);
-    expect(screen.getByRole('tab', { name: 'H2H' })).toHaveAttribute('aria-selected', 'true');
+    await renderView(baseProps());
+    expect(await screen.findByRole('tab', { name: 'H2H' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('clicking a duo row writes `a`/`b` (and omits the default `type`)', async () => {
     nextNavigationMock.setSearchParams('tab=h2h');
-    renderWithUrlState(
-      <CareerStatsView
-        {...baseProps({
+    await renderView(
+      baseProps({
           players: H2H_PLAYERS,
           allMatches: [
             h2hMatchRow({
@@ -116,10 +136,9 @@ describe('CareerStatsView — H2H initial pair', () => {
               ],
             }),
           ],
-        })}
-      />,
+        }),
     );
-    await userEvent.click(screen.getAllByText('Alice & Bob')[0]);
+    await userEvent.click((await screen.findAllByText('Alice & Bob'))[0]);
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/statistics?tab=h2h&a=Alice&b=Bob');

@@ -7,13 +7,8 @@ import {
   getGauntletStats,
   getAllSeasonMedalists,
   getPlayersById,
-  getAllMatchesWithPickBan,
   getAllEhogSnapshots,
-  getSabremetricSeasonTotals,
-  getAllMatchRounds,
-  getAllMatchKills,
-  getAllWeaponClassStats,
-  getAllEconomyStats,
+  getStatisticsDetail,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -28,12 +23,13 @@ export const metadata = {
 };
 
 export default async function StatisticsPage() {
-  // getPlayersById()/getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats() (and, via
-  // resolveMatchSeasons(), getAllMatchRounds()/getSabremetricSeasonTotals()) all read
-  // `players`/`player_match_stats`/`matches`/`weeks` independently, but are each wrapped in React's
-  // `cache()` (#507), so calling them plainly here still collapses to one read per table across
-  // this whole render pass rather than one per caller.
-  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics, allMatchRounds, allMatchKills, allWeaponClassStats, allEconomyStats] =
+  // Two tiers. The Leaderboard tab (the default) needs only the first, which the page awaits; the
+  // Stats, Advanced Stats and H2H tabs read the second (`getStatisticsDetail()`), started here so it
+  // runs alongside the first but streamed to the client behind it instead of gating first paint.
+  // These reads are `cache()`-wrapped (#507), so the two tiers share one read per table across this
+  // render pass rather than one per caller.
+  const detail = getStatisticsDetail();
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, ehogSnapshots] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
@@ -41,13 +37,7 @@ export default async function StatisticsPage() {
       getGauntletStats(),
       getAllSeasonMedalists(),
       getPlayersById(),
-      getAllMatchesWithPickBan(),
       getAllEhogSnapshots(),
-      getSabremetricSeasonTotals(),
-      getAllMatchRounds(),
-      getAllMatchKills(),
-      getAllWeaponClassStats(),
-      getAllEconomyStats(),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the
@@ -97,13 +87,8 @@ export default async function StatisticsPage() {
               gauntletBySeason={gauntletStats.bySeason}
               trophiesByPlayer={trophiesByPlayer}
               players={players}
-              allMatches={allMatches}
               ehogSnapshots={ehogSnapshots}
-              allSabremetrics={allSabremetrics}
-              allMatchRounds={allMatchRounds}
-              allMatchKills={allMatchKills}
-              allWeaponClassStats={allWeaponClassStats}
-              allEconomyStats={allEconomyStats}
+              detail={detail}
             />
           </UrlStateProvider>
         </Suspense>

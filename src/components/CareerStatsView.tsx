@@ -1,19 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
 import { useTabState } from './useTabState';
-import { useH2HPairUrlState } from './useH2HPairUrlState';
-import H2HSection from './H2HSection';
-import { BasicStatsView } from './BasicStatsView';
-import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, tabCls, filterByMatchIds } from '@/lib/util';
-import { useLiveH2HData } from './useLiveH2HData';
+import CareerDetailTabs from './CareerDetailTabs';
+import { TabLoadingSkeleton } from './Skeleton';
+import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import type { TrophyEntry, EhogSnapshotRow, StatisticsDetail } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
-import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
 
 type Tab = 'leaderboard' | 'stats' | 'advanced' | 'h2h';
@@ -29,13 +26,8 @@ export default function CareerStatsView({
   gauntletBySeason,
   trophiesByPlayer,
   players,
-  allMatches = [],
   ehogSnapshots = [],
-  allSabremetrics = [],
-  allMatchRounds = [],
-  allMatchKills = [],
-  allWeaponClassStats = [],
-  allEconomyStats = [],
+  detail,
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -45,13 +37,9 @@ export default function CareerStatsView({
   gauntletBySeason: Record<number, LeaderboardRowWithId[]>;
   trophiesByPlayer: Record<number, TrophyEntry[]>;
   players: { id: number; name: string; steam_avatar_url: string | null }[];
-  allMatches?: MapMatchRow[];
   ehogSnapshots?: EhogSnapshotRow[];
-  allSabremetrics?: SabremetricMatchRow[];
-  allMatchRounds?: MatchRoundRow[];
-  allMatchKills?: MatchKillRow[];
-  allWeaponClassStats?: WeaponClassMatchRow[];
-  allEconomyStats?: EconomyMatchRow[];
+  /** The Stats, Advanced Stats and H2H tabs' data, still loading while the Leaderboard tab renders. */
+  detail: Promise<StatisticsDetail>;
 }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
@@ -78,57 +66,15 @@ export default function CareerStatsView({
     return reg.length > 0 ? reg : gnt;
   }, [selectedSeason, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
 
-  const filteredMatches = useMemo<MapMatchRow[]>(() => {
-    if (selectedSeason === 'all') {
-      return allMatches.filter((m) => m.is_gauntlet ? includeGauntlet : includeRegular);
-    }
-    const pairedGntId = regularToGauntlet.get(selectedSeason);
-    return allMatches.filter((m) => {
-      if (m.season_id === selectedSeason) return m.is_gauntlet ? includeGauntlet : includeRegular;
-      if (pairedGntId != null && m.season_id === pairedGntId) return includeGauntlet;
-      return false;
-    });
-  }, [selectedSeason, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
-
-  const filteredRounds = useMemo(
-    () => filterByMatchIds(allMatchRounds, filteredMatches),
-    [filteredMatches, allMatchRounds],
+  // Whether a row of `seasonId` is inside the current Regular / Gauntlet / season filter — the one
+  // rule the detail tabs filter their per-match rows by.
+  const inSelection = useCallback(
+    (seasonId: number, isGauntlet: boolean) => {
+      if (selectedSeason === 'all' || seasonId === selectedSeason) return isGauntlet ? includeGauntlet : includeRegular;
+      return includeGauntlet && seasonId === regularToGauntlet.get(selectedSeason);
+    },
+    [selectedSeason, includeRegular, includeGauntlet, regularToGauntlet],
   );
-
-  const filteredKills = useMemo(
-    () => filterByMatchIds(allMatchKills, filteredMatches),
-    [filteredMatches, allMatchKills],
-  );
-
-  const filteredWeaponClassStats = useMemo(
-    () => filterByMatchIds(allWeaponClassStats, filteredMatches),
-    [filteredMatches, allWeaponClassStats],
-  );
-
-  const filteredEconomyStats = useMemo(
-    () => filterByMatchIds(allEconomyStats, filteredMatches),
-    [filteredMatches, allEconomyStats],
-  );
-
-  const h2hData = useLiveH2HData(filteredMatches, players);
-
-  // `h2hData.players`, not the `players` prop — `computeH2H` includes a synthetic fallback entry
-  // for any match-referenced player id absent from `players`, so it's a superset of `players`
-  // and the same list `H2HSection` itself resolves its clickable rows against; a narrower list here
-  // could produce an unresolved id on write.
-  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
-
-  const filteredSabremetrics = useMemo(() => {
-    if (selectedSeason === 'all') {
-      return allSabremetrics.filter((r) => r.is_gauntlet ? includeGauntlet : includeRegular);
-    }
-    const pairedGntId = regularToGauntlet.get(selectedSeason);
-    return allSabremetrics.filter((r) => {
-      if (r.season_id === selectedSeason) return r.is_gauntlet ? includeGauntlet : includeRegular;
-      if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
-      return false;
-    });
-  }, [selectedSeason, allSabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const trophyCounts = useMemo(() => {
     const counts = new Map<number, Record<1 | 2 | 3, number>>();
@@ -217,20 +163,10 @@ export default function CareerStatsView({
         )
       )}
 
-      {tab === 'stats' && (
-        rows.length === 0 ? (
-          <EmptyState message="No data for this selection." />
-        ) : (
-          <BasicStatsView rows={rows} matches={filteredMatches} rounds={filteredRounds} />
-        )
-      )}
-
-      {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredSabremetrics} kills={filteredKills} weaponClassStats={filteredWeaponClassStats} economyRows={filteredEconomyStats} hasEconomyData={allEconomyStats.length > 0} matches={filteredMatches} rounds={filteredRounds} hasSideData={allMatches.length > 0} />
-      )}
-
-      {tab === 'h2h' && (
-        <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />
+      {tab !== 'leaderboard' && (
+        <Suspense fallback={<TabLoadingSkeleton />}>
+          <CareerDetailTabs tab={tab} detail={detail} rows={rows} players={players} inSelection={inSelection} />
+        </Suspense>
       )}
     </>
   );
