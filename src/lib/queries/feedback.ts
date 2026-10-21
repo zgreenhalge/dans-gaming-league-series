@@ -202,7 +202,7 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
 /** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
  *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. Reads each
  *  form's own open column (`surveys.closed_at is null`, `superlative_polls.is_open`). */
-export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
+export const getOpenFeedbackSeasonIds = persistentQuery('getOpenFeedbackSeasonIds', async (): Promise<number[]> => {
   const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
     getAdminClient().from('surveys').select('season_id').is('closed_at', null),
     getAdminClient().from('superlative_polls').select('season_id').eq('is_open', true),
@@ -210,7 +210,7 @@ export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
   if (surveyErr) throw surveyErr;
   if (pollErr) throw pollErr;
   return [...new Set([...(surveys ?? []), ...(polls ?? [])].map((r) => r.season_id))];
-}
+});
 
 /** What the season page's Survey tab shows a viewer: their form, while the survey is open and they
  *  played the season. Null (no tab) otherwise — for a signed-out or ineligible viewer, a closed

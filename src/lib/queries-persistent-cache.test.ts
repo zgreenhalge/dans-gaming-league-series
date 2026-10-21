@@ -161,6 +161,7 @@ describe('cached reads match uncached reads', () => {
     ['getCareerH2HDataCached', () => q.getCareerH2HDataCached()],
     ['getMatch(100)', () => q.getMatch(100)],
     ['getMapIndex', () => q.getMapIndex()],
+    ['getOpenFeedbackSeasonIds', () => q.getOpenFeedbackSeasonIds()],
     ['getSurveyForSeason(1)', () => q.getSurveyForSeason(1)],
     ['getSuperlativePoll(1)', () => q.getSuperlativePoll(1)],
     ['getSeasonPlayedPlayers(1)', () => q.getSeasonPlayedPlayers(1)],
