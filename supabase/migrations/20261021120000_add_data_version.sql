@@ -1,5 +1,5 @@
 -- `data_version` is the freshness signal behind the persistent read cache (`persistentQuery()` in
--- src/lib/queries/_shared.ts): one row whose `version` goes up on every content write. A cached read
+-- src/lib/queries/_persistentCache.ts): one row whose `version` goes up on every content write. A cached read
 -- is keyed by the version it was computed at, so any write — from the app, a GitHub Action, an
 -- ingestion script or hand-run SQL — retires every cached read at once, with no writer having to know
 -- the cache exists.
