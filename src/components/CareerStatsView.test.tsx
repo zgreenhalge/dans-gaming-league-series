@@ -76,6 +76,17 @@ describe('CareerStatsView — tab state', () => {
     expect(screen.getByText('Alice')).toBeInTheDocument();
   });
 
+  test('a detail load that fails shows a retry in the tab instead of the page error', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    nextNavigationMock.setSearchParams('tab=stats');
+    const detail = Promise.reject<StatisticsDetail>(new Error('boom'));
+    detail.catch(() => {});
+    await renderView({ ...baseProps(), detail });
+    expect(await screen.findByText(/Couldn.t load these stats/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Stats' })).toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+
   test('clicking a tab pushes the URL', async () => {
     await renderView(baseProps());
     await userEvent.click(screen.getByRole('tab', { name: 'Advanced Stats' }));

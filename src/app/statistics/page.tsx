@@ -29,6 +29,10 @@ export default async function StatisticsPage() {
   // These reads are `cache()`-wrapped (#507), so the two tiers share one read per table across this
   // render pass rather than one per caller.
   const detail = getStatisticsDetail();
+  // Marks `detail` handled before the awaits below can throw first and leave its rejection unhandled;
+  // a rejection still reaches the client, whose `use(detail)` surfaces it to `CareerStatsView`'s
+  // error boundary.
+  detail.catch(() => {});
   const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, ehogSnapshots] =
     await Promise.all([
       getCareerLeaderboard(),

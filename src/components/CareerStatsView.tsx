@@ -6,7 +6,8 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
 import { useTabState } from './useTabState';
 import CareerDetailTabs from './CareerDetailTabs';
-import { TabLoadingSkeleton } from './Skeleton';
+import ErrorBoundary from './ErrorBoundary';
+import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
 import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, EhogSnapshotRow, StatisticsDetail } from '@/lib/queries';
@@ -79,17 +80,13 @@ export default function CareerStatsView({
   const trophyCounts = useMemo(() => {
     const counts = new Map<number, Record<1 | 2 | 3, number>>();
     for (const [pidStr, entries] of Object.entries(trophiesByPlayer)) {
-      const pairedGntId = selectedSeason === 'all' ? null : regularToGauntlet.get(selectedSeason);
-      const inSelection = selectedSeason === 'all'
-        ? entries
-        : entries.filter((t) => t.season_id === selectedSeason || (pairedGntId != null && t.season_id === pairedGntId));
-      const matching = inSelection.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
+      const matching = entries.filter((t) => inSelection(t.season_id, t.is_gauntlet));
       const c: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
       for (const t of matching) c[t.rank]++;
       counts.set(Number(pidStr), c);
     }
     return counts;
-  }, [trophiesByPlayer, selectedSeason, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [trophiesByPlayer, inSelection]);
 
   const ehogRatings = useMemo<Record<number, number>>(() => {
     const filtered = selectedSeason === 'all'
@@ -164,9 +161,11 @@ export default function CareerStatsView({
       )}
 
       {tab !== 'leaderboard' && (
-        <Suspense fallback={<TabLoadingSkeleton />}>
-          <CareerDetailTabs tab={tab} detail={detail} rows={rows} players={players} inSelection={inSelection} />
-        </Suspense>
+        <ErrorBoundary fallback={<TabLoadError label="these stats" onRetry={() => window.location.reload()} />}>
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <CareerDetailTabs tab={tab} detail={detail} rows={rows} players={players} inSelection={inSelection} />
+          </Suspense>
+        </ErrorBoundary>
       )}
     </>
   );
