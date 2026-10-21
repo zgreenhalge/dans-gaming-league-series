@@ -86,17 +86,22 @@ export function persistentQuery<A extends unknown[], R>(
   name: string,
   fn: (...args: A) => Promise<R>,
 ): (...args: A) => Promise<R> {
-  return cache(async (...args: A): Promise<R> => {
-    let end = args.length;
-    while (end > 0 && args[end - 1] === undefined) end--;
-    const keyArgs = args.slice(0, end) as A;
-    if (!runsUnderNext() || !keyArgs.every(isCacheKeyable)) return fn(...args);
+  const memo = cache(async (...args: A): Promise<R> => {
+    if (!runsUnderNext() || !args.every(isCacheKeyable)) return fn(...args);
 
     const version = await getDataVersion();
     if (version === null) return fn(...args);
     const read = unstable_cache(async (...a: A) => encodeCacheValue(await fn(...a)), [name, String(version)], {
       revalidate: CACHE_TTL_SECONDS,
     });
-    return decodeCacheValue<R>(await read(...keyArgs));
+    return decodeCacheValue<R>(await read(...args));
   });
+  // Trailing `undefined` arguments are dropped before `memo`, so `getSeasons()` and
+  // `getSeasons(undefined)` (a forwarded optional `client`) are one call to React's `cache()` and to
+  // the data cache alike.
+  return (...args: A) => {
+    let end = args.length;
+    while (end > 0 && args[end - 1] === undefined) end--;
+    return memo(...(args.slice(0, end) as A));
+  };
 }
