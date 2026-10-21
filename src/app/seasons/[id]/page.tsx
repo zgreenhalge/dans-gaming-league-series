@@ -45,8 +45,6 @@ import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber, parseRouteId 
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 
-export const revalidate = 60;
-
 export async function generateMetadata({
   params,
 }: {
@@ -146,7 +144,7 @@ export default async function SeasonPage({
     const playersById = await getPlayersById();
     const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
     const [light, bracketShape] = await Promise.all([
-      getGauntletSeasonLightView(seasonId, extractSeasonNumber(season.name), playersById),
+      getGauntletSeasonLightView(seasonId, extractSeasonNumber(season.name)),
       getGauntletBracketShape(seasonId),
     ]);
     const { rounds, leaderboard, h2hData, ehogRatings, hasAdvancedStats } = light;
@@ -245,11 +243,11 @@ export default async function SeasonPage({
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
     isUpcoming && isAdmin ? isSeasonScheduleGenerated(seasonId) : Promise.resolve(false),
-    isUpcoming ? getSeasonRoster(seasonId, playersById) : Promise.resolve([]),
+    isUpcoming ? getSeasonRoster(seasonId) : Promise.resolve([]),
     isUpcoming && isAdmin ? getKnownMapNames() : Promise.resolve([]),
     initialView === 'gauntlet' && linkedGauntlet
-      ? getGauntletSeasonLightView(linkedGauntlet.id, seasonNumber, playersById)
-      : getRegularSeasonLightView(seasonId, seasonNumber, playersById),
+      ? getGauntletSeasonLightView(linkedGauntlet.id, seasonNumber)
+      : getRegularSeasonLightView(seasonId, seasonNumber),
     leaderboardPromise,
     matchSummariesPromise,
     getSeasonSurveyView(seasonId, currentPlayerId),
@@ -268,7 +266,7 @@ export default async function SeasonPage({
   // have no real content to show a tab for — fetch the regular view actually needed to render
   // instead. Never reached on a normal page load (only a stale/bogus `view` param takes this path).
   if (!showGauntletTab && initialLightData.kind === 'gauntlet') {
-    initialLightData = { kind: 'regular', data: await getRegularSeasonLightView(seasonId, seasonNumber, playersById) };
+    initialLightData = { kind: 'regular', data: await getRegularSeasonLightView(seasonId, seasonNumber) };
   }
 
   const feedbackTabs = [...buildSurveyTab(season.id, surveyView, isAdmin), ...buildSuperlativesTab(season.id, superlativesView, isAdmin)];

@@ -15,7 +15,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getPlayer, getPlayersById, getPlayerNameHistory } from './queries';
+import { getPlayer, getPlayerRecent, getPlayersById, getPlayerNameHistory, pickRecent } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -41,6 +41,15 @@ async function main() {
 
   await test('getPlayer(9999) — nonexistent player returns null', async () => {
     assert.equal(await getPlayer(9999), null);
+  });
+
+  await test('getPlayerRecent() — the pickRecent() rows of the full history, rosters included', async () => {
+    for (const [id, limit] of [[1, 1], [1, 5], [7, 5]] as const) {
+      const full = (await getPlayer(id))!.history;
+      const recent = (await getPlayerRecent(id, limit))!;
+      assert.deepEqual(recent.history, pickRecent(full, limit));
+    }
+    assert.equal(await getPlayerRecent(9999, 5), null);
   });
 
   await test('getPlayerNameHistory(2) — Bob has one prior rename', async () => {

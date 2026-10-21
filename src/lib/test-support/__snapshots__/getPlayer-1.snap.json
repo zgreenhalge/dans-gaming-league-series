@@ -36,6 +36,18 @@
       "final_score": null,
       "pre_match_win_prob": null,
       "scheduled_at": null,
+      "skins_pick": null,
+      "shirts_pick": null,
+      "skins_starting_side": null,
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null,
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio"
+      ],
+      "replay_status": "none",
       "shirts": [
         {
           "player_id": 1,
@@ -111,19 +123,7 @@
           "rounds_won": 0,
           "rounds_played": 0
         }
-      ],
-      "skins_pick": null,
-      "shirts_pick": null,
-      "skins_starting_side": null,
-      "shirts_ban": null,
-      "shirts_ban2": null,
-      "skins_ban1": null,
-      "skins_ban2": null,
-      "is_playoff_game": false,
-      "map_pool": [
-        "Foroglio"
-      ],
-      "replay_status": "none"
+      ]
     },
     {
       "kills": 22,
@@ -148,6 +148,16 @@
       "final_score": "13-11",
       "pre_match_win_prob": null,
       "scheduled_at": null,
+      "skins_pick": "Foroglio",
+      "shirts_pick": "Foroglio",
+      "skins_starting_side": "T",
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null,
+      "is_playoff_game": true,
+      "map_pool": null,
+      "replay_status": "ready",
       "shirts": [
         {
           "player_id": 1,
@@ -223,17 +233,7 @@
           "rounds_won": 11,
           "rounds_played": 24
         }
-      ],
-      "skins_pick": "Foroglio",
-      "shirts_pick": "Foroglio",
-      "skins_starting_side": "T",
-      "shirts_ban": null,
-      "shirts_ban2": null,
-      "skins_ban1": null,
-      "skins_ban2": null,
-      "is_playoff_game": true,
-      "map_pool": null,
-      "replay_status": "ready"
+      ]
     },
     {
       "kills": 0,
@@ -258,6 +258,20 @@
       "final_score": "0-0",
       "pre_match_win_prob": null,
       "scheduled_at": null,
+      "skins_pick": "Cobblestone",
+      "shirts_pick": "Cobblestone",
+      "skins_starting_side": null,
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null,
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio",
+        "Cobblestone",
+        "Vertigo"
+      ],
+      "replay_status": "none",
       "shirts": [
         {
           "player_id": 1,
@@ -333,21 +347,7 @@
           "rounds_won": 0,
           "rounds_played": 0
         }
-      ],
-      "skins_pick": "Cobblestone",
-      "shirts_pick": "Cobblestone",
-      "skins_starting_side": null,
-      "shirts_ban": null,
-      "shirts_ban2": null,
-      "skins_ban1": null,
-      "skins_ban2": null,
-      "is_playoff_game": false,
-      "map_pool": [
-        "Foroglio",
-        "Cobblestone",
-        "Vertigo"
-      ],
-      "replay_status": "none"
+      ]
     },
     {
       "kills": 20,
@@ -372,6 +372,20 @@
       "final_score": "13-9",
       "pre_match_win_prob": 0.55,
       "scheduled_at": null,
+      "skins_pick": "Foroglio",
+      "shirts_pick": "Foroglio",
+      "skins_starting_side": "CT",
+      "shirts_ban": "Vertigo",
+      "shirts_ban2": "Nuke",
+      "skins_ban1": "Inferno",
+      "skins_ban2": "Overpass",
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio",
+        "Cobblestone",
+        "Vertigo"
+      ],
+      "replay_status": "ready",
       "shirts": [
         {
           "player_id": 1,
@@ -447,21 +461,7 @@
           "rounds_won": 9,
           "rounds_played": 22
         }
-      ],
-      "skins_pick": "Foroglio",
-      "shirts_pick": "Foroglio",
-      "skins_starting_side": "CT",
-      "shirts_ban": "Vertigo",
-      "shirts_ban2": "Nuke",
-      "skins_ban1": "Inferno",
-      "skins_ban2": "Overpass",
-      "is_playoff_game": false,
-      "map_pool": [
-        "Foroglio",
-        "Cobblestone",
-        "Vertigo"
-      ],
-      "replay_status": "ready"
+      ]
     }
   ],
   "trophies": [

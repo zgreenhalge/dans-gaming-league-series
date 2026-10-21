@@ -17,6 +17,7 @@ import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
 import { effectivePickedMap } from '../veto';
+import { persistentQuery } from './_persistentCache';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -31,7 +32,7 @@ export interface MatchDetail {
   stats: MatchStatRow[];
 }
 
-export async function getMatch(matchId: number): Promise<MatchDetail | null> {
+export const getMatch = persistentQuery('getMatch', async (matchId: number): Promise<MatchDetail | null> => {
   const { data: match, error } = await getAdminClient()
     .from('matches')
     .select('*')
@@ -76,7 +77,7 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   );
 
   return { match: m, week: weekRow as Week, season, stats: statRows };
-}
+});
 
 /** A rostered player's name plus their personal Discord name-color role
  *  (`players.discord_name_role_id`, #405) — `null` for a player who hasn't linked Discord/gotten one
@@ -292,7 +293,7 @@ export async function getMatchServerState(matchId: number): Promise<ServerState>
  * the admin console) already have the pod resolved and filter it out of the result themselves,
  * rather than this general-purpose query re-resolving `gauntlet_pods` on every call, gauntlet or not.
  */
-export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
+export const getOtherScheduledMatches = persistentQuery('getOtherScheduledMatches', async (matchId: number): Promise<ScheduledMatchRef[]> => {
   const { data } = await getAdminClient()
     .from('matches')
     .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
@@ -320,7 +321,7 @@ export async function getOtherScheduledMatches(matchId: number): Promise<Schedul
         matchNumber: r.match_number,
       }),
     }));
-}
+});
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSabFields {
   player_id: number;
@@ -336,7 +337,7 @@ export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSa
  *  results rather than read off the stored `player_match_sabremetrics` row — all were exact
  *  duplicates of (or directly reconstructible from) `match_kills`/`player_match_weapon_stats`/
  *  `match_rounds`/`match_utility_throws` (#457/#488/#489). */
-export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
+export const getMatchSabremetrics = persistentQuery('getMatchSabremetrics', async (matchId: number): Promise<MatchSabremetricsRow[]> => {
   const { data: pmsRows } = await getAdminClient()
     .from('player_match_stats')
     .select('id, player_id, faction')
@@ -349,8 +350,8 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   // `player_match_stats` fetch it would otherwise make internally via `fetchPmsLookup()` — `cache()`
   // (#507) can't collapse this into that call since this read's columns (`faction`, no `match_id`)
   // are a different shape than `fetchPmsLookup()`'s own. `getPlayersById()`/`getMatchKills()` need
-  // no such sharing — both are themselves `cache()`-wrapped, so calling each once below already
-  // collapses to one `players` read without a local promise to thread through.
+  // no such sharing — both are themselves `persistentQuery()`-wrapped, so calling each once below already
+  // shares one `players` read without a local promise to thread through.
   const pmsForUtility = pms.map((r) => ({ id: r.id, player_id: r.player_id, match_id: matchId }));
   const [{ data: sabRows }, players, kills, accuracyTotals, roundSides, throws] = await Promise.all([
     getAdminClient().from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
@@ -383,7 +384,7 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
       faction: pms.faction as Faction,
     };
   });
-}
+});
 
 export interface MapLeagueAvg {
   wins: number;
@@ -433,7 +434,7 @@ export interface MatchScoutingData {
  * how each has performed on the picked map. Used by the scouting report shown
  * before scores are entered.
  */
-export async function getMatchScoutingData(matchId: number): Promise<MatchScoutingData | null> {
+export const getMatchScoutingData = persistentQuery('getMatchScoutingData', async (matchId: number): Promise<MatchScoutingData | null> => {
   const { data: match, error: mErr } = await getAdminClient()
     .from('matches')
     .select('*')
@@ -611,4 +612,4 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     skins: skins as [ScoutingPlayer, ScoutingPlayer],
     mapLeagueAverages,
   };
-}
+});

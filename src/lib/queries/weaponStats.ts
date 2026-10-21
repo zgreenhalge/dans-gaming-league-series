@@ -7,6 +7,7 @@ import {
 } from './_shared';
 import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
 import { resolveSide } from '../parsers/roundSides';
+import { persistentQuery } from './_persistentCache';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
   player_id: number;
@@ -93,11 +94,11 @@ function resolveWeaponAndCategory(raw: PlayerMatchWeaponStat): { weapon: string;
  *  weapon). Pass `playersById`/`pmsRows` when the caller already fetched them (e.g. shared with an
  *  adjacent `getAllMatchKills()` call) to skip a redundant full `players`/`player_match_stats`
  *  table read. */
-export async function getAllWeaponClassStats(
+export const getAllWeaponClassStats = persistentQuery('getAllWeaponClassStats', async (
   seasonId?: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
   pmsRows?: PmsRow[] | Promise<PmsRow[]>,
-): Promise<WeaponClassMatchRow[]> {
+): Promise<WeaponClassMatchRow[]> => {
   const rows = await getAllJoinedStats<PlayerMatchWeaponStat>('player_match_weapon_stats', seasonId, playersById, pmsRows);
   return rows.map(({ raw, ...join }) => ({
     ...join,
@@ -108,7 +109,7 @@ export async function getAllWeaponClassStats(
     damage_dealt: raw.damage_dealt,
     rounds_played: raw.rounds_played,
   }));
-}
+});
 
 type RawRoundEconomyRow = { match_id: number; round_number: number; player_match_stats_id: number; economy_type: string };
 
@@ -153,11 +154,11 @@ async function getEconomyRoundWins(
  *  economy_type). Pass `playersById`/`pmsRows` when the caller already fetched them (e.g. shared
  *  with an adjacent `getAllMatchKills()` call) to skip a redundant full `players`/`player_match_stats`
  *  table read. */
-export async function getAllEconomyStats(
+export const getAllEconomyStats = persistentQuery('getAllEconomyStats', async (
   seasonId?: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
   pmsRows?: PmsRow[] | Promise<PmsRow[]>,
-): Promise<EconomyMatchRow[]> {
+): Promise<EconomyMatchRow[]> => {
   const [rows, roundWins] = await Promise.all([
     getAllJoinedStats<PlayerMatchEconomyStat>('player_match_economy_stats', seasonId, playersById, pmsRows),
     getEconomyRoundWins(),
@@ -172,17 +173,17 @@ export async function getAllEconomyStats(
     rounds_played: raw.rounds_played,
     rounds_won: roundWins.get(`${join.match_id}:${join.player_id}:${raw.economy_type}`) ?? 0,
   }));
-}
+});
 
 /** One match's `player_match_weapon_stats` rows, joined to player names — the match-page-scoped
  *  counterpart to `getAllWeaponClassStats()` (avoids a full-table fetch for one match's box score,
  *  same reasoning as `getMatchKills()` vs `getAllMatchKills()` — `kills.ts`). `season_id` is left
  *  unresolved (`-1`) since a match-page caller already knows its own season and doesn't need it,
  *  matching `getMatchKills()`'s own convention for the identical reason (#474). */
-export async function getMatchWeaponClassStats(
+export const getMatchWeaponClassStats = persistentQuery('getMatchWeaponClassStats', async (
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
-): Promise<WeaponClassMatchRow[]> {
+): Promise<WeaponClassMatchRow[]> => {
   const [rows, pmsLookup, resolvedPlayersById] = await Promise.all([
     fetchAllPages<PlayerMatchWeaponStat>((from, to) =>
       getAdminClient().from('player_match_weapon_stats').select('*').eq('match_id', matchId).range(from, to),
@@ -210,16 +211,16 @@ export async function getMatchWeaponClassStats(
     });
   }
   return result;
-}
+});
 
 /** One match's `player_match_economy_stats` rows, joined to player names — the match-page-scoped
  *  counterpart to `getAllEconomyStats()` (avoids a full-table fetch for one match's box score, same
  *  reasoning as `getMatchWeaponClassStats()` above). `season_id` is left unresolved (`-1`), matching
  *  that same convention. */
-export async function getMatchEconomyStats(
+export const getMatchEconomyStats = persistentQuery('getMatchEconomyStats', async (
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
-): Promise<EconomyMatchRow[]> {
+): Promise<EconomyMatchRow[]> => {
   // `fetchPmsFactionLookup()` is `cache()`-wrapped and keyed by `matchId` (#507), so this function's
   // own row-resolution call and `getEconomyRoundWins(matchId)`'s internal one already collapse to
   // one `player_match_stats` read without a local promise to thread between them.
@@ -252,7 +253,7 @@ export async function getMatchEconomyStats(
     });
   }
   return result;
-}
+});
 
 /** Same 5 fields as `WeaponStatFields` — aliased under its own name since this one is always a
  *  cross-match *sum* (`groupWeaponAccuracyByPlayer()`'s result), never a single stored row, but the

@@ -5,13 +5,14 @@ import type { Player, Season } from '../types';
 import { allMatchesPlayed, extractSeasonNumber, findPairedSeason, isPlayedScore } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { batchedIn, cacheQuery } from './_shared';
+import { batchedIn } from './_shared';
 import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics, type SabremetricMatchRow } from './sabremetrics';
 import { getAllMatchRounds, type MatchRoundRow } from './rounds';
 import { getAllMatchKills, type MatchKillRow } from './kills';
 import { getAllWeaponClassStats, getAllEconomyStats, type WeaponClassMatchRow, type EconomyMatchRow } from './weaponStats';
+import { persistentQuery } from './_persistentCache';
 
 export interface SeasonRosterEntry {
   player_id: number;
@@ -20,10 +21,10 @@ export interface SeasonRosterEntry {
   discord_id: string | null;
 }
 
-/** Optional `client` per docs/recipes.md's query-helper recipe. `cache()`-wrapped so the root
- *  layout's own read (feeds `SideNav`) and a page's separate read of the same table collapse into a
- *  single Supabase round trip per request — same reasoning as `getSeason()` below. */
-export const getSeasons = cacheQuery(async (client?: SupabaseClient): Promise<Season[]> => {
+/** Optional `client` per docs/recipes.md's query-helper recipe. `persistentQuery()`-wrapped so
+ *  the root layout's own read (feeds `SideNav`) and a page's separate read of the same table share one
+ *  Supabase read — same reasoning as `getSeason()` below. */
+export const getSeasons = persistentQuery('getSeasons', async (client?: SupabaseClient): Promise<Season[]> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db
     .from('seasons')
@@ -106,9 +107,9 @@ export async function isSeasonFullyPlayed(seasonId: number, client?: SupabaseCli
   return allMatchesPlayed(await getMatchScoresForWeeks(db, weekIds));
 }
 
-/** `cache()`-wrapped so a route that reads it from both `generateMetadata` and the page component
- *  (e.g. `seasons/[id]/page.tsx`) collapses into a single Supabase round trip per request. */
-export const getSeason = cacheQuery(async (id: number, client?: SupabaseClient): Promise<Season | null> => {
+/** `persistentQuery()`-wrapped so a route that reads it from both `generateMetadata` and the page
+ *  component (e.g. `seasons/[id]/page.tsx`) shares one Supabase read. */
+export const getSeason = persistentQuery('getSeason', async (id: number, client?: SupabaseClient): Promise<Season | null> => {
   const db = client ?? getAdminClient();
   const { data, error } = await db
     .from('seasons')
@@ -120,9 +121,8 @@ export const getSeason = cacheQuery(async (id: number, client?: SupabaseClient):
 });
 
 /** Find the gauntlet season paired to a regular season (`findPairedSeason()`'s rule). Reads through the
- *  `cache()`-wrapped `getSeasons()` rather than its own query, so repeat lookups in the same request
- *  (e.g. one per row in `getAdminMatches()`) collapse into the single round trip already made
- *  elsewhere in that request instead of adding their own. */
+ *  persistent `getSeasons()` rather than its own query, so repeat lookups (e.g. one per row in
+ *  `getAdminMatches()`) share the read already made elsewhere instead of adding their own. */
 export async function getLinkedGauntlet(regularSeasonName: string, client?: SupabaseClient): Promise<Season | null> {
   const seasons = await getSeasons(client);
   return findPairedSeason(regularSeasonName, seasons.filter((s) => s.is_gauntlet));
@@ -162,13 +162,11 @@ export function hubIdsBySeason(seasons: Season[]): Map<number, number> {
 }
 
 /** A season's explicit roster (`season_players`) — the pre-match-history source of who's on a
- * season before any matches exist to derive it from. Sorted by player name. Pass an
- * already-fetched `playersById` (e.g. one a caller needs for its own purposes too, like a full
- * player picker) to skip this function's own redundant full-table read. */
-export async function getSeasonRoster(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+ * season before any matches exist to derive it from. Sorted by player name. */
+export const getSeasonRoster = persistentQuery('getSeasonRoster', async (seasonId: number): Promise<SeasonRosterEntry[]> => {
   const [{ data, error }, resolvedPlayersById] = await Promise.all([
     getAdminClient().from('season_players').select('player_id').eq('season_id', seasonId),
-    playersById ?? getPlayersById(),
+    getPlayersById(),
   ]);
   if (error) throw error;
 
@@ -189,15 +187,15 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
     });
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
-}
+});
 
 /** Ids of the seasons a player is on the explicit roster (`season_players`) of — what "have I
  *  signed up for this season" means while a season is UPCOMING. */
-export async function getPlayerRosterSeasonIds(playerId: number): Promise<Set<number>> {
+export const getPlayerRosterSeasonIds = persistentQuery('getPlayerRosterSeasonIds', async (playerId: number): Promise<Set<number>> => {
   const { data, error } = await getAdminClient().from('season_players').select('season_id').eq('player_id', playerId);
   if (error) throw error;
   return new Set((data ?? []).map((r) => (r as { season_id: number }).season_id));
-}
+});
 
 /** Everyone currently part of a season, unioning `season_players` with anyone who already has a
  *  scheduled or played match under it (`weeks` → `matches` → `player_match_stats`). `season_players`
@@ -210,7 +208,7 @@ export async function getPlayerRosterSeasonIds(playerId: number): Promise<Set<nu
  *  editor, schedule generation), which specifically want the raw pre-schedule signup list. */
 export async function getSeasonParticipants(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
   const [roster, resolvedPlayersById, { data: weekRows, error: weekErr }] = await Promise.all([
-    getSeasonRoster(seasonId, playersById),
+    getSeasonRoster(seasonId),
     playersById ?? getPlayersById(),
     getAdminClient().from('weeks').select('id').eq('season_id', seasonId),
   ]);
@@ -268,8 +266,8 @@ const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[
  *  `getSeasonParticipants()`, which also counts a rostered player whose matches are still unplayed;
  *  this is the "took part" signal the post-season survey and superlatives vote gate on. Sorted by
  *  player name. */
-export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
-  const [playerIds, resolvedPlayersById] = await Promise.all([getSeasonPlayedPlayerIds(seasonId), playersById ?? getPlayersById()]);
+export const getSeasonPlayedPlayers = persistentQuery('getSeasonPlayedPlayers', async (seasonId: number): Promise<SeasonRosterEntry[]> => {
+  const [playerIds, resolvedPlayersById] = await Promise.all([getSeasonPlayedPlayerIds(seasonId), getPlayersById()]);
   const entries: SeasonRosterEntry[] = [];
   for (const playerId of playerIds) {
     const player = resolvedPlayersById.get(playerId);
@@ -282,7 +280,7 @@ export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map
     });
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
-}
+});
 
 /** Whether `playerId` is among a season's played players (`getSeasonPlayedPlayers()`'s result) — the one
  *  eligibility predicate the survey and superlatives gates and views all share. */
@@ -316,28 +314,27 @@ export interface SeasonStatsView {
  *  Distinct from `SeasonStatsView` (the Stats/Advanced Stats sub-tabs' own per-match fields, the
  *  most expensive queries this app runs), which is fetched lazily, client-side, only once one of
  *  those two sub-tabs is actually opened — see `getRegularSeasonStatsView()` below and
- *  `SeasonTabView`. `seasonNumber`/`playersById` are accepted rather than re-resolved here since
- *  every caller (the page's own initial render, the lazy tab-switch route) already has both in
- *  hand. */
-export async function getRegularSeasonLightView(
+ *  `SeasonTabView`. `seasonNumber` is accepted rather than re-resolved here since every caller (the
+ *  page's own initial render, the lazy tab-switch route) already has it in hand. */
+export const getRegularSeasonLightView = persistentQuery('getRegularSeasonLightView', async (
   seasonId: number,
   seasonNumber: number | null,
-  playersById: Map<number, Player>,
-): Promise<RegularSeasonLightView> {
-  const [schedule, ehogRatings, hasAdvancedStats] = await Promise.all([
+): Promise<RegularSeasonLightView> => {
+  const [schedule, ehogRatings, hasAdvancedStats, playersById] = await Promise.all([
     getSeasonSchedule(seasonId),
     getSeasonEhogRatings(seasonId),
     hasSeasonSabremetrics(seasonId),
+    getPlayersById(),
   ]);
   // Computed from `schedule` — already fetched above — instead of a second, redundant
   // getH2HData() round-trip over the same matches (see #441).
   const h2hData = computeH2H(scheduleToH2HInput(schedule, seasonNumber), playersById);
   return { schedule, h2hData, ehogRatings, hasAdvancedStats };
-}
+});
 
 /** The Regular Season tab's Stats/Advanced Stats sub-tab fields — see `RegularSeasonLightView`'s
  *  own doc comment for why these are split out and fetched separately, lazily. */
-export async function getRegularSeasonStatsView(seasonId: number): Promise<SeasonStatsView> {
+export const getRegularSeasonStatsView = persistentQuery('getRegularSeasonStatsView', async (seasonId: number): Promise<SeasonStatsView> => {
   const [sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     getAllSabremetrics(seasonId),
     getAllMatchRounds(seasonId),
@@ -346,4 +343,4 @@ export async function getRegularSeasonStatsView(seasonId: number): Promise<Seaso
     getAllEconomyStats(seasonId),
   ]);
   return { sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
-}
+});

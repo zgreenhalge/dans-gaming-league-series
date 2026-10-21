@@ -118,8 +118,8 @@ before running anything, runs the suite, then `supabase stop`.
 `fakeSupabase`/`src/lib/test-support/` harness, not a live database, so it (along with `npm run
 lint`/`npm run typecheck`) works in any agent session with no setup at all.
 
-`npm run build`/`npm run dev` fetch from Supabase during prerendering too (`seasons/page.tsx`,
-`maps/page.tsx`, `statistics/page.tsx`, and others using `export const revalidate = 60`, plus a few
+`npm run build`/`npm run dev` fetch from Supabase during prerendering too (`maps/page.tsx`,
+`statistics/page.tsx`, and others using `export const revalidate = 60`, plus a few
 API routes touched by `next build`'s page-data collection) — but `getAdminClient()`
 (`src/lib/supabase-admin.ts`) falls back to `src/lib/dev-fallback-supabase.ts` whenever
 `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are *both* unset

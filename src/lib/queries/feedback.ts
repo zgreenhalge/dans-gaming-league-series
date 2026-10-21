@@ -16,6 +16,7 @@ import {
 import { getPlayersById } from './player';
 import { getSeasonPlayedPlayers, hasPlayedSeason } from './seasons';
 import { batchedIn } from './_shared';
+import { persistentQuery } from './_persistentCache';
 
 export interface Survey {
   id: number;
@@ -31,7 +32,7 @@ export function isSurveyOpen(survey: Survey): boolean {
 }
 
 /** A season's survey with its questions in display order, or null if none has been created. */
-export async function getSurveyForSeason(seasonId: number): Promise<Survey | null> {
+export const getSurveyForSeason = persistentQuery('getSurveyForSeason', async (seasonId: number): Promise<Survey | null> => {
   const { data, error } = await getAdminClient()
     .from('surveys')
     .select('id, season_id, closed_at, questions')
@@ -39,7 +40,7 @@ export async function getSurveyForSeason(seasonId: number): Promise<Survey | nul
     .maybeSingle();
   if (error) throw error;
   return data ? { ...data, questions: data.questions as unknown as SurveyQuestion[] } : null;
-}
+});
 
 /** One player's own saved answers — for prefilling their editor — plus whether they have responded. */
 export async function getPlayerSurveyAnswers(
@@ -102,7 +103,7 @@ export interface SuperlativePoll {
 }
 
 /** A season's superlatives and whether voting is open, or null if none have been set up. */
-export async function getSuperlativePoll(seasonId: number): Promise<SuperlativePoll | null> {
+export const getSuperlativePoll = persistentQuery('getSuperlativePoll', async (seasonId: number): Promise<SuperlativePoll | null> => {
   const [{ data: poll, error }, { data: superlatives, error: superlativesErr }] = await Promise.all([
     getAdminClient().from('superlative_polls').select('is_open').eq('season_id', seasonId).maybeSingle(),
     getAdminClient()
@@ -115,7 +116,7 @@ export async function getSuperlativePoll(seasonId: number): Promise<SuperlativeP
   if (superlativesErr) throw superlativesErr;
   if (!poll) return null;
   return { isOpen: poll.is_open, superlatives: superlatives ?? [] };
-}
+});
 
 /** The shared lock rule (`isFeedbackLocked()`) for a poll, for the route gates: open, or any vote
  *  exists. Checks for votes only when voting is closed and there are superlatives to vote on. */
@@ -162,7 +163,7 @@ export interface SuperlativeAdminResults extends SuperlativeResults {
   isLocked: boolean;
 }
 
-async function tallyPoll(poll: SuperlativePoll): Promise<SuperlativeResults> {
+const tallyPoll = persistentQuery('tallyPoll', async (poll: SuperlativePoll): Promise<SuperlativeResults> => {
   const [votes, playersById] = await Promise.all([
     batchedIn<{ superlative_id: number; voter_player_id: number; nominee_player_id: number }>(
       'superlative_votes',
@@ -183,7 +184,7 @@ async function tallyPoll(poll: SuperlativePoll): Promise<SuperlativeResults> {
       return { ...s, totalVotes: nominees.reduce((sum, n) => sum + n.votes, 0), nominees };
     }),
   };
-}
+});
 
 /** Anonymised vote tallies per superlative plus the eligible-voter count, or null if none have been
  *  set up. */
@@ -201,7 +202,7 @@ export async function getSuperlativeResults(seasonId: number): Promise<Superlati
 /** Ids of seasons whose survey or superlatives vote is currently open for responses — a cheap
  *  pre-filter so callers only resolve per-viewer views for seasons that can have a banner. Reads each
  *  form's own open column (`surveys.closed_at is null`, `superlative_polls.is_open`). */
-export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
+export const getOpenFeedbackSeasonIds = persistentQuery('getOpenFeedbackSeasonIds', async (): Promise<number[]> => {
   const [{ data: surveys, error: surveyErr }, { data: polls, error: pollErr }] = await Promise.all([
     getAdminClient().from('surveys').select('season_id').is('closed_at', null),
     getAdminClient().from('superlative_polls').select('season_id').eq('is_open', true),
@@ -209,7 +210,7 @@ export async function getOpenFeedbackSeasonIds(): Promise<number[]> {
   if (surveyErr) throw surveyErr;
   if (pollErr) throw pollErr;
   return [...new Set([...(surveys ?? []), ...(polls ?? [])].map((r) => r.season_id))];
-}
+});
 
 /** What the season page's Survey tab shows a viewer: their form, while the survey is open and they
  *  played the season. Null (no tab) otherwise — for a signed-out or ineligible viewer, a closed

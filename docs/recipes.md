@@ -55,7 +55,10 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
    `players/[id]/page.tsx`.
 2. **Validate route params and `notFound()` early** — `parseRouteId(id)` (`src/lib/util.ts`) →
    `notFound()` on `null` before the data fetch, then `if (!detail) notFound()` after.
-3. **Set `export const revalidate = N`** (ISR) — most detail pages use `60`.
+3. **Set `export const revalidate = N`** (ISR) only on a page that reads no session, cookies or
+   `searchParams` — `/statistics` and `/maps` are cached for `N` seconds that way. A page that calls
+   `getServerSession()` (the detail pages that highlight the signed-in player) renders on every
+   request and ignores `revalidate`, so leave it off.
 4. **Add `generateMetadata()`** for the page `<title>`.
 5. **Wrap content in `<TopbarShell>`** (a page under a season builds its `crumbs` with `buildCrumbs()`, `src/lib/crumbs.ts`, rather than a literal array — see [`architecture.md`](./architecture.md#week-round-and-group-pages)) and delegate the actual rendering to a `components/*View.tsx`
    client/server component — keep the page itself thin (param handling + data fetching only).
@@ -94,11 +97,16 @@ in.
    `const db = client ?? getAdminClient()`, as `getSeasons()` (`seasons.ts`) and
    `getSeasonSchedule()` (`schedule.ts`) do. Forward `client` as-is (possibly `undefined`) to other
    helpers rather than defaulting it early, so a nested call shares the bare call's `cache()` entry.
-5. **If the read doesn't depend on its arguments — zero-arg, or keyed only by a primitive the
-   caller already has (a `matchId`, a `seasonId`) — wrap it in React's `cache()`
-   (`import { cache } from 'react'`) rather than adding a manual `xyz?: T | Promise<T>` override
-   parameter for sibling callers to thread down.** `cache()` dedupes identical calls within one
-   render pass automatically; see `getWeekLookup()`/`resolveMatchSeasons()`/`fetchPmsLookup()`/
+5. **If the read is of shared, user-independent data and doesn't depend on its arguments — zero-arg,
+   or keyed only by a primitive the caller already has (a `matchId`, a `seasonId`) — wrap it in
+   `persistentQuery('name', fn)` (`_persistentCache.ts`) rather than adding a manual
+   `xyz?: T | Promise<T>` override parameter for sibling callers to thread down.** It is React's
+   `cache()` (identical calls dedupe within one render pass) plus a cross-request cache that every
+   content write retires — see [`architecture.md`](./architecture.md#read-cache) for what that
+   requires of a read: plain-value arguments, a JSON-safe result, and no viewer-specific data and
+   no operational table (`live_match_score`, `background_jobs`, …), whose writes don't bump the
+   version. A read that must stay uncached uses React's `cache()` alone
+   (`import { cache } from 'react'`). See `getWeekLookup()`/`resolveMatchSeasons()`/`fetchPmsLookup()`/
    `getRoundSides()` (`_shared.ts`), `getPlayersById()` (`player.ts`), `getSeasonBaseData()`
    (`leaderboard.ts`), `fetchAllMatchRoundRows()` (`rounds.ts`), and `getMapDetail()` (`maps.ts`)
    for the pattern. Reach for the older `xyz?: T | Promise<T>` param only when two callers need to
@@ -107,12 +115,12 @@ in.
    doesn't) — `cache()`'s argument-keying can't recognize those as the same query. Never hand-build
    a `const xPromise = someQuery(); …` local variable and pass it into two sibling calls just to
    skip a second identical fetch — that's exactly what `cache()` replaces.
-   A helper that also takes the optional `client?` param is wrapped in `cacheQuery()`
-   (`_shared.ts`) instead, which ignores trailing `undefined` arguments so `getSeasons(client)`
-   with no client and a bare `getSeasons()` share one entry (`getSeasons()`, `getSeason()`,
-   `getPlayersById()`, `getMapLookup()`). A `cache()` key is an array argument's identity, not its
-   contents, so `getWeekLookup()` caches one read of every week and filters it for a `seasonIds`
-   scope instead of caching per array.
+   A helper that also takes the optional `client?` param is still wrapped in `persistentQuery()`:
+   it ignores trailing `undefined` arguments so `getSeasons(client)` with no client and a bare
+   `getSeasons()` share one entry, and a call that does pass a `client` skips the persistent cache
+   (`getSeasons()`, `getSeason()`, `getPlayersById()`, `getMapLookup()`). A cache key is an array
+   argument's identity, not its contents, so `getWeekLookup()` caches one read of every week and
+   filters it for a `seasonIds` scope instead of caching per array.
 6. If the new helper needs season pairing (regular ↔ gauntlet), use `findPairedSeason()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
    `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs or compare
@@ -197,7 +205,13 @@ Every `public` table has row level security on, so a new table is created closed
    the columns the role may select. The subscribing component calls `useRealtimeChanges()`
    (`src/components/useRealtimeChanges.ts`), which owns the channel's setup and cleanup and skips
    subscribing when `getBrowserClient()` returns `null` (public env unset).
-4. Regenerate `src/lib/database.types.ts` and document the table in
+4. **Attach the version trigger in the same migration**
+   (`create trigger bump_data_version after insert or update or delete or truncate on public.<table>
+   for each statement execute function public.bump_data_version();`), so a write to the table
+   retires the read cache ([`architecture.md`](./architecture.md#read-cache)). A table no cached
+   read depends on — operational state, like `background_jobs` — is added to `OPERATIONAL_TABLES` in
+   `src/lib/migrations-data-version.test.ts` instead; that test fails CI for a table that does neither.
+5. Regenerate `src/lib/database.types.ts` and document the table in
    [`architecture.md`](./architecture.md)'s Database section.
 
 ## Recipe: Add a new map

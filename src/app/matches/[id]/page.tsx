@@ -33,8 +33,6 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
 import { getDemoManifest } from '@/lib/demo/segmentManifest';
 
-export const revalidate = 60;
-
 export async function generateMetadata({
   params,
 }: {

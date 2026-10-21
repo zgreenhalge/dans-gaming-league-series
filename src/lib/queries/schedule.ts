@@ -4,6 +4,7 @@ import type { Week, Match, Faction } from '../types';
 import { allMatchesPlayed, isPlayedScore, weekWindow, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry } from '../stage-types';
 import { getPlayersById } from './player';
+import { persistentQuery } from './_persistentCache';
 
 export type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry };
 
@@ -35,11 +36,11 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
  *  query (weeks -> matches -> player_match_stats) instead of three sequential round trips, each
  *  depending on the previous one's ids. Optional `client` per docs/recipes.md's
  *  query-helper recipe. */
-export async function getSeasonSchedule(
+export const getSeasonSchedule = persistentQuery('getSeasonSchedule', async (
   seasonId: number,
   client?: SupabaseClient,
   opts?: { throughWeek?: number; onlyWeek?: number },
-): Promise<WeekWithMatches[]> {
+): Promise<WeekWithMatches[]> => {
   const db = client ?? getAdminClient();
   let weeksQuery = db
     .from('weeks')
@@ -81,7 +82,7 @@ export async function getSeasonSchedule(
       }),
     };
   });
-}
+});
 
 /** Every week of a season with just its match results (`final_score`) — enough to tell played from
  *  upcoming weeks for navigation, without `getSeasonSchedule()`'s per-match roster embed. */
@@ -115,10 +116,10 @@ export interface SeasonMatchSummaries {
  *  rendered, without eagerly paying for the heavy roster-embedded schedule either way. One embedded
  *  query (weeks -> matches), same pattern as `getSeasonSchedule()` above, instead of a `weeks` round
  *  trip followed by a second `matches` one. */
-export async function getSeasonMatchSummaries(
+export const getSeasonMatchSummaries = persistentQuery('getSeasonMatchSummaries', async (
   seasonId: number,
   client?: SupabaseClient,
-): Promise<SeasonMatchSummaries> {
+): Promise<SeasonMatchSummaries> => {
   const db = client ?? getAdminClient();
   const { data: weeks, error: wErr } = await db
     .from('weeks')
@@ -138,7 +139,7 @@ export async function getSeasonMatchSummaries(
     .sort((a, b) => a.week_number - b.week_number || a.match_number - b.match_number);
 
   return { weekCount: weekRows.length, matches: summaries };
-}
+});
 
 /** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind
  * `isSeasonFullyPlayed()` (`season-lifecycle.ts`), used wherever a caller already has week ids in
@@ -250,10 +251,10 @@ export function getUpcomingGames(schedule: WeekWithMatches[], startDate: string 
 
 /** True if the given week exists, has at least one match, and every match in it has a final,
  * played score. */
-export async function isWeekComplete(
+export const isWeekComplete = persistentQuery('isWeekComplete', async (
   seasonId: number,
   weekNumber: number,
-): Promise<boolean> {
+): Promise<boolean> => {
   const { data, error } = await getAdminClient()
     .from('matches')
     .select('final_score, weeks!inner(season_id, week_number)')
@@ -261,4 +262,4 @@ export async function isWeekComplete(
     .eq('weeks.week_number', weekNumber);
   if (error) throw error;
   return allMatchesPlayed((data ?? []) as { final_score: string | null }[]);
-}
+});

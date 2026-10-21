@@ -793,7 +793,9 @@ death, or kills + assists when there are no deaths (`deriveKda()` in `src/lib/ut
 tile also shows the kills-only [K/D](#kill-stats) beneath it, the figure the stat tables use.
 **Match history** lists the last five played matches (`lastPlayed()`,
 `src/lib/queries/player.ts`) with the stored `final_score`, shirts first, as every match card shows
-it. `buildMyStats()` in `src/lib/queries/myStats.ts`.
+it. The matches come from `getPlayerRecent()`, which loads rosters for just those five and the next
+upcoming match rather than the player's whole history. `buildMyStats()` in
+`src/lib/queries/myStats.ts`.
 
 **Standings season** — the first active regular season; with none active, the latest finished one
 (highest season number). `resolveHomeSeasons()` in `src/lib/queries/seasons.ts`, which also picks the Upcoming Games season.
