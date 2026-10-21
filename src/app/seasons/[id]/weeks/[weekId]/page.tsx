@@ -15,8 +15,6 @@ import { buildCrumbs, gauntletLink, roundHref, stageHeading, weekHref } from '@/
 import { describeMatchups, weekTitle } from '@/lib/seo/stage-meta';
 import { fmtWindowDate, parseRouteId, weekWindow } from '@/lib/util';
 
-export const revalidate = 60;
-
 type Params = { id: string; weekId: string };
 
 /** Resolves the URL to its week, redirecting to the canonical URL when the ids disagree with where

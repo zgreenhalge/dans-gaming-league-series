@@ -12,8 +12,6 @@ import { buildCrumbs, groupHref, regularSeasonLink, stageHeading } from '@/lib/c
 import { describeMatchups, groupTitle } from '@/lib/seo/stage-meta';
 import { parseRouteId, podKindLabel } from '@/lib/util';
 
-export const revalidate = 60;
-
 type Params = { id: string; podId: string };
 
 /** Resolves the URL to its gauntlet group (see the week page's loader for the redirect reasoning). */

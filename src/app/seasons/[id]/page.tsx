@@ -45,8 +45,6 @@ import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber, parseRouteId 
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 
-export const revalidate = 60;
-
 export async function generateMetadata({
   params,
 }: {

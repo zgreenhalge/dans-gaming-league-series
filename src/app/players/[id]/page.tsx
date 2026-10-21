@@ -18,8 +18,6 @@ import EhogBadge from '@/components/EhogBadge';
 import PlayerNameEditor from '@/components/PlayerNameEditor';
 import DiscordLinkButton from '@/components/DiscordLinkButton';
 
-export const revalidate = 60;
-
 export async function generateMetadata({
   params,
 }: {
