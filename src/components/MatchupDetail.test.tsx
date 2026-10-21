@@ -10,31 +10,11 @@
 import { describe, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
-import { duoStats, H2H_PLAYERS } from '@/lib/test-support/h2hFixtures';
+import { duoStats, H2H_PLAYERS, rivalStats } from '@/lib/test-support/h2hFixtures';
 import type { H2HStats } from '@/lib/h2h';
 
 const players = new Map(H2H_PLAYERS.map((p) => [p.id, p]));
-const STATS = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
-
-function rival(overrides: Partial<H2HStats> = {}): H2HStats {
-  return {
-    playerA: 1,
-    playerB: 2,
-    meetings: 6,
-    aWins: 3,
-    bWins: 3,
-    lastMap: null,
-    aStats: STATS,
-    bStats: STATS,
-    mapBreakdown: [],
-    matches: [],
-    aUpsetScore: 0,
-    bUpsetScore: 0,
-    aUpsetWins: 2,
-    bUpsetWins: 1,
-    ...overrides,
-  };
-}
+const rival = (overrides: Partial<H2HStats> = {}) => rivalStats(1, 2, 3, 3, { aUpsetWins: 2, bUpsetWins: 1, ...overrides });
 
 describe('DuoDetail', () => {
   test('shows wins above the odds, ADR lift and the average KDA', () => {
@@ -64,9 +44,9 @@ describe('RivalDetail', () => {
 
   test('dims the rating of an uneven rivalry, but not an even one or an unrated one', () => {
     const { rerender } = render(<RivalDetail rival={rival({ aWins: 5, bWins: 1 })} players={players} rivalryRating={40} ratingBreakdown="tip" />);
-    expect(screen.getByTitle('tip · Uneven record')).toHaveClass('opacity-40');
+    expect(screen.getByTitle('tip · Uneven record')).toHaveClass('opacity-50');
     rerender(<RivalDetail rival={rival()} players={players} rivalryRating={90} ratingBreakdown="tip" />);
-    expect(screen.getByTitle('tip')).not.toHaveClass('opacity-40');
+    expect(screen.getByTitle('tip')).not.toHaveClass('opacity-50');
     rerender(<RivalDetail rival={rival({ aWins: 5, bWins: 1 })} players={players} />);
     expect(screen.queryByTitle(/Uneven record/)).toBeNull();
   });

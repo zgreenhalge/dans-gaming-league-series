@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { careerH2HHref, h2hPairHref } from '@/lib/crumbs';
 import type { H2HData } from '@/lib/queries';
-import { duoBreakdownScorer, rankDuos, rankRivals, rivalBreakdownScorer, FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/queries';
+import { duoBreakdownScorer, rankDuos, rankRivals, rivalBreakdownScorer } from '@/lib/queries';
+import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/h2h-ratings';
 import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
 
 /** How many pairs each home-page list shows. */

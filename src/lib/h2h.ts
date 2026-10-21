@@ -141,10 +141,16 @@ export function rivalEvenness(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>)
 export const MIN_GAMES_FOR_PERFORMANCE = 3;
 
 /** A rivalry less even than this reads as lopsided, and its rating is shown dimmed. */
-export const UNEVEN_RIVALRY_BELOW = 0.5;
+const UNEVEN_RIVALRY_BELOW = 0.5;
 
 export function isUnevenRivalry(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): boolean {
   return rivalEvenness(r) < UNEVEN_RIVALRY_BELOW;
+}
+
+/** The note a dimmed rivalry rating carries (`RatingCircle`'s `dimmedReason`); `undefined` for a
+ *  rivalry that is even enough to show at full strength. */
+export function unevenRivalryNote(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>): string | undefined {
+  return isUnevenRivalry(r) ? 'Uneven record' : undefined;
 }
 
 export interface H2HData {
@@ -312,21 +318,17 @@ function teamWinProb(shirtsWinProb: number | null, faction: 'SHIRTS' | 'SKINS'):
  *  below even the win probability was, doubled (0 to 1); a favourite's win, a loss, or a game with
  *  no stored prediction counts 0. */
 function upsetScore(won: boolean, winProb: number | null): number {
-  return isUpsetWin(won, winProb) && winProb != null ? 1 - 2 * winProb : 0;
-}
-
-/** Whether a result is a win as the pre-match underdog. */
-function isUpsetWin(won: boolean, winProb: number | null): boolean {
-  return won && winProb != null && winProb < 0.5;
+  return won && winProb != null && winProb < 0.5 ? 1 - 2 * winProb : 0;
 }
 
 /** A player's ADR in the games they played with a given partner, as a fraction above their ADR in
  *  every other game they played (`totals` covers all of them). 0 when they played no other games. */
 function adrGain(together: H2HRivalPlayerAgg, totals: { games: number; adrSum: number } | undefined): number {
-  if (!totals || together.games === 0) return 0;
+  if (!totals) return 0;
   const otherGames = totals.games - together.games;
+  if (together.games === 0 || otherGames <= 0) return 0;
   const otherAdr = (totals.adrSum - together.adrSum) / otherGames;
-  return otherGames > 0 && otherAdr > 0 ? together.adrSum / together.games / otherAdr - 1 : 0;
+  return otherAdr > 0 ? together.adrSum / together.games / otherAdr - 1 : 0;
 }
 
 /**
@@ -473,8 +475,8 @@ export function computeH2H(
         const bWinProb = teamWinProb(m.shirtsWinProb, bRow.faction);
         agg.aUpsetScore += upsetScore(aRow.is_win, aWinProb);
         agg.bUpsetScore += upsetScore(bRow.is_win, bWinProb);
-        if (isUpsetWin(aRow.is_win, aWinProb)) agg.aUpsetWins += 1;
-        if (isUpsetWin(bRow.is_win, bWinProb)) agg.bUpsetWins += 1;
+        if (upsetScore(aRow.is_win, aWinProb) > 0) agg.aUpsetWins += 1;
+        if (upsetScore(bRow.is_win, bWinProb) > 0) agg.bUpsetWins += 1;
 
         for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
           statAgg.games += 1;

@@ -6,7 +6,8 @@ import H2HMatrix, { type H2HPair } from './H2HMatrix';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { findDuo, findRival } from '@/lib/h2h';
 import type { H2HData } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals, FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals } from '@/lib/queries';
+import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/h2h-ratings';
 import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
 import RatingCircle from './RatingCircle';
 

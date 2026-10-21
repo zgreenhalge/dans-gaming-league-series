@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
-import { duoStats, H2H_PLAYERS } from './test-support/h2hFixtures';
+import { duoStats, H2H_PLAYERS, rivalStats as rival } from './test-support/h2hFixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 import { test, report } from './test-support/miniTest';
 
@@ -40,7 +40,6 @@ import {
   resolveHomeSeasons,
   worstNightmareOf,
   type GauntletRound,
-  type H2HStats,
   type PlayerHistoryRow,
   type WeekWithMatches,
 } from './queries';
@@ -48,27 +47,6 @@ import type { H2HData } from './h2h';
 import type { LeaderboardRowWithId, Season } from './types';
 
 // ─── Builders ────────────────────────────────────────────────────────────────
-
-const PLAYER_STATS = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
-
-function rival(playerA: number, playerB: number, aWins: number, bWins: number): H2HStats {
-  return {
-    playerA,
-    playerB,
-    meetings: aWins + bWins,
-    aWins,
-    bWins,
-    lastMap: null,
-    aStats: { ...PLAYER_STATS, roundsWon: 13 * aWins },
-    bStats: { ...PLAYER_STATS, roundsWon: 13 * bWins },
-    mapBreakdown: [],
-    matches: [],
-    aUpsetScore: 0,
-    bUpsetScore: 0,
-    aUpsetWins: 0,
-    bUpsetWins: 0,
-  };
-}
 
 function season(overrides: Partial<Season> & { id: number; name: string }): Season {
   return {

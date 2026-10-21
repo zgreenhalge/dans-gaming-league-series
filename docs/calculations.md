@@ -701,7 +701,7 @@ Metrics derived from pairing-specific data
 
 Both ratings are a weighted sum of terms, in points out of 100, divided by the best pair's sum in
 the league, so the best pair reads 100 (`duoBlendedScorer()` / `rivalBlendedScorer()`,
-`src/lib/queries/h2h.ts`). The breakdown tooltips (`duoBreakdownScorer()` /
+`src/lib/h2h-ratings.ts`). The breakdown tooltips (`duoBreakdownScorer()` /
 `rivalBreakdownScorer()`) print each term's points against its weight and the pair's total against
 the best pair's, from the same term functions the ratings use.
 

@@ -221,7 +221,8 @@ are the one row for a ranked duo or rivalry: `H2HSection`'s Best Friends / Close
 selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Rivalries as links (`href`).
 `compact` drops a duo's rounds and performance columns (**vs Odds**, **KDA**) and a rivalry's avatars for a
 narrow card. A duo's **vs Odds** is its wins above the pre-match odds, signed and green or red; a rivalry's
-rating circle is dimmed when its record is uneven (`isUnevenRivalry()`, `src/lib/h2h.ts`), and the same
+rating circle is dimmed, with an "Uneven record" note in its tooltip, when its record is uneven
+(`unevenRivalryNote()`, `src/lib/h2h.ts`, passed to `RatingCircle`'s `dimmedReason`), and the same
 dimming applies wherever a rivalry rating shows (`RivalDetail`, the player page's Matchups table). Under
 `MIN_GAMES_FOR_PERFORMANCE` games together a duo's **vs Odds** and **ADR lift** are shown at half opacity,
 since they are mostly noise by then. `DuoDetail` adds **vs Odds**, **ADR lift** and **KDA** cells and

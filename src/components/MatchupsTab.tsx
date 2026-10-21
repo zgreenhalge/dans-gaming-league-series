@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/queries';
-import { isUnevenRivalry } from '@/lib/h2h';
+import { unevenRivalryNote } from '@/lib/h2h';
 import EmptyState from './EmptyState';
 import Th from './Th';
 import SortableTh from './SortableTh';
@@ -340,7 +340,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       <PlayerCell id={p.id} name={p.name} avatarUrl={p.steam_avatar_url} expanded={isExpanded} onToggle={toggle} />
                       <Td align="center">
                         <div className="flex justify-center">
-                          <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} dimmed={isUnevenRivalry(row._raw)} />
+                          <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} dimmedReason={unevenRivalryNote(row._raw)} />
                         </div>
                       </Td>
                       <Td>{row.myWins}–{row.myLosses}</Td>

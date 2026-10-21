@@ -7,18 +7,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { __setTestAdminClient } from './supabase-admin';
-import { createFakeSupabaseClient } from './test-support/fakeSupabase';
-import { buildFakeDb } from './test-support/fixtures';
-import { duoStats } from './test-support/h2hFixtures';
+import { duoStats, rivalStats } from './test-support/h2hFixtures';
 import { test, report } from './test-support/miniTest';
-
-__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
-
-import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from './queries';
+import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from './h2h-ratings';
 import type { H2HStats } from './h2h';
-
-const PLAYER = { kills: 20, assists: 5, deaths: 15, adr: 75, rwr: 57, roundsWon: 40, roundsPlayed: 70 };
 
 /** A duo with `games` games, `wins` of them won, on a 55% round win rate; override the rest. */
 function duo(games: number, wins: number, overrides: Parameters<typeof duoStats>[0] = {}) {
@@ -26,26 +18,7 @@ function duo(games: number, wins: number, overrides: Parameters<typeof duoStats>
 }
 
 /** A rivalry with the given record and per-side upset scores. */
-function rival(wins: [number, number], overrides: Partial<H2HStats> = {}): H2HStats {
-  const meetings = wins[0] + wins[1];
-  return {
-    playerA: 1,
-    playerB: 2,
-    meetings,
-    aWins: wins[0],
-    bWins: wins[1],
-    lastMap: null,
-    aStats: { ...PLAYER, roundsWon: wins[0] * 13 },
-    bStats: { ...PLAYER, roundsWon: wins[1] * 13 },
-    mapBreakdown: [],
-    matches: [],
-    aUpsetScore: 0,
-    bUpsetScore: 0,
-    aUpsetWins: 0,
-    bUpsetWins: 0,
-    ...overrides,
-  };
-}
+const rival = (wins: [number, number], overrides: Partial<H2HStats> = {}) => rivalStats(1, 2, wins[0], wins[1], overrides);
 
 // ─── Friends ─────────────────────────────────────────────────────────────────
 

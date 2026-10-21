@@ -159,7 +159,7 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`H2HSection.tsx`) and the home page's Top duos / Hottest Rivalries rank pairs (both through
   `rankDuos()`/`rankRivals()`), and how the `H2HMatrix` colors its cells. Shared via
-  `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
+  `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/h2h-ratings.ts`.
   Each term lives on its own scale — raw counts can run into the dozens, rates top out at 100,
   differences shrink toward 0 as a rivalry gets closer, and performance terms can be negative. To
   combine them into one weighted sum, each term is turned into a 0–1 fraction (of the best value

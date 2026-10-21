@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
-import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/queries';
-import { duoAvgKda, isUnevenRivalry, MIN_GAMES_FOR_PERFORMANCE, rivalEvenness } from '@/lib/h2h';
+import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/h2h-ratings';
+import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, rivalEvenness, unevenRivalryNote } from '@/lib/h2h';
 import { formatSigned, rateGradientColor, signedColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
@@ -409,16 +409,14 @@ export function RivalDetail({
   const mapImg = rival.lastMap ? (maps[mapSlug(rival.lastMap)]?.image_url ?? null) : null;
 
   const circleValue = rivalryRating ?? 50;
-  const uneven = rivalryRating != null && isUnevenRivalry(rival);
-  const circleTitle = ratingBreakdown ?? RIVAL_RATING_SUMMARY;
   const rivalCircle = (
     <RatingCircle
       value={circleValue}
       colorStart="black"
       colorEnd="var(--color-accent-red-fg)"
       size="lg"
-      title={uneven ? `${circleTitle} · Uneven record` : circleTitle}
-      dimmed={uneven}
+      title={ratingBreakdown ?? RIVAL_RATING_SUMMARY}
+      dimmedReason={rivalryRating != null ? unevenRivalryNote(rival) : undefined}
     />
   );
 
