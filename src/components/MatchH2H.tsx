@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import type { MatchDuelStat, MatchKillRow, MatchDamageEventRow } from '@/lib/queries';
 import { computeMatchDuels } from '@/lib/queries';
 import { KILL_WEAPON_CATEGORY_LABEL, type KillWeaponCategory } from '@/lib/parsers/weaponClasses';
@@ -174,14 +174,14 @@ function DuelCard({ duel, players }: { duel: MatchDuelStat; players: Map<number,
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-4 pt-3.5 pb-3">
         <div className="flex items-center gap-3 mb-3">
-          <Link href={`/players/${a.id}`} className="flex-1 min-w-0 flex items-center gap-2">
+          <PlayerLink playerId={a.id} className="flex-1 min-w-0 flex items-center gap-2">
             <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="sm" />
             <span className="font-display font-bold text-[13px] truncate" style={nameStyle(A_COLOR)}>{a.name}</span>
-          </Link>
-          <Link href={`/players/${b.id}`} className="flex-1 min-w-0 flex items-center gap-2 justify-end text-right">
+          </PlayerLink>
+          <PlayerLink playerId={b.id} className="flex-1 min-w-0 flex items-center gap-2 justify-end text-right">
             <span className="font-display font-bold text-[13px] truncate" style={nameStyle(B_COLOR)}>{b.name}</span>
             <PlayerAvatar name={b.name} imageUrl={b.steam_avatar_url} size="sm" />
-          </Link>
+          </PlayerLink>
         </div>
 
         <SplitBar label="Kills" aValue={duel.aKills} bValue={duel.bKills} />

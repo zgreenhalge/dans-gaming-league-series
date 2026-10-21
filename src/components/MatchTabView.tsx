@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import { tabCls, formatEhogDelta, factionClass } from '@/lib/util';
 import EmptyState from '@/components/EmptyState';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -105,7 +105,7 @@ function Scoreboard({
           return (
             <Tr key={p.player_id} clickable tinted className="faction-tint-row cursor-pointer">
               <NameTd sticky className="faction-fg">
-                <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
+                <PlayerLink playerId={p.player_id} className="flex items-center gap-2.5">
                   <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
                   <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
                   {p.player_id === mvpPlayerId && (
@@ -125,7 +125,7 @@ function Scoreboard({
                       ({formatEhogDelta(ratingDeltas[p.player_id])})
                     </span>
                   )}
-                </Link>
+                </PlayerLink>
               </NameTd>
               <Td>{dash(String(k))}</Td>
               <Td>{dash(String(a))}</Td>
