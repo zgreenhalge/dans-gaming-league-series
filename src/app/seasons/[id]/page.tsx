@@ -6,6 +6,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { buildCrumbs } from '@/lib/crumbs';
 import {
   getSeason,
+  getSeasons,
   getSeasonLeaderboard,
   getSeasonMatchSummaries,
   getSeasonRoster,
@@ -119,11 +120,25 @@ export default async function SeasonPage({
   // tab on the first paint, with no client-side flash/refetch.
   const initialView: 'regular' | 'gauntlet' = (await searchParams).view === 'gauntlet' ? 'gauntlet' : 'regular';
 
-  // Independent reads — neither depends on the other's result, so they run together instead of
-  // stacking as sequential round trips.
-  const [season, session] = await Promise.all([
+  // `leaderboard` and `matchSummaries` need only `seasonId`, so they start before anything is awaited
+  // and run alongside every wave below instead of gating it. Marks both promises "handled"
+  // immediately, before an `await` gives Node a chance to flag an in-flight rejection as unhandled
+  // (and crash the process under Node's default --unhandled-rejections=throw) — the real error, if
+  // any, still surfaces normally when these are awaited for real in the Promise.all further down; a
+  // `.catch()` here doesn't consume it there, since a promise can have more than one handler attached.
+  const leaderboardPromise = getSeasonLeaderboard(seasonId);
+  const matchSummariesPromise = getSeasonMatchSummaries(seasonId);
+  leaderboardPromise.catch(() => {});
+  matchSummariesPromise.catch(() => {});
+
+  // First wave: every read the rest of the page is derived from. `getSeasons()` is what
+  // `getLinkedGauntlet()` / `getLinkedRegularSeason()` pair against, so awaiting it here makes both
+  // free below; `getPlayersById()` is a cached read, cheap even for a season that redirects.
+  const [season, session, playersById] = await Promise.all([
     getSeason(seasonId),
     getServerSession(authOptions),
+    getPlayersById(),
+    getSeasons(),
   ]);
   if (!season) notFound();
 
@@ -135,13 +150,8 @@ export default async function SeasonPage({
 
     // Orphan gauntlet with no paired regular season — render standalone, reusing the same
     // getGauntletSeasonLightView() the paired-season path below fetches for its own Gauntlet tab
-    // instead of duplicating its fetch/derive logic. `getPlayersById()` is `cache()`-wrapped
-    // (fetched here rather than earlier so a season that redirects above never pays for it at all);
-    // it's needed as a value (not just a promise) to build the light-view call, so it's resolved
-    // before that fetch starts rather than folded into the same Promise.all — a real but small cost
-    // on this rare path (a gauntlet predating bracket-scheduling, or never paired). The Stats/
-    // Advanced Stats sub-tabs' own heavier data is a separate lazy fetch — see SeasonTabView.
-    const playersById = await getPlayersById();
+    // instead of duplicating its fetch/derive logic. The Stats/Advanced Stats sub-tabs' own heavier
+    // data is a separate lazy fetch — see SeasonTabView.
     const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
     const [light, bracketShape] = await Promise.all([
       getGauntletSeasonLightView(seasonId, extractSeasonNumber(season.name)),
@@ -209,26 +219,8 @@ export default async function SeasonPage({
     );
   }
 
-  // Regular season — check for paired gauntlet. `leaderboard` and `matchSummaries` are both light
-  // (the latter deliberately so — see getSeasonMatchSummaries()'s own doc comment) and needed
-  // regardless of which tab ends up showing, but nothing below this point depends on their *values*
-  // — only on `linkedGauntlet`/`playersById`. Started here (not awaited yet) so they run alongside
-  // everything below instead of gating it: awaiting all four together would make the light-view wave
-  // below wait on whichever of these two happens to be slowest, for no reason.
-  const leaderboardPromise = getSeasonLeaderboard(seasonId);
-  const matchSummariesPromise = getSeasonMatchSummaries(seasonId);
-  // Marks both promises "handled" immediately, before the `await` below gives Node a chance to flag
-  // an in-flight rejection as unhandled (and crash the process under Node's default
-  // --unhandled-rejections=throw) — the real error, if any, still surfaces normally when these are
-  // awaited for real in the Promise.all further down; a `.catch()` here doesn't consume it there,
-  // since a promise can have more than one handler attached.
-  leaderboardPromise.catch(() => {});
-  matchSummariesPromise.catch(() => {});
-
-  const [linkedGauntlet, playersById] = await Promise.all([
-    getLinkedGauntlet(season.name),
-    getPlayersById(),
-  ]);
+  // Regular season — check for a paired gauntlet (resolved from the `getSeasons()` read above).
+  const linkedGauntlet = await getLinkedGauntlet(season.name);
   const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
   const isUpcoming = season.status === 'UPCOMING';
   const seasonNumber = extractSeasonNumber(season.name);

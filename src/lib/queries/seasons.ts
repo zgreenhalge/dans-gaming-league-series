@@ -266,7 +266,7 @@ const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[
  *  `getSeasonParticipants()`, which also counts a rostered player whose matches are still unplayed;
  *  this is the "took part" signal the post-season survey and superlatives vote gate on. Sorted by
  *  player name. */
-export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+export const getSeasonPlayedPlayers = persistentQuery('getSeasonPlayedPlayers', async (seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> => {
   const [playerIds, resolvedPlayersById] = await Promise.all([getSeasonPlayedPlayerIds(seasonId), playersById ?? getPlayersById()]);
   const entries: SeasonRosterEntry[] = [];
   for (const playerId of playerIds) {
@@ -280,7 +280,7 @@ export async function getSeasonPlayedPlayers(seasonId: number, playersById?: Map
     });
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
-}
+});
 
 /** Whether `playerId` is among a season's played players (`getSeasonPlayedPlayers()`'s result) — the one
  *  eligibility predicate the survey and superlatives gates and views all share. */
