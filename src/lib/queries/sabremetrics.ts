@@ -325,17 +325,13 @@ function plusStat(playerVal: number, avgVal: number): number {
   return avgVal > 0 ? playerVal / avgVal : 1;
 }
 
-/** Ceiling for an inverted `+` stat. League-average over player blows up as the player's own rate
- *  approaches zero (a player who never chokes would be infinite), so it is capped at twice the
- *  league average — the same 2.00 ceiling `toRatingScale()`-style 0-100 displays clamp to. */
-const INVERTED_PLUS_CAP = 2;
-
 /** `plusStat()` for the "lower raw value is better" stats (Deaths/Round, Choke): league average
- *  over player, so higher is better like every other `+` stat. A player rate of zero scores the
- *  cap (flawless), or 1.00 when the league average is zero too (nothing to be better than). */
+ *  over player, so higher is better like every other `+` stat. League average over a zero rate
+ *  would be infinite, so the ratio is capped at 2.00 (twice the league average); a player rate of
+ *  zero scores the cap, or 1.00 when the league average is zero too (nothing to be better than). */
 function invertedPlusStat(playerVal: number, avgVal: number): number {
-  if (playerVal > 0) return Math.min(avgVal / playerVal, INVERTED_PLUS_CAP);
-  return avgVal > 0 ? INVERTED_PLUS_CAP : 1;
+  if (playerVal > 0) return Math.min(avgVal / playerVal, 2);
+  return avgVal > 0 ? 2 : 1;
 }
 
 export interface PlusStat {

@@ -1,6 +1,9 @@
 import type { PlayerSummary } from '@/lib/queries';
 import { PlayerSummaryBlock, PlayerSummaryBlockSkeleton } from './PlayerSummaryBlock';
 
+/** The card's width, which `PlayerLink` needs to keep it inside the viewport. */
+export const PLAYER_PREVIEW_CARD_WIDTH_REM = 20;
+
 /** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — or a
  *  pulsing skeleton of the same layout while `summary` is `null`. A floating panel: the home
  *  panels' site-accent top edge, an accent-tinted border and a shadow with a faint accent glow, so it
@@ -8,8 +11,9 @@ import { PlayerSummaryBlock, PlayerSummaryBlockSkeleton } from './PlayerSummaryB
 export function PlayerPreviewCard({ summary }: { summary: PlayerSummary | null }) {
   return (
     <div
-      className="w-[20rem] max-w-[calc(100vw-1rem)] border bg-[var(--color-bg-secondary)] p-3 shadow-2xl"
+      className="max-w-[calc(100vw-1rem)] border bg-[var(--color-bg-secondary)] p-3 shadow-2xl"
       style={{
+        width: `${PLAYER_PREVIEW_CARD_WIDTH_REM}rem`,
         borderColor: 'color-mix(in srgb, var(--color-site-accent) 55%, var(--color-border-primary))',
         borderTopColor: 'var(--color-site-accent)',
         borderTopWidth: '3px',

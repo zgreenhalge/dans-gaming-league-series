@@ -274,6 +274,7 @@ test('buildMyStats: career EHOG, record, KDA, ADR, next match, recent matches, b
   const stats = buildMyStats({
     playerId: 1,
     playerName: 'Alice',
+    avatarUrl: null,
     leaderboard: [
       leaderboardRow(2, 'Bob', 5, 5, 50, 70),
       leaderboardRow(1, 'Alice', 8, 2, 55, 80, { total_kills: 100, total_assists: 30, total_deaths: 50 }),
@@ -303,6 +304,7 @@ test('buildMyStats: a player with no matches has no rating, record, KDA, history
   const stats = buildMyStats({
     playerId: 7,
     playerName: 'Grace',
+    avatarUrl: null,
     leaderboard: [leaderboardRow(1, 'Alice', 8, 2, 55, 80)],
     ehog: null,
     history: [],

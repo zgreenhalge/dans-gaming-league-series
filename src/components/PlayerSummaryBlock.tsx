@@ -34,6 +34,7 @@ export function PlayerSummaryBlock({
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-2.5">
+        {/* A plain Link, not PlayerLink: the block is the hover card's body, which can't open a card of its own. */}
         <Link
           href={`/players/${playerId}`}
           className="flex items-center gap-3 min-w-0 font-display text-[24px] font-bold hover:opacity-80 transition-opacity"

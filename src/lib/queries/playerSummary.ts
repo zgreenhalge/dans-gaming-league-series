@@ -74,8 +74,10 @@ export function buildPlayerSummary(input: {
   };
 }
 
-/** `playerId`'s career summary, or `null` when that player doesn't exist. */
-export async function getPlayerSummary(playerId: number): Promise<PlayerSummary | null> {
+/** What `buildPlayerSummary()` is built from, fetched together: the career leaderboard (regular and
+ *  gauntlet merged), the player with their recent history, and their current EHOG. `null` when the
+ *  player doesn't exist. */
+export async function loadPlayerSummaryInputs(playerId: number) {
   const [regular, gauntlet, detail, ehog] = await Promise.all([
     getCareerLeaderboard(),
     getGauntletStats(),
@@ -83,12 +85,18 @@ export async function getPlayerSummary(playerId: number): Promise<PlayerSummary 
     getCurrentEhogRating(playerId),
   ]);
   if (!detail) return null;
-  return buildPlayerSummary({
+  return {
     playerId,
     playerName: detail.player.name,
     avatarUrl: detail.player.steam_avatar_url,
     leaderboard: mergeLeaderboardRows(regular, gauntlet.career),
     ehog,
     history: detail.history,
-  });
+  };
+}
+
+/** `playerId`'s career summary, or `null` when that player doesn't exist. */
+export async function getPlayerSummary(playerId: number): Promise<PlayerSummary | null> {
+  const inputs = await loadPlayerSummaryInputs(playerId);
+  return inputs && buildPlayerSummary(inputs);
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import type { PlayerSummary } from '@/lib/queries';
-import { PlayerPreviewCard } from './PlayerPreviewCard';
+import { PLAYER_PREVIEW_CARD_WIDTH_REM, PlayerPreviewCard } from './PlayerPreviewCard';
 
 // A link to a player's page that previews them on hover: a `PlayerPreviewCard` opens beside the
 // link as soon as the mouse is on it — a skeleton card until `GET /api/players/[id]/summary`
@@ -15,12 +15,13 @@ import { PlayerPreviewCard } from './PlayerPreviewCard';
 
 const CLOSE_DELAY_MS = 120;
 /** Gap between the link and the card, and the card's minimum distance from the viewport edge. The
- *  gap is padding inside the card's wrapper, so the pointer never leaves hoverable ground crossing it. */
+ *  gap is padding inside the card's wrapper (`py-1.5`), so the pointer never leaves hoverable ground
+ *  crossing it. */
 const GAP_PX = 6;
 const EDGE_PX = 8;
-/** The card's width (`PlayerPreviewCard`'s `w-[20rem]`) and the space it needs below its link
- *  before it flips above (its rendered height is ~200px). */
-const CARD_WIDTH_PX = 320;
+/** The card's width and the space it needs below its link before it flips above (its rendered
+ *  height is ~200px). */
+const CARD_WIDTH_PX = PLAYER_PREVIEW_CARD_WIDTH_REM * 16;
 const CARD_HEIGHT_PX = 210;
 
 /** Summaries by player id, shared by every `PlayerLink` on the page. */
@@ -39,16 +40,12 @@ function loadSummary(playerId: number): Promise<PlayerSummary | null> {
   return pending;
 }
 
-/** Where the card opens: `style` for its fixed-position wrapper, below `rect` (above when the
- *  viewport has no room below), left-aligned to it and kept inside the viewport; `above` says which
- *  side the wrapper's gap padding goes on. */
-function cardPlacement(rect: DOMRect): { style: React.CSSProperties; above: boolean } {
+/** Fixed-position style for the card's wrapper: below `rect` (above when the viewport has no room
+ *  below), left-aligned to it and kept inside the viewport. */
+function cardPlacement(rect: DOMRect): React.CSSProperties {
   const left = Math.max(EDGE_PX, Math.min(rect.left, window.innerWidth - CARD_WIDTH_PX - EDGE_PX));
   const above = rect.bottom + GAP_PX + CARD_HEIGHT_PX > window.innerHeight;
-  return {
-    above,
-    style: above ? { bottom: window.innerHeight - rect.top, left } : { top: rect.bottom, left },
-  };
+  return above ? { bottom: window.innerHeight - rect.top, left } : { top: rect.bottom, left };
 }
 
 export function PlayerLink({
@@ -59,7 +56,7 @@ export function PlayerLink({
   const ref = useRef<HTMLAnchorElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** `summary` is `null` while it loads. */
-  const [open, setOpen] = useState<{ summary: PlayerSummary | null; style: React.CSSProperties; above: boolean } | null>(null);
+  const [open, setOpen] = useState<{ summary: PlayerSummary | null; style: React.CSSProperties } | null>(null);
 
   const cancelClose = () => clearTimeout(closeTimer.current);
   const scheduleClose = () => {
@@ -83,7 +80,7 @@ export function PlayerLink({
   const show = () => {
     const el = ref.current;
     if (!el) return;
-    setOpen((o) => o ?? { summary: null, ...cardPlacement(el.getBoundingClientRect()) });
+    setOpen((o) => o ?? { summary: null, style: cardPlacement(el.getBoundingClientRect()) });
     loadSummary(playerId).then((summary) => {
       // Closed while loading: nothing to fill. Failed: no card rather than a stuck skeleton.
       setOpen((o) => (o && summary ? { ...o, summary } : null));
@@ -109,7 +106,7 @@ export function PlayerLink({
       />
       {open && createPortal(
         <div
-          className={`fixed z-50 ${open.above ? 'pb-1.5' : 'pt-1.5'}`}
+          className="fixed z-50 py-1.5"
           style={open.style}
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}

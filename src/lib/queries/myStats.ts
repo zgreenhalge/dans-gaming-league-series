@@ -1,12 +1,8 @@
 import type { H2HData } from '../h2h';
 import type { LeaderboardRowWithId } from '../types';
-import { mergeLeaderboardRows } from '../util';
-import { getCurrentEhogRating } from './ehog';
-import { getGauntletStats } from './gauntlet';
 import { bestFriendOf, worstNightmareOf, type PersonalMatchup } from '../h2h-ratings';
-import { getCareerLeaderboard } from './leaderboard';
-import { getPlayerRecent, nextUpcoming, opponentNames, type PlayerHistoryRow } from './player';
-import { buildPlayerSummary, PLAYER_SUMMARY_RECENT_LIMIT, type PlayerSummary } from './playerSummary';
+import { nextUpcoming, opponentNames, type PlayerHistoryRow } from './player';
+import { buildPlayerSummary, loadPlayerSummaryInputs, type PlayerSummary } from './playerSummary';
 
 // The home page's "My Stats" panel: one signed-in player's `PlayerSummary` (`playerSummary.ts`) plus
 // their upcoming match and best friend / worst nightmare, which come from the career H2H.
@@ -44,13 +40,13 @@ export interface MyStats extends PlayerSummary {
 export function buildMyStats(input: {
   playerId: number;
   playerName: string;
-  avatarUrl?: string | null;
+  avatarUrl: string | null;
   leaderboard: LeaderboardRowWithId[];
   ehog: number | null;
   history: PlayerHistoryRow[];
   h2h: H2HData;
 }): MyStats {
-  const { playerId, playerName, avatarUrl = null, leaderboard, ehog, history, h2h } = input;
+  const { playerId, playerName, avatarUrl, leaderboard, ehog, history, h2h } = input;
 
   const nameOf = new Map(h2h.players.map((p) => [p.id, p.name]));
   const toPlayer = (m: PersonalMatchup | null): MyStatsPlayer | null =>
@@ -71,20 +67,6 @@ export function buildMyStats(input: {
 /** The home page's My Stats data for `playerId`, or `null` when that player doesn't exist. `h2h` is
  *  the career H2H data the page already holds for its Top duos / Hottest Rivalries panels. */
 export async function getMyStats(playerId: number, h2h: H2HData): Promise<MyStats | null> {
-  const [regular, gauntlet, detail, ehog] = await Promise.all([
-    getCareerLeaderboard(),
-    getGauntletStats(),
-    getPlayerRecent(playerId, PLAYER_SUMMARY_RECENT_LIMIT),
-    getCurrentEhogRating(playerId),
-  ]);
-  if (!detail) return null;
-  return buildMyStats({
-    playerId,
-    playerName: detail.player.name,
-    avatarUrl: detail.player.steam_avatar_url,
-    leaderboard: mergeLeaderboardRows(regular, gauntlet.career),
-    ehog,
-    history: detail.history,
-    h2h,
-  });
+  const inputs = await loadPlayerSummaryInputs(playerId);
+  return inputs && buildMyStats({ ...inputs, h2h });
 }
