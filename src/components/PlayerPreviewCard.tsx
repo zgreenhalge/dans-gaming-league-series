@@ -2,14 +2,21 @@ import type { PlayerSummary } from '@/lib/queries';
 import { PlayerSummaryBlock } from './PlayerSummaryBlock';
 
 /** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — in a
- *  floating bordered panel with the site-accent top edge the home panels use. */
+ *  floating panel: the home panels' site-accent top edge, an accent-tinted border and a shadow with a
+ *  faint accent glow, so it stands out from the page behind it. */
 export function PlayerPreviewCard({ summary }: { summary: PlayerSummary }) {
   return (
     <div
-      className="w-[22rem] max-w-[calc(100vw-1rem)] border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] p-4 shadow-lg"
-      style={{ borderTopColor: 'var(--color-site-accent)', borderTopWidth: '3px' }}
+      className="w-[20rem] max-w-[calc(100vw-1rem)] border bg-[var(--color-bg-secondary)] p-3 shadow-2xl"
+      style={{
+        borderColor: 'color-mix(in srgb, var(--color-site-accent) 55%, var(--color-border-primary))',
+        borderTopColor: 'var(--color-site-accent)',
+        borderTopWidth: '3px',
+        // A dark halo plus a faint accent glow lifts the card off a page of similar colors.
+        boxShadow: '0 12px 32px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(0 0 0 / 0.25), 0 0 18px color-mix(in srgb, var(--color-site-accent) 25%, transparent)',
+      }}
     >
-      <PlayerSummaryBlock summary={summary} showForm />
+      <PlayerSummaryBlock summary={summary} showForm compact />
     </div>
   );
 }

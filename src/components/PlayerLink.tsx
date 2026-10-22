@@ -17,8 +17,10 @@ const CLOSE_DELAY_MS = 80;
 /** Gap between the link and the card, and the card's minimum distance from the viewport edge. */
 const GAP_PX = 6;
 const EDGE_PX = 8;
-/** Space the card needs below its link before it flips above (its rendered height is ~230px). */
-const CARD_HEIGHT_PX = 240;
+/** The card's width (`PlayerPreviewCard`'s `w-[20rem]`) and the space it needs below its link
+ *  before it flips above (its rendered height is ~200px). */
+const CARD_WIDTH_PX = 320;
+const CARD_HEIGHT_PX = 210;
 
 /** Summaries by player id, shared by every `PlayerLink` on the page. */
 const summaries = new Map<number, Promise<PlayerSummary | null>>();
@@ -76,7 +78,7 @@ export function PlayerLink({
     loadSummary(playerId).then((summary) => {
       const el = ref.current;
       if (!summary || !el || !hovering.current) return;
-      setOpen({ summary, style: cardPosition(el.getBoundingClientRect(), 352) });
+      setOpen({ summary, style: cardPosition(el.getBoundingClientRect(), CARD_WIDTH_PX) });
     });
   }, [playerId]);
 
