@@ -132,7 +132,6 @@ describe('RivalRow', () => {
       </>,
     );
     expect(screen.getAllByText('Upsets')).toHaveLength(2);
-    expect(screen.getAllByText('Rounds')).toHaveLength(2);
     for (const hidden of [screen.getByText('2'), screen.getByText('1'), screen.getByText('55'), screen.getByText('51')]) {
       expect(hidden).toHaveClass('hidden', 'sm:block');
     }

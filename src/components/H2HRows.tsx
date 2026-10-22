@@ -170,14 +170,17 @@ const UPSETS_TITLE = 'Meetings won as the pre-match underdog';
 function rivalCols(compact: boolean): string {
   return compact
     ? 'grid-cols-[1fr_32px_32px_38px_32px_32px_1fr]'
-    : 'grid-cols-[28px_1fr_34px_38px_34px_1fr_28px] sm:grid-cols-[28px_1fr_38px_38px_34px_38px_34px_38px_38px_1fr_28px]';
+    : 'grid-cols-[28px_1fr_34px_38px_34px_1fr_28px] sm:grid-cols-[28px_1fr_36px_36px_28px_36px_28px_36px_36px_1fr_28px]';
 }
+
+/** The classes that hide a full rivalry table's Upsets and Rounds cells (and their header labels)
+ *  below `sm`; the compact table has no Rounds and always shows Upsets. */
+const wideOnly = (compact: boolean) => (compact ? '' : ' hidden sm:block');
 
 /** Column labels above a list of `RivalRow`s. */
 export function RivalHeader({ compact = false }: { compact?: boolean }) {
-  const wide = compact ? '' : ' hidden sm:block';
-  const upsets = <span className={`${HEAD_CLS} text-center${wide}`} title={UPSETS_TITLE}>Upsets</span>;
-  const rounds = <span className={`${HEAD_CLS} text-center${wide}`}>Rounds</span>;
+  const upsets = <span className={`${HEAD_CLS} text-center${wideOnly(compact)}`} title={UPSETS_TITLE}>Upsets</span>;
+  const rounds = <span className={`${HEAD_CLS} text-center${wideOnly(compact)}`}>Rounds</span>;
   const rating = `${HEAD_CLS} text-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)]`;
   return (
     <div className={`grid ${rivalCols(compact)} items-center gap-2 px-3.5 pt-2`}>
@@ -220,7 +223,7 @@ export function RivalRow({
   const accent = 'text-[var(--color-site-accent)]';
   const tone = (mine: number, theirs: number) => (mine > theirs ? ` ${accent}` : mine < theirs ? ` ${dim}` : '');
   const cell = 'display-numeral text-[12px] text-center';
-  const wide = compact ? '' : ' hidden sm:block';
+  const wide = wideOnly(compact);
   return (
     <RowShell className={`grid ${rivalCols(compact)} items-center gap-2 px-3.5 py-2`} action={action}>
       {!compact && <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="sm" />}

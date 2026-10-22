@@ -186,7 +186,7 @@ export function ratingPoints(score: number): number {
 }
 
 /** The `limit` highest-scoring `items`, best first, each built into a `R` with its score as a
- *  rounded 0–100 rating. */
+ *  `ratingPoints()` 0–100 rating. */
 function rankBy<T, R>(items: T[], score: (item: T) => number, limit: number, make: (item: T, rating: number) => R): R[] {
   return items
     .map((item) => ({ item, raw: score(item) }))
