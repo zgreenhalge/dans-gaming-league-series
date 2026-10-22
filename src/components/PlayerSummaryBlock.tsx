@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { PlayerSummary } from '@/lib/queries';
 import EhogBadge from './EhogBadge';
 import PlayerAvatar from './PlayerAvatar';
+import { SkeletonBar } from './Skeleton';
 import { PlayerName } from './PlayerName';
 import StatTileGrid from './StatTileGrid';
 import { WLChip } from './WLChip';
@@ -70,6 +71,42 @@ export function PlayerSummaryBlock({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * `PlayerSummaryBlock`'s loading stand-in: the same avatar, name, EHOG badge, tiles and Form row as
+ * pulsing bars, so the layout holds still when the data arrives. Sits on a `bg-secondary` surface.
+ */
+export function PlayerSummaryBlockSkeleton({ compact = false }: { compact?: boolean }) {
+  const bar = (className: string) => <SkeletonBar tone="raised" className={className} />;
+  return (
+    <div aria-busy="true">
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <div className="flex items-center gap-3 min-w-0">
+          {bar('w-10 h-10 rounded-full shrink-0')}
+          {bar('h-6 w-32')}
+        </div>
+        {bar('w-[74px] h-[64px] shrink-0')}
+      </div>
+
+      <StatTileGrid
+        columns="grid-cols-3"
+        compact={compact}
+        tiles={[
+          { label: 'W-L', value: <SkeletonBar className="h-5 w-12" /> },
+          { label: 'KDA', value: <SkeletonBar className="h-5 w-10" /> },
+          { label: 'ADR', value: <SkeletonBar className="h-5 w-12" /> },
+        ]}
+      />
+
+      <div className="mt-2.5 flex items-center gap-3">
+        <span className={LABEL_CLS}>Form</span>
+        <div className="flex items-center gap-2">
+          {[1, 2, 3, 4, 5].map((i) => <span key={i}>{bar('w-[1.4rem] h-[1.4rem] rounded-md')}</span>)}
+        </div>
+      </div>
     </div>
   );
 }

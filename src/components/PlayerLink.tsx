@@ -7,7 +7,7 @@ import type { PlayerSummary } from '@/lib/queries';
 import { PlayerPreviewCard } from './PlayerPreviewCard';
 
 // A link to a player's page that previews them on hover: a `PlayerPreviewCard` opens beside the
-// link as soon as the mouse is on it — a "Loading…" card until `GET /api/players/[id]/summary`
+// link as soon as the mouse is on it — a skeleton card until `GET /api/players/[id]/summary`
 // answers, fetched on first hover and kept for the rest of the page's life. The card stays open
 // while the mouse is over the link or the card itself. It renders in a portal (`document.body`), so
 // a table's `overflow` container can't clip it. It's mouse-only — touch and pen taps navigate, as a
@@ -85,7 +85,7 @@ export function PlayerLink({
     if (!el) return;
     setOpen((o) => o ?? { summary: null, ...cardPlacement(el.getBoundingClientRect()) });
     loadSummary(playerId).then((summary) => {
-      // Closed while loading: nothing to fill. Failed: no card rather than a stuck "Loading…".
+      // Closed while loading: nothing to fill. Failed: no card rather than a stuck skeleton.
       setOpen((o) => (o && summary ? { ...o, summary } : null));
     });
   };

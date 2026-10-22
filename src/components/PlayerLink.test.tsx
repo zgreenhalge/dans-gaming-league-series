@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `PlayerLink.tsx` and the `PlayerPreviewCard` it opens: a mouse hover opens
- * the card at once with a loading state, fills it from the player's summary, keeps it open while the
+ * the card at once as a skeleton, fills it from the player's summary, keeps it open while the
  * mouse is over the link or the card, a touch or pen pointer never opens it, and the link itself
  * still goes to the player's page.
  *
@@ -71,14 +71,15 @@ describe('PlayerLink', () => {
     expect(screen.getAllByLabelText(/^(Win|Loss)$/)).toHaveLength(2);
   });
 
-  test('the card opens at once with a loading state, then fills in when the summary arrives', async () => {
+  test('the card opens at once as a skeleton, then fills in when the summary arrives', async () => {
     let resolve!: (v: unknown) => void;
     fetchMock.mockReturnValue(new Promise((r) => { resolve = r; }));
     render(<PlayerLink playerId={103}>Rook</PlayerLink>);
     fireEvent.pointerEnter(screen.getByRole('link', { name: 'Rook' }), { pointerType: 'mouse' });
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(screen.queryByText('31-19')).toBeNull();
     await act(async () => { resolve({ ok: true, json: async () => summary(103) }); await vi.advanceTimersByTimeAsync(0); });
-    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
     expect(screen.getByText('31-19')).toBeInTheDocument();
   });
 
@@ -111,7 +112,7 @@ describe('PlayerLink', () => {
     render(<PlayerLink playerId={106}>Rook</PlayerLink>);
     await hover(screen.getByRole('link', { name: 'Rook' }), 'touch');
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   test('a summary that finishes loading after the pointer left does not reopen the card', async () => {
@@ -124,15 +125,15 @@ describe('PlayerLink', () => {
     await settleClose();
     await act(async () => { resolve({ ok: true, json: async () => summary(107) }); await vi.advanceTimersByTimeAsync(0); });
     expect(screen.queryByText('Form')).toBeNull();
-    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
-  test('a failed load closes the card instead of leaving "Loading…" up, and is retried on the next hover', async () => {
+  test('a failed load closes the card instead of leaving the skeleton up, and is retried on the next hover', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true, json: async () => summary(108) });
     render(<PlayerLink playerId={108}>Rook</PlayerLink>);
     const link = screen.getByRole('link', { name: 'Rook' });
     await hover(link);
-    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
     expect(screen.queryByText('Form')).toBeNull();
     fireEvent.pointerLeave(link);
     await hover(link);

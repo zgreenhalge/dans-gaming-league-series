@@ -1,8 +1,8 @@
 import type { PlayerSummary } from '@/lib/queries';
-import { PlayerSummaryBlock } from './PlayerSummaryBlock';
+import { PlayerSummaryBlock, PlayerSummaryBlockSkeleton } from './PlayerSummaryBlock';
 
 /** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — or a
- *  "Loading…" placeholder of the same size while `summary` is `null`. A floating panel: the home
+ *  pulsing skeleton of the same layout while `summary` is `null`. A floating panel: the home
  *  panels' site-accent top edge, an accent-tinted border and a shadow with a faint accent glow, so it
  *  stands out from the page behind it. */
 export function PlayerPreviewCard({ summary }: { summary: PlayerSummary | null }) {
@@ -20,9 +20,7 @@ export function PlayerPreviewCard({ summary }: { summary: PlayerSummary | null }
       {summary ? (
         <PlayerSummaryBlock summary={summary} showForm compact />
       ) : (
-        <div className="flex min-h-[10.5rem] items-center justify-center tracked text-[10px] text-[var(--color-text-secondary)]">
-          Loading…
-        </div>
+        <PlayerSummaryBlockSkeleton compact />
       )}
     </div>
   );
