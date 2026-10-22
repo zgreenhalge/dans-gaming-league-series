@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `TopPairsPanels.tsx`: Top duos and Hottest Rivalries each list the top three
- * career pairs, best first, with a stats preview per row (rating, games and W-L for a duo; matches
- * and rounds won on each side for a rivalry). The title links to the career H2H tab and every row to that
+ * career pairs, best first, with a stats preview per row (rating, W-L and wins above the odds for a
+ * duo; matches won and upset wins on each side for a rivalry). The title links to the career H2H tab and every row to that
  * pair's career H2H matchup (`type=opponent` for rivalries); both render nothing when there are no
  * pairs.
  *

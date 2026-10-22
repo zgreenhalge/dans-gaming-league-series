@@ -56,6 +56,7 @@ describe('DuoRow', () => {
     expect(screen.getByText('+1.5').parentElement).not.toHaveClass('opacity-50');
     rerender(<DuoRow {...props} duo={duoStats({ gamesPlayed: 2, winsAboveExpected: -0.4 })} />);
     expect(screen.getByText('-0.4').parentElement).toHaveClass('opacity-50');
+    expect(screen.getByTitle('Only 2 games together, so this is mostly noise')).toBe(screen.getByText('-0.4').parentElement);
   });
 
   test('compact keeps the record and wins above the odds, and leaves out games, KDA and rounds', () => {
@@ -81,6 +82,7 @@ describe('DuoRow', () => {
     expect(screen.getByText('vs Odds')).toBeInTheDocument();
     expect(screen.getByText('+1.5')).toBeInTheDocument();
     expect(screen.getByText('3–2')).toBeInTheDocument();
+    expect(screen.queryByTitle(/KDA is shown for context only/)).toBeNull(); // no KDA column to note
   });
 
   test('with an href the row is a link', () => {

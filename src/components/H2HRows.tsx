@@ -116,6 +116,7 @@ export function DuoRow({
 }) {
   const wr = winRatePct(duo.wins, duo.gamesPlayed);
   const rwr = winRatePct(duo.roundsWon, duo.roundsPlayed);
+  const thinSample = duo.gamesPlayed < MIN_GAMES_FOR_PERFORMANCE;
   return (
     <RowShell className="flex items-center gap-2.5 px-3.5 py-2" action={action}>
       <span className="display-numeral text-[12px] w-3.5 text-[var(--color-text-secondary)]">{rank}</span>
@@ -126,7 +127,7 @@ export function DuoRow({
       <span className="font-display font-semibold text-[11px] flex-1 truncate">{a.name} &amp; {b.name}</span>
       <div className={`grid ${duoCols(compact)} gap-x-2 shrink-0 items-center`}>
         <div className="flex justify-center">
-          <RatingCircle value={rating} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={`${breakdown} · KDA is shown for context only`} />
+          <RatingCircle value={rating} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={compact ? breakdown : `${breakdown} · KDA is shown for context only`} />
         </div>
         {!compact && (
           <div className="flex flex-col items-end">
@@ -138,7 +139,10 @@ export function DuoRow({
           <span className="display-numeral text-[13px] text-right">{duo.wins}–{duo.gamesPlayed - duo.wins}</span>
           <span className="font-mono text-[8px] text-[var(--color-text-secondary)] text-right">{wr}%</span>
         </div>
-        <div className={`flex flex-col items-end${duo.gamesPlayed < MIN_GAMES_FOR_PERFORMANCE ? ' opacity-50' : ''}`}>
+        <div
+          className={`flex flex-col items-end${thinSample ? ' opacity-50' : ''}`}
+          title={thinSample ? `Only ${duo.gamesPlayed} ${duo.gamesPlayed === 1 ? 'game' : 'games'} together, so this is mostly noise` : undefined}
+        >
           <span className="display-numeral text-[13px] text-right" style={{ color: signedColor(duo.winsAboveExpected, 1) }}>{formatSigned(duo.winsAboveExpected, 1)}</span>
           <span className="font-mono text-[8px] text-right">&nbsp;</span>
         </div>
