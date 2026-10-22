@@ -47,10 +47,12 @@ interface ReportStats {
   entryPlus: number | null;
   kastPlus: number | null;
   tradePlus: number | null;
+  tradedPlus: number | null;
   objectivePlus: number | null;
   utilityPlus: number | null;
   clutchPlus: number | null;
   chokePlus: number | null;
+  accuracyPlus: number | null;
   aimPlus: number | null;
   sprayPlus: number | null;
   mechanics: {
@@ -80,10 +82,12 @@ function reportStats(agg: AggregatedSab, la: LeagueAverages): ReportStats {
     entryPlus: plus.entry,
     kastPlus: plus.kast,
     tradePlus: plus.trade,
+    tradedPlus: plus.tradedDeath,
     objectivePlus: plus.objective,
     utilityPlus: plus.utility,
     clutchPlus: plus.clutch,
     chokePlus: plus.choke,
+    accuracyPlus: plus.accuracy,
     aimPlus: plus.aim,
     sprayPlus: plus.spray,
     mechanics: {
@@ -105,8 +109,8 @@ function emptyReportStats(): ReportStats {
   return {
     sampleMatches: 0,
     kprPlus: null, aprPlus: null, dprPlus: null, kdrPlus: null, adrPlus: null,
-    entryPlus: null, kastPlus: null, tradePlus: null, objectivePlus: null,
-    utilityPlus: null, clutchPlus: null, chokePlus: null, aimPlus: null, sprayPlus: null,
+    entryPlus: null, kastPlus: null, tradePlus: null, tradedPlus: null, objectivePlus: null,
+    utilityPlus: null, clutchPlus: null, chokePlus: null, accuracyPlus: null, aimPlus: null, sprayPlus: null,
     mechanics: {
       accuracy: null, headAccuracy: null, counterStrafePct: null,
       sprayAccuracy: null, ctSmokesBlockingPct: null, unusedUtilPerDeath: null,
