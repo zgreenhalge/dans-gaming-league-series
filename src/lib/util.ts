@@ -699,8 +699,9 @@ export function addNumericFields<T extends object>(a: T, b: T): void {
   }
 }
 
+/** An EHOG rating delta to one decimal with an explicit `+` when positive (`formatSigned()`). */
 export function formatEhogDelta(delta: number): string {
-  return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+  return formatSigned(delta, 1);
 }
 
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */

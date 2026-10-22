@@ -136,6 +136,9 @@ export function rivalEvenness(r: Pick<H2HStats, 'aWins' | 'bWins' | 'meetings'>)
   return r.meetings > 0 ? 1 - Math.abs(r.aWins - r.bWins) / r.meetings : 0;
 }
 
+/** What an upset is, for the column header and the matchup cell that explain the figure. */
+export const UPSETS_TITLE = 'Meetings won as the pre-match underdog';
+
 /** A duo needs this many games together before its wins above the odds and ADR lift read as more
  *  than noise; the UI dims them below it. */
 export const MIN_GAMES_FOR_PERFORMANCE = 3;

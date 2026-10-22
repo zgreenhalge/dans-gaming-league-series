@@ -345,10 +345,11 @@ test('compareWithinSeasonDesc: week desc, then match number desc', () => {
 test('avgOf: averages a list of numbers', () => {
   assert.equal(avgOf([1, 2, 3]), 2);
 });
-test('formatEhogDelta: prefixes a "+" for non-negative deltas, keeps "-" for negative', () => {
+test('formatEhogDelta: prefixes a "+" for positive deltas, keeps "-" for negative, no sign on zero', () => {
   assert.equal(formatEhogDelta(1.25), '+1.3');
   assert.equal(formatEhogDelta(-1.25), '-1.3');
-  assert.equal(formatEhogDelta(0), '+0.0');
+  assert.equal(formatEhogDelta(0), '0.0');
+  assert.equal(formatEhogDelta(-0.04), '0.0');
 });
 
 // --- mapSlug: user-typed map names → stable URL segments ---

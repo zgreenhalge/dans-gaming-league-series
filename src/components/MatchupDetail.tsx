@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { PlayerLink } from './PlayerLink';
 import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
 import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/h2h-ratings';
-import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, rivalEvenness, unevenRivalryNote } from '@/lib/h2h';
+import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, rivalEvenness, unevenRivalryNote, UPSETS_TITLE } from '@/lib/h2h';
 import { formatSigned, rateGradientColor, signedColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
@@ -519,7 +519,7 @@ export function RivalDetail({
         <div className="mt-3.5">{statsTable}</div>
 
         <div className="grid grid-cols-2 gap-2.5 mt-3.5">
-          <StatCell label="Upsets" title={`Meetings won as the pre-match underdog: ${a.name} ${rival.aUpsetWins}, ${b.name} ${rival.bUpsetWins}`}>
+          <StatCell label="Upsets" title={`${UPSETS_TITLE}: ${a.name} ${rival.aUpsetWins}, ${b.name} ${rival.bUpsetWins}`}>
             {rival.aUpsetWins}–{rival.bUpsetWins}
           </StatCell>
           <StatCell label="Evenness" title="1 minus the win difference over meetings; the rating is scaled by its square">

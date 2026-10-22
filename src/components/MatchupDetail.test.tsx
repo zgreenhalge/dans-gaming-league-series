@@ -11,7 +11,7 @@ import { describe, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { duoStats, H2H_PLAYERS, rivalStats } from '@/lib/test-support/h2hFixtures';
-import type { H2HStats } from '@/lib/h2h';
+import { UPSETS_TITLE, type H2HStats } from '@/lib/h2h';
 
 const players = new Map(H2H_PLAYERS.map((p) => [p.id, p]));
 const rival = (overrides: Partial<H2HStats> = {}) => rivalStats(1, 2, 3, 3, { aUpsetWins: 2, bUpsetWins: 1, ...overrides });
@@ -40,6 +40,7 @@ describe('RivalDetail', () => {
     render(<RivalDetail rival={rival({ aWins: 4, bWins: 2 })} players={players} />);
     expect(screen.getByText('2–1')).toBeInTheDocument();
     expect(screen.getByText('67%')).toBeInTheDocument(); // 1 − 2 / 6
+    expect(screen.getByTitle(`${UPSETS_TITLE}: Alice 2, Bob 1`)).toBeInTheDocument();
   });
 
   test('dims the rating of an uneven rivalry, but not an even one or an unrated one', () => {

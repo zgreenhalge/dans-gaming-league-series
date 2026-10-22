@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, unevenRivalryNote, type DuoStats, type H2HStats } from '@/lib/h2h';
+import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, unevenRivalryNote, UPSETS_TITLE, type DuoStats, type H2HStats } from '@/lib/h2h';
 import { formatSigned, signedColor, winRatePct } from '@/lib/util';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
@@ -162,8 +162,6 @@ export function DuoRow({
     </RowShell>
   );
 }
-
-const UPSETS_TITLE = 'Meetings won as the pre-match underdog';
 
 // The full table shows Upsets and Rounds beside the matches won, and drops both below `sm`, where a
 // card has no room for them beside the avatars and names; the compact table shows Upsets only.
