@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { PlayerLink } from './PlayerLink';
-import { tabCls, formatEhogDelta, factionClass } from '@/lib/util';
+import { tabCls, formatEhogDelta, factionClass, signedColor } from '@/lib/util';
 import EmptyState from '@/components/EmptyState';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
@@ -121,7 +121,7 @@ function Scoreboard({
                     </span>
                   )}
                   {ratingDeltas[p.player_id] != null && (
-                    <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
+                    <span className="ml-1 font-mono text-[10px]" style={{ color: signedColor(ratingDeltas[p.player_id], 1) ?? 'var(--color-text-secondary)' }}>
                       ({formatEhogDelta(ratingDeltas[p.player_id])})
                     </span>
                   )}

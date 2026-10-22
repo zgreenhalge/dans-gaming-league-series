@@ -5,7 +5,7 @@ import { LocalTime } from './LocalTime';
 import { PlayerName } from './PlayerName';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { fmtWindowDate, formatEhogDelta, isPlayedScore } from '@/lib/util';
+import { fmtWindowDate, formatEhogDelta, isPlayedScore, signedColor } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
 import { FeatureMatchIcon } from './FeatureMatch';
 
@@ -109,7 +109,10 @@ function TeamStatBlock({
             {showEhog && (() => {
               const delta = ehogDeltas[p.player_id] as number | undefined;
               return (
-                <span className={`${statCls} ${highlight ? 'text-[12px] font-semibold' : 'text-[11px]'} w-14 pr-2 hidden min-[480px]:block ${delta != null ? (delta >= 0 ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]') : 'text-[var(--color-text-secondary)]'}`}>
+                <span
+                  className={`${statCls} ${highlight ? 'text-[12px] font-semibold' : 'text-[11px]'} w-14 pr-2 hidden min-[480px]:block`}
+                  style={{ color: signedColor(delta ?? 0, 1) ?? 'var(--color-text-secondary)' }}
+                >
                   {delta != null ? formatEhogDelta(delta) : ''}
                 </span>
               );
