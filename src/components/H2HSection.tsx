@@ -96,7 +96,7 @@ export default function H2HSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {topDuos.length > 0 && (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
             <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">

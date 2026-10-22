@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `TopPairsPanels.tsx`: Top duos and Hottest Rivalries each list the top three
- * career pairs, best first, with a stats preview per row (rating, games and W-L for a duo; matches
- * and rounds won on each side for a rivalry). The title links to the career H2H tab and every row to that
+ * career pairs, best first, with a stats preview per row (rating, W-L and wins above the odds for a
+ * duo; matches won and upset wins on each side for a rivalry). The title links to the career H2H tab and every row to that
  * pair's career H2H matchup (`type=opponent` for rivalries); both render nothing when there are no
  * pairs.
  *
@@ -50,12 +50,14 @@ describe('TopDuosPanel', () => {
     expect(screen.queryByText('P2 & P5')).toBeNull();
   });
 
-  test('each row previews games, W-L and win rate — and leaves out the duo rounds column that does not fit', () => {
-    render(<TopDuosPanel data={DATA} />);
+  test('each row previews W-L, win rate and wins above the odds — and leaves out the columns that do not fit', () => {
+    render(<TopDuosPanel data={{ ...DATA, duos: DATA.duos.map((d) => ({ ...d, winsAboveExpected: 1.46 })) }} />);
     const first = screen.getAllByRole('link').find((l) => l.getAttribute('href')?.includes('&a=P1'))!;
-    expect(within(first).getByText('10')).toBeInTheDocument();
     expect(within(first).getByText('9–1')).toBeInTheDocument();
     expect(within(first).getByText('90%')).toBeInTheDocument();
+    expect(within(first).getByText('+1.5')).toBeInTheDocument();
+    expect(screen.getByText('vs Odds')).toBeInTheDocument();
+    expect(screen.queryByText('Games')).toBeNull();
     expect(screen.queryByText('Rounds W-L')).toBeNull();
     expect(screen.getByText('Rating')).toBeInTheDocument();
   });
@@ -81,12 +83,13 @@ describe('HottestRivalriesPanel', () => {
     expect(rows[0]).toHaveTextContent('P2');
   });
 
-  test('each row previews the rounds and matches each player won on either side of the rating', () => {
+  test('each row previews the upsets and matches each player won on either side of the rating', () => {
     render(<HottestRivalriesPanel data={DATA} />);
     const second = screen.getAllByRole('link').find((l) => l.getAttribute('href')?.includes('&a=P1&b=P3'))!;
     expect(within(second).getAllByText('3')).toHaveLength(2);
     expect(screen.getAllByText('Won')).toHaveLength(2);
-    expect(screen.getAllByText('Rounds')).toHaveLength(2);
+    expect(screen.getAllByText('Upsets')).toHaveLength(2);
+    expect(screen.queryByText('Rounds')).toBeNull();
   });
 
   test('renders nothing without a rivalry', () => {
