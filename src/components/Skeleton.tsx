@@ -1,7 +1,9 @@
-export function SkeletonBar({ className = '' }: { className?: string }) {
+/** A pulsing placeholder bar. `tone="raised"` is for bars sitting on a `bg-secondary` surface (a
+ *  card), where the default bar would vanish into it. */
+export function SkeletonBar({ className = '', tone = 'default' }: { className?: string; tone?: 'default' | 'raised' }) {
   return (
     <div
-      className={`animate-pulse bg-[var(--color-bg-secondary)] ${className}`}
+      className={`animate-pulse ${tone === 'raised' ? 'bg-[var(--color-border-tertiary)]' : 'bg-[var(--color-bg-secondary)]'} ${className}`}
       aria-hidden
     />
   );

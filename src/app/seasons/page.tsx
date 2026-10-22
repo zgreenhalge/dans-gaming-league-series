@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PlayerLink } from '@/components/PlayerLink';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -59,9 +60,9 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
       {hasData ? (
         <div className="grid grid-cols-3">
           {top3.map((p, i) => (
-            <Link
+            <PlayerLink
               key={p.player_id}
-              href={`/players/${p.player_id}`}
+              playerId={p.player_id}
               className="lift-row block px-5 py-4 border-r border-[var(--color-border-tertiary)] last:border-r-0"
             >
               <div className="flex items-center gap-3 mb-2">
@@ -75,7 +76,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
                 <span><span className="text-[var(--color-text-primary)] font-semibold">{p.overall_adr.toFixed(2)}</span> ADR</span>
                 <span>{p.win_rate_percentage.toFixed(1)}% WR</span>
               </div>
-            </Link>
+            </PlayerLink>
           ))}
         </div>
       ) : (

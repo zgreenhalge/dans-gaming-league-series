@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -224,9 +225,15 @@ export default function LeaderboardTable({
                 </Td>
               )}
               <NameTd sticky={stickyNameCol} style={{ color: textColor ?? undefined }}>
-                <Link href={href} className="flex items-center w-full h-full">
-                  <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
-                </Link>
+                {firstColMode === 'player' ? (
+                  <PlayerLink playerId={p.player_id} className="flex items-center w-full h-full">
+                    <PlayerName name={p.player_name} isMe={myPlayerId !== null && p.player_id === myPlayerId} />
+                  </PlayerLink>
+                ) : (
+                  <Link href={href} className="flex items-center w-full h-full">
+                    <PlayerName name={p.player_name} isMe={false} />
+                  </Link>
+                )}
               </NameTd>
               {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
                 <Td key={c.key}>{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Td>

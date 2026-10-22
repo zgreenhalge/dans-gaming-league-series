@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
 import { FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY } from '@/lib/h2h-ratings';
 import { duoAvgKda, MIN_GAMES_FOR_PERFORMANCE, rivalEvenness, unevenRivalryNote } from '@/lib/h2h';
@@ -460,7 +461,7 @@ export function RivalDetail({
         { player: a, stats: rival.aStats, color: 'var(--color-t)' },
         { player: b, stats: rival.bStats, color: 'var(--color-ct)' },
       ] as const).map(({ player, stats, color }) => (
-        <Link key={player.id} href={`/players/${player.id}`} className="lift-row relative z-[2] flex items-center gap-2 py-1.5 border-t border-[var(--color-border-tertiary)]">
+        <PlayerLink key={player.id} playerId={player.id} className="lift-row relative z-[2] flex items-center gap-2 py-1.5 border-t border-[var(--color-border-tertiary)]">
           <span className="ml-2 shrink-0"><PlayerAvatar name={player.name} imageUrl={player.steam_avatar_url} size="sm" /></span>
           <span className="flex-1 font-display font-semibold text-[12px] truncate" style={{ color }}>{player.name}</span>
           <span className={smCol}>{stats.kills}</span>
@@ -469,7 +470,7 @@ export function RivalDetail({
           <span className={lgCol}>{stats.adr.toFixed(0)}</span>
           <span className={lgCol}>{kdr(stats).toFixed(2)}</span>
           <span className={lgCol}>{stats.rwr.toFixed(1)}%</span>
-        </Link>
+        </PlayerLink>
       ))}
     </div>
   );

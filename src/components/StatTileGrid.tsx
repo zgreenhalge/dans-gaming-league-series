@@ -20,6 +20,7 @@ export default function StatTileGrid({
   columns = 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
   heading,
   hint,
+  compact = false,
 }: {
   tiles: StatTile[];
   /** Responsive grid-template-columns classes. */
@@ -28,6 +29,8 @@ export default function StatTileGrid({
   heading?: string;
   /** Tooltip for the heading. */
   hint?: string;
+  /** Tighter tile padding, for tiles inside a small panel. */
+  compact?: boolean;
 }) {
   return (
     <div>
@@ -39,7 +42,7 @@ export default function StatTileGrid({
       <div className="border border-[var(--color-border-primary)]">
         <div className={`grid gap-px bg-[var(--color-border-tertiary)] ${columns}`}>
           {tiles.map((t) => (
-            <div key={t.label} title={t.title} className="bg-[var(--color-bg-primary)] px-3 py-3">
+            <div key={t.label} title={t.title} className={`bg-[var(--color-bg-primary)] px-3 ${compact ? 'py-2' : 'py-3'}`}>
               <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">{t.label}</div>
               <div className="font-display text-[20px] font-semibold tnum leading-none" style={t.valueStyle}>
                 {t.value}

@@ -1,6 +1,7 @@
 {
   "playerId": 1,
   "playerName": "Alice",
+  "avatarUrl": null,
   "ehog": 1450,
   "record": {
     "wins": 2,
@@ -9,12 +10,6 @@
   "kda": 1.4242424242424243,
   "kd": 1.2727272727272727,
   "adr": 86.80434782608695,
-  "next": {
-    "matchId": 102,
-    "opponents": "Bob & Dave",
-    "map": "Cobblestone",
-    "scheduledAt": null
-  },
   "recent": [
     {
       "matchId": 200,
@@ -31,6 +26,12 @@
       "map": "Foroglio"
     }
   ],
+  "next": {
+    "matchId": 102,
+    "opponents": "Bob & Dave",
+    "map": "Cobblestone",
+    "scheduledAt": null
+  },
   "bestFriend": {
     "id": 2,
     "name": "Bob",

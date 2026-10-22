@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/h2h-ratings';
@@ -41,8 +41,8 @@ function CalloutCard({
 }) {
   if (!player) return null;
   return (
-    <Link
-      href={`/players/${player.id}`}
+    <PlayerLink
+      playerId={player.id}
       title={title}
       className="lift-row border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex items-center gap-3 transition-colors"
       style={{ background: `color-mix(in srgb, ${color} 6%, var(--color-bg-primary))` }}
@@ -53,7 +53,7 @@ function CalloutCard({
         <div className="font-display font-semibold text-[13px] truncate">{player.name}</div>
       </div>
       <div className="display-numeral text-[18px] font-semibold shrink-0" style={{ color }}>{stat}</div>
-    </Link>
+    </PlayerLink>
   );
 }
 

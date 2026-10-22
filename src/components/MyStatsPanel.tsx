@@ -3,10 +3,10 @@ import { h2hPairHref } from '@/lib/crumbs';
 import { toSentenceCase } from '@/lib/maps';
 import type { MyStats, MyStatsPlayer } from '@/lib/queries';
 import EmptyState from './EmptyState';
-import { ehogColorFor } from './EhogBadge';
+import EhogBadge from './EhogBadge';
 import { NextMatchLink } from './NextMatchLink';
 import { WLChip } from './WLChip';
-import { PlayerName } from './PlayerName';
+import { PlayerSummaryBlock } from './PlayerSummaryBlock';
 import { PanelLink } from './PanelHeader';
 import StatTileGrid from './StatTileGrid';
 
@@ -39,39 +39,19 @@ function H2HRow({
 }
 
 /**
- * The home page's My Stats panel for a signed-in player: EHOG, W-L, KDA and ADR, their next
- * match, best friend and worst nightmare (each linking to the career H2H matchup), and their last
+ * The home page's My Stats panel for a signed-in player: their `PlayerSummaryBlock` (EHOG, W-L, KDA
+ * and ADR), their next match, best friend and worst nightmare (each linking to the career H2H matchup), and their last
  * played matches. `stats` comes from `getMyStats()` (`src/lib/queries/myStats.ts`).
  */
 export function MyStatsPanel({ stats }: { stats: MyStats }) {
-  const { playerId, playerName, ehog, record, kda, kd, adr, next, recent, bestFriend, worstNightmare } = stats;
-  const played = record.wins + record.losses > 0;
+  const { playerId, playerName, next, recent, bestFriend, worstNightmare } = stats;
 
   return (
     <div className={PANEL_CLS} style={PANEL_STYLE}>
       <div className={LABEL_CLS}>My Stats</div>
-      <Link href={`/players/${playerId}`} className="inline-block font-display text-[28px] font-bold mt-1 mb-3 hover:opacity-80 transition-opacity">
-        <PlayerName name={playerName} isMe />
-      </Link>
-      <StatTileGrid
-        columns="grid-cols-4"
-        tiles={[
-          {
-            label: 'EHOG',
-            title: 'Current EHOG rating',
-            value: ehog != null ? ehog.toFixed(1) : '—',
-            valueStyle: ehog != null ? { color: ehogColorFor(ehog) } : undefined,
-          },
-          { label: 'W-L', title: 'Career match record', value: played ? `${record.wins}-${record.losses}` : '—' },
-          {
-            label: 'KDA',
-            title: 'Career (kills + assists) per death; K/D is kills per death',
-            value: played ? kda.toFixed(2) : '—',
-            sub: played ? `${kd.toFixed(2)} K/D` : undefined,
-          },
-          { label: 'ADR', title: 'Career average damage per round', value: played ? adr.toFixed(2) : '—' },
-        ]}
-      />
+      <div className="mt-2">
+        <PlayerSummaryBlock summary={stats} isMe />
+      </div>
 
       {next && (
         <NextMatchLink className="mt-4" {...next} />
@@ -133,11 +113,13 @@ export function MyStatsLockedPanel() {
     <div className={PANEL_CLS} style={PANEL_STYLE}>
       <div className={LABEL_CLS}>My Stats</div>
       <div className="select-none opacity-70 blur-[5px]" aria-hidden>
-        <div className="font-display text-[28px] font-bold mt-1 mb-3">Your Name</div>
+        <div className="flex items-center justify-between gap-3 mt-2 mb-3">
+          <span className="font-display text-[24px] font-bold">Your Name</span>
+          <EhogBadge rating={23.4} />
+        </div>
         <StatTileGrid
-          columns="grid-cols-4"
+          columns="grid-cols-3"
           tiles={[
-            { label: 'EHOG', value: '23.4' },
             { label: 'W-L', value: '11-9' },
             { label: 'KDA', value: '1.42' },
             { label: 'ADR', value: '74.05' },

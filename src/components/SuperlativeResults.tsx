@@ -2,7 +2,7 @@
 // top nominee (all of them, on a tie) leads each superlative; the rest follow with their vote counts.
 // Voters are never shown — `SuperlativeResults` carries only per-nominee counts.
 
-import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import type { SuperlativeResults } from '@/lib/queries';
 
 export function SuperlativeResultsPanel({ results }: { results: SuperlativeResults }) {
@@ -21,12 +21,12 @@ export function SuperlativeResultsPanel({ results }: { results: SuperlativeResul
               <ol className="flex flex-col gap-1.5">
                 {s.nominees.map((n) => (
                   <li key={n.player_id} className={`flex items-baseline justify-between gap-3 ${n.votes === top ? '' : 'text-[var(--color-text-secondary)]'}`}>
-                    <Link
-                      href={`/players/${n.player_id}`}
+                    <PlayerLink
+                      playerId={n.player_id}
                       className={`hover:underline truncate ${n.votes === top ? 'font-display text-[18px] font-semibold' : 'font-mono text-[12px]'}`}
                     >
                       {n.player_name}
-                    </Link>
+                    </PlayerLink>
                     <span className="font-mono text-[11px] shrink-0">
                       {n.votes} {n.votes === 1 ? 'vote' : 'votes'}
                     </span>

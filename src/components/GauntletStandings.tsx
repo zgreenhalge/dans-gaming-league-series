@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PlayerLink } from './PlayerLink';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -46,8 +46,8 @@ export default function GauntletStandings({
 
   return (
     <div className="overflow-hidden flex flex-col gap-1 mb-8">
-      <Link
-        href={`/players/${champion.player_id}`}
+      <PlayerLink
+        playerId={champion.player_id}
         className="block px-6 py-5 border-b border-[var(--color-border-tertiary)] transition-colors"
         style={{ background: tint(1), border: `4px solid ${MEDAL_COLORS[1]}` }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = tint(1, 28); }}
@@ -78,7 +78,7 @@ export default function GauntletStandings({
             </span>
           </div>
         )}
-      </Link>
+      </PlayerLink>
 
       {(second || third) && (
         <div className="grid grid-cols-2 gap-1">
@@ -87,9 +87,9 @@ export default function GauntletStandings({
             const rank = (i + 2) as 2 | 3;
             const ps = statsByPlayer.get(p.player_id);
             return (
-              <Link
+              <PlayerLink
                 key={p.player_id}
-                href={`/players/${p.player_id}`}
+                playerId={p.player_id}
                 className="block px-5 py-4 transition-colors"
                 style={{ background: tint(rank), border: `4px solid ${MEDAL_COLORS[rank]}` }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = tint(rank, 28); }}
@@ -116,7 +116,7 @@ export default function GauntletStandings({
                     </span>
                   </div>
                 )}
-              </Link>
+              </PlayerLink>
             );
           })}
         </div>

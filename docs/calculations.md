@@ -176,7 +176,9 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 
 - `KPR+` = `Player K/R` / `League Avg K/R`
 - `APR+` = `Player A/R` / `League Avg A/R`
-- `DPR+` = `Player D/R` / `League Avg D/R`
+- `DPR+` = `League Avg D/R` / `Player D/R` — inverted (league average over player, not the usual
+  player-over-average), so like every other `+` stat, higher is better: fewer deaths score higher.
+  Capped at 2.00 (a player with zero deaths scores the cap, not infinity).
 - `KDR+` = `Player K/D` / `League Avg K/D`
 - `ADR+` = `Player ADR` / `League Avg ADR`
 - `Entry+` = `Player Opening Success Rate` / `League Avg Opening Success Rate`
@@ -196,8 +198,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
       trade window — the same condition that qualifies a round as "Traded" for KAST
     - `Trade Kill %` = `Trade Kill Successes` / `Trade Kill Attempts`
-  - **Traded Deaths** — the mirror, from the perspective of the player who died (tracked as its
-    own raw stat; not currently folded into `Trade+`):
+  - **Traded Deaths** — the mirror, from the perspective of the player who died (feeds
+    `Traded+`, below):
     - `Traded Death Opportunities` = times this player died while at least one teammate was
       still alive, within 360 game units of the death, and within 540 game units of the killer
       (someone had a realistic chance to reach and engage the killer)
@@ -206,6 +208,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     - `Traded Death Successes` = opportunities where a teammate killed the killer within the
       trade window
     - `Traded Death %` = `Traded Death Successes` / `Traded Death Attempts`
+- `Traded+` = `Player Traded Death %` / `League Avg Traded Death %` — how often a teammate
+  avenged this player's own death, the mirror of `Trade+` from the victim's side.
   - In wingman there's exactly one teammate, so `Opportunities` degenerates to a single
     yes/no check per death rather than a count across a full side.
   - The trade window (currently 5s, `TRADE_WINDOW_SECONDS` in `src/lib/parsers/constants.ts`) and
@@ -217,7 +221,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Utility+` = `0.30 * Flash Assists+` + `0.30 * Utility Damage+` + `0.20 * Blocking Smokes+` +
   `0.20 * (2 - Teamflash+)` — a weighted average of four already-normalized `+` ratios (each vs.
   its own league-average rate per round, or per CT smoke thrown for `Blocking Smokes+`), the same
-  way `Aim+` averages `Accuracy+`/`Head Accuracy+`/`Counter-Strafe+`, rather than a raw point score
+  way `Accuracy+` averages raw `Accuracy`/`Head Accuracy`/`Counter-Strafe %`, rather than a raw point score
   whose league average could land near zero and blow up the ratio. `Teamflash+` is "lower is
   better," so it's folded in inverted (`2 - Teamflash+`) to land on the same "1.00 = average" scale
   as the other three before weighting.
@@ -267,8 +271,9 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     two enemies at different moments (rather than both dying simultaneously to one grenade) feeds
     both buckets. Both attempts resolve win/loss off the same final round outcome, so a
     sequentially-won 1v2 contributes `3 + 1 = 4` to `Clutch Score`, not just `3`.
-- `Choke+` = `Player Choke Score` / `League Avg Choke Score` — lower is better (fewer/smaller
-  blown advantages)
+- `Choke+` = `League Avg Choke Score` / `Player Choke Score` — inverted (league average over
+  player), so higher is better: fewer/smaller blown advantages score higher. Capped at 2.00 like
+  `DPR+`.
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
   - `1v1/1v2 losses` = the mirror of `Clutch Score`'s wins: `Clutch Attempts - Clutch Wins` for
     each bucket.
@@ -291,17 +296,19 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   collector reads `Weapon.m_iClip1`/`Weapon.m_bInReload` at each event's own tick rather than
   periodic sampling — the pre-reload clip count is frozen for the whole reload window (can't fire
   mid-reload), so the event tick itself always lands inside it. See `src/lib/parsers/reload.ts`.
-- `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
-  `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
-  Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
-  `Utility Score` — these three are fairly orthogonal skills on different denominators (a great
-  spray-controller isn't necessarily a good counter-strafer), so there's no principled single
-  scale to weight them on directly. Once each is its own `1.00 = league average` ratio, blending
-  them is apples-to-apples; the weights themselves reflect that landing headshots matters most,
-  followed by raw accuracy, with counter-strafing weighted lowest of the three.
-- `Spray+` = `Player Spray Accuracy` / `League Avg Spray Accuracy` — a standalone ratio, not folded
-  into `Aim+`, since spraying and single-tapping are different enough mechanical skills to track
-  separately.
+- `Accuracy+` = `0.35 * Accuracy ratio` + `0.40 * Head Accuracy ratio` + `0.25 * Counter-Strafe
+  ratio` (each itself `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/
+  `Counter-Strafe %` from the Mechanics section below). A weighted blend rather than a sum on a
+  shared point-scale like `Utility Score` — these three are fairly orthogonal skills on different
+  denominators, so there's no principled single scale to weight them on directly. Once each is its
+  own `1.00 = league average` ratio, blending them is apples-to-apples; the weights reflect that
+  landing headshots matters most, followed by raw accuracy, with counter-strafing weighted lowest.
+- `Spray+` = `Player Spray Accuracy` / `League Avg Spray Accuracy` — also its own standalone ratio
+  (spraying and single-tapping are different enough mechanical skills to track independently), and
+  one of `Aim+`'s two inputs.
+- `Aim+` = `0.65 * Accuracy+` + `0.35 * Spray+` — the overall mechanical-skill composite, weighted
+  toward `Accuracy+` since it's the broader signal (itself a three-way blend) with `Spray+` as a
+  secondary contributor.
 
 ### Mechanics (raw, ungated)
 
@@ -309,7 +316,8 @@ Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events. "Ra
 aren't gated on whether the enemy was actually spotted/visible (Leetify's "Accuracy (Enemy
 Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship ungated first per
 `docs/demo-parsing-reference.md`'s guidance on that tradeoff. `Accuracy`, `Head Accuracy`, and
-`Counter-Strafe %` feed `Aim+`; `Spray Accuracy` feeds `Spray+` — see below.
+`Counter-Strafe %` feed `Accuracy+`; `Spray Accuracy` feeds `Spray+`; `Accuracy+` and `Spray+`
+both feed `Aim+` — see above.
 
 - `Shots Fired` = count of gun shots fired (guns only; grenade throws, knife, and C4 don't count).
 - `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count
@@ -536,29 +544,33 @@ sabremetrics sub-tab showing the `_ct`/`_t` halves at season/career grain; the s
 is only surfaced per-match, via the box score's CT/T checkboxes (`MatchTabView.tsx`'s `Scoreboard`),
 which toggle which side's numbers replace the merged column for that one match.
 
-### Player Rating (not yet implemented)
+### Player Rating
 
-A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Every underlying `+` stat
-this formula references (`KPR+`, `ADR+`, `Entry+`, `Clutch+`, `Choke+`, `KAST+`, `Trade+`,
-`Objective+`, `Utility+`, `APR+`, `DPR+`, `K/D+`) is already computed by demo ingestion and shown
-live in `SabremetricsLeaderboardView.tsx`. The composite itself, combining these into one number,
-hasn't been implemented yet.
+A weighted sabremetric composite for individual performance, on the same 1.00-centered scale as
+every `+` stat it is built from (1.00 = league average). Independent from the
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Implemented by
+`computePlayerRating()` in `src/lib/queries/sabremetrics.ts`, alongside `computePlusStats()`.
 
 ```
 Player Rating = 1.00
-  + 0.30(KPR+ - 1)
+  + 0.30(KAST+ - 1)
   + 0.20(ADR+ - 1)
-  + 0.10(Entry+ - 1)
+  + 0.10(KPR+ - 1)
+  + 0.10(K/D+ - 1)
+  + 0.10(Trade+ - 1)
   + 0.10(Clutch+ - 1)
-  + 0.10(KAST+ - 1)
+  + 0.10(Choke+ - 1)
   + 0.10(Objective+ - 1)
   + 0.10(Utility+ - 1)
-  + 0.10(APR+ - 1)
-  - 0.10(DPR+ - 1)
+  + 0.10(Aim+ - 1)
 ```
 
-#### Role ratings
+`Aim+` already blends in `Spray+`, so there is no separate `Spray+` term (it would double-count).
+
+#### Role ratings (not yet implemented)
+
+Entry, Anchor and Setup ratings are specified below but not computed anywhere yet; their weights
+are not final.
 
 ```
 Entry Rating = 1.00
@@ -576,8 +588,8 @@ Anchor Rating = 1.00
   + 0.15(ADR+ - 1)
   + 0.15(KAST+ - 1)
   + 0.10(Objective+ - 1)
-  - 0.50(DPR+ - 1)
-  - 0.20(Choke+ - 1)
+  + 0.50(DPR+ - 1)
+  + 0.20(Choke+ - 1)
 ```
 
 ```

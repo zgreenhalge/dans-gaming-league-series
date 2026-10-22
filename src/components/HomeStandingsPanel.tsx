@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import Th from './Th';
 import { StatTable, Tr, Td, NameTd } from './StatTable';
+import { PlayerLink } from './PlayerLink';
 import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 
@@ -88,9 +88,9 @@ export function HomeStandingsPanel({
                 <Tr key={p.player_id} href={href}>
                   <Td align="left" muted>{i + 1}</Td>
                   <NameTd>
-                    <Link href={href} className="flex items-center w-full h-full">
+                    <PlayerLink playerId={p.player_id} className="flex items-center w-full h-full">
                       <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
-                    </Link>
+                    </PlayerLink>
                   </NameTd>
                   <Td muted>{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Td>
                   <Td>{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Td>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import PlayerAvatar from './PlayerAvatar';
+import { PlayerLink } from './PlayerLink';
 import type { ThAlign } from './Th';
 import { TH_ALIGN_CLS } from './Th';
 
@@ -184,14 +185,14 @@ export function PlayerCell({
   onToggle?: () => void;
 }) {
   const link = (
-    <Link
-      href={`/players/${id}`}
+    <PlayerLink
+      playerId={id}
       onClick={(e) => e.stopPropagation()}
       className="flex items-center gap-2 w-full h-full"
     >
       {avatarUrl !== undefined && <PlayerAvatar name={name} imageUrl={avatarUrl} size="sm" />}
       <span className="truncate">{name}</span>
-    </Link>
+    </PlayerLink>
   );
   return (
     <NameTd sticky={sticky} className={className}>
