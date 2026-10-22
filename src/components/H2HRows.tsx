@@ -60,8 +60,11 @@ function RowShell({
 
 const HEAD_CLS = 'tracked text-[8px] text-[var(--color-text-secondary)]';
 
+// The full table drops its KDA and Rounds W-L columns below `sm`, where a card has no room for them
+// beside the avatars and names; the header and every row apply the same template so their columns
+// line up.
 function duoCols(compact: boolean): string {
-  return compact ? 'grid-cols-[28px_34px_44px]' : 'grid-cols-[28px_34px_44px_40px_36px_88px]';
+  return compact ? 'grid-cols-[28px_34px_44px]' : 'grid-cols-[32px_34px_40px_40px] sm:grid-cols-[32px_34px_40px_40px_32px_58px]';
 }
 
 /** Column labels above a list of `DuoRow`s. */
@@ -75,15 +78,15 @@ export function DuoHeader({ compact = false }: { compact?: boolean }) {
         <span className={`${HEAD_CLS} text-right`}>W-L</span>
         {!compact && (
           <>
-            <span className={`${HEAD_CLS} text-right`} title={`Wins above the pre-match odds: the duo's wins minus the wins the odds predicted. Dimmed under ${MIN_GAMES_FOR_PERFORMANCE} games together.`}>
+            <span className={`${HEAD_CLS} text-right whitespace-nowrap`} title={`Wins above the pre-match odds: the duo's wins minus the wins the odds predicted. Dimmed under ${MIN_GAMES_FOR_PERFORMANCE} games together.`}>
               vs Odds
             </span>
-            <span className={`${HEAD_CLS} text-right`} title="Average of the two players' KDA, (kills + assists) / deaths, together. Shown for context; the Friends Rating's performance term uses ADR, not KDA.">
+            <span className={`${HEAD_CLS} text-right hidden sm:block`} title="Average of the two players' KDA, (kills + assists) / deaths, together. Shown for context; the Friends Rating's performance term uses ADR, not KDA.">
               KDA
             </span>
           </>
         )}
-        {!compact && <span className={`${HEAD_CLS} text-right`}>Rounds W-L</span>}
+        {!compact && <span className={`${HEAD_CLS} text-right whitespace-nowrap hidden sm:block`}>Rounds W-L</span>}
       </div>
     </div>
   );
@@ -139,16 +142,16 @@ export function DuoRow({
               <span className="display-numeral text-[13px] text-right" style={{ color: signedColor(duo.winsAboveExpected, 1) }}>{formatSigned(duo.winsAboveExpected, 1)}</span>
               <span className="font-mono text-[8px] text-right">&nbsp;</span>
             </div>
-            <div className="flex flex-col items-end">
+            <div className="hidden sm:flex flex-col items-end">
               <span className="display-numeral text-[13px] text-right">{duoAvgKda(duo).toFixed(2)}</span>
               <span className="font-mono text-[8px] text-right">&nbsp;</span>
             </div>
           </>
         )}
         {!compact && (
-          <div className="flex flex-col items-end">
-            <span className="display-numeral text-[13px] inline-block w-[58px] text-right">{duo.roundsWon}–{duo.roundsPlayed - duo.roundsWon}</span>
-            <span className="font-mono text-[8px] text-[var(--color-text-secondary)] inline-block w-[58px] text-right">{rwr}%</span>
+          <div className="hidden sm:flex flex-col items-end">
+            <span className="display-numeral text-[13px] text-right">{duo.roundsWon}–{duo.roundsPlayed - duo.roundsWon}</span>
+            <span className="font-mono text-[8px] text-[var(--color-text-secondary)] text-right">{rwr}%</span>
           </div>
         )}
       </div>
