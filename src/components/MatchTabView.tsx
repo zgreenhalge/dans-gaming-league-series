@@ -121,7 +121,7 @@ function Scoreboard({
                     </span>
                   )}
                   {ratingDeltas[p.player_id] != null && (
-                    <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
+                    <span className={`ml-1 font-mono text-[10px] ${deltaTone(ratingDeltas[p.player_id])}`}>
                       ({formatEhogDelta(ratingDeltas[p.player_id])})
                     </span>
                   )}
@@ -186,6 +186,15 @@ function TeamHeader({
       )}
     </div>
   );
+}
+
+/** The text colour class for an EHOG delta, judged at the one decimal `formatEhogDelta()` shows so a
+ *  delta that reads 0.0 is neutral. */
+function deltaTone(delta: number): string {
+  const shown = Number(delta.toFixed(1));
+  if (shown > 0) return 'text-[var(--color-accent-green-fill)]';
+  if (shown < 0) return 'text-[var(--color-accent-red-fg)]';
+  return 'text-[var(--color-text-secondary)]';
 }
 
 function deltaColor(delta: number, maxAbs: number): string {
