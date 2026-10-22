@@ -56,25 +56,28 @@ describe('DuoRow', () => {
     expect(screen.getByText('-0.4').parentElement).toHaveClass('opacity-50');
   });
 
-  test('compact leaves out the rounds column and its header', () => {
+  test('compact keeps the record and wins above the odds, and leaves out games, KDA and rounds', () => {
     const { rerender } = render(
       <>
         <DuoHeader />
-        <DuoRow {...props} />
+        <DuoRow {...props} duo={duoStats({ winsAboveExpected: 1.46 })} />
       </>,
     );
     expect(screen.getByText('Rounds W-L')).toBeInTheDocument();
+    expect(screen.getByText('Games')).toBeInTheDocument();
     rerender(
       <>
         <DuoHeader compact />
-        <DuoRow {...props} compact />
+        <DuoRow {...props} duo={duoStats({ winsAboveExpected: 1.46 })} compact />
       </>,
     );
     expect(screen.queryByText('Rounds W-L')).toBeNull();
     expect(screen.queryByText('40–30')).toBeNull();
     expect(screen.queryByText('KDA')).toBeNull();
-    expect(screen.queryByText('vs Odds')).toBeNull();
     expect(screen.queryByText('1.67')).toBeNull();
+    expect(screen.queryByText('Games')).toBeNull();
+    expect(screen.getByText('vs Odds')).toBeInTheDocument();
+    expect(screen.getByText('+1.5')).toBeInTheDocument();
     expect(screen.getByText('3–2')).toBeInTheDocument();
   });
 
@@ -131,16 +134,18 @@ describe('RivalRow', () => {
     expect(screen.getByText('3')).toHaveClass('text-[var(--color-text-secondary)]');
   });
 
-  test('compact keeps the round figures and drops only the avatars', () => {
+  test('compact shows each side\'s upset wins in place of rounds, and drops the avatars', () => {
     const { container } = render(
       <>
         <RivalHeader compact />
-        <RivalRow {...props} a={withAvatar(alice)} b={withAvatar(bob)} compact />
+        <RivalRow {...props} rival={{ ...RIVAL, aUpsetWins: 2, bUpsetWins: 1 }} a={withAvatar(alice)} b={withAvatar(bob)} compact />
       </>,
     );
-    expect(screen.getByText('55')).toBeInTheDocument();
-    expect(screen.getByText('51')).toBeInTheDocument();
-    expect(screen.getAllByText('Rounds')).toHaveLength(2);
+    expect(screen.getAllByText('Upsets')).toHaveLength(2);
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('55')).toBeNull();
+    expect(screen.queryByText('Rounds')).toBeNull();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(container.querySelectorAll('img')).toHaveLength(0);
   });

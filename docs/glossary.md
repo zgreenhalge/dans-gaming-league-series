@@ -172,8 +172,8 @@ so you don't have to reverse-engineer them from scratch each time.
   highest-rated partner), **Worst nightmare** (the opponent they've lost to most) and Match history. Career-scoped, not season-scoped. Definitions in
   [`calculations.md`](./calculations.md#home-page). Signed out, the panel is a blurred placeholder
   with a Login prompt.
-- **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating,
-  games and W-L for a duo; matches and rounds won on each side for a rivalry), the title linking to the Statistics
+- **Top duos / Hottest Rivalries** — the home page's top-three career pairs by Blended score (rating, W-L
+  and wins above the odds for a duo; matches won and upset wins on each side for a rivalry), the title linking to the Statistics
   H2H tab and each row to that pair's H2H matchup (`/statistics?tab=h2h&a=…&b=…`, `&type=opponent` for a
   rivalry — the `a`/`b`/`type` params `useH2HPairUrlState()` reads; `h2hPairHref()` and the hook
   share their names and default in `src/lib/h2hPairParams.ts`).
