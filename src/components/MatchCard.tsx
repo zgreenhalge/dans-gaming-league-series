@@ -111,7 +111,7 @@ function TeamStatBlock({
               return (
                 <span
                   className={`${statCls} ${highlight ? 'text-[12px] font-semibold' : 'text-[11px]'} w-14 pr-2 hidden min-[480px]:block`}
-                  style={{ color: (delta != null ? signedColor(delta, 1) : undefined) ?? 'var(--color-text-secondary)' }}
+                  style={{ color: signedColor(delta ?? 0, 1) ?? 'var(--color-text-secondary)' }}
                 >
                   {delta != null ? formatEhogDelta(delta) : ''}
                 </span>
