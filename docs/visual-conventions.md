@@ -230,8 +230,8 @@ standard is the two densities above applied to that string.
 are the one row for a ranked duo or rivalry: `H2HSection`'s Best Friends / Closest Rivals cards render them as
 selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Rivalries as links (`href`).
 `compact` narrows a duo to rating, W-L and **vs Odds** (no Games, KDA or Rounds W-L) and a rivalry to wins and
-**Upsets** in place of rounds, with no avatars, for a narrow card; the full table also drops KDA and Rounds W-L
-below `sm`, and `H2HSection` puts its two cards side by side only from `xl`, so a row never outgrows its card. A
+**Upsets** in place of rounds, with no avatars, for a narrow card. The full duo table also drops KDA and Rounds W-L,
+and the full rivalry table (**Upsets** and **Rounds** on either side of the matches won) drops both, below `sm`; and `H2HSection` puts its two cards side by side only from `xl`, so a row never outgrows its card. A
 duo's **vs Odds** is its wins above the pre-match odds, signed and green or red; a rivalry's rating circle is
 dimmed, with an "Uneven record" note in its tooltip, when its record is uneven
 (`unevenRivalryNote()`, `src/lib/h2h.ts`, passed to `RatingCircle`'s `dimmedReason`), and the same

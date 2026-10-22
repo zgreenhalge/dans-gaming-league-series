@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { duoStats, rivalStats } from './test-support/h2hFixtures';
 import { test, report } from './test-support/miniTest';
-import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from './h2h-ratings';
+import { duoBlendedScorer, duoBreakdownScorer, rankDuos, ratingPoints, rivalBlendedScorer, rivalBreakdownScorer } from './h2h-ratings';
 import type { H2HStats } from './h2h';
 
 /** A duo with `games` games, `wins` of them won, on a 55% round win rate; override the rest. */
@@ -19,6 +19,25 @@ function duo(games: number, wins: number, overrides: Parameters<typeof duoStats>
 
 /** A rivalry with the given record and per-side upset scores. */
 const rival = (wins: [number, number], overrides: Partial<H2HStats> = {}) => rivalStats(1, 2, wins[0], wins[1], overrides);
+
+// ─── Displayed ratings ───────────────────────────────────────────────────────
+
+test('ratingPoints: rounds down, reads 100 only for a score of 1, and absorbs float error', () => {
+  assert.equal(ratingPoints(1), 100);
+  assert.equal(ratingPoints(0.996), 99);
+  assert.equal(ratingPoints(0.999999), 99);
+  assert.equal(ratingPoints(0.29), 29); // 0.29 * 100 is 28.999…
+  assert.equal(ratingPoints(0.07), 7);
+  assert.equal(ratingPoints(0), 0);
+});
+
+test('rankDuos: each rating is the scorer\'s score rounded down, so a near-best duo never reads 100', () => {
+  const duos = [duo(8, 6, { winsAboveExpected: 1 }), duo(7, 6, { winsAboveExpected: 1 }), duo(4, 3)];
+  const score = duoBlendedScorer(duos);
+  const ranked = rankDuos(duos, 3);
+  for (const { duo: d, rating } of ranked) assert.equal(rating, ratingPoints(score(d)));
+  assert.equal(ranked.filter((r) => r.rating === 100).length, 1);
+});
 
 // ─── Friends ─────────────────────────────────────────────────────────────────
 

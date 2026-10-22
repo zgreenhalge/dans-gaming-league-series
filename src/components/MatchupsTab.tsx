@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { PlayerLink } from './PlayerLink';
 import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
-import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/h2h-ratings';
+import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer, ratingPoints } from '@/lib/h2h-ratings';
 import { unevenRivalryNote } from '@/lib/h2h';
 import EmptyState from './EmptyState';
 import Th from './Th';
@@ -323,7 +323,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
               {sortedH2h.map((row) => {
                 const p = playersById.get(row.other);
                 if (!p) return null;
-                const rating = Math.round(rivalScore(row._raw) * 100);
+                const rating = ratingPoints(rivalScore(row._raw));
                 const bg = rowBg(rating, RED);
                 const hoverBg = rowHoverBg(rating, RED);
                 const isExpanded = expandedOpponent === row.other;
@@ -392,7 +392,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                 const p = playersById.get(row.other);
                 if (!p) return null;
                 const myName = playersById.get(playerId)?.name ?? 'Me';
-                const rating = Math.round(duoScore(row._raw) * 100);
+                const rating = ratingPoints(duoScore(row._raw));
                 const bg = rowBg(rating, GREEN);
                 const hoverBg = rowHoverBg(rating, GREEN);
                 const myKd = row.myStats.deaths > 0 ? row.myStats.kills / row.myStats.deaths : row.myStats.kills;

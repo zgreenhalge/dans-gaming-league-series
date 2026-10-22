@@ -165,17 +165,24 @@ export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => strin
   };
 }
 
-/** A duo with its 0–100 friendship rating (`duoBlendedScorer()` ×100, the number `H2HSection`'s
+/** A duo with its 0–100 friendship rating (`ratingPoints()` of `duoBlendedScorer()`, the number `H2HSection`'s
  *  rating circle shows). */
 export interface RankedDuo {
   duo: DuoStats;
   rating: number;
 }
 
-/** A rivalry with its 0–100 rivalry rating (`rivalBlendedScorer()` ×100). */
+/** A rivalry with its 0–100 rivalry rating (`ratingPoints()` of `rivalBlendedScorer()`). */
 export interface RankedRival {
   rival: H2HStats;
   rating: number;
+}
+
+/** A 0–1 score as the 0–100 rating the UI shows. It rounds down, so only the best pair reads 100 and
+ *  two pairs a hair apart never share a number by rounding up; the nudge absorbs float error
+ *  (`0.29 * 100` is 28.999…). */
+export function ratingPoints(score: number): number {
+  return Math.floor(score * 100 + 1e-9);
 }
 
 /** The `limit` highest-scoring `items`, best first, each built into a `R` with its score as a
@@ -185,7 +192,7 @@ function rankBy<T, R>(items: T[], score: (item: T) => number, limit: number, mak
     .map((item) => ({ item, raw: score(item) }))
     .sort((x, y) => y.raw - x.raw)
     .slice(0, limit)
-    .map(({ item, raw }) => make(item, Math.round(raw * 100)));
+    .map(({ item, raw }) => make(item, ratingPoints(raw)));
 }
 
 /**

@@ -165,34 +165,40 @@ export function DuoRow({
 
 const UPSETS_TITLE = 'Meetings won as the pre-match underdog';
 
+// The full table shows Upsets and Rounds beside the matches won, and drops both below `sm`, where a
+// card has no room for them beside the avatars and names; the compact table shows Upsets only.
 function rivalCols(compact: boolean): string {
   return compact
     ? 'grid-cols-[1fr_32px_32px_38px_32px_32px_1fr]'
-    : 'grid-cols-[28px_1fr_38px_38px_38px_38px_38px_1fr_28px]';
+    : 'grid-cols-[28px_1fr_34px_38px_34px_1fr_28px] sm:grid-cols-[28px_1fr_38px_38px_34px_38px_34px_38px_38px_1fr_28px]';
 }
 
 /** Column labels above a list of `RivalRow`s. */
 export function RivalHeader({ compact = false }: { compact?: boolean }) {
-  const outer = <span className={`${HEAD_CLS} text-center`} title={compact ? UPSETS_TITLE : undefined}>{compact ? 'Upsets' : 'Rounds'}</span>;
+  const wide = compact ? '' : ' hidden sm:block';
+  const upsets = <span className={`${HEAD_CLS} text-center${wide}`} title={UPSETS_TITLE}>Upsets</span>;
+  const rounds = <span className={`${HEAD_CLS} text-center${wide}`}>Rounds</span>;
   const rating = `${HEAD_CLS} text-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)]`;
   return (
     <div className={`grid ${rivalCols(compact)} items-center gap-2 px-3.5 pt-2`}>
       {!compact && <span />}
       <span />
-      {outer}
+      {upsets}
+      {!compact && rounds}
       <span className={`${HEAD_CLS} text-center`}>Won</span>
       <span className={rating}>Rating</span>
       <span className={`${HEAD_CLS} text-center`}>Won</span>
-      {outer}
+      {!compact && rounds}
+      {upsets}
       <span />
       {!compact && <span />}
     </div>
   );
 }
 
-/** A ranked rivalry: the two players on either side of rounds won, matches won and the rating.
- *  `compact` drops the avatars and shows each side's upset wins in place of rounds won. The higher
- *  figure of each pair is accented. */
+/** A ranked rivalry: the two players on either side of upset wins, rounds won (unless `compact`),
+ *  matches won and the rating. `compact` also drops the avatars. The higher figure of each pair is
+ *  accented. */
 export function RivalRow({
   rival,
   rating,
@@ -210,26 +216,24 @@ export function RivalRow({
   b: PlayerRef;
   compact?: boolean;
 }) {
-  const aWinsHigher = rival.aWins > rival.bWins;
-  const bWinsHigher = rival.bWins > rival.aWins;
-  const outerA = compact ? rival.aUpsetWins : rival.aStats.roundsWon;
-  const outerB = compact ? rival.bUpsetWins : rival.bStats.roundsWon;
-  const aOuterHigher = outerA > outerB;
-  const bOuterHigher = outerB > outerA;
   const dim = 'text-[var(--color-text-secondary)]';
   const accent = 'text-[var(--color-site-accent)]';
-  const tone = (higher: boolean, otherHigher: boolean) => (higher ? ` ${accent}` : !otherHigher ? '' : ` ${dim}`);
+  const tone = (mine: number, theirs: number) => (mine > theirs ? ` ${accent}` : mine < theirs ? ` ${dim}` : '');
+  const cell = 'display-numeral text-[12px] text-center';
+  const wide = compact ? '' : ' hidden sm:block';
   return (
     <RowShell className={`grid ${rivalCols(compact)} items-center gap-2 px-3.5 py-2`} action={action}>
       {!compact && <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="sm" />}
       <span className="font-display font-semibold text-[11px] truncate">{a.name}</span>
-      <span className={`display-numeral text-[12px] text-center${tone(aOuterHigher, bOuterHigher)}`}>{outerA}</span>
-      <span className={`display-numeral text-[12px] text-center${tone(aWinsHigher, bWinsHigher)}`}>{rival.aWins}</span>
+      <span className={`${cell}${wide}${tone(rival.aUpsetWins, rival.bUpsetWins)}`}>{rival.aUpsetWins}</span>
+      {!compact && <span className={`${cell}${wide}${tone(rival.aStats.roundsWon, rival.bStats.roundsWon)}`}>{rival.aStats.roundsWon}</span>}
+      <span className={`${cell}${tone(rival.aWins, rival.bWins)}`}>{rival.aWins}</span>
       <div className="flex items-center justify-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)] self-stretch -my-2">
         <RatingCircle value={rating} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={breakdown} dimmedReason={unevenRivalryNote(rival)} />
       </div>
-      <span className={`display-numeral text-[12px] text-center${tone(bWinsHigher, aWinsHigher)}`}>{rival.bWins}</span>
-      <span className={`display-numeral text-[12px] text-center${tone(bOuterHigher, aOuterHigher)}`}>{outerB}</span>
+      <span className={`${cell}${tone(rival.bWins, rival.aWins)}`}>{rival.bWins}</span>
+      {!compact && <span className={`${cell}${wide}${tone(rival.bStats.roundsWon, rival.aStats.roundsWon)}`}>{rival.bStats.roundsWon}</span>}
+      <span className={`${cell}${wide}${tone(rival.bUpsetWins, rival.aUpsetWins)}`}>{rival.bUpsetWins}</span>
       <span className="font-display font-semibold text-[11px] text-right truncate">{b.name}</span>
       {!compact && <PlayerAvatar name={b.name} imageUrl={b.steam_avatar_url} size="sm" />}
     </RowShell>

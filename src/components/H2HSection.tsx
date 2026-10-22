@@ -7,7 +7,7 @@ import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { findDuo, findRival } from '@/lib/h2h';
 import type { H2HData } from '@/lib/queries';
 import {
-  duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals,
+  duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals, ratingPoints,
   FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY,
 } from '@/lib/h2h-ratings';
 import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
@@ -71,13 +71,13 @@ export default function H2HSection({
   const avgFriendshipRating = useMemo(() => {
     const eligible = duos.filter((d) => d.gamesPlayed > 0);
     if (!eligible.length) return 0;
-    return Math.round(eligible.reduce((s, d) => s + duoScore(d) * 100, 0) / eligible.length);
+    return ratingPoints(eligible.reduce((s, d) => s + duoScore(d), 0) / eligible.length);
   }, [duos, duoScore]);
 
   const avgRivalryScore = useMemo(() => {
     const eligible = rivals.filter((r) => r.meetings > 0);
     if (!eligible.length) return 0;
-    return Math.round(eligible.reduce((s, r) => s + rivalScore(r) * 100, 0) / eligible.length);
+    return ratingPoints(eligible.reduce((s, r) => s + rivalScore(r), 0) / eligible.length);
   }, [rivals, rivalScore]);
 
   if (players.length === 0 || (duos.length === 0 && rivals.length === 0)) {
@@ -182,8 +182,8 @@ export default function H2HSection({
         />
 
         <div className="flex flex-col gap-3.5">
-          {activeDuo && <DuoDetail duo={activeDuo} players={playersById} onFlip={flipToOpponent} friendshipRating={Math.round(duoScore(activeDuo) * 100)} ratingBreakdown={duoBreakdown(activeDuo)} />}
-          {activeRival && <RivalDetail rival={activeRival} players={playersById} onFlip={flipToPartner} rivalryRating={Math.round(rivalScore(activeRival) * 100)} ratingBreakdown={rivalBreakdown(activeRival)} />}
+          {activeDuo && <DuoDetail duo={activeDuo} players={playersById} onFlip={flipToOpponent} friendshipRating={ratingPoints(duoScore(activeDuo))} ratingBreakdown={duoBreakdown(activeDuo)} />}
+          {activeRival && <RivalDetail rival={activeRival} players={playersById} onFlip={flipToPartner} rivalryRating={ratingPoints(rivalScore(activeRival))} ratingBreakdown={rivalBreakdown(activeRival)} />}
         </div>
       </div>
     </div>
