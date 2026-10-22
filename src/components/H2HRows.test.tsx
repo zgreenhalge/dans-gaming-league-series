@@ -2,7 +2,8 @@
 /**
  * Component tests for `H2HRows.tsx`: the ranked duo / rivalry rows shared by `H2HSection` and the
  * home page. A row is a link when given an `href` and a selectable row (click selects, hover
- * previews) otherwise; `compact` drops a duo's rounds column and a rivalry's avatars.
+ * previews) otherwise; `compact` narrows a duo to record and wins above the odds, and a rivalry to
+ * upset wins in place of rounds, without avatars.
  *
  * Run:  npx vitest run src/components/H2HRows.test.tsx
  */
@@ -25,6 +26,7 @@ const withAvatar = (p: typeof alice) => ({ ...p, steam_avatar_url: 'https://exam
 
 describe('DuoRow', () => {
   const props = { rank: 1, duo: duoStats(), rating: 88, breakdown: 'tip', a: alice, b: bob };
+  const withOdds = duoStats({ winsAboveExpected: 1.46 });
 
   test('shows the pair, games, W-L with win rate and rounds W-L with round win rate', () => {
     render(<DuoRow {...props} />);
@@ -54,28 +56,33 @@ describe('DuoRow', () => {
     expect(screen.getByText('+1.5').parentElement).not.toHaveClass('opacity-50');
     rerender(<DuoRow {...props} duo={duoStats({ gamesPlayed: 2, winsAboveExpected: -0.4 })} />);
     expect(screen.getByText('-0.4').parentElement).toHaveClass('opacity-50');
+    expect(screen.getByTitle('Only 2 games together, so this is mostly noise')).toBe(screen.getByText('-0.4').parentElement);
   });
 
-  test('compact leaves out the rounds column and its header', () => {
+  test('compact keeps the record and wins above the odds, and leaves out games, KDA and rounds', () => {
     const { rerender } = render(
       <>
         <DuoHeader />
-        <DuoRow {...props} />
+        <DuoRow {...props} duo={withOdds} />
       </>,
     );
     expect(screen.getByText('Rounds W-L')).toBeInTheDocument();
+    expect(screen.getByText('Games')).toBeInTheDocument();
     rerender(
       <>
         <DuoHeader compact />
-        <DuoRow {...props} compact />
+        <DuoRow {...props} duo={withOdds} compact />
       </>,
     );
     expect(screen.queryByText('Rounds W-L')).toBeNull();
     expect(screen.queryByText('40–30')).toBeNull();
     expect(screen.queryByText('KDA')).toBeNull();
-    expect(screen.queryByText('vs Odds')).toBeNull();
     expect(screen.queryByText('1.67')).toBeNull();
+    expect(screen.queryByText('Games')).toBeNull();
+    expect(screen.getByText('vs Odds')).toBeInTheDocument();
+    expect(screen.getByText('+1.5')).toBeInTheDocument();
     expect(screen.getByText('3–2')).toBeInTheDocument();
+    expect(screen.queryByTitle(/KDA is shown for context only/)).toBeNull(); // no KDA column to note
   });
 
   test('with an href the row is a link', () => {
@@ -131,16 +138,18 @@ describe('RivalRow', () => {
     expect(screen.getByText('3')).toHaveClass('text-[var(--color-text-secondary)]');
   });
 
-  test('compact keeps the round figures and drops only the avatars', () => {
+  test('compact shows each side\'s upset wins in place of rounds, and drops the avatars', () => {
     const { container } = render(
       <>
         <RivalHeader compact />
-        <RivalRow {...props} a={withAvatar(alice)} b={withAvatar(bob)} compact />
+        <RivalRow {...props} rival={{ ...RIVAL, aUpsetWins: 2, bUpsetWins: 1 }} a={withAvatar(alice)} b={withAvatar(bob)} compact />
       </>,
     );
-    expect(screen.getByText('55')).toBeInTheDocument();
-    expect(screen.getByText('51')).toBeInTheDocument();
-    expect(screen.getAllByText('Rounds')).toHaveLength(2);
+    expect(screen.getAllByText('Upsets')).toHaveLength(2);
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('55')).toBeNull();
+    expect(screen.queryByText('Rounds')).toBeNull();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(container.querySelectorAll('img')).toHaveLength(0);
   });

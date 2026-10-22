@@ -30,7 +30,7 @@ function PairsCard({ title, tooltip, children }: { title: string; tooltip: strin
 }
 
 /** The home page's Top duos: the career partners with the highest friendship rating
- *  (`rankDuos()`), each row showing rating, games and W-L and linking to that pair's career H2H
+ *  (`rankDuos()`), each row showing rating, W-L and wins above the odds and linking to that pair's career H2H
  *  matchup. Renders nothing before any pair has played together. */
 export function TopDuosPanel({ data }: { data: H2HData }) {
   const ranked = rankDuos(data.duos, TOP_PAIRS_LIMIT);
@@ -63,7 +63,7 @@ export function TopDuosPanel({ data }: { data: H2HData }) {
 }
 
 /** The home page's Hottest Rivalries: the career opponents with the highest rivalry rating
- *  (`rankRivals()`), each row showing both players' matches won and the rating, linking to that
+ *  (`rankRivals()`), each row showing both players' matches won and upset wins around the rating, linking to that
  *  pair's career H2H matchup. Renders nothing before any pair has met. */
 export function HottestRivalriesPanel({ data }: { data: H2HData }) {
   const ranked = rankRivals(data.rivals, TOP_PAIRS_LIMIT);
