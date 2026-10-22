@@ -6,6 +6,7 @@ import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, SCORE_CATEGORY_INFO, type ScoreCategory, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { tabCls } from '@/lib/util';
+import { playerHref } from '@/lib/crumbs';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
 import Th from './Th';
@@ -69,7 +70,7 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
+            <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
               <Td>{row.total_kills}</Td>
               <Td>{row.total_assists}</Td>
@@ -129,7 +130,7 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
+            <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
               <Td>{fmtNum(row.kd_ratio, 2)}</Td>
               <Td>{fmtNum(stats.dmgPerKill, 1)}</Td>
@@ -211,7 +212,7 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
+            <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
               <Td>{row.matches_played}</Td>
               <Td>{row.matches_won}–{row.matches_lost}</Td>
@@ -272,7 +273,7 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
         </thead>
         <tbody>
           {sorted.map(({ row, stats }) => (
-            <Tr key={row.player_id} href={`/players/${row.player_id}`}>
+            <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
               <Td>{fmtNum(stats.rPerGame, 1)}</Td>
               <Td>{fmtDiff(stats.rdPerGame, 2)}</Td>

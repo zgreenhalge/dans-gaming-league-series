@@ -13,6 +13,13 @@ export interface Crumb {
 // gauntlet (it has no row of its own, and exists in the bracket before any game is scheduled), and
 // `podId` is `gauntlet_pods.id`.
 
+/** The path to a player's page. */
+export function playerHref(playerId: number): string {
+  // The one place the URL shape is written; everything else calls this.
+  // eslint-disable-next-line no-restricted-syntax
+  return `/players/${playerId}`;
+}
+
 export function seasonHref(hubSeasonId: number): string {
   return `/seasons/${hubSeasonId}`;
 }

@@ -12,11 +12,14 @@ export function ehogColorFor(rating: number) {
   return (GRADE_TIERS.find((t) => rating >= t.min) ?? GRADE_TIERS[GRADE_TIERS.length - 1]).color;
 }
 
+/** The badge's box size, shared with the hover card's loading skeleton so the two can't drift. */
+export const EHOG_BADGE_SIZE_CLS = 'w-[74px] h-[64px]';
+
 export default function EhogBadge({ rating }: { rating: number }) {
   const color = ehogColorFor(rating);
   return (
     <div
-      className="relative flex items-center justify-center w-[74px] h-[64px] border-[3px] font-display text-[24px] font-bold"
+      className={`relative flex items-center justify-center ${EHOG_BADGE_SIZE_CLS} border-[3px] font-display text-[24px] font-bold`}
       style={{
         borderColor: color,
         color,

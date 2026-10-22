@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import type { PlayerSummary } from '@/lib/queries';
+import { playerHref } from '@/lib/crumbs';
 import { PLAYER_PREVIEW_CARD_WIDTH_REM, PlayerPreviewCard } from './PlayerPreviewCard';
 
 // A link to a player's page that previews them on hover: a `PlayerPreviewCard` opens beside the
@@ -95,7 +96,7 @@ export function PlayerLink({
       <Link
         {...rest}
         ref={ref}
-        href={`/players/${playerId}`}
+        href={playerHref(playerId)}
         onPointerEnter={(e) => {
           onPointerEnter?.(e);
           if (e.pointerType !== 'mouse') return;

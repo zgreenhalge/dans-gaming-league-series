@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { PlayerName } from './PlayerName';
 import { canonicalSort } from '@/lib/util';
+import { playerHref, seasonHref } from '@/lib/crumbs';
 import { ehogColorFor } from './EhogBadge';
 import Th from './Th';
 import SortableTh from './SortableTh';
@@ -209,8 +210,8 @@ export default function LeaderboardTable({
             ? 'var(--color-text-secondary)'
             : rowColor;
           const href = firstColMode === 'season'
-            ? `/seasons/${p.season_id}`
-            : `/players/${p.player_id}`;
+            ? seasonHref(p.season_id)
+            : playerHref(p.player_id);
           return (
             <Tr
               key={firstColMode === 'season' ? p.season_id : p.player_id}
