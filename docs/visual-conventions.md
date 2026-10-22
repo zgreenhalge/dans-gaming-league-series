@@ -232,15 +232,19 @@ standard is the two densities above applied to that string.
 are the one row for a ranked duo or rivalry: `H2HSection`'s Best Friends / Closest Rivals cards render them as
 selectable rows (`onSelect` / `onHover`), the home page's Top duos / Hottest Rivalries as links (`href`).
 `compact` narrows a duo to rating, W-L and **vs Odds** (no Games, KDA or Rounds W-L) and a rivalry to wins and
-**Upsets** in place of rounds, with no avatars, for a narrow card; the full table also drops KDA and Rounds W-L
-below `sm`, and `H2HSection` puts its two cards side by side only from `xl`, so a row never outgrows its card. A
-duo's **vs Odds** is its wins above the pre-match odds, signed and green or red; a rivalry's rating circle is
-dimmed, with an "Uneven record" note in its tooltip, when its record is uneven
-(`unevenRivalryNote()`, `src/lib/h2h.ts`, passed to `RatingCircle`'s `dimmedReason`), and the same
-dimming applies wherever a rivalry rating shows (`RivalDetail`, the player page's Matchups table). Under
+**Upsets** in place of rounds, with no avatars, for a narrow card.
+
+The full tables fit their card the same way. A duo drops KDA and Rounds W-L below `sm`; a rivalry (**Upsets**
+and **Rounds** on either side of the matches won) drops both **Upsets** and **Rounds** below `sm`. `H2HSection`
+puts its two cards side by side only from `xl`, so a row never outgrows its card.
+
+A duo's **vs Odds** is its wins above the pre-match odds, signed and green or red. Under
 `MIN_GAMES_FOR_PERFORMANCE` games together a duo's **vs Odds** and **ADR lift** are shown at half opacity,
-since they are mostly noise by then. `DuoDetail` adds **vs Odds**, **ADR lift** and **KDA** cells and
-`RivalDetail` adds **Upsets** (each side's meetings won as the pre-match underdog) and **Evenness**.
+since they are mostly noise by then. A rivalry's rating circle is dimmed, with an "Uneven record" note in its
+tooltip, when its record is uneven (`unevenRivalryNote()`, `src/lib/h2h.ts`, passed to `RatingCircle`'s
+`dimmedReason`); the same dimming applies wherever a rivalry rating shows (`RivalDetail`, the player page's
+Matchups table). `DuoDetail` adds **vs Odds**, **ADR lift** and **KDA** cells and `RivalDetail` adds **Upsets**
+(each side's meetings won as the pre-match underdog) and **Evenness**.
 
 **Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
 `MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it

@@ -124,6 +124,20 @@ describe('RivalRow', () => {
     expect(screen.getAllByText('Rounds')).toHaveLength(2);
   });
 
+  test('the full table shows upset wins beside rounds, and both hide below sm', () => {
+    render(
+      <>
+        <RivalHeader />
+        <RivalRow {...props} rival={{ ...RIVAL, aUpsetWins: 2, bUpsetWins: 1 }} />
+      </>,
+    );
+    expect(screen.getAllByText('Upsets')).toHaveLength(2);
+    for (const hidden of [screen.getByText('2'), screen.getByText('1'), screen.getByText('55'), screen.getByText('51')]) {
+      expect(hidden).toHaveClass('hidden', 'sm:block');
+    }
+    expect(screen.getByText('4')).not.toHaveClass('hidden'); // matches won stay on a phone
+  });
+
   test('dims the rating of an uneven rivalry and says why, but not an even one', () => {
     const { rerender } = render(<RivalRow {...props} rival={rivalStats(1, 2, 6, 1)} />);
     expect(screen.getByTitle('tip · Uneven record')).toHaveClass('opacity-50');

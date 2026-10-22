@@ -773,8 +773,9 @@ as the underdog, the figure the matchup view shows beside the score-weighted ups
 
 The home page's **Top duos** and **Hottest Rivalries** list the three highest-rated pairs, and
 `H2HSection`'s "Best Friends" / "Closest Rivals" cards the top five: both rank through `rankDuos()` /
-`rankRivals()` (`src/lib/queries/h2h.ts`) on the Friends Rating and Rival Rating above, each shown
-as the rating × 100, rounded. Only pairs that have played together (duos) or met (rivals) are ranked.
+`rankRivals()` (`src/lib/h2h-ratings.ts`) on the Friends Rating and Rival Rating above, each shown
+as the 0–100 rating rounded down (`ratingPoints()`), so only the best pair reads 100 and two close
+pairs never share a number by rounding up. Only pairs that have played together (duos) or met (rivals) are ranked.
 
 A player's own two matchups on the home page's **My Stats** are computed from the same data:
 
