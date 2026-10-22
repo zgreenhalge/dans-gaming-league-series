@@ -8,7 +8,7 @@ import { PLAYER_PREVIEW_CARD_WIDTH_REM, PlayerPreviewCard } from './PlayerPrevie
 
 // A link to a player's page that previews them on hover: a `PlayerPreviewCard` opens beside the
 // link as soon as the mouse is on it — a skeleton card until `GET /api/players/[id]/summary`
-// answers, fetched on first hover and kept for the rest of the page's life. The card stays open
+// answers, fetched on hover and reused for a minute. The card stays open
 // while the mouse is over the link or the card itself. It renders in a portal (`document.body`), so
 // a table's `overflow` container can't clip it. It's mouse-only — touch and pen taps navigate, as a
 // plain link does.
@@ -24,19 +24,22 @@ const EDGE_PX = 8;
 const CARD_WIDTH_PX = PLAYER_PREVIEW_CARD_WIDTH_REM * 16;
 const CARD_HEIGHT_PX = 210;
 
+/** How long a loaded summary is reused — the summary route's own `max-age`. A tab left open through
+ *  a match night re-fetches rather than previewing stale figures. */
+const SUMMARY_TTL_MS = 60_000;
+
 /** Summaries by player id, shared by every `PlayerLink` on the page. */
-const summaries = new Map<number, Promise<PlayerSummary | null>>();
+const summaries = new Map<number, { at: number; pending: Promise<PlayerSummary | null> }>();
 
 function loadSummary(playerId: number): Promise<PlayerSummary | null> {
-  let pending = summaries.get(playerId);
-  if (!pending) {
-    pending = fetch(`/api/players/${playerId}/summary`)
-      .then((res) => (res.ok ? (res.json() as Promise<PlayerSummary>) : null))
-      .catch(() => null);
-    // A failed load is retried on the next hover rather than cached.
-    pending.then((s) => { if (!s) summaries.delete(playerId); });
-    summaries.set(playerId, pending);
-  }
+  const cached = summaries.get(playerId);
+  if (cached && Date.now() - cached.at < SUMMARY_TTL_MS) return cached.pending;
+  const pending = fetch(`/api/players/${playerId}/summary`)
+    .then((res) => (res.ok ? (res.json() as Promise<PlayerSummary>) : null))
+    .catch(() => null);
+  // A failed load is retried on the next hover rather than cached.
+  pending.then((s) => { if (!s) summaries.delete(playerId); });
+  summaries.set(playerId, { at: Date.now(), pending });
   return pending;
 }
 
