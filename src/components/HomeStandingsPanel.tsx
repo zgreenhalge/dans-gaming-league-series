@@ -2,6 +2,7 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 import Th from './Th';
 import { StatTable, Tr, Td, NameTd } from './StatTable';
 import { PlayerLink } from './PlayerLink';
+import { playerHref } from '@/lib/crumbs';
 import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 
@@ -83,7 +84,7 @@ export function HomeStandingsPanel({
           <tbody>
             {rows.map((p, i) => {
               const played = p.total_rounds_played > 0;
-              const href = `/players/${p.player_id}`;
+              const href = playerHref(p.player_id);
               return (
                 <Tr key={p.player_id} href={href}>
                   <Td align="left" muted>{i + 1}</Td>

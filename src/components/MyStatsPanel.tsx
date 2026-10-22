@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { h2hPairHref } from '@/lib/crumbs';
+import { h2hPairHref, playerHref } from '@/lib/crumbs';
 import { toSentenceCase } from '@/lib/maps';
 import type { MyStats, MyStatsPlayer } from '@/lib/queries';
 import EmptyState from './EmptyState';
@@ -81,7 +81,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
       <div className="mt-4 border-t border-[var(--color-border-secondary)] pt-3">
         <div className="flex items-baseline justify-between mb-2">
           <span className={LABEL_CLS}>Match history</span>
-          <PanelLink href={`/players/${playerId}?tab=matches`}>View all →</PanelLink>
+          <PanelLink href={`${playerHref(playerId)}?tab=matches`}>View all →</PanelLink>
         </div>
         {recent.length === 0 ? (
           <EmptyState message="No recent matches" />

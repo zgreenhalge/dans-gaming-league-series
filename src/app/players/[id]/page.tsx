@@ -8,6 +8,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer, isPlayedHistoryRow, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
 import { parseRouteId } from '@/lib/util';
+import { playerHref } from '@/lib/crumbs';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
@@ -25,12 +26,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const playerId = parseRouteId(id);
-  const meta = playerId === null ? null : await getPlayerMeta(playerId);
+  if (playerId === null) return { title: 'Player' };
+  const meta = await getPlayerMeta(playerId);
   if (!meta) return { title: 'Player' };
   return {
     title: meta.name,
     description: meta.description,
-    alternates: { canonical: `/players/${id}` },
+    alternates: { canonical: playerHref(playerId) },
     openGraph: {
       title: `DGLS · ${meta.name}`,
       description: meta.description,
