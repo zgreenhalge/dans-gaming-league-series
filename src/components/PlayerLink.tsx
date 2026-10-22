@@ -1,20 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import type { PlayerSummary } from '@/lib/queries';
 import { PlayerPreviewCard } from './PlayerPreviewCard';
 
 // A link to a player's page that previews them on hover: a `PlayerPreviewCard` opens beside the
-// link after a short delay, fetched from `GET /api/players/[id]/summary` on first hover and kept
-// for the rest of the page's life. The card renders in a portal (`document.body`), so a table's
-// `overflow` container can't clip it. It's mouse-only — touch and pen taps navigate, as a plain
-// link does — and it ignores the pointer, so it never blocks the link itself.
+// link as soon as the mouse is on it — a "Loading…" card until `GET /api/players/[id]/summary`
+// answers, fetched on first hover and kept for the rest of the page's life. The card stays open
+// while the mouse is over the link or the card itself. It renders in a portal (`document.body`), so
+// a table's `overflow` container can't clip it. It's mouse-only — touch and pen taps navigate, as a
+// plain link does.
 
-const OPEN_DELAY_MS = 300;
-const CLOSE_DELAY_MS = 80;
-/** Gap between the link and the card, and the card's minimum distance from the viewport edge. */
+const CLOSE_DELAY_MS = 120;
+/** Gap between the link and the card, and the card's minimum distance from the viewport edge. The
+ *  gap is padding inside the card's wrapper, so the pointer never leaves hoverable ground crossing it. */
 const GAP_PX = 6;
 const EDGE_PX = 8;
 /** The card's width (`PlayerPreviewCard`'s `w-[20rem]`) and the space it needs below its link
@@ -38,14 +39,16 @@ function loadSummary(playerId: number): Promise<PlayerSummary | null> {
   return pending;
 }
 
-/** Fixed-position style placing a card of `width` below `rect` (above when the viewport has no room
- *  below), left-aligned to it and kept inside the viewport. */
-function cardPosition(rect: DOMRect, width: number): React.CSSProperties {
-  const left = Math.max(EDGE_PX, Math.min(rect.left, window.innerWidth - width - EDGE_PX));
-  const fitsBelow = rect.bottom + GAP_PX + CARD_HEIGHT_PX <= window.innerHeight;
-  return fitsBelow
-    ? { top: rect.bottom + GAP_PX, left }
-    : { bottom: window.innerHeight - rect.top + GAP_PX, left };
+/** Where the card opens: `style` for its fixed-position wrapper, below `rect` (above when the
+ *  viewport has no room below), left-aligned to it and kept inside the viewport; `above` says which
+ *  side the wrapper's gap padding goes on. */
+function cardPlacement(rect: DOMRect): { style: React.CSSProperties; above: boolean } {
+  const left = Math.max(EDGE_PX, Math.min(rect.left, window.innerWidth - CARD_WIDTH_PX - EDGE_PX));
+  const above = rect.bottom + GAP_PX + CARD_HEIGHT_PX > window.innerHeight;
+  return {
+    above,
+    style: above ? { bottom: window.innerHeight - rect.top, left } : { top: rect.bottom, left },
+  };
 }
 
 export function PlayerLink({
@@ -54,13 +57,16 @@ export function PlayerLink({
 }: { playerId: number } & Omit<React.ComponentProps<typeof Link>, 'href'>) {
   const { onPointerEnter, onPointerLeave, ...rest } = linkProps;
   const ref = useRef<HTMLAnchorElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  /** Whether the pointer is still on the link — a slow summary load must not open the card after it left. */
-  const hovering = useRef(false);
-  const [open, setOpen] = useState<{ summary: PlayerSummary; style: React.CSSProperties } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** `summary` is `null` while it loads. */
+  const [open, setOpen] = useState<{ summary: PlayerSummary | null; style: React.CSSProperties; above: boolean } | null>(null);
 
-  const clearTimer = () => clearTimeout(timer.current);
-  useEffect(() => clearTimer, []);
+  const cancelClose = () => clearTimeout(closeTimer.current);
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(null), CLOSE_DELAY_MS);
+  };
+  useEffect(() => cancelClose, []);
 
   // The card is positioned from the link's rect at open time, so a scroll or resize closes it.
   useEffect(() => {
@@ -74,13 +80,15 @@ export function PlayerLink({
     };
   }, [open]);
 
-  const show = useCallback(() => {
+  const show = () => {
+    const el = ref.current;
+    if (!el) return;
+    setOpen((o) => o ?? { summary: null, ...cardPlacement(el.getBoundingClientRect()) });
     loadSummary(playerId).then((summary) => {
-      const el = ref.current;
-      if (!summary || !el || !hovering.current) return;
-      setOpen({ summary, style: cardPosition(el.getBoundingClientRect(), CARD_WIDTH_PX) });
+      // Closed while loading: nothing to fill. Failed: no card rather than a stuck "Loading…".
+      setOpen((o) => (o && summary ? { ...o, summary } : null));
     });
-  }, [playerId]);
+  };
 
   return (
     <>
@@ -91,19 +99,21 @@ export function PlayerLink({
         onPointerEnter={(e) => {
           onPointerEnter?.(e);
           if (e.pointerType !== 'mouse') return;
-          hovering.current = true;
-          clearTimer();
-          timer.current = setTimeout(show, OPEN_DELAY_MS);
+          cancelClose();
+          show();
         }}
         onPointerLeave={(e) => {
           onPointerLeave?.(e);
-          hovering.current = false;
-          clearTimer();
-          timer.current = setTimeout(() => setOpen(null), CLOSE_DELAY_MS);
+          scheduleClose();
         }}
       />
       {open && createPortal(
-        <div className="pointer-events-none fixed z-50" style={open.style}>
+        <div
+          className={`fixed z-50 ${open.above ? 'pb-1.5' : 'pt-1.5'}`}
+          style={open.style}
+          onPointerEnter={cancelClose}
+          onPointerLeave={scheduleClose}
+        >
           <PlayerPreviewCard summary={open.summary} />
         </div>,
         document.body,

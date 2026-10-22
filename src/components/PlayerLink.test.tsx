@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `PlayerLink.tsx` and the `PlayerPreviewCard` it opens: a mouse hover fetches
- * the player's summary and shows the card after a delay, a touch or pen pointer never does, leaving
- * before the load finishes shows nothing, and the link itself still goes to the player's page.
+ * Component tests for `PlayerLink.tsx` and the `PlayerPreviewCard` it opens: a mouse hover opens
+ * the card at once with a loading state, fills it from the player's summary, keeps it open while the
+ * mouse is over the link or the card, a touch or pen pointer never opens it, and the link itself
+ * still goes to the player's page.
  *
  * Run:  npx vitest run src/components/PlayerLink.test.tsx
  */
@@ -42,11 +43,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** Hover with `pointerType`, wait out the open delay and let the fetch settle. */
+/** Hover with `pointerType`, then let the fetch settle. */
 async function hover(link: HTMLElement, pointerType = 'mouse') {
   fireEvent.pointerEnter(link, { pointerType });
-  await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
 }
+
+/** Let the close delay run out. */
+const settleClose = () => act(async () => { await vi.advanceTimersByTimeAsync(300); });
 
 describe('PlayerLink', () => {
   test('links to the player page', () => {
@@ -67,48 +71,68 @@ describe('PlayerLink', () => {
     expect(screen.getAllByLabelText(/^(Win|Loss)$/)).toHaveLength(2);
   });
 
-  test('leaving closes the card', async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => summary(103) });
+  test('the card opens at once with a loading state, then fills in when the summary arrives', async () => {
+    let resolve!: (v: unknown) => void;
+    fetchMock.mockReturnValue(new Promise((r) => { resolve = r; }));
     render(<PlayerLink playerId={103}>Rook</PlayerLink>);
+    fireEvent.pointerEnter(screen.getByRole('link', { name: 'Rook' }), { pointerType: 'mouse' });
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    await act(async () => { resolve({ ok: true, json: async () => summary(103) }); await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByText('31-19')).toBeInTheDocument();
+  });
+
+  test('leaving the link closes the card', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => summary(104) });
+    render(<PlayerLink playerId={104}>Rook</PlayerLink>);
     const link = screen.getByRole('link', { name: 'Rook' });
     await hover(link);
-    expect(screen.getByText('Form')).toBeInTheDocument();
     fireEvent.pointerLeave(link);
-    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+    await settleClose();
+    expect(screen.queryByText('Form')).toBeNull();
+  });
+
+  test('the card stays open while the mouse is over it, and closes when it leaves the card', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => summary(105) });
+    render(<PlayerLink playerId={105}>Rook</PlayerLink>);
+    const link = screen.getByRole('link', { name: 'Rook' });
+    await hover(link);
+    const card = screen.getByText('Form').closest('.fixed') as HTMLElement;
+    fireEvent.pointerLeave(link);
+    fireEvent.pointerEnter(card);
+    await settleClose();
+    expect(screen.getByText('Form')).toBeInTheDocument();
+    fireEvent.pointerLeave(card);
+    await settleClose();
     expect(screen.queryByText('Form')).toBeNull();
   });
 
   test('a touch pointer never fetches or opens the card', async () => {
-    render(<PlayerLink playerId={104}>Rook</PlayerLink>);
+    render(<PlayerLink playerId={106}>Rook</PlayerLink>);
     await hover(screen.getByRole('link', { name: 'Rook' }), 'touch');
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('Loading…')).toBeNull();
   });
 
-  test('leaving before the open delay fetches nothing', async () => {
-    render(<PlayerLink playerId={105}>Rook</PlayerLink>);
-    const link = screen.getByRole('link', { name: 'Rook' });
-    fireEvent.pointerEnter(link, { pointerType: 'mouse' });
-    fireEvent.pointerLeave(link);
-    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test('a summary that finishes loading after the pointer left does not open the card', async () => {
+  test('a summary that finishes loading after the pointer left does not reopen the card', async () => {
     let resolve!: (v: unknown) => void;
     fetchMock.mockReturnValue(new Promise((r) => { resolve = r; }));
-    render(<PlayerLink playerId={106}>Rook</PlayerLink>);
-    const link = screen.getByRole('link', { name: 'Rook' });
-    await hover(link);
-    fireEvent.pointerLeave(link);
-    await act(async () => { resolve({ ok: true, json: async () => summary(106) }); await vi.advanceTimersByTimeAsync(200); });
-    expect(screen.queryByText('Form')).toBeNull();
-  });
-
-  test('a failed load shows no card and is retried on the next hover', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true, json: async () => summary(107) });
     render(<PlayerLink playerId={107}>Rook</PlayerLink>);
     const link = screen.getByRole('link', { name: 'Rook' });
     await hover(link);
+    fireEvent.pointerLeave(link);
+    await settleClose();
+    await act(async () => { resolve({ ok: true, json: async () => summary(107) }); await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.queryByText('Form')).toBeNull();
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
+  test('a failed load closes the card instead of leaving "Loading…" up, and is retried on the next hover', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true, json: async () => summary(108) });
+    render(<PlayerLink playerId={108}>Rook</PlayerLink>);
+    const link = screen.getByRole('link', { name: 'Rook' });
+    await hover(link);
+    expect(screen.queryByText('Loading…')).toBeNull();
     expect(screen.queryByText('Form')).toBeNull();
     fireEvent.pointerLeave(link);
     await hover(link);

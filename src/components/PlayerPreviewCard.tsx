@@ -1,10 +1,11 @@
 import type { PlayerSummary } from '@/lib/queries';
 import { PlayerSummaryBlock } from './PlayerSummaryBlock';
 
-/** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — in a
- *  floating panel: the home panels' site-accent top edge, an accent-tinted border and a shadow with a
- *  faint accent glow, so it stands out from the page behind it. */
-export function PlayerPreviewCard({ summary }: { summary: PlayerSummary }) {
+/** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — or a
+ *  "Loading…" placeholder of the same size while `summary` is `null`. A floating panel: the home
+ *  panels' site-accent top edge, an accent-tinted border and a shadow with a faint accent glow, so it
+ *  stands out from the page behind it. */
+export function PlayerPreviewCard({ summary }: { summary: PlayerSummary | null }) {
   return (
     <div
       className="w-[20rem] max-w-[calc(100vw-1rem)] border bg-[var(--color-bg-secondary)] p-3 shadow-2xl"
@@ -16,7 +17,13 @@ export function PlayerPreviewCard({ summary }: { summary: PlayerSummary }) {
         boxShadow: '0 12px 32px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(0 0 0 / 0.25), 0 0 18px color-mix(in srgb, var(--color-site-accent) 25%, transparent)',
       }}
     >
-      <PlayerSummaryBlock summary={summary} showForm compact />
+      {summary ? (
+        <PlayerSummaryBlock summary={summary} showForm compact />
+      ) : (
+        <div className="flex min-h-[10.5rem] items-center justify-center tracked text-[10px] text-[var(--color-text-secondary)]">
+          Loading…
+        </div>
+      )}
     </div>
   );
 }

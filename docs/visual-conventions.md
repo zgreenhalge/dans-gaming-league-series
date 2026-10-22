@@ -75,9 +75,10 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   can hold (multi-line or formatted text); use a plain `title` for a single short sentence instead.
 
 - **`<PlayerLink playerId>`** (`PlayerLink.tsx`) — the link to a player's page, with a hover card:
-  after a short delay a `PlayerPreviewCard` (a player's `PlayerSummary` — EHOG badge, W-L, KDA, ADR
-  and a Form row of their last five results) opens beside the link, fetched from
-  `GET /api/players/[id]/summary` and kept for the page's life. Mouse-only (touch just navigates)
+  a `PlayerPreviewCard` (a player's `PlayerSummary` — EHOG badge, W-L, KDA, ADR and a Form row of
+  their last five results) opens beside the link the moment the mouse is on it, showing "Loading…"
+  until `GET /api/players/[id]/summary` answers (fetched once per player, kept for the page's life),
+  and stays open while the mouse is over the link or the card. Mouse-only (touch just navigates)
   and rendered in a portal so a scrolling table can't clip it. Use it instead of a hand-written
   `<Link href={`/players/${id}`}>` for any player name or avatar. `PlayerSummaryBlock`
   (`PlayerSummaryBlock.tsx`) is the shared name + EHOG badge + tiles layout, also used by the home
