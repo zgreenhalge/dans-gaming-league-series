@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { PlayerSummary } from '@/lib/queries';
-import EhogBadge from './EhogBadge';
+import { playerHref } from '@/lib/util';
+import EhogBadge, { EHOG_BADGE_SIZE_CLS } from './EhogBadge';
 import PlayerAvatar from './PlayerAvatar';
 import { SkeletonBar } from './Skeleton';
 import { PlayerName } from './PlayerName';
@@ -36,7 +37,7 @@ export function PlayerSummaryBlock({
       <div className="flex items-center justify-between gap-3 mb-2.5">
         {/* A plain Link, not PlayerLink: the block is the hover card's body, which can't open a card of its own. */}
         <Link
-          href={`/players/${playerId}`}
+          href={playerHref(playerId)}
           className="flex items-center gap-3 min-w-0 font-display text-[24px] font-bold hover:opacity-80 transition-opacity"
         >
           <PlayerAvatar name={playerName} imageUrl={avatarUrl} size="md" round />
@@ -89,7 +90,7 @@ export function PlayerSummaryBlockSkeleton({ compact = false }: { compact?: bool
           {bar('w-10 h-10 rounded-full shrink-0')}
           {bar('h-6 w-32')}
         </div>
-        {bar('w-[74px] h-[64px] shrink-0')}
+        {bar(`${EHOG_BADGE_SIZE_CLS} shrink-0`)}
       </div>
 
       <StatTileGrid

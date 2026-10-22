@@ -133,6 +133,12 @@ export function groupByMap<T>(
 // reading as "not found".
 const MAX_INT4 = 2_147_483_647;
 
+/** The path to a player's page. Build player links with this (or `PlayerLink`), not a hand-written
+ *  `/players/${id}` template — ESLint flags the template in JSX. */
+export function playerHref(id: number): string {
+  return `/players/${id}`;
+}
+
 /**
  * Parse a route's `[id]` segment into a positive Postgres `integer` id, or `null` if it isn't one.
  * Only plain decimal digits pass — `''`, `0`, negatives, `1.5`, `1e3`, `0x10`, padded whitespace and

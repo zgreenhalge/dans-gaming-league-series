@@ -80,7 +80,9 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   same layout (`PlayerSummaryBlockSkeleton`) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute),
   and stays open while the mouse is over the link or the card. Mouse-only (touch just navigates)
   and rendered in a portal so a scrolling table can't clip it. Use it instead of a hand-written
-  `<Link href={`/players/${id}`}>` for any player name or avatar. `PlayerSummaryBlock`
+  `<Link href={`/players/${id}`}>` for any player name or avatar; where a plain `href` is needed (a
+  `Tr` row target), use `playerHref(id)` (`src/lib/util.ts`). ESLint rejects a hand-written
+  `/players/${id}` template in JSX. `PlayerSummaryBlock`
   (`PlayerSummaryBlock.tsx`) is the shared name + EHOG badge + tiles layout, also used by the home
   page's My Stats panel.
 

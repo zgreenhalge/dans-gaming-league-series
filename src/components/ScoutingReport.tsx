@@ -7,7 +7,7 @@ import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/h2h-ratings';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { avgOf, factionColor, tabCls } from '@/lib/util';
+import { avgOf, factionColor, playerHref, tabCls } from '@/lib/util';
 import { findDuo, findRival } from '@/lib/h2h';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail, EmptyPanel } from './MatchupDetail';
@@ -130,7 +130,7 @@ function MapCard({
       </thead>
       <tbody>
         {rows.map(({ player, stat }) => (
-          <Tr key={player.id} href={`/players/${player.id}`}>
+          <Tr key={player.id} href={playerHref(player.id)}>
             <PlayerCell id={player.id} name={player.name} sticky={false} className="truncate" />
             {stat === null ? (
               <Td colSpan={expanded ? 6 : 3} muted>No data</Td>
