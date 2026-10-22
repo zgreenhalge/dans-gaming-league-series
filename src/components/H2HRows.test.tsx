@@ -2,7 +2,8 @@
 /**
  * Component tests for `H2HRows.tsx`: the ranked duo / rivalry rows shared by `H2HSection` and the
  * home page. A row is a link when given an `href` and a selectable row (click selects, hover
- * previews) otherwise; `compact` drops a duo's rounds column and a rivalry's avatars.
+ * previews) otherwise; `compact` narrows a duo to record and wins above the odds, and a rivalry to
+ * upset wins in place of rounds, without avatars.
  *
  * Run:  npx vitest run src/components/H2HRows.test.tsx
  */
@@ -25,6 +26,7 @@ const withAvatar = (p: typeof alice) => ({ ...p, steam_avatar_url: 'https://exam
 
 describe('DuoRow', () => {
   const props = { rank: 1, duo: duoStats(), rating: 88, breakdown: 'tip', a: alice, b: bob };
+  const withOdds = duoStats({ winsAboveExpected: 1.46 });
 
   test('shows the pair, games, W-L with win rate and rounds W-L with round win rate', () => {
     render(<DuoRow {...props} />);
@@ -60,7 +62,7 @@ describe('DuoRow', () => {
     const { rerender } = render(
       <>
         <DuoHeader />
-        <DuoRow {...props} duo={duoStats({ winsAboveExpected: 1.46 })} />
+        <DuoRow {...props} duo={withOdds} />
       </>,
     );
     expect(screen.getByText('Rounds W-L')).toBeInTheDocument();
@@ -68,7 +70,7 @@ describe('DuoRow', () => {
     rerender(
       <>
         <DuoHeader compact />
-        <DuoRow {...props} duo={duoStats({ winsAboveExpected: 1.46 })} compact />
+        <DuoRow {...props} duo={withOdds} compact />
       </>,
     );
     expect(screen.queryByText('Rounds W-L')).toBeNull();
