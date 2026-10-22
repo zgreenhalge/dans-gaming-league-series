@@ -7,7 +7,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
 import { useNav } from './NavContext';
 import type { Crumb } from '@/lib/crumbs';
-import { playerHref } from '@/lib/util';
+import { playerHref } from '@/lib/crumbs';
 
 const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
   { label: 'Anonymous', playerId: null, providerId: null },

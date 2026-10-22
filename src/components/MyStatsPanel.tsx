@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { h2hPairHref } from '@/lib/crumbs';
-import { playerHref } from '@/lib/util';
+import { h2hPairHref, playerHref } from '@/lib/crumbs';
 import { toSentenceCase } from '@/lib/maps';
 import type { MyStats, MyStatsPlayer } from '@/lib/queries';
 import EmptyState from './EmptyState';

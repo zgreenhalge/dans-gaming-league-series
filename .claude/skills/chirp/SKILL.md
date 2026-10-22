@@ -146,8 +146,8 @@ The JSON it prints, per match:
 - `seasonSabremetrics[playerId]` — that player's `+` stats for the season (`kprPlus`, `aprPlus`,
   `dprPlus`, `kdrPlus`, `adrPlus`, `entryPlus`, `kastPlus`, `tradePlus`, `tradedPlus`,
   `objectivePlus`, `utilityPlus`, `clutchPlus`, `chokePlus`, `accuracyPlus`, `aimPlus`, `sprayPlus`,
-  per the formulas in `docs/calculations.md`; 1.00 is league average and higher is better for every
-  one, `dprPlus` and `chokePlus` included — fewer deaths and chokes score higher), plus raw `mechanics` rates
+  per the formulas in `docs/calculations.md`; 1.00 = league average, higher is always better,
+  `dprPlus` and `chokePlus` included), plus raw `mechanics` rates
   (`accuracy`, `headAccuracy`, `counterStrafePct`, `sprayAccuracy`). `sampleMatches` is how many
   of that player's *season* matches have demo-derived data — **this will usually be small (1-3)
   early in a season**, since these stats only exist for matches with an uploaded/parsed demo.

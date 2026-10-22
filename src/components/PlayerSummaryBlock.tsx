@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { PlayerSummary } from '@/lib/queries';
-import { playerHref } from '@/lib/util';
+import { playerHref } from '@/lib/crumbs';
 import EhogBadge, { EHOG_BADGE_SIZE_CLS } from './EhogBadge';
 import PlayerAvatar from './PlayerAvatar';
 import { SkeletonBar } from './Skeleton';

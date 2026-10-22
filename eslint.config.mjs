@@ -48,12 +48,10 @@ const eslintConfig = defineConfig([
             "This Supabase write's { error } is never checked (only its data is read). Destructure { error } too and check it (or add .throwOnError()) — see AGENTS.md's \"Never swallow a write's outcome\".",
         },
         {
-          // A hand-written player link skips the hover card (`PlayerLink`) and repeats the URL
-          // shape (`playerHref()`, src/lib/util.ts).
-          selector:
-            "JSXAttribute[name.name='href'] TemplateLiteral[quasis.0.value.raw=/^[/]players[/]/]",
+          // Player links go through PlayerLink / playerHref().
+          selector: "TemplateLiteral[quasis.0.value.raw=/^[/]players[/]/]",
           message:
-            "Link to a player with <PlayerLink playerId={id}> (hover card) or href={playerHref(id)} (src/lib/util.ts), not a hand-written /players/${id} template.",
+            "Link to a player with <PlayerLink playerId={id}> (hover card) or playerHref(id) (src/lib/crumbs.ts), not a hand-written /players/${id} template.",
         },
       ],
     },

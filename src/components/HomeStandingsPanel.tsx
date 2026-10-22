@@ -2,7 +2,7 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 import Th from './Th';
 import { StatTable, Tr, Td, NameTd } from './StatTable';
 import { PlayerLink } from './PlayerLink';
-import { playerHref } from '@/lib/util';
+import { playerHref } from '@/lib/crumbs';
 import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 
