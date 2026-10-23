@@ -4,7 +4,8 @@ import type { H2HData } from '@/lib/queries';
 import {
   duoBreakdownScorer, rankDuos, rankRivals, rivalBreakdownScorer, FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY,
 } from '@/lib/h2h-ratings';
-import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
+import EmptyState from './EmptyState';
+import { DuoHeader, DuoRow, RIVALRY_EMPTY_MESSAGE, RivalHeader, RivalRow } from './H2HRows';
 
 /** How many pairs each home-page list shows. */
 export const TOP_PAIRS_LIMIT = 3;
@@ -64,15 +65,18 @@ export function TopDuosPanel({ data }: { data: H2HData }) {
 
 /** The home page's Hottest Rivalries: the career opponents with the highest rivalry rating
  *  (`rankRivals()`), each row showing both players' matches won and upset wins around the rating, linking to that
- *  pair's career H2H matchup. Renders nothing before any pair has met. */
+ *  pair's career H2H matchup. Shows `RIVALRY_EMPTY_MESSAGE` while no pair rates above 0. */
 export function HottestRivalriesPanel({ data }: { data: H2HData }) {
   const ranked = rankRivals(data.rivals, TOP_PAIRS_LIMIT);
-  if (ranked.length === 0) return null;
   const breakdown = rivalBreakdownScorer(data.rivals);
   const player = new Map(data.players.map((p) => [p.id, p]));
   return (
     <PairsCard title="Hottest Rivalries" tooltip={RIVAL_RATING_SUMMARY}>
-      <RivalHeader compact />
+      {ranked.length === 0 ? (
+        <EmptyState message={RIVALRY_EMPTY_MESSAGE} className="px-5 py-4" />
+      ) : (
+        <RivalHeader compact />
+      )}
       {ranked.map(({ rival, rating }) => {
         const a = player.get(rival.playerA);
         const b = player.get(rival.playerB);
