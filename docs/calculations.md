@@ -730,7 +730,7 @@ Two ideas run through both:
 
 - `games` = 25 * games / maxGames
 - `winRate` = 15 * settled * (winRate / maxWinRate), where `winRate` = games won / games played
-- `rwr` = 15 * settled * (rwr / maxRwr), where `rwr` = rounds won / rounds played
+- `rwr` = 15 * settled * (rwr / maxRwr), where `rwr` = rounds won / rounds played, unrounded
 - `settled` = confidence(games) / confidence(maxGames)
 - `odds` = 30 * min(1, max(0, winsAboveExpected / (games + K)) / 0.15)
 - `lift` = 15 * min(1, max(0, adrLift * confidence(games)) / 0.10)
