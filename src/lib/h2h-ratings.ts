@@ -204,9 +204,15 @@ export function rankDuos(duos: DuoStats[], limit: number): RankedDuo[] {
   return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit, (duo, rating) => ({ duo, rating }));
 }
 
-/** The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. */
+/**
+ * The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. Only pairs whose
+ * `ratingPoints()` rating is above 0 are ranked: a single meeting or a sweep has no evenness and
+ * rates 0, so a league where every pair is in that state returns an empty list (the callers render
+ * an empty state).
+ */
 export function rankRivals(rivals: H2HStats[], limit: number): RankedRival[] {
-  return rankBy(rivals.filter((r) => r.meetings > 0), rivalBlendedScorer(rivals), limit, (rival, rating) => ({ rival, rating }));
+  const score = rivalBlendedScorer(rivals);
+  return rankBy(rivals.filter((r) => r.meetings > 0 && ratingPoints(score(r)) > 0), score, limit, (rival, rating) => ({ rival, rating }));
 }
 
 /** One player's standing against a single other player, from that player's side. */
