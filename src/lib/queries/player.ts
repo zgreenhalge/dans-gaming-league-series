@@ -4,7 +4,9 @@ import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../ty
 import { extractSeasonNumber, compareMatchRefDesc, isPlayedScore } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { asPage, fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
+import { getSeasons } from './seasons';
+import type { PlayerSeasonAdrTotal } from '../h2h';
 import { effectivePickedMap } from '../veto';
 import { persistentQuery } from './_persistentCache';
 
@@ -274,6 +276,35 @@ export const getPlayer = persistentQuery('getPlayer', async (playerId: number): 
     getAllSeasonMedalists(),
   ]);
   return { player, history, trophies: medalists.get(playerId) ?? [] };
+});
+
+/**
+ * Every player's played games and summed per-match ADR, one row per player per season, from the
+ * played matches with rounds played (the rows `isPlayedHistoryRow()` keeps). The player page sums
+ * these under its season selection (`adrBaselineFor()`, `src/lib/h2h.ts`) into the league-wide
+ * baseline `computeH2H()` measures a partner's ADR lift against, since the page holds only the viewed
+ * player's own matches.
+ */
+export const getPlayerSeasonAdrTotals = persistentQuery('getPlayerSeasonAdrTotals', async (): Promise<PlayerSeasonAdrTotal[]> => {
+  const [matchSeason, seasons, statRows] = await Promise.all([
+    resolveMatchSeasons(),
+    getSeasons(),
+    fetchAllPages<Pick<PlayerMatchStat, 'match_id' | 'player_id' | 'adr' | 'rounds_played'>>((from, to) =>
+      asPage(getAdminClient().from('player_match_stats').select('match_id, player_id, adr, rounds_played').range(from, to)),
+    ),
+  ]);
+  const gauntletSeasonIds = new Set(seasons.filter((s) => s.is_gauntlet).map((s) => s.id));
+  const totals = new Map<string, PlayerSeasonAdrTotal>();
+  for (const r of statRows) {
+    const seasonId = matchSeason.get(r.match_id);
+    if (seasonId == null || !(r.rounds_played > 0)) continue;
+    const key = `${r.player_id}:${seasonId}`;
+    const total = totals.get(key) ?? { player_id: r.player_id, season_id: seasonId, is_gauntlet: gauntletSeasonIds.has(seasonId), games: 0, adr_sum: 0 };
+    total.games += 1;
+    total.adr_sum += r.adr ?? 0;
+    totals.set(key, total);
+  }
+  return [...totals.values()].sort((a, b) => a.player_id - b.player_id || a.season_id - b.season_id);
 });
 
 /** The rows of `history` (newest first) that `lastPlayed(history, limit)` and `nextUpcoming(history)`

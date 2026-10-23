@@ -15,7 +15,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getPlayer, getPlayerRecent, getPlayersById, getPlayerNameHistory, pickRecent } from './queries';
+import { getPlayer, getPlayerRecent, getPlayerSeasonAdrTotals, getPlayersById, getPlayerNameHistory, pickRecent, isPlayedHistoryRow } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -62,6 +62,22 @@ async function main() {
 
   await test('getPlayerNameHistory(1) — Alice has never renamed', async () => {
     assert.deepEqual(await getPlayerNameHistory(1), []);
+  });
+
+  await test('getPlayerSeasonAdrTotals() — one row per player per season over played matches with rounds, summing the history rows\' ADR', async () => {
+    const totals = await getPlayerSeasonAdrTotals();
+    for (const id of [1, 2, 7]) {
+      const played = (await getPlayer(id))!.history.filter(isPlayedHistoryRow);
+      const mine = totals.filter((t) => t.player_id === id);
+      assert.equal(mine.reduce((n, t) => n + t.games, 0), played.length);
+      assert.ok(Math.abs(mine.reduce((n, t) => n + t.adr_sum, 0) - played.reduce((n, r) => n + r.adr, 0)) < 1e-9);
+      for (const t of mine) {
+        const inSeason = played.filter((r) => r.season_id === t.season_id);
+        assert.equal(t.games, inSeason.length);
+        assert.equal(t.is_gauntlet, inSeason[0].is_gauntlet);
+      }
+    }
+    matchesSnapshot('getPlayerSeasonAdrTotals', totals);
   });
 
   report();

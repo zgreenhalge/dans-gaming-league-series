@@ -326,12 +326,45 @@ function upsetScore(won: boolean, winProb: number | null): number {
 
 /** A player's ADR in the games they played with a given partner, as a fraction above their ADR in
  *  every other game they played (`totals` covers all of them). 0 when they played no other games. */
-function adrGain(together: H2HRivalPlayerAgg, totals: { games: number; adrSum: number } | undefined): number {
+function adrGain(together: H2HRivalPlayerAgg, totals: AdrTotals | undefined): number {
   if (!totals) return 0;
   const otherGames = totals.games - together.games;
   if (together.games === 0 || otherGames <= 0) return 0;
   const otherAdr = (totals.adrSum - together.adrSum) / otherGames;
   return otherAdr > 0 ? together.adrSum / together.games / otherAdr - 1 : 0;
+}
+
+/** A player's played games and summed per-match ADR: the shape `computeH2H()`'s ADR baseline
+ *  holds per player. */
+export interface AdrTotals { games: number; adrSum: number }
+
+/** One player's played games and summed per-match ADR in one season — the league-wide rows
+ *  `getPlayerSeasonAdrTotals()` returns, which `adrBaselineFor()` folds into a baseline. */
+export interface PlayerSeasonAdrTotal {
+  player_id: number;
+  season_id: number;
+  is_gauntlet: boolean;
+  games: number;
+  adr_sum: number;
+}
+
+/**
+ * The per-player ADR baseline `computeH2H()` takes, summed from the `totals` rows that `include`
+ * accepts — the page's season selection applied to the league-wide rows.
+ */
+export function adrBaselineFor(
+  totals: PlayerSeasonAdrTotal[],
+  include: (total: PlayerSeasonAdrTotal) => boolean,
+): Map<number, AdrTotals> {
+  const baseline = new Map<number, AdrTotals>();
+  for (const t of totals) {
+    if (!include(t)) continue;
+    const sum = baseline.get(t.player_id) ?? { games: 0, adrSum: 0 };
+    sum.games += t.games;
+    sum.adrSum += t.adr_sum;
+    baseline.set(t.player_id, sum);
+  }
+  return baseline;
 }
 
 /**
@@ -340,16 +373,22 @@ function adrGain(together: H2HRivalPlayerAgg, totals: { games: number; adrSum: n
  * Only played matches should be passed in (callers filter with `isPlayedScore`
  * beforehand, since what counts as "played" and which seasons are in scope
  * varies by caller).
+ *
+ * `adrBaseline` is each player's total played games and summed ADR under the same selection, for
+ * `adrLift` ("ADR in every other game"). Omitted, it is summed from `matches`, which is right
+ * whenever `matches` holds the whole league's games; a caller holding only some players' games
+ * (the player page) passes the league-wide baseline (`adrBaselineFor()`).
  */
 export function computeH2H(
   matches: H2HMatchInput[],
   players: Map<number, { name: string; steam_avatar_url: string | null }>,
+  adrBaseline?: Map<number, AdrTotals>,
 ): H2HData {
   const duoAgg = new Map<string, H2HDuoAgg>();
   const rivalAgg = new Map<string, H2HRivalAgg>();
   const playerIds = new Set<number>();
   // Every game each player played in the selection, for `adrGain()`'s "ADR in every other game".
-  const playerTotals = new Map<number, { games: number; adrSum: number }>();
+  const matchTotals = new Map<number, AdrTotals>();
 
   function getDuo(x: H2HRosterRow, y: H2HRosterRow): H2HDuoAgg {
     const [a, b] = x.player_id < y.player_id ? [x.player_id, y.player_id] : [y.player_id, x.player_id];
@@ -387,10 +426,10 @@ export function computeH2H(
     if (roster.length === 0) continue;
     for (const r of roster) {
       playerIds.add(r.player_id);
-      const totals = playerTotals.get(r.player_id) ?? { games: 0, adrSum: 0 };
+      const totals = matchTotals.get(r.player_id) ?? { games: 0, adrSum: 0 };
       totals.games += 1;
       totals.adrSum += r.adr;
-      playerTotals.set(r.player_id, totals);
+      matchTotals.set(r.player_id, totals);
     }
 
     // Partner/opponent grouping is purely faction-based: two players are
@@ -527,6 +566,7 @@ export function computeH2H(
     }
   }
 
+  const playerTotals = adrBaseline ?? matchTotals;
   const duos: DuoStats[] = [...duoAgg.values()].map((d) => ({
     playerA: d.a,
     playerB: d.b,

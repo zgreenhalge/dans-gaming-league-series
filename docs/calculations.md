@@ -740,8 +740,18 @@ Two ideas run through both:
 their games of (1 if they won, else 0) minus their team's pre-match win probability, the frozen
 `matches.pre_match_win_prob` ([`ehog.md`](./ehog.md)). A game with no stored prediction adds 0.
 `adrLift` is the mean of the two players' ADR in the games they played together over their own ADR
-in every other game of the selection, minus 1 (a player with no other games counts 0). A negative
-`odds` or `lift` earns 0 rather than subtracting.
+in every other game under the page's season selection, minus 1 (a player with no other games counts
+0). A negative `odds` or `lift` earns 0 rather than subtracting.
+
+The "other games" are each player's baseline, a games count and a per-match ADR sum (`computeH2H()`'s
+optional `adrBaseline`). A page that holds the whole league's matches (Statistics, a map page,
+`getH2HData()`) omits it and the baseline is summed from those matches. The player page holds only
+the viewed player's matches, where every game of a partner is a game with the viewed player, so it
+passes the league-wide baseline instead: `getPlayerSeasonAdrTotals()` (`src/lib/queries/player.ts`)
+returns every player's played games and ADR sum per season, and `adrBaselineFor()`
+(`src/lib/h2h.ts`) sums the rows the page's season filter includes. A partner's lift there is their
+ADR with the viewed player over their ADR in all their other games. Ratings on the player page are
+still normalised against that player's own duos (the best of them reads 100).
 
 `H2HSection`'s Best Friends rows show a **KDA** column for context (`duoAvgKda()`,
 `src/lib/h2h.ts`): the mean of the two players' own KDA, (kills + assists) / deaths via

@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, findDuo, findRival, duoAvgKda, rivalEvenness, isUnevenRivalry, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
+import { computeH2H, adrBaselineFor, findDuo, findRival, duoAvgKda, rivalEvenness, isUnevenRivalry, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
@@ -526,6 +526,55 @@ test('adrLift is 0 for a player whose every game was with the partner', () => {
   ];
   const result = computeH2H([match({ matchId: 1, roster })], players);
   assert.equal(findDuo(result.duos, 1, 2)!.adrLift, 0);
+});
+
+// One player's selection: player 1's two games, each with a different partner. The league-wide
+// baseline also holds the partners' games away from player 1.
+const onePlayerMatches = () => [
+  match({ matchId: 1, roster: [
+    stat({ player_id: 1, faction: 'SHIRTS', adr: 100 }), stat({ player_id: 2, faction: 'SHIRTS', adr: 90 }),
+    stat({ player_id: 3, faction: 'SKINS', adr: 80, is_win: false }), stat({ player_id: 4, faction: 'SKINS', adr: 80, is_win: false }),
+  ] }),
+  match({ matchId: 2, roster: [
+    stat({ player_id: 1, faction: 'SHIRTS', adr: 80 }), stat({ player_id: 3, faction: 'SHIRTS', adr: 60 }),
+    stat({ player_id: 2, faction: 'SKINS', adr: 70, is_win: false }), stat({ player_id: 4, faction: 'SKINS', adr: 80, is_win: false }),
+  ] }),
+];
+
+test('adrLift: without a baseline, "other games" are the selection\'s own games', () => {
+  const result = computeH2H(onePlayerMatches(), players);
+  // Match 2 is the pair's only game together. Player 1's other game is match 1 (ADR 100); player 3's
+  // only other game is match 1 too, as player 1's opponent (ADR 80).
+  near(findDuo(result.duos, 1, 3)!.adrLift, (80 / 100 - 1 + (60 / 80 - 1)) / 2);
+});
+
+test('adrLift: a league-wide baseline compares each player with their ADR in all their other games', () => {
+  // Beyond the selection's games, player 1 played one more game at ADR 120 (baseline: 3 games, ADR
+  // sum 300) and player 3 played three at ADR 60 (4 games, ADR sum 240).
+  const baseline = new Map([
+    [1, { games: 3, adrSum: 100 + 80 + 120 }],
+    [3, { games: 4, adrSum: 60 + 60 * 3 }],
+  ]);
+  const result = computeH2H(onePlayerMatches().slice(1), players, baseline);
+  // Player 1: 80 against (300 - 80) / 2 = 110 elsewhere. Player 3: 60 against (240 - 60) / 3 = 60.
+  near(findDuo(result.duos, 1, 3)!.adrLift, (80 / 110 - 1 + (60 / 60 - 1)) / 2);
+});
+
+test('adrLift: a player missing from the baseline contributes 0', () => {
+  const result = computeH2H(onePlayerMatches().slice(1), players, new Map([[1, { games: 3, adrSum: 300 }]]));
+  near(findDuo(result.duos, 1, 3)!.adrLift, (80 / 110 - 1 + 0) / 2);
+});
+
+test('adrBaselineFor: sums the rows the season selection includes, per player', () => {
+  const rows = [
+    { player_id: 1, season_id: 1, is_gauntlet: false, games: 2, adr_sum: 170 },
+    { player_id: 1, season_id: 2, is_gauntlet: false, games: 1, adr_sum: 90 },
+    { player_id: 1, season_id: 3, is_gauntlet: true, games: 1, adr_sum: 50 },
+    { player_id: 2, season_id: 1, is_gauntlet: false, games: 3, adr_sum: 240 },
+  ];
+  assert.deepEqual([...adrBaselineFor(rows, () => true)], [[1, { games: 4, adrSum: 310 }], [2, { games: 3, adrSum: 240 }]]);
+  assert.deepEqual([...adrBaselineFor(rows, (r) => r.season_id === 1)], [[1, { games: 2, adrSum: 170 }], [2, { games: 3, adrSum: 240 }]]);
+  assert.deepEqual([...adrBaselineFor(rows, (r) => !r.is_gauntlet && r.season_id === 2)], [[1, { games: 1, adrSum: 90 }]]);
 });
 
 test('duoAvgKda: mean of the two players own (K+A)/D, not the pooled ratio', () => {

@@ -79,6 +79,7 @@ function baseProps(overrides: { history?: PlayerHistoryRow[] } = {}) {
     players: [],
     ehogHistory: [],
     matchDeltas: {},
+    adrTotals: [],
   };
 }
 
