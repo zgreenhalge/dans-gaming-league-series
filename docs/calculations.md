@@ -813,8 +813,8 @@ player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 **My Stats** — career figures for the signed-in player. **EHOG** is the current rating
 (`getCurrentEhogRating()`, [`ehog.md`](./ehog.md)), colored by its tier like the leaderboard's EHOG
 column. **W-L**, **KDA** and **ADR** come from the player's row of the combined regular and gauntlet
-career leaderboard (`mergeLeaderboardRows()` of `getCareerLeaderboard()` and
-`getGauntletStats().career`, the Statistics page's default view). **KDA** is (kills + assists) per
+career leaderboard (`getMergedCareerLeaderboard()`: `mergeLeaderboardRows()` of
+`getCareerLeaderboard()` and `getGauntletStats().career`, the Statistics page's default view). **KDA** is (kills + assists) per
 death, or kills + assists when there are no deaths (`deriveKda()` in `src/lib/util.ts`); the KDA
 tile also shows the kills-only [K/D](#kill-stats) beneath it, the figure the stat tables use.
 **Match history** lists the last five played matches (`lastPlayed()`,

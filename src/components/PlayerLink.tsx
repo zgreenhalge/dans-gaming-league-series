@@ -27,7 +27,7 @@ const LONG_PRESS_SLOP_PX = 10;
  *  inside the card's wrapper (`py-1.5`), so the pointer never leaves hoverable ground crossing it. */
 const EDGE_PX = 8;
 
-/** How long a loaded summary is reused — the summary route's own `max-age`. A tab left open through
+/** How long a loaded summary is reused — the summary route's `s-maxage`. A tab left open through
  *  a match night re-fetches rather than previewing stale figures. */
 const SUMMARY_TTL_MS = 60_000;
 

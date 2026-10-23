@@ -151,6 +151,7 @@ describe('cached reads match uncached reads', () => {
     ['getAllLeaderboards', () => q.getAllLeaderboards()],
     ['getCareerLeaderboard', () => q.getCareerLeaderboard()],
     ['getGauntletStats', () => q.getGauntletStats()],
+    ['getMergedCareerLeaderboard', () => q.getMergedCareerLeaderboard()],
     ['getAllSeasonMedalists', () => q.getAllSeasonMedalists()],
     ['getAllEhogSnapshots', () => q.getAllEhogSnapshots()],
     ['getStatisticsDetail', () => q.getStatisticsDetail()],
