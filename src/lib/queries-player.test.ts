@@ -52,6 +52,29 @@ async function main() {
     assert.equal(await getPlayerRecent(9999, 5), null);
   });
 
+  await test('getPlayerRecent() — matches pickRecent() on a long history with upcoming matches', async () => {
+    const db = buildFakeDb();
+    const played = db.matches.find((m) => m.final_score && m.final_score !== '0-0')!;
+    const stats = db.player_match_stats.filter((st) => st.match_id === played.id);
+    let statId = 900_000;
+    for (let i = 0; i < 40; i++) {
+      // Every fourth clone is unplayed; ids run against match_number so the order is not by id.
+      const clone = { ...played, id: 900_000 - i, match_number: 100 + i, final_score: i % 4 === 0 ? null : played.final_score };
+      db.matches.push(clone);
+      for (const st of stats) db.player_match_stats.push({ ...st, id: statId++, match_id: clone.id });
+    }
+    __setTestAdminClient(createFakeSupabaseClient(db));
+    try {
+      for (const limit of [1, 5, 12]) {
+        const full = (await getPlayer(1))!.history;
+        assert.ok(full.length > 40);
+        assert.deepEqual((await getPlayerRecent(1, limit))!.history, pickRecent(full, limit));
+      }
+    } finally {
+      __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
+    }
+  });
+
   await test('getPlayerNameHistory(2) — Bob has one prior rename', async () => {
     const history = await getPlayerNameHistory(2);
     assert.equal(history.length, 1);
