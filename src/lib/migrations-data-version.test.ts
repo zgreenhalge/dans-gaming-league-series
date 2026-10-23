@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { migrationFiles, publicTables, CREATE_TABLE, readMigration, stripComments } from './test-support/migrationSql';
+import { migrationFiles, publicTables, CREATE_TABLE, OPERATIONAL_TABLES, readMigration, stripComments } from './test-support/migrationSql';
 
 // Every `public` table bumps `data_version` on write (supabase/migrations/20261021120000_add_data_version.sql,
 // deferred to commit by 20261021130000_defer_data_version_bump.sql), which is what retires the
@@ -11,19 +11,6 @@ import { migrationFiles, publicTables, CREATE_TABLE, readMigration, stripComment
 
 const BASELINE_MIGRATION = '20261021120000_add_data_version.sql';
 const TRIGGER_MIGRATIONS = [BASELINE_MIGRATION, '20261021130000_defer_data_version_bump.sql'];
-
-/** Tables whose writes don't bump `data_version`. */
-const OPERATIONAL_TABLES = new Set([
-  'data_version',
-  'background_jobs',
-  'config_set_files',
-  'config_sets',
-  'live_match_score',
-  'match_discord_state',
-  'match_server_state',
-  'ops_errors',
-  'scrim_sessions',
-]);
 
 const BUMP_TRIGGER = /\bcreate\s+(?:constraint\s+)?trigger\s+\w+\s+after\s+[^;]*?\bon\s+(?:public\s*\.\s*)?(\w+)\s+(?:deferrable\s+initially\s+deferred\s+)?for\s+each\s+(?:statement|row)\s+execute\s+function\s+(?:public\s*\.\s*)?bump_data_version\s*\(\)/gi;
 
