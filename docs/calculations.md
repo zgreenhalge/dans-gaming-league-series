@@ -775,7 +775,10 @@ The home page's **Top duos** and **Hottest Rivalries** list the three highest-ra
 `H2HSection`'s "Best Friends" / "Closest Rivals" cards the top five: both rank through `rankDuos()` /
 `rankRivals()` (`src/lib/h2h-ratings.ts`) on the Friends Rating and Rival Rating above, each shown
 as the 0–100 rating rounded down (`ratingPoints()`), so only the best pair reads 100 and two close
-pairs never share a number by rounding up. Only pairs that have played together (duos) or met (rivals) are ranked.
+pairs never share a number by rounding up. Only pairs that have played together (duos) are ranked;
+rivals are ranked only when their rating is above 0, so a pair with one meeting or a sweep never
+appears and a league where every pair is in that state ranks no rivals (the lists show an empty
+state). Equal ratings keep input order.
 
 A player's own two matchups on the home page's **My Stats** are computed from the same data:
 

@@ -246,6 +246,12 @@ tooltip, when its record is uneven (`unevenRivalryNote()`, `src/lib/h2h.ts`, pas
 Matchups table). `DuoDetail` adds **vs Odds**, **ADR lift** and **KDA** cells and `RivalDetail` adds **Upsets**
 (each side's meetings won as the pre-match underdog) and **Evenness**.
 
+**Rivalry empty state.** `rankRivals()` returns only pairs rated above 0 (a single meeting or a sweep
+rates 0). While it returns nothing, `H2HSection`'s Closest Rivals card and the home page's Hottest
+Rivalries panel keep their title and show an `EmptyState` line, `RIVALRY_EMPTY_MESSAGE`
+(`src/components/H2HRows.tsx`), instead of the header and rows. The `H2HMatrix` has no empty state; its
+rival colouring stays as is.
+
 **Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
 `MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it
 summarizes (a week or round page, the season, the Schedule tab), with a small `tracked` secondary link
@@ -257,7 +263,7 @@ than a panel, as in `PlayerView`'s stats tab). `UpcomingGamesPanel`'s `GameBlock
 `MyStatsPanel` and `PlayerView` use them; don't re-type the class strings. A scheduled-game row
 ends in a *date block* — the weekday over a large day number, in the site accent — then the time and a
 countdown; the block appears only for a row that has a time. A list-only panel with nothing to list
-(Upcoming Games, To Be Scheduled, Top duos, Hottest Rivalries) is omitted; standings and Match history,
+(Upcoming Games, To Be Scheduled, Top duos) is omitted; standings and Match history,
 which sit inside a panel that has other content, show an `EmptyState` line instead.
 
 **Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
