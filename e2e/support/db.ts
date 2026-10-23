@@ -242,3 +242,248 @@ export async function teardownMatch(fixture: TestMatch): Promise<void> {
   const { error: seasonErr } = await supabase.from('seasons').delete().eq('id', fixture.seasonId);
   if (seasonErr) throw seasonErr;
 }
+
+export interface TestGauntlet {
+  /** The paired regular season — the hub every stage page's URL is built from. */
+  hubSeasonId: number;
+  gauntletSeasonId: number;
+  /** The number both season names carry (`Season <n>` / `Season <n> Gauntlet`); the pages title the
+   *  pair `Season <n>`. */
+  seasonNumber: number;
+  /** The regular season's week 1 (one played match). */
+  hubWeekId: number;
+  hubMatchId: number;
+  /** `weeks.id` of gauntlet round 1 (a gauntlet round is a `weeks` row owned by the gauntlet). */
+  roundOneWeekId: number;
+  /** Round 1's two groups (pod ids) and the final in round 2 (no games scheduled yet). */
+  eliminationPodId: number;
+  wildcardPodId: number;
+  finalPodId: number;
+  /** Both games of each round-1 group, in game order. */
+  eliminationMatchIds: number[];
+  wildcardMatchIds: number[];
+  /** Display names by seed: seeds 1-4 are the elimination group, seeds 5-8 the wildcard group. */
+  playerNamesBySeed: string[];
+  /** The extra eighth player `seedGauntletWithPods()` adds; `teardownGauntlet()` removes it. */
+  extraPlayerId: number;
+}
+
+/** Inserts one played 2v2 match's `player_match_stats` rows. Stats are uniform and derived from the
+ *  scoreline — enough for scorecards and match cards to render, not a model of real play. */
+async function insertPlayedMatchStats(
+  supabase: ReturnType<typeof adminClient>,
+  matchId: number,
+  shirts: number[],
+  skins: number[],
+  shirtsRoundsWon: number,
+  skinsRoundsWon: number,
+): Promise<void> {
+  const roundsPlayed = shirtsRoundsWon + skinsRoundsWon;
+  const shirtsWon = shirtsRoundsWon > skinsRoundsWon;
+  const row = (playerId: number, faction: 'SHIRTS' | 'SKINS') => {
+    const won = faction === 'SHIRTS' ? shirtsWon : !shirtsWon;
+    const adr = won ? 80 : 62;
+    return {
+      match_id: matchId,
+      player_id: playerId,
+      faction,
+      kills: won ? 16 : 11,
+      assists: 3,
+      deaths: won ? 12 : 16,
+      adr,
+      damage: adr * roundsPlayed,
+      rounds_played: roundsPlayed,
+      rounds_won: faction === 'SHIRTS' ? shirtsRoundsWon : skinsRoundsWon,
+      is_win: won,
+    };
+  };
+  const { error } = await supabase
+    .from('player_match_stats')
+    .insert([...shirts.map((id) => row(id, 'SHIRTS')), ...skins.map((id) => row(id, 'SKINS'))]);
+  if (error) throw error;
+}
+
+/** A paired regular season and gauntlet (`Season <n>` / `Season <n> Gauntlet`, paired by the number in
+ *  the name) shaped like a real bracket:
+ *
+ *  - regular season: week 1 with one played match;
+ *  - gauntlet round 1: two played groups of four players — group 1 an elimination pod (only the
+ *    player who wins both games advances), group 2 a wildcard pod (everyone with a win advances) —
+ *    each with two games on a shared roster re-split between games;
+ *  - gauntlet round 2: the final, not yet scheduled (no `weeks` row, no games), its four slots fed by
+ *    round 1's two groups (one from the elimination group, three from the wildcard group).
+ *
+ *  Needs eight players, one more than `seed.sql` provides, so it adds one `E2E ` player that
+ *  `teardownGauntlet()` removes. */
+export async function seedGauntletWithPods(): Promise<TestGauntlet> {
+  const supabase = adminClient();
+  const { mapNames, playerIds: seededIds } = await fetchMapsAndPlayers(supabase, 1, 7);
+  const [map] = mapNames;
+  const stamp = Date.now();
+  // Offset from the small numbers real seasons use, so the pair never shares a number with other data.
+  const seasonNumber = 1000 + (stamp % 8000);
+
+  const { data: extraPlayer, error: extraErr } = await supabase
+    .from('players')
+    .insert({ name: `E2E ${stamp} Eighth` })
+    .select('id, name')
+    .single();
+  if (extraErr) throw extraErr;
+  const extra = extraPlayer as { id: number; name: string };
+  const playerIds = [...seededIds, extra.id];
+
+  const { data: names, error: namesErr } = await supabase.from('players').select('id, name').in('id', playerIds);
+  if (namesErr) throw namesErr;
+  const nameById = new Map((names as { id: number; name: string }[]).map((p) => [p.id, p.name]));
+  const playerNamesBySeed = playerIds.map((id) => nameById.get(id) ?? `#${id}`);
+
+  const { data: seasonRows, error: seasonErr } = await supabase
+    .from('seasons')
+    .insert([
+      { name: `E2E ${stamp} Season ${seasonNumber}`, status: 'ARCHIVED', is_gauntlet: false, map_pool: [map], target_win_rounds: 13 },
+      { name: `E2E ${stamp} Season ${seasonNumber} Gauntlet`, status: 'ACTIVE', is_gauntlet: true, map_pool: [map], target_win_rounds: 13 },
+    ])
+    .select('id, is_gauntlet');
+  if (seasonErr) throw seasonErr;
+  const seasons = seasonRows as { id: number; is_gauntlet: boolean }[];
+  const hubSeasonId = seasons.find((s) => !s.is_gauntlet)!.id;
+  const gauntletSeasonId = seasons.find((s) => s.is_gauntlet)!.id;
+
+  const { data: weekRows, error: weekErr } = await supabase
+    .from('weeks')
+    .insert([
+      { season_id: hubSeasonId, week_number: 1 },
+      { season_id: gauntletSeasonId, week_number: 1 },
+    ])
+    .select('id, season_id');
+  if (weekErr) throw weekErr;
+  const weeks = weekRows as { id: number; season_id: number }[];
+  const hubWeekId = weeks.find((w) => w.season_id === hubSeasonId)!.id;
+  const roundOneWeekId = weeks.find((w) => w.season_id === gauntletSeasonId)!.id;
+
+  // Gauntlet games are all playoff games.
+  const matchSpecs = [
+    { week_id: hubWeekId, match_number: 1, final_score: '13-9', is_playoff_game: false },
+    { week_id: roundOneWeekId, match_number: 1, final_score: '13-9', is_playoff_game: true },
+    { week_id: roundOneWeekId, match_number: 2, final_score: '13-7', is_playoff_game: true },
+    { week_id: roundOneWeekId, match_number: 3, final_score: '13-10', is_playoff_game: true },
+    { week_id: roundOneWeekId, match_number: 4, final_score: '13-6', is_playoff_game: true },
+  ].map((m) => ({ ...m, skins_pick: map, shirts_pick: map, skins_starting_side: 'CT' }));
+  const { data: matchRows, error: matchErr } = await supabase.from('matches').insert(matchSpecs).select('id, week_id, match_number');
+  if (matchErr) throw matchErr;
+  const matches = matchRows as { id: number; week_id: number; match_number: number }[];
+  const matchId = (weekId: number, matchNumber: number) =>
+    matches.find((m) => m.week_id === weekId && m.match_number === matchNumber)!.id;
+  const hubMatchId = matchId(hubWeekId, 1);
+  const eliminationMatchIds = [matchId(roundOneWeekId, 1), matchId(roundOneWeekId, 2)];
+  const wildcardMatchIds = [matchId(roundOneWeekId, 3), matchId(roundOneWeekId, 4)];
+
+  // Each group: game 1 is (a,b) vs (c,d), game 2 is (a,c) vs (b,d), shirts winning both — so `a` wins
+  // twice, `b` and `c` once, `d` never.
+  const [s1, s2, s3, s4, s5, s6, s7, s8] = playerIds;
+  await Promise.all([
+    insertPlayedMatchStats(supabase, hubMatchId, [s1, s2], [s3, s4], 13, 9),
+    insertPlayedMatchStats(supabase, eliminationMatchIds[0], [s1, s2], [s3, s4], 13, 9),
+    insertPlayedMatchStats(supabase, eliminationMatchIds[1], [s1, s3], [s2, s4], 13, 7),
+    insertPlayedMatchStats(supabase, wildcardMatchIds[0], [s5, s6], [s7, s8], 13, 10),
+    insertPlayedMatchStats(supabase, wildcardMatchIds[1], [s5, s7], [s6, s8], 13, 6),
+  ]);
+
+  const { data: podRows, error: podErr } = await supabase
+    .from('gauntlet_pods')
+    .insert([
+      { season_id: gauntletSeasonId, round_number: 1, pod_index: 0, advance_rule: 'single', is_final: false, week_id: roundOneWeekId, match1_id: eliminationMatchIds[0], match2_id: eliminationMatchIds[1] },
+      { season_id: gauntletSeasonId, round_number: 1, pod_index: 1, advance_rule: 'wildcard', is_final: false, week_id: roundOneWeekId, match1_id: wildcardMatchIds[0], match2_id: wildcardMatchIds[1] },
+      { season_id: gauntletSeasonId, round_number: 2, pod_index: 0, advance_rule: 'single', is_final: true },
+    ])
+    .select('id, round_number, pod_index');
+  if (podErr) throw podErr;
+  const pods = podRows as { id: number; round_number: number; pod_index: number }[];
+  const podId = (round: number, index: number) => pods.find((p) => p.round_number === round && p.pod_index === index)!.id;
+  const eliminationPodId = podId(1, 0);
+  const wildcardPodId = podId(1, 1);
+  const finalPodId = podId(2, 0);
+
+  const seedSlot = (pod_id: number, slot_index: number, seed: number) => ({
+    pod_id,
+    slot_index,
+    source_kind: 'seed',
+    source_seed: seed,
+    player_id: playerIds[seed - 1],
+  });
+  const podSlot = (slot_index: number, source_pod_id: number) => ({
+    pod_id: finalPodId,
+    slot_index,
+    source_kind: 'pod',
+    source_pod_id,
+    player_id: null,
+  });
+  const { error: slotErr } = await supabase.from('gauntlet_pod_slots').insert([
+    ...[1, 2, 3, 4].map((seed, i) => seedSlot(eliminationPodId, i, seed)),
+    ...[5, 6, 7, 8].map((seed, i) => seedSlot(wildcardPodId, i, seed)),
+    podSlot(0, eliminationPodId),
+    podSlot(1, wildcardPodId),
+    podSlot(2, wildcardPodId),
+    podSlot(3, wildcardPodId),
+  ]);
+  if (slotErr) throw slotErr;
+
+  return {
+    hubSeasonId,
+    gauntletSeasonId,
+    seasonNumber,
+    hubWeekId,
+    hubMatchId,
+    roundOneWeekId,
+    eliminationPodId,
+    wildcardPodId,
+    finalPodId,
+    eliminationMatchIds,
+    wildcardMatchIds,
+    playerNamesBySeed,
+    extraPlayerId: extra.id,
+  };
+}
+
+/** Tears down everything `seedGauntletWithPods()` created, in FK-safe order (slots and pods hold
+ *  references to matches and each other). Every delete's own `{ error }` is checked, per
+ *  `AGENTS.md`'s "Never swallow a write's outcome". */
+export async function teardownGauntlet(fixture: TestGauntlet): Promise<void> {
+  const supabase = adminClient();
+  const seasonIds = [fixture.hubSeasonId, fixture.gauntletSeasonId];
+
+  const { data: podRows, error: podSelectErr } = await supabase
+    .from('gauntlet_pods')
+    .select('id')
+    .eq('season_id', fixture.gauntletSeasonId);
+  if (podSelectErr) throw podSelectErr;
+  const podIds = (podRows ?? []).map((p) => (p as { id: number }).id);
+  if (podIds.length > 0) {
+    const { error: slotsErr } = await supabase.from('gauntlet_pod_slots').delete().in('pod_id', podIds);
+    if (slotsErr) throw slotsErr;
+    const { error: podsErr } = await supabase.from('gauntlet_pods').delete().in('id', podIds);
+    if (podsErr) throw podsErr;
+  }
+
+  const { data: weekRows, error: weekSelectErr } = await supabase.from('weeks').select('id').in('season_id', seasonIds);
+  if (weekSelectErr) throw weekSelectErr;
+  const weekIds = (weekRows ?? []).map((w) => (w as { id: number }).id);
+  if (weekIds.length > 0) {
+    const { data: matchRows, error: matchSelectErr } = await supabase.from('matches').select('id').in('week_id', weekIds);
+    if (matchSelectErr) throw matchSelectErr;
+    const matchIds = (matchRows ?? []).map((m) => (m as { id: number }).id);
+    if (matchIds.length > 0) {
+      const { error: statsErr } = await supabase.from('player_match_stats').delete().in('match_id', matchIds);
+      if (statsErr) throw statsErr;
+      const { error: matchesErr } = await supabase.from('matches').delete().in('id', matchIds);
+      if (matchesErr) throw matchesErr;
+    }
+    const { error: weeksErr } = await supabase.from('weeks').delete().in('id', weekIds);
+    if (weeksErr) throw weeksErr;
+  }
+
+  const { error: seasonsErr } = await supabase.from('seasons').delete().in('id', seasonIds);
+  if (seasonsErr) throw seasonsErr;
+  const { error: playerErr } = await supabase.from('players').delete().eq('id', fixture.extraPlayerId);
+  if (playerErr) throw playerErr;
+}
