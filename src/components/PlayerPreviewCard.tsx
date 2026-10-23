@@ -1,8 +1,8 @@
 import type { PlayerSummary } from '@/lib/queries';
 import { PlayerSummaryBlock, PlayerSummaryBlockSkeleton } from './PlayerSummaryBlock';
 
-/** The card's width, which `PlayerLink` needs to keep it inside the viewport. */
-export const PLAYER_PREVIEW_CARD_WIDTH_REM = 20;
+/** The card's width; `PlayerLink` measures the rendered card rather than reading this. */
+const PLAYER_PREVIEW_CARD_WIDTH_REM = 20;
 
 /** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — or a
  *  pulsing skeleton of the same layout while `summary` is `null`. A floating panel: the home
