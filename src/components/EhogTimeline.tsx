@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EhogRatingPoint } from '@/lib/queries';
-import { formatSigned, roundTo, seasonTitle } from '@/lib/util';
+import { formatSigned, roundTo, seasonTitle, signedColor } from '@/lib/util';
 import { useElementWidth } from './useElementWidth';
 
 const PADDING = { top: 16, right: 16, bottom: 24, left: 40 };
@@ -357,7 +357,7 @@ export default function EhogTimeline({
                 x={tx + tooltipW / 2}
                 y={ty + 30}
                 textAnchor="middle"
-                fill="var(--color-accent-red-fg)"
+                fill={signedColor(resetDelta, 2) ?? 'var(--color-text-secondary)'}
                 fontSize={12}
                 fontFamily="var(--font-display)"
                 fontWeight={600}

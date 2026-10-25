@@ -6,15 +6,10 @@
  * Run:  npx vitest run src/components/EhogTimeline.test.tsx
  */
 
-import { beforeAll, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 import EhogTimeline from './EhogTimeline';
 import type { EhogRatingPoint } from '@/lib/queries';
-
-// jsdom has no ResizeObserver; the timeline only needs it to exist.
-beforeAll(() => {
-  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
-});
 
 const point = (matchNumber: number, ehogRating: number, ratingDelta: number): EhogRatingPoint => ({
   matchId: matchNumber,

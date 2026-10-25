@@ -705,9 +705,18 @@ export function addNumericFields<T extends object>(a: T, b: T): void {
   }
 }
 
-/** An EHOG rating delta to one decimal with an explicit `+` when positive (`formatSigned()`). */
+/** Decimals an EHOG rating delta shows on a match, and so the precision its colour is judged at. */
+const EHOG_DELTA_DECIMALS = 1;
+
+/** An EHOG rating delta with an explicit `+` when positive (`formatSigned()`). */
 export function formatEhogDelta(delta: number): string {
-  return formatSigned(delta, 1);
+  return formatSigned(delta, EHOG_DELTA_DECIMALS);
+}
+
+/** An EHOG rating delta's colour: green, red, or `undefined` for a delta that reads 0.0, judged at
+ *  the precision `formatEhogDelta()` shows. */
+export function ehogDeltaColor(delta: number): string | undefined {
+  return signedColor(delta, EHOG_DELTA_DECIMALS);
 }
 
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
