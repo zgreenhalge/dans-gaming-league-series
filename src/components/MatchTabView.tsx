@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { PlayerLink } from './PlayerLink';
-import { tabCls, formatEhogDelta, factionClass, signedColor } from '@/lib/util';
+import { tabCls, formatEhogDelta, formatSigned, factionClass, roundTo, signedColor } from '@/lib/util';
 import EmptyState from '@/components/EmptyState';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
@@ -188,15 +188,18 @@ function TeamHeader({
   );
 }
 
+/** A projection delta's tint, deepening with its size against the table's largest. The sign is judged
+ *  at the two decimals the cell shows, so a delta that reads 0.00 stays neutral. */
 function deltaColor(delta: number, maxAbs: number): string {
   if (maxAbs === 0) return 'rgba(255,255,255,0.5)';
   const t = Math.min(1, Math.abs(delta) / maxAbs);
-  if (delta > 0) return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
-  if (delta < 0) return `color-mix(in srgb, var(--color-accent-red-fg) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
+  const shown = roundTo(delta, 2);
+  if (shown > 0) return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
+  if (shown < 0) return `color-mix(in srgb, var(--color-accent-red-fg) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
   return 'rgba(255,255,255,0.5)';
 }
 
-function RatingProjectionTable({
+export function RatingProjectionTable({
   projections,
   shirts,
   skins,
@@ -224,7 +227,7 @@ function RatingProjectionTable({
           const delta = proj.deltas[p.player_id] ?? 0;
           return (
             <Td key={p.player_id} bold style={{ color: deltaColor(delta, maxAbsDelta) }}>
-              {delta > 0 ? '+' : ''}{delta.toFixed(2)}
+              {formatSigned(delta, 2)}
             </Td>
           );
         })}

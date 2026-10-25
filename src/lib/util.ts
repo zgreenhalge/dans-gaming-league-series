@@ -420,17 +420,23 @@ export function winRatePct(wins: number, gamesPlayed: number): number {
   return gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 100) : 0;
 }
 
+/** `n` rounded to `decimals` places — the value a figure shows, for deciding its sign or colour at
+ *  the precision it displays. */
+export function roundTo(n: number, decimals: number): number {
+  return Number(n.toFixed(decimals));
+}
+
 /** `n` to `decimals` places with an explicit `+` when positive (`+1.5`, `-0.4`, `0.0`), rounded
  *  first so a value that displays as zero never shows a sign. */
 export function formatSigned(n: number, decimals: number): string {
-  const rounded = Number(n.toFixed(decimals));
+  const rounded = roundTo(n, decimals);
   return `${rounded > 0 ? '+' : ''}${rounded.toFixed(decimals)}`;
 }
 
 /** Green for a positive value, red for a negative one, `undefined` (the default text color) for
  *  zero — judged at `decimals` places so it matches what `formatSigned()` shows. */
 export function signedColor(n: number, decimals: number): string | undefined {
-  const rounded = Number(n.toFixed(decimals));
+  const rounded = roundTo(n, decimals);
   if (rounded > 0) return 'var(--color-accent-green-fg)';
   if (rounded < 0) return 'var(--color-accent-red-fg)';
   return undefined;

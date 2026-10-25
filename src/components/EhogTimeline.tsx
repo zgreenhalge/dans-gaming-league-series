@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EhogRatingPoint } from '@/lib/queries';
-import { seasonTitle } from '@/lib/util';
+import { formatSigned, roundTo, seasonTitle } from '@/lib/util';
 import { useElementWidth } from './useElementWidth';
 
 const PADDING = { top: 16, right: 16, bottom: 24, left: 40 };
@@ -238,7 +238,7 @@ export default function EhogTimeline({
         {/* Dots — show all but highlight hovered */}
         {points.map((p, i) => {
           const isHovered = i === hoverIdx;
-          const delta = history[i].ratingDelta;
+          const delta = roundTo(history[i].ratingDelta, 2);
           const dotColor =
             delta > 0
               ? 'var(--color-accent-green-fill)'
@@ -263,13 +263,12 @@ export default function EhogTimeline({
         {/* Hover tooltip */}
         {hovered && hoveredPt && (() => {
           const label = formatLabel(hovered);
-          const deltaStr = hovered.ratingDelta > 0
-            ? `+${hovered.ratingDelta.toFixed(2)}`
-            : hovered.ratingDelta.toFixed(2);
+          const deltaStr = formatSigned(hovered.ratingDelta, 2);
+          const shown = roundTo(hovered.ratingDelta, 2);
           const t = Math.min(1, Math.abs(hovered.ratingDelta) / 5);
-          const deltaColor = hovered.ratingDelta > 0
+          const deltaColor = shown > 0
             ? `rgb(${Math.round(255 - 200 * t)}, ${Math.round(255 - 30 * t)}, ${Math.round(255 - 200 * t)})`
-            : hovered.ratingDelta < 0
+            : shown < 0
               ? `rgb(${Math.round(255 - 30 * t)}, ${Math.round(255 - 200 * t)}, ${Math.round(255 - 200 * t)})`
               : '#ffffff';
           const tooltipW = 130;

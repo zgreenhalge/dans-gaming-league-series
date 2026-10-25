@@ -49,6 +49,7 @@ import {
   ordinal,
   mergeLeaderboardRows,
   formatSigned,
+  roundTo,
   signedColor,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
@@ -515,6 +516,13 @@ test('mergeLeaderboardRows: sums a shared player\'s totals and re-derives their 
   assert.equal(p1.overall_adr, 60);
   assert.equal(p1.kd_ratio, 28 / 12);
   assert.deepEqual(merged.find((r) => r.player_id === 2), lbRow(2));
+});
+
+test('roundTo: rounds to the decimals a figure shows, so a sign can be judged at that precision', () => {
+  assert.equal(roundTo(1.25, 1), 1.3);
+  assert.equal(roundTo(-0.004, 2), -0); // a negative that rounds to zero is zero (-0 === 0)
+  assert.equal(roundTo(-0.004, 2) < 0, false);
+  assert.equal(roundTo(2.5, 0), 3);
 });
 
 test('formatSigned: explicit plus when positive, rounded first so a zero never shows a sign', () => {
