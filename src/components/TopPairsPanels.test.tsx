@@ -12,7 +12,6 @@
 import { describe, expect, test } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { HottestRivalriesPanel, TopDuosPanel, TOP_PAIRS_LIMIT } from './TopPairsPanels';
-import { RIVALRY_EMPTY_MESSAGE } from './H2HRows';
 import type { H2HData } from '@/lib/h2h';
 import { duoStats, rivalStats as rival } from '@/lib/test-support/h2hFixtures';
 
@@ -93,10 +92,9 @@ describe('HottestRivalriesPanel', () => {
     expect(screen.queryByText('Rounds')).toBeNull();
   });
 
-  test('shows the empty message without a rated rivalry', () => {
-    render(<HottestRivalriesPanel data={{ ...DATA, rivals: [] }} />);
-    expect(screen.getByText(RIVALRY_EMPTY_MESSAGE)).toBeTruthy();
-    expect(screen.queryByText('Rounds')).toBeNull();
+  test('renders nothing without a rated rivalry', () => {
+    const { container } = render(<HottestRivalriesPanel data={{ ...DATA, rivals: [] }} />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   test('a pair whose player is missing from the roster is skipped', () => {

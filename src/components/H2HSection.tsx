@@ -10,7 +10,7 @@ import {
   duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, rankDuos, rankRivals, ratingPoints,
   FRIENDS_RATING_SUMMARY, RIVAL_RATING_SUMMARY,
 } from '@/lib/h2h-ratings';
-import { DuoHeader, DuoRow, RIVALRY_EMPTY_MESSAGE, RivalHeader, RivalRow } from './H2HRows';
+import { DuoHeader, DuoRow, RivalHeader, RivalRow } from './H2HRows';
 import RatingCircle from './RatingCircle';
 
 function LeagueAvgCircle({ value, colorStart, colorEnd, title }: { value: number; colorStart: string; colorEnd: string; title?: string }) {
@@ -144,7 +144,7 @@ export default function H2HSection({
             </span>
             <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" title={RIVAL_RATING_SUMMARY} />
           </div>
-          {topRivals.length === 0 && <EmptyState message={RIVALRY_EMPTY_MESSAGE} className="px-5 py-4" />}
+          {topRivals.length === 0 && <EmptyState message="No established rivalries yet." className="px-5 py-4" />}
           {topRivals.length > 0 && <RivalHeader />}
           <div>
             {topRivals.map(({ rival: r, rating }) => {
