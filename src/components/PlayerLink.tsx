@@ -89,8 +89,11 @@ export function PlayerLink({
   const cancelClose = () => clearTimeout(closeTimer.current);
   const cancelPress = () => { clearTimeout(pressTimer.current); pressStart.current = null; };
   const close = () => { cancelClose(); setOpen(null); };
+  /** Mouse leave closes the card unless keyboard focus is holding it open. */
   const scheduleClose = () => {
     cancelClose();
+    const link = ref.current;
+    if (link && document.activeElement === link && isKeyboardFocus(link)) return;
     closeTimer.current = setTimeout(() => setOpen(null), CLOSE_DELAY_MS);
   };
   useEffect(() => () => { cancelClose(); cancelPress(); }, []);
@@ -185,10 +188,9 @@ export function PlayerLink({
         }}
         onClick={(e) => {
           onClick?.(e);
-          if (longPressed.current) {
-            longPressed.current = false;
-            e.preventDefault();
-          }
+          // A keyboard activation (`detail` 0) after an abandoned long-press must still navigate.
+          if (longPressed.current && e.detail > 0) e.preventDefault();
+          longPressed.current = false;
         }}
         onFocus={(e) => {
           onFocus?.(e);

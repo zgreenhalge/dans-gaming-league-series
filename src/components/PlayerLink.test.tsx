@@ -159,6 +159,18 @@ describe('PlayerLink keyboard', () => {
     expect(link).not.toHaveAttribute('aria-describedby');
   });
 
+  test('the mouse leaving does not close a card that keyboard focus holds open', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => summary(117) });
+    render(<PlayerLink playerId={117}>Rook</PlayerLink>);
+    const link = screen.getByRole('link', { name: 'Rook' });
+    vi.spyOn(link, 'matches').mockReturnValue(true);
+    await act(async () => { link.focus(); await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.pointerLeave(link, { pointerType: 'mouse' });
+    await settleClose();
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+  });
+
   test('Escape closes an open card', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => summary(111) });
     render(<PlayerLink playerId={111}>Rook</PlayerLink>);
@@ -201,7 +213,17 @@ describe('PlayerLink touch long-press', () => {
     fireEvent.pointerLeave(link, { pointerType: 'touch' });
     await settleClose();
     expect(screen.getByRole('tooltip')).toBeInTheDocument();
-    expect(fireEvent.click(link)).toBe(false);
+    expect(fireEvent.click(link, { detail: 1 })).toBe(false);
+  });
+
+  test('a keyboard activation after an abandoned long-press still navigates', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => summary(116) });
+    render(<PlayerLink playerId={116}>Rook</PlayerLink>);
+    const link = screen.getByRole('link', { name: 'Rook' });
+    fireEvent.pointerDown(link, { pointerType: 'touch', clientX: 5, clientY: 5 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    fireEvent.pointerCancel(link, { pointerType: 'touch' });
+    expect(fireEvent.click(link, { detail: 0 })).toBe(true);
   });
 
   test('a quick tap does not open the card and still navigates', async () => {
