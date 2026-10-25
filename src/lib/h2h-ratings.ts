@@ -1,4 +1,5 @@
 import { rivalEvenness, type DuoStats, type H2HStats } from './h2h';
+import { deriveRwr } from './util';
 
 // ─── Friends and Rival ratings ───────────────────────────────────────────────
 //
@@ -41,8 +42,8 @@ const fractionOf = (value: number, max: number) => (max > 0 ? value / max : 0);
 /** `value` as a 0–1 fraction of `full`, never below 0. */
 const capped = (value: number, full: number) => Math.min(1, Math.max(0, value) / full);
 
-/** A duo's rounds won as a 0–1 fraction of rounds played, unrounded so close duos stay distinct. */
-const roundWinFraction = (d: DuoStats) => (d.roundsPlayed > 0 ? d.roundsWon / d.roundsPlayed : 0);
+/** A duo's unrounded round-weighted win rate, so close duos stay distinct. */
+const roundWinRate = (d: DuoStats) => deriveRwr({ total_rounds_played: d.roundsPlayed, total_rounds_won: d.roundsWon });
 
 const playedDuos = (duos: DuoStats[]) => duos.filter((d) => d.gamesPlayed > 0);
 const playedRivals = (rivals: H2HStats[]) => rivals.filter((r) => r.meetings > 0);
@@ -68,7 +69,7 @@ function duoTermsScorer(duos: DuoStats[]): (d: DuoStats) => FriendsTerms {
   const eligible = playedDuos(duos);
   const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
   const maxWinRate = Math.max(0, ...eligible.map((d) => d.wins / d.gamesPlayed));
-  const maxRwr = Math.max(0, ...eligible.map(roundWinFraction));
+  const maxRwr = Math.max(0, ...eligible.map(roundWinRate));
   const w = FRIENDS_WEIGHTS;
   return (d) => {
     if (d.gamesPlayed === 0) return { games: 0, winRate: 0, rwr: 0, odds: 0, lift: 0 };
@@ -79,7 +80,7 @@ function duoTermsScorer(duos: DuoStats[]): (d: DuoStats) => FriendsTerms {
     return {
       games: w.games * (g / maxGames),
       winRate: w.winRate * settled * fractionOf(d.wins / g, maxWinRate),
-      rwr: w.rwr * settled * fractionOf(roundWinFraction(d), maxRwr),
+      rwr: w.rwr * settled * fractionOf(roundWinRate(d), maxRwr),
       odds: w.odds * capped(d.winsAboveExpected / (g + RATING_K), ODDS_FULL),
       lift: w.lift * capped(d.adrLift * confidence(g), LIFT_FULL),
     };

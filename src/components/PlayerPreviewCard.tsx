@@ -1,7 +1,7 @@
 import type { PlayerSummary } from '@/lib/queries';
 import { PlayerSummaryBlock, PlayerSummaryBlockSkeleton } from './PlayerSummaryBlock';
 
-/** The card's width; `PlayerLink` measures the rendered card rather than reading this. */
+/** The card's CSS width. */
 const PLAYER_PREVIEW_CARD_WIDTH_REM = 20;
 
 /** The player hover card's body: a player's `PlayerSummary` — EHOG, W-L, KDA, ADR and Form — or a

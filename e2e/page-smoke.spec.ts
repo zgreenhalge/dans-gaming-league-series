@@ -10,6 +10,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import { seedPlayedMatchWithSabremetrics, teardownMatch, type TestMatch } from './support/db';
+import { assertNoErrorBoundary } from './support/assertions';
 
 let fixture: TestMatch;
 
@@ -20,10 +21,6 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   await teardownMatch(fixture);
 });
-
-async function assertNoErrorBoundary(page: Page): Promise<void> {
-  await expect(page.getByText('Something went wrong')).toHaveCount(0);
-}
 
 /** Clicks every tab in every `role="tablist"` on the page, including a sub-tab bar that only
  *  mounts once its parent tab is selected (e.g. Advanced Stats' own sub-tabs) — repeats until a
