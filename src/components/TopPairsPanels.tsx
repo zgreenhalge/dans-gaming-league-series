@@ -64,7 +64,7 @@ export function TopDuosPanel({ data }: { data: H2HData }) {
 
 /** The home page's Hottest Rivalries: the career opponents with the highest rivalry rating
  *  (`rankRivals()`), each row showing both players' matches won and upset wins around the rating, linking to that
- *  pair's career H2H matchup. Renders nothing before any pair has met. */
+ *  pair's career H2H matchup. Renders nothing while no pair rates above 0. */
 export function HottestRivalriesPanel({ data }: { data: H2HData }) {
   const ranked = rankRivals(data.rivals, TOP_PAIRS_LIMIT);
   if (ranked.length === 0) return null;

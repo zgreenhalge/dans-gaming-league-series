@@ -1,5 +1,5 @@
 import { rivalEvenness, type DuoStats, type H2HStats } from './h2h';
-import { winRatePct } from './util';
+import { deriveRwr } from './util';
 
 // ─── Friends and Rival ratings ───────────────────────────────────────────────
 //
@@ -42,6 +42,9 @@ const fractionOf = (value: number, max: number) => (max > 0 ? value / max : 0);
 /** `value` as a 0–1 fraction of `full`, never below 0. */
 const capped = (value: number, full: number) => Math.min(1, Math.max(0, value) / full);
 
+/** A duo's unrounded round-weighted win rate, so close duos stay distinct. */
+const roundWinRate = (d: DuoStats) => deriveRwr({ total_rounds_played: d.roundsPlayed, total_rounds_won: d.roundsWon });
+
 const playedDuos = (duos: DuoStats[]) => duos.filter((d) => d.gamesPlayed > 0);
 const playedRivals = (rivals: H2HStats[]) => rivals.filter((r) => r.meetings > 0);
 
@@ -66,7 +69,7 @@ function duoTermsScorer(duos: DuoStats[]): (d: DuoStats) => FriendsTerms {
   const eligible = playedDuos(duos);
   const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
   const maxWinRate = Math.max(0, ...eligible.map((d) => d.wins / d.gamesPlayed));
-  const maxRwr = Math.max(0, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
+  const maxRwr = Math.max(0, ...eligible.map(roundWinRate));
   const w = FRIENDS_WEIGHTS;
   return (d) => {
     if (d.gamesPlayed === 0) return { games: 0, winRate: 0, rwr: 0, odds: 0, lift: 0 };
@@ -77,7 +80,7 @@ function duoTermsScorer(duos: DuoStats[]): (d: DuoStats) => FriendsTerms {
     return {
       games: w.games * (g / maxGames),
       winRate: w.winRate * settled * fractionOf(d.wins / g, maxWinRate),
-      rwr: w.rwr * settled * fractionOf(winRatePct(d.roundsWon, d.roundsPlayed), maxRwr),
+      rwr: w.rwr * settled * fractionOf(roundWinRate(d), maxRwr),
       odds: w.odds * capped(d.winsAboveExpected / (g + RATING_K), ODDS_FULL),
       lift: w.lift * capped(d.adrLift * confidence(g), LIFT_FULL),
     };
@@ -204,9 +207,15 @@ export function rankDuos(duos: DuoStats[], limit: number): RankedDuo[] {
   return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit, (duo, rating) => ({ duo, rating }));
 }
 
-/** The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. */
+/**
+ * The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. Only pairs whose
+ * `ratingPoints()` rating is above 0 are ranked: a single meeting or a sweep has no evenness and
+ * rates 0, so a league where every pair is in that state returns an empty list (the callers render
+ * an empty state).
+ */
 export function rankRivals(rivals: H2HStats[], limit: number): RankedRival[] {
-  return rankBy(rivals.filter((r) => r.meetings > 0), rivalBlendedScorer(rivals), limit, (rival, rating) => ({ rival, rating }));
+  const score = rivalBlendedScorer(rivals);
+  return rankBy(rivals.filter((r) => r.meetings > 0 && ratingPoints(score(r)) > 0), score, limit, (rival, rating) => ({ rival, rating }));
 }
 
 /** One player's standing against a single other player, from that player's side. */

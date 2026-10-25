@@ -4,7 +4,9 @@ import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../ty
 import { extractSeasonNumber, compareMatchRefDesc, isPlayedScore } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { asPage, fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
+import { getSeasons } from './seasons';
+import type { PlayerSeasonAdrTotal } from '../h2h';
 import { effectivePickedMap } from '../veto';
 import { persistentQuery } from './_persistentCache';
 
@@ -192,11 +194,85 @@ async function attachRosters<T extends { match_id: number }>(rows: T[]): Promise
   });
 }
 
+type WeekLookup = Awaited<ReturnType<typeof getWeekLookup>>;
+
+/** All of a player's `player_match_stats` rows, narrowed to `columns`. */
+function fetchPlayerStatRows<T>(playerId: number, columns: string): Promise<T[]> {
+  return fetchAllPages<T>((from, to) =>
+    asPage(getAdminClient().from('player_match_stats').select(columns).eq('player_id', playerId).range(from, to)),
+  );
+}
+
+/** Every season by id. */
+async function fetchSeasonsById(): Promise<Map<number, Season>> {
+  return new Map((await getSeasons()).map((se) => [se.id, se]));
+}
+
+/** `weekId`'s week number and season, or `null` when either is missing. */
+function placeInLeague(weekId: number, weekLookup: WeekLookup, seasonById: Map<number, Season>) {
+  const w = weekLookup.get(weekId);
+  const season = w && seasonById.get(w.season_id);
+  return w && season ? { week_number: w.week_number, season } : null;
+}
+
+/** `rows` sorted newest first (in place): season (numbered before gauntlet), then week, then match. */
+function newestFirst<T extends { season_name: string; is_gauntlet: boolean; week_number: number; match_number: number }>(
+  rows: T[],
+): T[] {
+  const ref = (r: T) => ({
+    seasonNumber: extractSeasonNumber(r.season_name),
+    isGauntlet: r.is_gauntlet,
+    weekNumber: r.week_number,
+    matchNumber: r.match_number,
+  });
+  return rows.sort((a, b) => compareMatchRefDesc(ref(a), ref(b)));
+}
+
+/** A player's `statRows` joined to their `matches`, weeks and seasons, newest first, before rosters
+ *  (`attachRosters()`) are attached. A stat row whose match, week or season is missing is dropped. */
+function toHistory(
+  statRows: PlayerMatchStat[],
+  matches: Match[],
+  weekLookup: WeekLookup,
+  seasonById: Map<number, Season>,
+): HistoryBase[] {
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+  const rows: HistoryBase[] = [];
+  for (const s of statRows) {
+    const m = matchById.get(s.match_id);
+    const placed = m && placeInLeague(m.week_id, weekLookup, seasonById);
+    if (!m || !placed) continue;
+    const se = placed.season;
+    rows.push({
+      ...s,
+      match_number: m.match_number,
+      week_number: placed.week_number,
+      season_id: se.id,
+      season_number: extractSeasonNumber(se.name),
+      season_name: se.name,
+      is_gauntlet: se.is_gauntlet,
+      map: effectivePickedMap(m),
+      final_score: m.final_score,
+      pre_match_win_prob: m.pre_match_win_prob,
+      scheduled_at: m.scheduled_at,
+      skins_pick: m.skins_pick,
+      shirts_pick: m.shirts_pick,
+      skins_starting_side: m.skins_starting_side,
+      shirts_ban: m.shirts_ban,
+      shirts_ban2: m.shirts_ban2,
+      skins_ban1: m.skins_ban1,
+      skins_ban2: m.skins_ban2,
+      is_playoff_game: m.is_playoff_game,
+      map_pool: se.is_gauntlet ? null : se.map_pool,
+      replay_status: m.replay_status ?? null,
+    });
+  }
+  return newestFirst(rows);
+}
+
 /** A player's match history, newest first, before rosters (`attachRosters()`) are attached. */
 async function loadPlayerHistory(playerId: number): Promise<HistoryBase[]> {
-  const statRows = await fetchAllPages<PlayerMatchStat>((from, to) =>
-    asPage(getAdminClient().from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
-  );
+  const statRows = await fetchPlayerStatRows<PlayerMatchStat>(playerId, '*');
   if (statRows.length === 0) return [];
 
   const matchIds = Array.from(new Set(statRows.map((s) => s.match_id)));
@@ -205,65 +281,61 @@ async function loadPlayerHistory(playerId: number): Promise<HistoryBase[]> {
     getWeekLookup(),
   ]);
   if (mErr) throw mErr;
-  const matchById = new Map<number, Match>();
-  for (const m of (matches ?? []) as Match[]) matchById.set(m.id, m);
+  const seasonById = await fetchSeasonsById();
+  return toHistory(statRows, (matches ?? []) as Match[], weekLookup, seasonById);
+}
 
-  const seasonIds = Array.from(
-    new Set(
-      (matches ?? [])
-        .map((m) => weekLookup.get((m as Match).week_id)?.season_id)
-        .filter((id): id is number => id != null),
-    ),
+/**
+ * The rows of `loadPlayerHistory()` that `pickRecent(history, recentLimit)` keeps, newest first,
+ * before rosters are attached. Placing a match in the timeline needs only its score, week and
+ * season, so every match is read as just those columns (and the player's stat rows as just
+ * `match_id` and `rounds_played`); the full stat and match rows are read for the picked matches
+ * alone. Season, week and match numbers are not columns of `player_match_stats`, and the season
+ * number is parsed from its name, so the ordering cannot be pushed into a single `order` + `limit`.
+ */
+async function loadPlayerRecentHistory(playerId: number, recentLimit: number): Promise<HistoryBase[]> {
+  const stats = await fetchPlayerStatRows<Pick<PlayerMatchStat, 'match_id' | 'rounds_played'>>(
+    playerId,
+    'match_id, rounds_played',
   );
-  const { data: seasons, error: seErr } = await getAdminClient()
-    .from('seasons')
-    .select('*')
-    .in('id', seasonIds);
-  if (seErr) throw seErr;
-  const seasonById = new Map<number, Season>();
-  for (const s of (seasons ?? []) as Season[]) seasonById.set(s.id, s);
+  if (stats.length === 0) return [];
 
-  const history = statRows
-    .map((s) => {
-      const m = matchById.get(s.match_id);
-      if (!m) return null;
-      const w = weekLookup.get(m.week_id);
-      if (!w) return null;
-      const se = seasonById.get(w.season_id);
-      if (!se) return null;
-      return {
-        ...s,
-        match_number: m.match_number,
-        week_number: w.week_number,
-        season_id: se.id,
-        season_number: extractSeasonNumber(se.name),
-        season_name: se.name,
-        is_gauntlet: se.is_gauntlet,
-        map: effectivePickedMap(m),
+  const matchIds = Array.from(new Set(stats.map((s) => s.match_id)));
+  const [{ data: placedRows, error: pErr }, weekLookup] = await Promise.all([
+    getAdminClient().from('matches').select('id, week_id, match_number, final_score').in('id', matchIds),
+    getWeekLookup(),
+  ]);
+  if (pErr) throw pErr;
+  const placedMatches = (placedRows ?? []) as Pick<Match, 'id' | 'week_id' | 'match_number' | 'final_score'>[];
+  const seasonById = await fetchSeasonsById();
+
+  const placedById = new Map(placedMatches.map((m) => [m.id, m]));
+  const timeline = newestFirst(
+    stats.flatMap((s) => {
+      const m = placedById.get(s.match_id);
+      const placed = m && placeInLeague(m.week_id, weekLookup, seasonById);
+      if (!m || !placed) return [];
+      return [{
+        match_id: s.match_id,
+        rounds_played: s.rounds_played,
         final_score: m.final_score,
-        pre_match_win_prob: m.pre_match_win_prob,
-        scheduled_at: m.scheduled_at,
-        skins_pick: m.skins_pick,
-        shirts_pick: m.shirts_pick,
-        skins_starting_side: m.skins_starting_side,
-        shirts_ban: m.shirts_ban,
-        shirts_ban2: m.shirts_ban2,
-        skins_ban1: m.skins_ban1,
-        skins_ban2: m.skins_ban2,
-        is_playoff_game: m.is_playoff_game,
-        map_pool: se.is_gauntlet ? null : se.map_pool,
-        replay_status: m.replay_status ?? null,
-      };
-    })
-    .filter((r): r is HistoryBase => r !== null)
-    .sort((a, b) =>
-      compareMatchRefDesc(
-        { seasonNumber: extractSeasonNumber(a.season_name), isGauntlet: a.is_gauntlet, weekNumber: a.week_number, matchNumber: a.match_number },
-        { seasonNumber: extractSeasonNumber(b.season_name), isGauntlet: b.is_gauntlet, weekNumber: b.week_number, matchNumber: b.match_number },
-      ),
-    );
+        match_number: m.match_number,
+        week_number: placed.week_number,
+        season_name: placed.season.name,
+        is_gauntlet: placed.season.is_gauntlet,
+      }];
+    }),
+  );
+  const pickedIds = pickRecent(timeline, recentLimit).map((r) => r.match_id);
+  if (pickedIds.length === 0) return [];
 
-  return history;
+  const [{ data: statRows, error: sErr }, { data: matches, error: mErr }] = await Promise.all([
+    getAdminClient().from('player_match_stats').select('*').eq('player_id', playerId).in('match_id', pickedIds),
+    getAdminClient().from('matches').select('*').in('id', pickedIds),
+  ]);
+  if (sErr) throw sErr;
+  if (mErr) throw mErr;
+  return toHistory((statRows ?? []) as PlayerMatchStat[], (matches ?? []) as Match[], weekLookup, seasonById);
 }
 
 export const getPlayer = persistentQuery('getPlayer', async (playerId: number): Promise<PlayerDetail | null> => {
@@ -276,6 +348,35 @@ export const getPlayer = persistentQuery('getPlayer', async (playerId: number): 
   return { player, history, trophies: medalists.get(playerId) ?? [] };
 });
 
+/**
+ * Every player's played games and summed per-match ADR, one row per player per season, from the
+ * played matches with rounds played (the rows `isPlayedHistoryRow()` keeps). The player page sums
+ * these under its season selection (`adrBaselineFor()`, `src/lib/h2h.ts`) into the league-wide
+ * baseline `computeH2H()` measures a partner's ADR lift against, since the page holds only the viewed
+ * player's own matches.
+ */
+export const getPlayerSeasonAdrTotals = persistentQuery('getPlayerSeasonAdrTotals', async (): Promise<PlayerSeasonAdrTotal[]> => {
+  const [matchSeason, seasons, statRows] = await Promise.all([
+    resolveMatchSeasons(),
+    getSeasons(),
+    fetchAllPages<Pick<PlayerMatchStat, 'match_id' | 'player_id' | 'adr' | 'rounds_played'>>((from, to) =>
+      asPage(getAdminClient().from('player_match_stats').select('match_id, player_id, adr, rounds_played').range(from, to)),
+    ),
+  ]);
+  const gauntletSeasonIds = new Set(seasons.filter((s) => s.is_gauntlet).map((s) => s.id));
+  const totals = new Map<string, PlayerSeasonAdrTotal>();
+  for (const r of statRows) {
+    const seasonId = matchSeason.get(r.match_id);
+    if (seasonId == null || !(r.rounds_played > 0)) continue;
+    const key = `${r.player_id}:${seasonId}`;
+    const total = totals.get(key) ?? { player_id: r.player_id, season_id: seasonId, is_gauntlet: gauntletSeasonIds.has(seasonId), games: 0, adr_sum: 0 };
+    total.games += 1;
+    total.adr_sum += r.adr ?? 0;
+    totals.set(key, total);
+  }
+  return [...totals.values()].sort((a, b) => a.player_id - b.player_id || a.season_id - b.season_id);
+});
+
 /** The rows of `history` (newest first) that `lastPlayed(history, limit)` and `nextUpcoming(history)`
  *  pick, still newest first. */
 export function pickRecent<T extends HistoryResult>(history: T[], limit: number): T[] {
@@ -285,17 +386,20 @@ export function pickRecent<T extends HistoryResult>(history: T[], limit: number)
 }
 
 /**
- * The slice of `getPlayer()` the home page's My Stats panel reads: `player` plus a `history` of
- * `pickRecent(history, recentLimit)` with rosters for just those matches. Skips the trophy read.
+ * The slice of `getPlayer()` the home page's My Stats panel and the player hover card read:
+ * `player` plus a `history` of `pickRecent(history, recentLimit)` with rosters for just those
+ * matches. Reads the full stat and match rows of those matches alone
+ * (`loadPlayerRecentHistory()`) and skips the trophy read.
  * `null` when the player doesn't exist.
  */
 export const getPlayerRecent = persistentQuery('getPlayerRecent', async (
   playerId: number,
   recentLimit: number,
 ): Promise<Pick<PlayerDetail, 'player' | 'history'> | null> => {
-  const player = (await getPlayersById()).get(playerId);
+  const [players, recent] = await Promise.all([getPlayersById(), loadPlayerRecentHistory(playerId, recentLimit)]);
+  const player = players.get(playerId);
   if (!player) return null;
-  return { player, history: await attachRosters(pickRecent(await loadPlayerHistory(playerId), recentLimit)) };
+  return { player, history: await attachRosters(recent) };
 });
 
 /** The fields that decide whether a history row's match has been played. */

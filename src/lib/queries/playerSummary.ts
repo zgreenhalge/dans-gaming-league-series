@@ -1,8 +1,7 @@
 import type { LeaderboardRowWithId } from '../types';
-import { deriveKd, deriveKda, mergeLeaderboardRows } from '../util';
+import { deriveKd, deriveKda } from '../util';
 import { getCurrentEhogRating } from './ehog';
-import { getGauntletStats } from './gauntlet';
-import { getCareerLeaderboard } from './leaderboard';
+import { getMergedCareerLeaderboard } from './leaderboard';
 import { getPlayerRecent, lastPlayed, opponentNames, type PlayerHistoryRow } from './player';
 
 // A player's career snapshot: EHOG, W-L, KDA, ADR and their last results. The home page's My Stats
@@ -78,9 +77,8 @@ export function buildPlayerSummary(input: {
  *  gauntlet merged), the player with their recent history, and their current EHOG. `null` when the
  *  player doesn't exist. */
 export async function loadPlayerSummaryInputs(playerId: number) {
-  const [regular, gauntlet, detail, ehog] = await Promise.all([
-    getCareerLeaderboard(),
-    getGauntletStats(),
+  const [leaderboard, detail, ehog] = await Promise.all([
+    getMergedCareerLeaderboard(),
     getPlayerRecent(playerId, PLAYER_SUMMARY_RECENT_LIMIT),
     getCurrentEhogRating(playerId),
   ]);
@@ -89,7 +87,7 @@ export async function loadPlayerSummaryInputs(playerId: number) {
     playerId,
     playerName: detail.player.name,
     avatarUrl: detail.player.steam_avatar_url,
-    leaderboard: mergeLeaderboardRows(regular, gauntlet.career),
+    leaderboard,
     ehog,
     history: detail.history,
   };

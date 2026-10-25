@@ -1,7 +1,7 @@
 /**
  * Tests for the home page's data layer: `queries/home.ts` (`getHomeGames`), `queries/seasons.ts` (`resolveHomeSeasons`),
  * `queries/myStats.ts` (`buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` (`queries/leaderboard.ts`),
- * `rankDuos` / `rankRivals` / `bestFriendOf` / `worstNightmareOf` (`queries/h2h.ts`),
+ * `rankDuos` / `rankRivals` / `bestFriendOf` / `worstNightmareOf` (`h2h-ratings.ts`),
  * `findCurrentGauntletRound` (`queries/gauntlet.ts`) and the history-row helpers in
  * `queries/player.ts`. The DB-backed functions run against the shared fixture league; the pure ones
  * against small hand-built inputs.
@@ -165,6 +165,19 @@ test('rankDuos / rankRivals: best first, capped at the limit, never-played pairs
   assert.deepEqual(rankedRivals.map((r) => [r.rival.playerA, r.rival.playerB]), [[1, 3], [1, 2]]);
   assert.equal(rankedRivals[0].rating, 100);
   assert.equal(rankRivals(rivals, 1).length, 1);
+});
+
+test('rankRivals: an all-zero league (single meetings and sweeps) ranks nothing', () => {
+  const rivals = [rival(1, 2, 1, 0), rival(1, 3, 0, 1), rival(2, 3, 3, 0), rival(3, 4, 0, 0)];
+  assert.deepEqual(rankRivals(rivals, 5), []);
+  assert.deepEqual(rankRivals([], 5), []);
+});
+
+test('rankRivals: a mixed league keeps only the pairs rated above 0, even when the limit has room', () => {
+  const rivals = [rival(1, 2, 1, 0), rival(1, 3, 6, 6), rival(2, 3, 4, 0), rival(2, 4, 2, 3)];
+  const ranked = rankRivals(rivals, 5);
+  assert.deepEqual(ranked.map((r) => [r.rival.playerA, r.rival.playerB]), [[1, 3], [2, 4]]);
+  assert.ok(ranked.every((r) => r.rating > 0));
 });
 
 // ─── buildSeasonForm / getSeasonForm ─────────────────────────────────────────

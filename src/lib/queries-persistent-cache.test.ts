@@ -6,6 +6,7 @@
  * Run:  npx vitest run src/lib/queries-persistent-cache.test.ts
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const store = new Map<string, unknown>();
@@ -22,6 +23,7 @@ vi.mock('next/cache', () => ({
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
+import { OPERATIONAL_TABLES } from './test-support/migrationSql';
 import { decodeCacheValue, encodeCacheValue, persistentQuery } from './queries/_persistentCache';
 import * as q from './queries';
 
@@ -151,10 +153,13 @@ describe('cached reads match uncached reads', () => {
     ['getAllLeaderboards', () => q.getAllLeaderboards()],
     ['getCareerLeaderboard', () => q.getCareerLeaderboard()],
     ['getGauntletStats', () => q.getGauntletStats()],
+    ['getMergedCareerLeaderboard', () => q.getMergedCareerLeaderboard()],
     ['getAllSeasonMedalists', () => q.getAllSeasonMedalists()],
     ['getAllEhogSnapshots', () => q.getAllEhogSnapshots()],
     ['getStatisticsDetail', () => q.getStatisticsDetail()],
     ['getPlayer(1)', () => q.getPlayer(1)],
+    ['getPlayerRecent(1, 5)', () => q.getPlayerRecent(1, 5)],
+    ['getCurrentEhogRating(1)', () => q.getCurrentEhogRating(1)],
     ['getSeasonSchedule(1)', () => q.getSeasonSchedule(1)],
     ['getSeasonMatchSummaries(1)', () => q.getSeasonMatchSummaries(1)],
     ['getRegularSeasonLightView(1)', () => q.getRegularSeasonLightView(1, 1)],
@@ -166,6 +171,16 @@ describe('cached reads match uncached reads', () => {
     ['getSuperlativePoll(1)', () => q.getSuperlativePoll(1)],
     ['getSeasonPlayedPlayers(1)', () => q.getSeasonPlayedPlayers(1)],
   ];
+
+  // A cached read is only fresh while `data_version` moves with its inputs, and a write to an
+  // operational table (`OPERATIONAL_TABLES`) never moves it — so no wrapped read may touch one.
+  test.each(reads)('%s reads no operational table', async (_name, read) => {
+    const real = createFakeSupabaseClient(buildFakeDb());
+    const touched = new Set<string>();
+    __setTestAdminClient({ from: (t: string) => (touched.add(t), real.from(t)) } as unknown as SupabaseClient);
+    await read();
+    expect([...touched].filter((t) => OPERATIONAL_TABLES.has(t) && t !== 'data_version')).toEqual([]);
+  });
 
   test.each(reads)('%s', async (_name, read) => {
     __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));

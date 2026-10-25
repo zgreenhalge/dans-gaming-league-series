@@ -134,41 +134,40 @@ export default function H2HSection({
           </div>
         )}
 
-        {topRivals.length > 0 && (
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-            <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">
-              <span
-                className="font-display font-bold text-[13px]"
-                title={RIVAL_RATING_SUMMARY}
-              >
-                Closest Rivals
-              </span>
-              <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" title={RIVAL_RATING_SUMMARY} />
-            </div>
-            <RivalHeader />
-            <div>
-              {topRivals.map(({ rival: r, rating }) => {
-                const a = playersById.get(r.playerA);
-                const b = playersById.get(r.playerB);
-                if (!a || !b) return null;
-                const on = active?.type === 'opponent' && ((active.a === r.playerA && active.b === r.playerB) || (active.a === r.playerB && active.b === r.playerA));
-                return (
-                  <RivalRow
-                    key={`${r.playerA}-${r.playerB}`}
-                    rival={r}
-                    rating={rating}
-                    breakdown={rivalBreakdown(r)}
-                    a={a}
-                    b={b}
-                    highlight={on ? 'color-mix(in srgb, var(--color-t) 7%, transparent)' : undefined}
-                    onSelect={() => setSel({ a: r.playerA, b: r.playerB, type: 'opponent' })}
-                    onHover={(over) => setHover(over ? { a: r.playerA, b: r.playerB, type: 'opponent' } : null)}
-                  />
-                );
-              })}
-            </div>
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+          <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">
+            <span
+              className="font-display font-bold text-[13px]"
+              title={RIVAL_RATING_SUMMARY}
+            >
+              Closest Rivals
+            </span>
+            <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" title={RIVAL_RATING_SUMMARY} />
           </div>
-        )}
+          {topRivals.length === 0 && <EmptyState message="No established rivalries yet." className="px-5 py-4" />}
+          {topRivals.length > 0 && <RivalHeader />}
+          <div>
+            {topRivals.map(({ rival: r, rating }) => {
+              const a = playersById.get(r.playerA);
+              const b = playersById.get(r.playerB);
+              if (!a || !b) return null;
+              const on = active?.type === 'opponent' && ((active.a === r.playerA && active.b === r.playerB) || (active.a === r.playerB && active.b === r.playerA));
+              return (
+                <RivalRow
+                  key={`${r.playerA}-${r.playerB}`}
+                  rival={r}
+                  rating={rating}
+                  breakdown={rivalBreakdown(r)}
+                  a={a}
+                  b={b}
+                  highlight={on ? 'color-mix(in srgb, var(--color-t) 7%, transparent)' : undefined}
+                  onSelect={() => setSel({ a: r.playerA, b: r.playerB, type: 'opponent' })}
+                  onHover={(over) => setHover(over ? { a: r.playerA, b: r.playerB, type: 'opponent' } : null)}
+                />
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
