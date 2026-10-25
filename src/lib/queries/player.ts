@@ -203,14 +203,9 @@ function fetchPlayerStatRows<T>(playerId: number, columns: string): Promise<T[]>
   );
 }
 
-/** The seasons that `matches` (through their weeks) belong to. */
-async function fetchSeasonsOf(matches: { week_id: number }[], weekLookup: WeekLookup): Promise<Map<number, Season>> {
-  const seasonIds = Array.from(
-    new Set(matches.map((m) => weekLookup.get(m.week_id)?.season_id).filter((id): id is number => id != null)),
-  );
-  const { data, error } = await getAdminClient().from('seasons').select('*').in('id', seasonIds);
-  if (error) throw error;
-  return new Map(((data ?? []) as Season[]).map((se) => [se.id, se]));
+/** Every season by id. */
+async function fetchSeasonsById(): Promise<Map<number, Season>> {
+  return new Map((await getSeasons()).map((se) => [se.id, se]));
 }
 
 /** `weekId`'s week number and season, or `null` when either is missing. */
@@ -286,7 +281,7 @@ async function loadPlayerHistory(playerId: number): Promise<HistoryBase[]> {
     getWeekLookup(),
   ]);
   if (mErr) throw mErr;
-  const seasonById = await fetchSeasonsOf((matches ?? []) as Match[], weekLookup);
+  const seasonById = await fetchSeasonsById();
   return toHistory(statRows, (matches ?? []) as Match[], weekLookup, seasonById);
 }
 
@@ -312,7 +307,7 @@ async function loadPlayerRecentHistory(playerId: number, recentLimit: number): P
   ]);
   if (pErr) throw pErr;
   const placedMatches = (placedRows ?? []) as Pick<Match, 'id' | 'week_id' | 'match_number' | 'final_score'>[];
-  const seasonById = await fetchSeasonsOf(placedMatches, weekLookup);
+  const seasonById = await fetchSeasonsById();
 
   const placedById = new Map(placedMatches.map((m) => [m.id, m]));
   const timeline = newestFirst(
@@ -401,9 +396,10 @@ export const getPlayerRecent = persistentQuery('getPlayerRecent', async (
   playerId: number,
   recentLimit: number,
 ): Promise<Pick<PlayerDetail, 'player' | 'history'> | null> => {
-  const player = (await getPlayersById()).get(playerId);
+  const [players, recent] = await Promise.all([getPlayersById(), loadPlayerRecentHistory(playerId, recentLimit)]);
+  const player = players.get(playerId);
   if (!player) return null;
-  return { player, history: await attachRosters(await loadPlayerRecentHistory(playerId, recentLimit)) };
+  return { player, history: await attachRosters(recent) };
 });
 
 /** The fields that decide whether a history row's match has been played. */

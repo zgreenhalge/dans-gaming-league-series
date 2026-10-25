@@ -176,8 +176,6 @@ function rivalCols(compact: boolean): string {
 const wideOnly = (compact: boolean) => (compact ? '' : ' hidden sm:block');
 
 /** Column labels above a list of `RivalRow`s. */
-/** The empty-state line for a rivalry list while no pair rates above 0 (`rankRivals()` returned nothing). */
-
 export function RivalHeader({ compact = false }: { compact?: boolean }) {
   const upsets = <span className={`${HEAD_CLS} text-center${wideOnly(compact)}`} title={UPSETS_TITLE}>Upsets</span>;
   const rounds = <span className={`${HEAD_CLS} text-center${wideOnly(compact)}`}>Rounds</span>;

@@ -7,9 +7,7 @@ import { getAdminClient } from '../supabase-admin';
 // supabase/migrations/20261021120000_add_data_version.sql): every content write bumps that counter,
 // so a write — from any writer — leaves the old entries unreachable and the next read recomputes.
 // The TTL below only lets unreferenced entries expire. Each entry is capped by the data cache's item
-// size limit (2 MB of stored JSON, which escapes the encoded string twice — about two thirds of that
-// in plain JSON); a larger result is not stored, Next logs `Failed to set Next.js data cache ... items
-// over 2MB`, and the read is recomputed on every call. Next runs a persistent read called from inside
+// size limit; a result over it is not stored and the read is recomputed on every call. Next runs a persistent read called from inside
 // another one's computation uncached, so only the outermost read of a computation is stored; the
 // inner ones are shared within the render by `cache()` as usual. A wrapped read depends only on
 // tables that bump `data_version` and on no clock (`queries-persistent-cache.test.ts` checks the

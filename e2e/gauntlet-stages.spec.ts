@@ -10,6 +10,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import { seedGauntletWithPods, teardownGauntlet, type TestGauntlet } from './support/db';
+import { assertNoErrorBoundary } from './support/assertions';
 
 let fixture: TestGauntlet;
 
@@ -25,10 +26,6 @@ const weekPath = () => `/seasons/${fixture.hubSeasonId}/weeks/${fixture.hubWeekI
 const roundPath = (round: number) => `/seasons/${fixture.hubSeasonId}/rounds/${round}`;
 const groupPath = (podId: number) => `/seasons/${fixture.hubSeasonId}/groups/${podId}`;
 const matchLink = (page: Page, matchId: number) => page.locator(`a[href="/matches/${matchId}"]`);
-
-async function assertNoErrorBoundary(page: Page): Promise<void> {
-  await expect(page.getByText('Something went wrong')).toHaveCount(0);
-}
 
 /** Asserts the browser ended up on `path` (no query), after any redirects. */
 async function expectPath(page: Page, path: string): Promise<void> {
