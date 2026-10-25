@@ -362,7 +362,7 @@ export default function EhogTimeline({
                 fontFamily="var(--font-display)"
                 fontWeight={600}
               >
-                {resetDelta >= 0 ? '+' : ''}{resetDelta.toFixed(2)}
+                {formatSigned(resetDelta, 2)}
               </text>
             </g>
           );
