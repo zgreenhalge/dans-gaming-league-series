@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bodySha,
   bodySignals,
   digestIssue,
+  findTriageNote,
   findRefs,
   inRanges,
   matchesFilter,
   parseRanges,
   parseTitle,
   renderTable,
+  type RawComment,
   type RawIssue,
 } from '../../scripts/issue-digest-shared';
 
@@ -91,5 +94,32 @@ describe('digestIssue / renderTable', () => {
     const table = renderTable([d]);
     expect(table.split('\n')).toHaveLength(3);
     expect(table).toContain('| 10 | perf(db): speed up a read | Octo | perf | 6 |');
+  });
+});
+
+describe('findTriageNote', () => {
+  const marker = (sha: string) => `<!-- triage-assessment body-sha=${sha} -->\n## Triage assessment`;
+  const comment = (body: string, at: string): RawComment => ({ html_url: `https://x/${at}`, created_at: at, body });
+
+  it('returns null when no comment carries the marker', () => {
+    expect(findTriageNote([comment('looks good', 'a'), comment(null as unknown as string, 'b')], 'abc')).toBeNull();
+  });
+
+  it('uses the latest assessment and marks it fresh only when the body hash matches', () => {
+    const sha = bodySha('Body.');
+    const comments = [comment(marker('000000000000'), 'old'), comment('chatter', 'mid'), comment(marker(sha), 'new')];
+    expect(findTriageNote(comments, sha)).toEqual({ url: 'https://x/new', postedAt: 'new', fresh: true });
+    expect(findTriageNote(comments, bodySha('Edited body.'))).toMatchObject({ postedAt: 'new', fresh: false });
+  });
+
+  it('flows through digestIssue and renders a Triaged column only when comments were read', () => {
+    const i = issue();
+    const withNote = digestIssue(i, 0, [comment(marker(bodySha(i.body)), 't')]);
+    expect(withNote.triage?.fresh).toBe(true);
+    expect(digestIssue(i, 0).triage).toBeUndefined();
+    expect(digestIssue(i, 0, []).triage).toBeNull();
+    expect(renderTable([withNote])).toContain('| Triaged |');
+    expect(renderTable([withNote])).toContain('| fresh |');
+    expect(renderTable([digestIssue(i, 0)])).not.toContain('Triaged');
   });
 });

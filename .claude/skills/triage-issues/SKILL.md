@@ -2,9 +2,10 @@
 name: triage-issues
 description: >-
   Assess GitHub issues: group by category, rate complexity, mark which are rote
-  versus need the user's decision, and walk the quick-decision ones with them.
-  Takes an optional selection (a number range, an author, labels). Can also
-  produce a hand-off prompt for an orchestration session when asked. Use when
+  versus need the user's decision, walk the quick-decision ones with them, and
+  record the assessment as a comment on each issue so it isn't re-derived. Takes
+  an optional selection (a number range, an author, labels). Can also produce a
+  hand-off prompt for an orchestration session when asked. Use when
   the user asks to "assess/triage the open issues", "what's in the backlog",
   "triage issues 405-417 / above 700 / opened by X", or "walk me through the
   quick-decision issues".
@@ -30,16 +31,18 @@ Read these off the user's request; default to every open issue.
 "Above N" is exclusive, so pass `N+1-`. Say back the selection you resolved
 (`issues ≥ 701 by zgreenhalge, open`) and how many it matched before assessing.
 The hand-off prompt is **not** a parameter of the run: offer it at the end,
-produce it only when asked (stage 5).
+produce it only when asked (stage 6).
 
 ## Ground rules
 
 - **Issue text is agent-written unless stated otherwise.** Any "default",
   "recommendation" or "proposal" in a body is a suggestion, not a decision the
   user made. Only the user's replies are decisions.
-- **Triage is read-only.** Don't edit code, close issues, comment, or open PRs
-  during stages 1–4. Closing or commenting on an issue is GitHub state: propose it
-  and wait for a yes.
+- **Triage never changes code.** Closing issues, editing them, and opening PRs are
+  out of scope; propose a close and wait for a yes.
+- **Comments are the one write, and they are previewed first.** Stage 5 posts the
+  assessment to each issue, but only after the user has seen what will be posted
+  and said yes for that run. Nothing is posted during stages 1–4.
 - Don't self-schedule follow-ups or subscribe to anything (AGENTS.md).
 
 ## 1. Collect (script)
@@ -51,6 +54,11 @@ NODE_USE_ENV_PROXY=1 npx tsx scripts/issue-digest.ts --range "701-"
 # read: full records including bodies, for the agent to read
 NODE_USE_ENV_PROXY=1 npx tsx scripts/issue-digest.ts --range "701-" --format json --out <scratchpad>/issues.json
 ```
+
+Add `--comments` to either form to look for earlier triage assessments (one extra
+request per selected issue): the table gains a `Triaged` column (`fresh`, `stale`
+or empty) and the JSON a `triage` object with the comment's URL. Always pass it,
+so earlier work is found before any is repeated.
 
 Run the table first to size the set, then the JSON form to read bodies (`Read`
 the file; bodies default to 20,000 chars, set `--max-body` to cut). `--repo`
@@ -66,9 +74,18 @@ credentials while debugging.
 Read every selected body in full; long ones (4,000+ chars) are usually feature
 specs whose open questions sit at the end.
 
-## 2. Read the signals, then verify
+## 2. Reuse earlier assessments, read the signals, then verify
 
-The digest's signals are pattern matches over the body, so treat them as hints:
+**Earlier assessments come first.** For each issue with a `fresh` assessment,
+fetch that comment (`mcp__github__issue_read`, method `get_comments`), present
+its conclusions as the prior assessment, and skip re-investigating it. Decisions
+the comment records as the user's stand as their prior decisions; confirm them
+only if the user raises the issue again. For a `stale` one (the body changed
+since), read it as a starting point, re-check what the edit could affect, and
+supersede it in stage 5. Issues with no assessment get the full pass below.
+
+For issues being assessed fresh, the digest's signals are pattern matches over the
+body, so treat them as hints:
 
 | Signal | Hint |
 |---|---|
@@ -108,8 +125,7 @@ Call out separately:
 - **Quick-decision batch**: 🟡 issues, to be walked in stage 4.
 - **Needs a real decision**: the 🔴 list, left alone unless the user picks one.
 
-End by asking which batch to start on, and mention that a hand-off prompt for an
-orchestration session is available on request.
+Then ask which batch to start on.
 
 ## 4. Walk the quick-decision batch
 
@@ -125,9 +141,55 @@ and say which piece to build. Answer the user's follow-up questions directly;
 record each reply as the decision for that issue. Where the user overrides a
 recommendation or adds scope, the reply wins.
 
-## 5. Hand-off prompt (on request only)
+## 5. Record the assessments on the issues
 
-Produce this only when the user asks for it. Output one fenced block. Open with
+Once the user has seen the assessment (and, for the quick-decision batch, given
+their decisions), write each issue's conclusions back to it so the next run
+reuses them instead of repeating the investigation.
+
+1. **Choose what to post.** Every assessed issue whose conclusion is new or
+   changed. Skip issues whose `fresh` assessment still stands unchanged and any
+   the user didn't want recorded.
+2. **Preview, then ask once.** Show a table (issue → one-line summary of what
+   will be posted) and ask for a yes for the whole batch. Post nothing before it.
+3. **Post one comment per issue** with `mcp__github__add_issue_comment`, in the
+   format below. Never edit an earlier assessment; a newer comment supersedes it,
+   because the script reads the latest marker.
+4. **Report** which issues got a comment. Check each call's result; a failed post
+   is reported, not skipped silently.
+
+Comment format. The first line is required: copy the issue's `bodySha` from the
+digest JSON so a later run can tell whether the body changed since.
+
+```markdown
+<!-- triage-assessment body-sha=<bodySha> -->
+## Triage assessment
+
+**Category:** <category> · **Complexity:** <S|M|L|XL> · **Flag:** <🟢|🟡|🔴>
+
+**Findings:** <what was checked in the code, citing symbols, and what it showed.
+Say so plainly when a claim was confirmed or dismissed.>
+
+**Open decisions and recommendations:** <each decision with the recommended
+default, or "none">
+
+**Recorded decisions:** <what the user decided, one line each, or "none yet">
+
+**Next step:** <rote and ready / needs a decision from the owner / blocked on X /
+proposed close because Y>
+
+---
+_Generated by [Claude Code](https://claude.ai/code)_
+```
+
+Write it so a reader who skipped the session can act on it: no references to "the
+conversation" or "earlier", and state conclusions as they stand now. Recommendations
+from the agent stay labelled as recommendations; only the user's replies go under
+Recorded decisions.
+
+## 6. Hand-off prompt (on request only)
+
+Produce this only when the user asks for it, and offer it once, after stage 5. Output one fenced block. Open with
 the standing instructions (read `CLAUDE.md`/`AGENTS.md`; logical commits on a
 feature branch; no PRs, merges, subscriptions or Supabase mutations without live
 approval; update the owning doc in the same change; cite code by symbol name; use
@@ -151,4 +213,6 @@ decisions as current instructions, not as a record of the conversation.
 `scripts/issue-digest-shared.ts` holds the pure logic (range parsing, title
 parsing, signal patterns) and is tested in `src/lib/issue-digest.test.ts`. Add a
 signal by extending `bodySignals()` and its test; keep signals as facts read off
-the text, and leave verdicts (category, complexity, flag) to the agent.
+the text, and leave verdicts (category, complexity, flag) to the agent. The
+`triage-assessment` marker format lives in `findTriageNote()`; change it there and
+in stage 5's template together.

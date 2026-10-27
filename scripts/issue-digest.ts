@@ -4,7 +4,11 @@
 //
 //   npx tsx scripts/issue-digest.ts [--state open|closed|all] [--range <spec>] [--author <login>]
 //     [--label <name>]... [--repo <owner/name>] [--format table|json] [--max-body <chars>]
-//     [--out <path>]
+//     [--out <path>] [--comments]
+//
+// `--comments` also reads each selected issue's comments and reports its latest triage assessment
+// (a comment carrying a `<!-- triage-assessment body-sha=... -->` marker) as `fresh` when the issue
+// body is unchanged since, `stale` when it was edited.
 //
 // `--max-body` limits how much of each body the digest carries: default 20000 for `json`, 0 for `table`.
 //
@@ -22,6 +26,7 @@ import {
   parseRanges,
   renderTable,
   type IssueFilter,
+  type RawComment,
   type RawIssue,
 } from './issue-digest-shared';
 
@@ -45,18 +50,17 @@ function resolveRepo(flag: string | undefined): string {
   return m[1];
 }
 
-async function fetchIssues(repo: string, state: string): Promise<RawIssue[]> {
+/** Every page of a GitHub REST list endpoint (`path` carries any query string already). */
+async function fetchAll<T>(path: string): Promise<T[]> {
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const all: RawIssue[] = [];
+  const sep = path.includes('?') ? '&' : '?';
+  const all: T[] = [];
   for (let page = 1; ; page++) {
-    const res = await fetch(
-      `https://api.github.com/repos/${repo}/issues?state=${state}&per_page=100&page=${page}`,
-      { headers },
-    );
-    if (!res.ok) throw new Error(`GitHub API ${res.status} for ${repo}: ${await res.text()}`);
-    const batch = (await res.json()) as RawIssue[];
+    const res = await fetch(`https://api.github.com${path}${sep}per_page=100&page=${page}`, { headers });
+    if (!res.ok) throw new Error(`GitHub API ${res.status} for ${path}: ${await res.text()}`);
+    const batch = (await res.json()) as T[];
     all.push(...batch);
     if (batch.length < 100) return all;
   }
@@ -80,10 +84,16 @@ async function main() {
   };
 
   const repo = resolveRepo(one('repo'));
-  const issues = (await fetchIssues(repo, state))
+  const selected = (await fetchAll<RawIssue>(`/repos/${repo}/issues?state=${state}`))
     .filter((i) => matchesFilter(i, filter))
-    .sort((a, b) => b.number - a.number)
-    .map((i) => digestIssue(i, maxBody));
+    .sort((a, b) => b.number - a.number);
+  const issues = [];
+  for (const i of selected) {
+    const comments = flags.has('comments')
+      ? await fetchAll<RawComment>(`/repos/${repo}/issues/${i.number}/comments`)
+      : undefined;
+    issues.push(digestIssue(i, maxBody, comments));
+  }
 
   const output = format === 'json' ? JSON.stringify(issues, null, 2) : renderTable(issues);
   if (one('out')) {

@@ -1,5 +1,8 @@
 // Pure helpers for scripts/issue-digest.ts: issue-number selection, conventional-commit title
-// parsing, and the body signals the digest reports. No I/O, so they are unit-tested directly.
+// parsing, prior-assessment lookup, and the body signals the digest reports. No I/O, so they are
+// unit-tested directly.
+
+import { createHash } from 'node:crypto';
 
 export interface RawIssue {
   number: number;
@@ -15,6 +18,20 @@ export interface RawIssue {
   pull_request?: unknown;
 }
 
+export interface RawComment {
+  html_url: string;
+  created_at: string;
+  body: string | null;
+}
+
+/** A triage assessment comment found on an issue. `fresh` means the issue body is unchanged since
+ *  the comment was written, so its findings still describe the issue. */
+export interface TriageNote {
+  url: string;
+  postedAt: string;
+  fresh: boolean;
+}
+
 export interface IssueDigest {
   number: number;
   title: string;
@@ -27,6 +44,10 @@ export interface IssueDigest {
   type: string | null;
   scope: string | null;
   bodyChars: number;
+  /** Short hash of the body. A triage comment records it so a later run can tell whether the body changed. */
+  bodySha: string;
+  /** The latest triage assessment comment, or null if none; undefined when comments weren't fetched. */
+  triage?: TriageNote | null;
   /** Other issue/PR numbers the title or body mentions, ascending. */
   refs: number[];
   signals: BodySignals;
@@ -106,8 +127,26 @@ export function bodySignals(body: string): BodySignals {
   };
 }
 
-export function digestIssue(issue: RawIssue, maxBody: number): IssueDigest {
+/** Marks a comment as a triage assessment and records the body it assessed:
+ *  `<!-- triage-assessment body-sha=<bodySha> -->`. */
+const TRIAGE_MARKER = /<!--\s*triage-assessment\s+body-sha=([0-9a-f]+)\s*-->/;
+
+export function bodySha(body: string | null): string {
+  return createHash('sha256').update(body ?? '').digest('hex').slice(0, 12);
+}
+
+/** The most recent triage comment (comments arrive oldest first), compared against the current body. */
+export function findTriageNote(comments: RawComment[], currentSha: string): TriageNote | null {
+  for (let i = comments.length - 1; i >= 0; i--) {
+    const m = TRIAGE_MARKER.exec(comments[i].body ?? '');
+    if (m) return { url: comments[i].html_url, postedAt: comments[i].created_at, fresh: m[1] === currentSha };
+  }
+  return null;
+}
+
+export function digestIssue(issue: RawIssue, maxBody: number, comments?: RawComment[]): IssueDigest {
   const body = issue.body ?? '';
+  const sha = bodySha(issue.body);
   return {
     number: issue.number,
     title: issue.title,
@@ -118,6 +157,8 @@ export function digestIssue(issue: RawIssue, maxBody: number): IssueDigest {
     updatedAt: issue.updated_at,
     ...parseTitle(issue.title),
     bodyChars: body.length,
+    bodySha: sha,
+    triage: comments ? findTriageNote(comments, sha) : undefined,
     refs: findRefs(`${issue.title}\n${body}`, issue.number),
     signals: bodySignals(body),
     body: maxBody > 0 ? body.slice(0, maxBody) : '',
@@ -144,8 +185,11 @@ export function matchesFilter(issue: RawIssue, filter: IssueFilter): boolean {
 
 /** A compact table for scanning; the full records come from `--format json`. */
 export function renderTable(digests: IssueDigest[]): string {
-  const head = '| # | Title | Author | Type | Chars | Refs | Done-when | Open Qs | Unverified | Blocker | Supersedes |';
-  const sep = '|---|---|---|---|---|---|---|---|---|---|---|';
+  const withTriage = digests.some((d) => d.triage !== undefined);
+  const head =
+    '| # | Title | Author | Type | Chars | Refs | Done-when | Open Qs | Unverified | Blocker | Supersedes |' +
+    (withTriage ? ' Triaged |' : '');
+  const sep = '|---|---|---|---|---|---|---|---|---|---|---|' + (withTriage ? '---|' : '');
   const yn = (b: boolean) => (b ? 'y' : '');
   const rows = digests.map((d) =>
     [
@@ -160,6 +204,7 @@ export function renderTable(digests: IssueDigest[]): string {
       yn(d.signals.unverified),
       yn(d.signals.externalBlocker),
       yn(d.signals.supersedes),
+      ...(withTriage ? [d.triage ? (d.triage.fresh ? 'fresh' : 'stale') : ''] : []),
     ].join(' | '),
   );
   return [head, sep, ...rows.map((r) => `| ${r} |`)].join('\n');
