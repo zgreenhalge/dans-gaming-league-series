@@ -8,9 +8,8 @@ export interface RawIssue {
   number: number;
   title: string;
   body: string | null;
-  state: string;
   user: { login: string } | null;
-  labels: ({ name?: string } | string)[];
+  labels: { name: string }[];
   created_at: string;
   updated_at: string;
   html_url: string;
@@ -127,12 +126,13 @@ export function bodySignals(body: string): BodySignals {
   };
 }
 
-/** Marks a comment as a triage assessment and records the body it assessed:
- *  `<!-- triage-assessment body-sha=<bodySha> -->`. */
-const TRIAGE_MARKER = /<!--\s*triage-assessment\s+body-sha=([0-9a-f]+)\s*-->/;
+/** Opens a triage assessment comment and records the body it assessed:
+ *  `<!-- triage-assessment body-sha=<bodySha> -->`. It must start the comment, so a reply that
+ *  quotes an assessment (`> <!-- ... -->`) isn't mistaken for one. */
+const TRIAGE_MARKER = /^\s*<!--\s*triage-assessment\s+body-sha=([0-9a-f]+)\s*-->/;
 
-export function bodySha(body: string | null): string {
-  return createHash('sha256').update(body ?? '').digest('hex').slice(0, 12);
+export function bodySha(body: string): string {
+  return createHash('sha256').update(body).digest('hex').slice(0, 12);
 }
 
 /** The most recent triage comment (comments arrive oldest first), compared against the current body. */
@@ -144,15 +144,17 @@ export function findTriageNote(comments: RawComment[], currentSha: string): Tria
   return null;
 }
 
+const labelNames = (issue: RawIssue) => issue.labels.map((l) => l.name);
+
 export function digestIssue(issue: RawIssue, maxBody: number, comments?: RawComment[]): IssueDigest {
   const body = issue.body ?? '';
-  const sha = bodySha(issue.body);
+  const sha = bodySha(body);
   return {
     number: issue.number,
     title: issue.title,
     url: issue.html_url,
     author: issue.user?.login ?? 'ghost',
-    labels: issue.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter(Boolean),
+    labels: labelNames(issue),
     createdAt: issue.created_at,
     updatedAt: issue.updated_at,
     ...parseTitle(issue.title),
@@ -177,35 +179,36 @@ export function matchesFilter(issue: RawIssue, filter: IssueFilter): boolean {
   if (filter.ranges && !inRanges(issue.number, filter.ranges)) return false;
   if (filter.author && issue.user?.login.toLowerCase() !== filter.author.toLowerCase()) return false;
   if (filter.labels?.length) {
-    const have = issue.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? '')).toLowerCase());
+    const have = labelNames(issue).map((l) => l.toLowerCase());
     if (!filter.labels.every((l) => have.includes(l.toLowerCase()))) return false;
   }
   return true;
 }
 
-/** A compact table for scanning; the full records come from `--format json`. */
+/** A compact table for scanning; the full records come from `--format json`. The Triaged column
+ *  appears only when comments were read. */
 export function renderTable(digests: IssueDigest[]): string {
-  const withTriage = digests.some((d) => d.triage !== undefined);
-  const head =
-    '| # | Title | Author | Type | Chars | Refs | Done-when | Open Qs | Unverified | Blocker | Supersedes |' +
-    (withTriage ? ' Triaged |' : '');
-  const sep = '|---|---|---|---|---|---|---|---|---|---|---|' + (withTriage ? '---|' : '');
   const yn = (b: boolean) => (b ? 'y' : '');
-  const rows = digests.map((d) =>
-    [
-      d.number,
-      d.title.replace(/\|/g, '\\|'),
-      d.author,
-      d.type ?? '',
-      d.bodyChars,
-      d.refs.map((r) => `#${r}`).join(' '),
-      yn(d.signals.hasDoneWhen),
-      d.signals.openQuestions || '',
-      yn(d.signals.unverified),
-      yn(d.signals.externalBlocker),
-      yn(d.signals.supersedes),
-      ...(withTriage ? [d.triage ? (d.triage.fresh ? 'fresh' : 'stale') : ''] : []),
-    ].join(' | '),
-  );
-  return [head, sep, ...rows.map((r) => `| ${r} |`)].join('\n');
+  const columns: [string, (d: IssueDigest) => string | number][] = [
+    ['#', (d) => d.number],
+    ['Title', (d) => d.title.replace(/\|/g, '\\|')],
+    ['Author', (d) => d.author],
+    ['Type', (d) => d.type ?? ''],
+    ['Chars', (d) => d.bodyChars],
+    ['Refs', (d) => d.refs.map((r) => `#${r}`).join(' ')],
+    ['Done-when', (d) => yn(d.signals.hasDoneWhen)],
+    ['Open Qs', (d) => d.signals.openQuestions || ''],
+    ['Unverified', (d) => yn(d.signals.unverified)],
+    ['Blocker', (d) => yn(d.signals.externalBlocker)],
+    ['Supersedes', (d) => yn(d.signals.supersedes)],
+  ];
+  if (digests.some((d) => d.triage !== undefined)) {
+    columns.push(['Triaged', (d) => (d.triage ? (d.triage.fresh ? 'fresh' : 'stale') : '')]);
+  }
+  const row = (cells: (string | number)[]) => `| ${cells.join(' | ')} |`;
+  return [
+    row(columns.map(([name]) => name)),
+    row(columns.map(() => '---')),
+    ...digests.map((d) => row(columns.map(([, cell]) => cell(d)))),
+  ].join('\n');
 }

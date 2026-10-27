@@ -19,7 +19,6 @@ function issue(over: Partial<RawIssue> = {}): RawIssue {
     number: 10,
     title: 'perf(db): speed up a read',
     body: 'Body.',
-    state: 'open',
     user: { login: 'Octo' },
     labels: [{ name: 'enhancement' }],
     created_at: '2026-01-01T00:00:00Z',
@@ -99,10 +98,11 @@ describe('digestIssue / renderTable', () => {
 
 describe('findTriageNote', () => {
   const marker = (sha: string) => `<!-- triage-assessment body-sha=${sha} -->\n## Triage assessment`;
-  const comment = (body: string, at: string): RawComment => ({ html_url: `https://x/${at}`, created_at: at, body });
+  const comment = (body: string | null, at: string): RawComment => ({ html_url: `https://x/${at}`, created_at: at, body });
 
-  it('returns null when no comment carries the marker', () => {
-    expect(findTriageNote([comment('looks good', 'a'), comment(null as unknown as string, 'b')], 'abc')).toBeNull();
+  it('returns null when no comment opens with the marker, including a reply that quotes one', () => {
+    const quoted = `> ${marker('abc')}\n\nAgreed.`;
+    expect(findTriageNote([comment('looks good', 'a'), comment(quoted, 'b'), comment(null, 'c')], 'abc')).toBeNull();
   });
 
   it('uses the latest assessment and marks it fresh only when the body hash matches', () => {
@@ -114,7 +114,7 @@ describe('findTriageNote', () => {
 
   it('flows through digestIssue and renders a Triaged column only when comments were read', () => {
     const i = issue();
-    const withNote = digestIssue(i, 0, [comment(marker(bodySha(i.body)), 't')]);
+    const withNote = digestIssue(i, 0, [comment(marker(bodySha('Body.')), 't')]);
     expect(withNote.triage?.fresh).toBe(true);
     expect(digestIssue(i, 0).triage).toBeUndefined();
     expect(digestIssue(i, 0, []).triage).toBeNull();
