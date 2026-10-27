@@ -116,15 +116,14 @@ async function main() {
   const selected = (await fetchAll<RawIssue>(`/repos/${repo}/issues?state=${state}`))
     .filter((i) => matchesFilter(i, filter))
     .sort((a, b) => b.number - a.number);
-  const issues = await Promise.all(
-    selected.map(async (i) =>
-      digestIssue(
-        i,
-        maxBody,
-        flags.has('comments') ? await fetchAll<RawComment>(`/repos/${repo}/issues/${i.number}/comments`) : undefined,
-      ),
-    ),
-  );
+  const issues = [];
+  for (const i of selected) {
+    // One request per issue, in sequence: GitHub asks clients not to fire requests concurrently.
+    const comments = flags.has('comments')
+      ? await fetchAll<RawComment>(`/repos/${repo}/issues/${i.number}/comments`)
+      : undefined;
+    issues.push(digestIssue(i, maxBody, comments));
+  }
 
   const output = format === 'json' ? JSON.stringify(issues, null, 2) : renderTable(issues);
   const out = one('out');
