@@ -7,7 +7,7 @@ follow the link that matches what you're doing. New to the codebase? Read
 | Doc | What's in it |
 |---|---|
 | [`glossary.md`](./glossary.md) | DGLS-specific domain terms (gauntlet, H2H, faction, RWR, veto, …) + a map of where each concept lives in the code |
-| [`season-lifecycle.md`](./season-lifecycle.md) | How a season runs end to end: each stage in order, who acts, what gates it, and the route or function behind it; who can do what (the access gates); every process timer |
+| [`season-lifecycle.md`](./season-lifecycle.md) | How a season runs end to end: each stage in order, who acts, what gates it, the code behind it, and the timers along the way |
 | [`patterns.md`](./patterns.md) | Cross-cutting conventions every change should follow |
 | [`recipes.md`](./recipes.md) | Step-by-step patterns for common changes (new stat, page, query helper, map) |
 | [`architecture.md`](./architecture.md) | Routes, auth, the mutation API, database schema, deployment |
@@ -22,20 +22,8 @@ follow the link that matches what you're doing. New to the codebase? Read
 | [`github-actions.md`](./github-actions.md) | When to run work as a GitHub Action vs a Vercel function, and how to build a background-job Action (the dispatch → workflow → `scripts/*` pattern) |
 | [`e2e.md`](./e2e.md) | Playwright end-to-end coverage: local Supabase stack, dev-mode mock auth, self-seeding fixtures, CI placement, and the Claude Code `SessionStart` hook that bootstraps the local stack for agent sessions |
 
-## Diagrams
-
-Diagrams are Mermaid code blocks inside the doc that owns their area: GitHub renders them, and they
-read as text in a diff or to an agent. Search the docs for ```` ```mermaid ```` to find them all.
-
-| Diagram | Kind | Where |
-|---|---|---|
-| A season from creation to archive | Flowchart | [`season-lifecycle.md`](./season-lifecycle.md#at-a-glance) |
-| Schedule draft → real weeks and matches | State | [`season-lifecycle.md`](./season-lifecycle.md#setup-upcoming) |
-| One match, from scheduling to the committed score | Sequence | [`season-lifecycle.md`](./season-lifecycle.md#regular-season-active) |
-| `seasons.status`, regular and gauntlet | State | [`architecture.md`](./architecture.md#season-status-lifecycle) |
-| Core league tables and their foreign keys | Entity-relationship | [`architecture.md`](./architecture.md#tables) |
-| `match_server_state.server_state` | State | [`hosting.md`](./hosting.md#server-state-machine) |
-| `demo_ingest` job statuses | State | [`hosting.md`](./hosting.md#job-state-background_jobs-job_type--demo_ingest) |
+Diagrams are Mermaid blocks in the doc that owns their area ([`patterns.md`](./patterns.md#diagrams-are-mermaid-next-to-the-prose-they-explain));
+search the docs for ```` ```mermaid ```` to find them all.
 
 For quick-start, env vars, and npm commands see the root [`README.md`](../README.md). Agent-specific
 guidance lives in [`../CLAUDE.md`](../CLAUDE.md) and [`../AGENTS.md`](../AGENTS.md). The historical

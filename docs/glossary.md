@@ -2,9 +2,8 @@
 
 A vocabulary and orientation reference for DGLS — for new contributors and AI agents alike.
 The README documents *what* the system does; this doc explains the *terms* and *where things live*
-so you don't have to reverse-engineer them from scratch each time. For how the terms fit together
-over a season — stages in order, who acts, the code behind each — see
-[`season-lifecycle.md`](./season-lifecycle.md).
+so you don't have to reverse-engineer them from scratch each time. For how a season runs end to end,
+see [`season-lifecycle.md`](./season-lifecycle.md).
 
 ## League format & domain terms
 
