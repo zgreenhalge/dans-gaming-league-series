@@ -23,7 +23,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
+      frontend: ${{ steps.frontend.outputs.frontend }}
       ingestion: ${{ steps.filter.outputs.ingestion }}
       ehog: ${{ steps.filter.outputs.ehog }}
     steps:
@@ -32,8 +32,23 @@ jobs:
 
       - name: Determine changed areas
         id: filter
-        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         with:
+          filters: |
+            ingestion:
+              - 'ingestion/**'
+            ehog:
+              - 'ehog/**'
+              - 'src/lib/ehog.ts'
+
+      # Its own step because the exclusions need predicate-quantifier 'every': a file counts only if
+      # it matches every pattern. Under the default 'some', '**' alone matches every file, so the
+      # '!' patterns never exclude anything — and 'every' would break the two-pattern ehog filter.
+      - name: Determine frontend changes
+        id: frontend
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        with:
+          predicate-quantifier: 'every'
           filters: |
             frontend:
               - '**'
@@ -41,11 +56,6 @@ jobs:
               - '!docs/**'
               - '!*.md'
               - '!LICENSE'
-            ingestion:
-              - 'ingestion/**'
-            ehog:
-              - 'ehog/**'
-              - 'src/lib/ehog.ts'
 
   frontend:
     needs: changes
