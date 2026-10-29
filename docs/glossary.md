@@ -6,8 +6,10 @@ so you don't have to reverse-engineer them from scratch each time.
 
 ## League format & domain terms
 
-- **Individual Rotating Mixer** — the league format. Teammates change every week (randomly drawn),
-  so match outcomes are partly a function of your draw, not just your skill. RWR% and ADR are
+- **Individual Rotating Mixer** — the league format. Teammates change every week (the round-robin
+  schedule pairs every two players as teammates exactly once — `buildSeasonSchedule()`,
+  `src/lib/season-schedule.ts`), so match outcomes are partly a function of your draw, not just your
+  skill. RWR% and ADR are
   rate-normalized stats that help correct for that when breaking ties in the canonical leaderboard
   sort.
 - **ADR (Average Damage per Round)** — the platform's primary individual skill metric; the
@@ -44,6 +46,17 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,
   `skins_ban2`, `shirts_pick`, `skins_pick`, `skins_starting_side` on `Match`). Rendered by
   `VetoSequence.tsx`. Gauntlet seasons use a *different* veto flow — see below.
+  - **Regular-season order** — `PATCH /api/matches/[id]/veto` walks `REGULAR_STEPS`: SHIRTS bans
+    one map (`shirts_ban`), SKINS bans two (`skins_ban1`, `skins_ban2`), SHIRTS picks one of the two
+    maps left (`shirts_pick`), and SKINS chooses its starting side (`skins_starting_side`, `CT` or
+    `T`). The route has no SKINS pick step and doesn't use `shirts_ban2`, a gauntlet slot. A new
+    entry must fill the next empty step; either player on that step's faction fills it, and may later
+    overwrite their faction's filled step. A map must be in the season's `map_pool` and not already
+    used in this veto.
+  - **Veto window** — a player can veto only once the match has a `scheduled_at`, and only from 10
+    minutes before it; an admin can act at any time and is the only one who can clear a step. No
+    step changes once the match has a played score. Completing the veto provisions the match server
+    ([`hosting.md`](./hosting.md)).
   - **Effective played map** is `shirts_pick ?? skins_pick`, not `skins_pick` alone. When shirts
     made the pick, `shirts_pick` is set and `skins_pick` is `null`; when skins made the pick,
     `shirts_pick` is `null` and `skins_pick` is set. Always resolve with `effectivePickedMap()`
