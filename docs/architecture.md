@@ -408,9 +408,11 @@ resolution sweeps every round for every fully-materialized pod without a thread 
 targeting a single "next round" the way `publishWeekThreads()` targets a single next week; an explicit
 round number still targets just that round. `closeGauntletPodThreadIfDone()` archives/locks it only once *both* games are played, not after
 the first (`writeMatchScore()`'s hook branches on `is_gauntlet` to call this instead of the regular
-`closeMatchThread()`). Only Game 1 ever gets a scheduled-reminder job or a Discord Scheduled Event
-sync target (`discord-event-sync.ts`'s `podPartnerId` parameter propagates a synced time onto Game 2
-without giving it a reminder of its own) — one thread, one event, one reminder per pod.
+`closeMatchThread()`). Only Game 1 is a Discord Scheduled Event sync target — one thread and one
+event per pod. `syncMatchScheduledEvent()`'s `podPartnerId` parameter copies a synced time onto
+Game 2 without scheduling a reminder for it, so an event-synced pod gets one reminder. A time set by
+hand through `PATCH /api/matches/[id]/schedule` schedules a reminder for whichever game it sets, so a
+pod scheduled by hand gets one per game.
 
 `DELETE /api/seasons/[id]/gauntlet` reverses either step — it refuses once any of the gauntlet's
 matches has a played score, otherwise deletes the gauntlet season and everything materialized under

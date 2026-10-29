@@ -371,8 +371,9 @@ async function syncMatchScheduledEvent(
   // This is the other write path for matches.scheduled_at (PATCH /api/matches/[id]/schedule only
   // covers a human editing it by hand) — scheduleMatchReminder() (re)schedules the 1-hour reminder's
   // one-shot pg_cron job here too, or a match whose time only ever comes from Discord event sync
-  // would never get a reminder scheduled at all. Only `match` itself gets one — a gauntlet pod's
-  // Game 2 (`podPartnerId`) never does, one reminder per pod, same as the manual schedule route.
+  // would never get a reminder scheduled at all. Only `match` itself gets one here — a gauntlet pod's
+  // Game 2 (`podPartnerId`) takes the synced time but no reminder, so an event-synced pod has one.
+  // The manual schedule route differs: it reminds whichever game it sets.
   // Awaited directly (not deferred) since this file runs as a standalone script
   // (scripts/discord-event-sync.ts, via GitHub Actions), not a Next.js request, so there's no
   // response to defer past.
