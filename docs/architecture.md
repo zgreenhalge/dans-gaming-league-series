@@ -80,7 +80,7 @@ Players authenticate via **Steam OpenID**. The flow:
 1. User clicks "Sign in with Steam" → `/api/auth/steam` redirects to Steam
 2. Steam bounces back to `/api/auth/steam/callback`, which validates the response, mints a short-lived signed token, and redirects to `/auth/steam`
 3. The `/auth/steam` page calls NextAuth's `signIn("steam-credentials", { token })` to establish a session
-4. On first login a `RegisterModal` appears. If the URL carries an admin-issued claim link (`?claim=<token>`, minted via `GET /api/players/[id]/claim-link` and handed out of band), the player confirms and links their Steam account to that specific, already-known player record; otherwise they create a new one. Self-service linking to an arbitrary existing record is not possible — the claim token is what proves the player was actually handed that record.
+4. On first login a `RegisterModal` appears. If the URL carries an admin-issued claim link (`?claim=<token>`, minted via `GET /api/players/[id]/claim-link` and handed out of band, valid for 7 days — `CLAIM_TTL_MS` in `src/lib/playerClaim.ts`), the player confirms and links their Steam account to that specific, already-known player record; otherwise they create a new one. Self-service linking to an arbitrary existing record is not possible — the claim token is what proves the player was actually handed that record.
 
 Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates. `is_admin` is carried on the session token as `session.user.isAdmin`, re-derived from the DB on every session read rather than cached for the JWT's lifetime — a demotion (or promotion) takes effect on that player's very next request. It gates the Topbar's admin-console link; `src/app/admin/layout.tsx` is the actual enforcement point for every route under `/admin/**`, so individual admin pages don't repeat the check.
 
@@ -211,7 +211,7 @@ erDiagram
 | Table | Purpose |
 |---|---|
 | `data_version` | Singleton (`id` pinned to `1`): `version`, bumped by `bump_data_version()` on every content write. The freshness key of the read cache above. Not in the Realtime publication |
-| `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[], `null` until decided — empty is valid while the season is `UPCOMING`, exactly 5 maps otherwise), `target_win_rounds`, `buy_in_amount` |
+| `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[], `null` until decided — empty is valid while the season is `UPCOMING`, exactly 5 maps otherwise), `target_win_rounds` (13 for every season `POST /api/seasons` creates), `buy_in_amount` |
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
 | `season_players` | Explicit roster for a season: `season_id`, `player_id`, unique per `(season_id, player_id)`. Only meaningful before matches exist — once a season has been played, `player_match_stats` is the source of who actually participated. Read alone via `getSeasonRoster()` (roster editor, schedule generation — both want the raw pre-schedule signup list specifically); `getSeasonParticipants()` unions it with the match-derived membership for callers that need "who's part of the season right now" regardless of stage (the `@Participants` Discord role sync). Mutated through `POST`/`DELETE /api/seasons/[id]/players` (admins manage any player; a player can only add/remove themselves via `requireSeasonRosterAccess()`, `src/lib/season-roster-access.ts`), editable only while the season is `UPCOMING` — enforced atomically by the `season_players_upcoming_only` trigger, which row-locks the parent season and re-checks its status inside the same transaction as the insert/delete, not just by the route's own pre-check |
 | `season_schedule_draft_weeks` / `season_schedule_draft_matches` | A regular season's editable schedule draft, generated from `season_players` by `buildRosterSchedule()` (`season-schedule-engine.ts`) and persisted by `generateSeasonScheduleDraft()` (`season-schedule-draft-engine.ts`) via `POST /api/seasons/[id]/schedule`. Mirrors `weeks`/`matches` in shape — `bye_player_id` is singular because `doubleheaderPolicy: 'auto'` caps byes at one per week by construction — but stays in its own tables until confirmed, so generating or hand-editing it never touches real `weeks`/`matches` rows. `season_schedule_draft_matches` uses flat `shirts_player1_id`/`shirts_player2_id`/`skins_player1_id`/`skins_player2_id` columns rather than a normalized slot table, since (unlike a gauntlet pod slot) a draft match slot is always just a player_id, never a placeholder sourced from another match's winner. Read via `getSeasonScheduleDraft()` (existence-only checks use the cheaper `hasSeasonScheduleDraft()`). `validateDraftIntegrity()`/`validateDraftCompleteness()` (`season-schedule-validation.ts`) are the two-tier check hand-edits and confirmation both go through — integrity is hard (structural soundness: no self-paired match, at most 2 appearances/week, a bye player never also plays, every referenced player is on the season's current roster), completeness is soft everywhere except confirmation, which requires both. Hand-editing happens in `SeasonScheduleDraftEditor` (`/admin/seasons/schedule/[id]`) via `PATCH /api/seasons/[id]/schedule` (`saveSeasonScheduleDraft()`). `confirmSeasonScheduleDraft()` materializes a validated draft into real `weeks`/`matches` plus zero-stat placeholder `player_match_stats` rows (same pattern as `materializePod()`) via `POST /api/seasons/[id]/schedule/confirm` — refuses if the season already has real weeks, and leaves the draft rows untouched either way. The validated draft snapshot itself (not a fresh read of the draft tables) is what the `confirm_season_schedule_draft()` DB function materializes, passed as its `p_weeks` argument — otherwise a concurrent hand-edit landing between validation and the DB call could change what's persisted without changing what was actually validated. `rollbackSeasonScheduleDraft()` (`POST /api/seasons/[id]/schedule/rollback`) is confirm's inverse: deletes real `weeks` (cascading `matches`/`player_match_stats` — both `on delete cascade`) restricted to weeks with no played match yet, so a played match is never silently deleted; a week with even one is left untouched and reported in the response's `protectedWeekNumbers`. Never touches the draft rows a confirm materialized from, so once every remaining real week is either rolled back or played, the draft is editable again through the normal generate/save/delete/confirm flow — for a season still `UPCOMING`, since those routes refuse any other status and rollback doesn't change it.<br><br>`generateSeasonScheduleDraft()`/`saveSeasonScheduleDraft()`/`deleteSeasonScheduleDraft()`/`confirmSeasonScheduleDraft()`/`rollbackSeasonScheduleDraft()` each call a single Postgres function (`generate_season_schedule_draft()`/`save_season_schedule_draft()`/`delete_season_schedule_draft()`/`confirm_season_schedule_draft()`/`rollback_season_schedule_draft()`, `supabase/migrations/`) that does the operation's whole delete/insert-or-update sequence in one DB transaction — mirroring the `reconcile_gauntlet_draft()` pattern — so a mid-operation failure rolls back cleanly with no partial state and no compensating cleanup code. Every one of these functions opens by calling the shared `lock_and_check_season_materialized()` helper, which takes `select ... from seasons where id = p_season_id for update` as its first statement — a real Postgres row lock that serializes concurrent generate/save/delete/confirm/rollback calls for the same season at the database level — and returns whether the season already has real `weeks`, so the lock-then-check idiom and the definition of "materialized" live in one place rather than being repeated in each caller (`clear_season_schedule_draft()` similarly factors out the delete-matches-then-weeks sequence shared by generate and delete). A caller blocks until the other transaction commits rather than getting an immediate "locked" error, which is fine since every one of these operations is fast. Each function's own "is this season already materialized?" check runs after acquiring that lock, inside the same transaction as the write it guards, so two concurrent calls (e.g. a generate and a confirm) can't interleave — whichever acquires the lock first fully commits, including its own check, before the other's lock wait releases. The first three map an `already-materialized` result back to `ScheduleAlreadyMaterializedError` in `season-schedule-draft-engine.ts` — `season.status === 'UPCOMING'` alone doesn't rule this out, since confirming deliberately leaves status untouched (activation is a separate action), so without this check an admin could keep editing a draft that's already been superseded by a real schedule. If a call to one of these functions errors, `recordOpsError()` (entity type `season`, operation `schedule_generate`/`schedule_confirm`) surfaces that for manual follow-up. |
@@ -268,18 +268,18 @@ balance unified across regular season and gauntlet play, including this same gau
 already-decided-but-unplayed pods.
 
 The shape for each qualifier count (seed 1 = the regular season's canonical-sort leader). Seeds past
-the field are in the plan's `drops` and don't qualify; every shape is capped at 8 games except N = 20's
-10. The Gauntlet Preview tool (`/tools/gauntlet-preview`) draws any of these:
+the field are in the plan's `drops` and don't qualify. The Gauntlet Preview tool
+(`/tools/gauntlet-preview`) draws any of these:
 
-| Qualifiers (N) | Shape | Seeds that don't qualify |
-|---|---|---|
-| 4 | The final pod only | — |
-| 5–7 | Rest ladder (`buildLadder()`): every round is one wildcard pod of the 4 lowest-seeded live players while the top seeds rest; seed 1 rests until the final | — |
-| 8 | A wildcard pod (seeds 1–4) and a single pod (5–8) feed the final | — |
-| 9–11 | R1: seed 1 rests, wildcard {2–5}, single {6–9}; R2: seed 1 rests again, wildcard over the 4 R1 survivors; final = seed 1 + 3 R2 survivors | 10+ |
-| 12 | R1: seeds 1–3 rest, two single pods snake-seeded over {4–11}; R2: seed 1 rests, wildcard over {2, 3} + the 2 R1 survivors; final = seed 1 + 3 R2 survivors | 12 |
-| 13–19 | Plateau (`buildPlateau()`): seed 1 byes to the final; seeds 2–13 snake-seed into 3 single pods | 14+ |
-| 20 | Four single pods snake-seeded over seeds 1–16 feed the final | 17–20 |
+| Qualifiers (N) | Shape | Rounds | Games | Seeds that don't qualify |
+|---|---|---|---|---|
+| 4 | The final pod only | 1 | 2 | — |
+| 5–7 | Rest ladder (`buildLadder()`): every round is one wildcard pod of the 4 lowest-seeded live players while the top seeds rest; seed 1 rests until the final | N − 3 | 2 × (N − 3) | — |
+| 8 | A wildcard pod (seeds 1–4) and a single pod (5–8) feed the final | 2 | 6 | — |
+| 9–11 | R1: seed 1 rests, wildcard {2–5}, single {6–9}; R2: seed 1 rests again, wildcard over the 4 R1 survivors; final = seed 1 + 3 R2 survivors | 3 | 8 | 10+ |
+| 12 | R1: seeds 1–3 rest, two single pods snake-seeded over {4–11}; R2: seed 1 rests, wildcard over {2, 3} + the 2 R1 survivors; final = seed 1 + 3 R2 survivors | 3 | 8 | 12 |
+| 13–19 | Plateau (`buildPlateau()`): seed 1 byes to the final; seeds 2–13 snake-seed into 3 single pods | 2 | 8 | 14+ |
+| 20 | Four single pods snake-seeded over seeds 1–16 feed the final | 2 | 10 | 17–20 |
 
 Building and seeding a bracket are two separate steps, because the shape only depends on the
 qualifier *count*, not on who qualified:
@@ -630,6 +630,7 @@ stateDiagram-v2
         UPCOMING --> ACTIVE : schedule confirmed (activateSeason)
         ACTIVE --> ARCHIVED : every match played (checkSeasonCompletion)
         ARCHIVED --> ACTIVE : paired gauntlet reset (deleteGauntletSeason)
+        ACTIVE --> ARCHIVED : rebuilt gauntlet finishes (checkGauntletCompletion)
         UPCOMING --> [*] : DELETE /api/seasons/[id]
     }
     state "Gauntlet season" as gauntlet {
@@ -638,6 +639,7 @@ stateDiagram-v2
         [*] --> G_ACTIVE : bracket shape built (tryBuildGauntletShape)
         G_ACTIVE --> G_ARCHIVED : final pod and every match played (checkGauntletCompletion)
         G_ACTIVE --> [*] : reset (deleteGauntletSeason)
+        G_ARCHIVED --> [*] : reset with force (deleteGauntletSeason)
     }
 ```
 

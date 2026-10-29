@@ -274,8 +274,9 @@ stateDiagram-v2
     dismissed --> [*]
 ```
 
-`stage` moves through `received → queued → fetch → parse → confirmed` within that — `fetch` covers the
-DatHost pull, `parse` the rest — for progress detail without a separate status. Auto-commit takes the
+`stage` adds progress detail without a separate status: it moves through
+`received → queued → fetch → parse → confirmed`, where `fetch` (the DatHost pull) and `parse` (the
+rest) both happen inside the `running` status. Auto-commit takes the
 `running → confirmed` status edge directly (no `parsed` stop) — the auto-commit predicate check and the write
 both happen inside the `running` status, after the `parse` stage.
 
