@@ -2,7 +2,9 @@
 
 A vocabulary and orientation reference for DGLS — for new contributors and AI agents alike.
 The README documents *what* the system does; this doc explains the *terms* and *where things live*
-so you don't have to reverse-engineer them from scratch each time.
+so you don't have to reverse-engineer them from scratch each time. For how the terms fit together
+over a season — stages in order, who acts, the code behind each — see
+[`season-lifecycle.md`](./season-lifecycle.md).
 
 ## League format & domain terms
 
@@ -33,7 +35,7 @@ so you don't have to reverse-engineer them from scratch each time.
   (win/loss + margin of victory), not individual-stat-based. Updated via full chronological recompute
   after every score submission. See [`ehog.md`](./ehog.md) for the full engine docs.
   Not to be confused with the aspirational *Player Rating* sabremetric composite in
-  [`calculations.md`](./calculations.md#player-rating-aspirational--requires-demo-data).
+  [`calculations.md`](./calculations.md#player-rating).
 - **Seed EHOG** — an admin-configured starting EHOG rating (`players.seed_ehog`) for a known new
   player, used in place of the global new-player default until their first rated match. Set from the
   admin console's Manage → Player view; see [`ehog.md`](./ehog.md#seeding-a-known-players-starting-rating).
