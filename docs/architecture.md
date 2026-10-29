@@ -206,56 +206,6 @@ erDiagram
     seasons ||--o{ season_schedule_draft_weeks : "schedule draft"
     season_schedule_draft_weeks ||--o{ season_schedule_draft_matches : "holds"
     players ||--o{ player_rating_history : "EHOG history"
-
-    seasons {
-        int id PK
-        text name UK
-        season_status_type status "UPCOMING, ACTIVE, ARCHIVED"
-        bool is_gauntlet
-        text_array map_pool
-        int target_win_rounds
-    }
-    weeks {
-        int id PK
-        int season_id FK
-        int week_number
-        int bye_player_id FK
-    }
-    matches {
-        int id PK
-        int week_id FK
-        timestamptz scheduled_at
-        text final_score "SHIRTS-SKINS"
-        bool is_playoff_game
-    }
-    player_match_stats {
-        int id PK
-        int match_id FK
-        int player_id FK
-        faction_side_type faction "SHIRTS or SKINS"
-        bool is_win
-    }
-    players {
-        int id PK
-        text name UK
-        text steam_id UK
-        text discord_id UK
-        bool is_admin
-    }
-    gauntlet_pods {
-        int id PK
-        int season_id FK
-        int round_number
-        text advance_rule "single or wildcard"
-        bool is_final
-    }
-    gauntlet_pod_slots {
-        int id PK
-        int pod_id FK
-        int slot_index
-        text source_kind "seed or pod"
-        int player_id FK
-    }
 ```
 
 | Table | Purpose |
@@ -321,15 +271,15 @@ The shape for each qualifier count (seed 1 = the regular season's canonical-sort
 the field are in the plan's `drops` and don't qualify; every shape is capped at 8 games except N = 20's
 10. The Gauntlet Preview tool (`/tools/gauntlet-preview`) draws any of these:
 
-| Qualifiers (N) | Shape | Rounds | Games | Seeds that don't qualify |
-|---|---|---|---|---|
-| 4 | The final pod only | 1 | 2 | — |
-| 5–7 | Rest ladder (`buildLadder()`): every round is one wildcard pod of the 4 lowest-seeded live players while the top seeds rest; seed 1 rests until the final | N − 3 | 2 × (N − 3) | — |
-| 8 | A wildcard pod (seeds 1–4) and a single pod (5–8) feed the final | 2 | 6 | — |
-| 9–11 | R1: seed 1 rests, wildcard {2–5}, single {6–9}; R2: seed 1 rests again, wildcard over the 4 R1 survivors; final = seed 1 + 3 R2 survivors | 3 | 8 | 10+ |
-| 12 | R1: seeds 1–3 rest, two single pods snake-seeded over {4–11}; R2: seed 1 rests, wildcard over {2, 3} + the 2 R1 survivors; final = seed 1 + 3 R2 survivors | 3 | 8 | 12 |
-| 13–19 | Plateau (`buildPlateau()`): seed 1 byes to the final; seeds 2–13 snake-seed into 3 single pods | 2 | 8 | 14+ |
-| 20 | Four single pods snake-seeded over seeds 1–16 feed the final | 2 | 10 | 17–20 |
+| Qualifiers (N) | Shape | Seeds that don't qualify |
+|---|---|---|
+| 4 | The final pod only | — |
+| 5–7 | Rest ladder (`buildLadder()`): every round is one wildcard pod of the 4 lowest-seeded live players while the top seeds rest; seed 1 rests until the final | — |
+| 8 | A wildcard pod (seeds 1–4) and a single pod (5–8) feed the final | — |
+| 9–11 | R1: seed 1 rests, wildcard {2–5}, single {6–9}; R2: seed 1 rests again, wildcard over the 4 R1 survivors; final = seed 1 + 3 R2 survivors | 10+ |
+| 12 | R1: seeds 1–3 rest, two single pods snake-seeded over {4–11}; R2: seed 1 rests, wildcard over {2, 3} + the 2 R1 survivors; final = seed 1 + 3 R2 survivors | 12 |
+| 13–19 | Plateau (`buildPlateau()`): seed 1 byes to the final; seeds 2–13 snake-seed into 3 single pods | 14+ |
+| 20 | Four single pods snake-seeded over seeds 1–16 feed the final | 17–20 |
 
 Building and seeding a bracket are two separate steps, because the shape only depends on the
 qualifier *count*, not on who qualified:
@@ -690,9 +640,6 @@ stateDiagram-v2
         G_ACTIVE --> [*] : reset (deleteGauntletSeason)
     }
 ```
-
-`checkGauntletCompletion()` also archives the paired regular season if it is still `ACTIVE`, and a
-gauntlet with a played match resets only with `{ force: true }`.
 
 **`@Participants` Discord role sync (#397).** `activateSeason()` best-effort grants the role to
 every linked (`discord_id` set) player on the roster — a catch-up pass covering anyone who linked

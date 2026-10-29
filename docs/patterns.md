@@ -15,8 +15,6 @@ assuming this list is complete:
 - Changing a stat or ranking formula → [`calculations.md`](./calculations.md) **first** (the math is
   load-bearing and easy to get subtly wrong).
 - A data-fetching/query helper → [`recipes.md`](./recipes.md) + [`glossary.md`](./glossary.md).
-- How a season runs end to end, who can do what, or a process timer →
-  [`season-lifecycle.md`](./season-lifecycle.md).
 - A route, the mutation API, the schema, or deployment → [`architecture.md`](./architecture.md).
 - CSS, hover/lift, layout, or a shared UI primitive → [`visual-conventions.md`](./visual-conventions.md).
 - The EHOG rating engine → [`ehog.md`](./ehog.md) (and mirror any math change Python ↔ TS).
@@ -225,11 +223,10 @@ domain concept add it to [`glossary.md`](./glossary.md). A stale doc is worse th
 ## Diagrams are Mermaid, next to the prose they explain
 
 When a flow, a state machine or a set of relationships is easier to see than to read, draw it as a
-` ```mermaid ` code block in the doc that owns the area, never as an image file. GitHub renders it, a
+` ```mermaid ` code block in the doc that owns the area, never as an image file: GitHub renders it, a
 diff shows exactly what changed, and an agent reads it as text. Label nodes and edges with the same
 symbol names the prose cites (`activateSeason()`, `server_state`), so a grep for the symbol finds the
-diagram too. A diagram is documentation like any other: update it in the same change as the behavior
-it draws, and list a new one in [`README.md`](./README.md)'s Diagrams table.
+diagram too.
 
 ## Client-only values: dates, times, and hydration safety
 

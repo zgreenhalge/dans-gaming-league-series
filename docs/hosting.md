@@ -35,7 +35,7 @@ played, meaningless once scored), not match data — see issue #288.
 
 | Column | Meaning |
 |---|---|
-| `server_state` | `idle → provisioning → live → tearing_down → done` (or `failed`) |
+| `server_state` | where the match is in the server lifecycle drawn below |
 | `dathost_server_id` | the DatHost server this match claimed (always the one shared id today) |
 | `connect_string` | `ip:port` for the join/`connect` link, set when `live`, cleared on teardown |
 | `server_started_at` | when provisioning began (drives the panel's progress estimate) |
@@ -254,13 +254,6 @@ it parses.
 
 Schema-free by design — status lives in the existing table, detail lives in the R2 artifact:
 
-`received → queued → running → parsed | quarantined → confirmed | dismissed | failed`
-
-`stage` moves through `received → queued → fetch → parse → confirmed` within that — `fetch` covers the
-DatHost pull, `parse` the rest — for progress detail without a separate status. Auto-commit takes the
-`running → confirmed` status edge directly (no `parsed` stop) — the auto-commit predicate check and the write
-both happen inside the `running` status, after the `parse` stage.
-
 ```mermaid
 stateDiagram-v2
     [*] --> received : map_result (POST /api/ingest/matchzy-log)
@@ -280,6 +273,11 @@ stateDiagram-v2
     confirmed --> [*]
     dismissed --> [*]
 ```
+
+`stage` moves through `received → queued → fetch → parse → confirmed` within that — `fetch` covers the
+DatHost pull, `parse` the rest — for progress detail without a separate status. Auto-commit takes the
+`running → confirmed` status edge directly (no `parsed` stop) — the auto-commit predicate check and the write
+both happen inside the `running` status, after the `parse` stage.
 
 ## Scrims
 
