@@ -7,6 +7,7 @@ A stat tracker for DGLS — a **CS2 Wingman league** played in the Individual Ro
 Full reference docs live in [`docs/`](./docs/). Start with [`docs/README.md`](./docs/README.md) for the index. Highlights:
 
 - [`docs/glossary.md`](./docs/glossary.md) — DGLS domain terms + a map of where each concept lives in the code (read this first)
+- [`docs/season-lifecycle.md`](./docs/season-lifecycle.md) — how a season runs end to end
 - [`docs/patterns.md`](./docs/patterns.md) — cross-cutting conventions every change should follow
 - [`docs/recipes.md`](./docs/recipes.md) — step-by-step patterns for common changes
 - [`docs/architecture.md`](./docs/architecture.md) — routes, auth, mutation API, database schema, deployment

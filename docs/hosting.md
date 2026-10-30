@@ -35,11 +35,27 @@ played, meaningless once scored), not match data — see issue #288.
 
 | Column | Meaning |
 |---|---|
-| `server_state` | `idle → provisioning → live → tearing_down → done` (or `failed`) |
+| `server_state` | where the match is in the server lifecycle drawn below |
 | `dathost_server_id` | the DatHost server this match claimed (always the one shared id today) |
 | `connect_string` | `ip:port` for the join/`connect` link, set when `live`, cleared on teardown |
 | `server_started_at` | when provisioning began (drives the panel's progress estimate) |
 | `teardown_at` | when a scheduled (non-immediate) teardown's grace period ends — set on entering `tearing_down`, cleared once the stop actually runs |
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle : no row yet
+    idle --> provisioning : provisionMatchServer() (veto complete, or Provision Server)
+    done --> provisioning : provision again (a corrected veto map)
+    failed --> provisioning : retry
+    provisioning --> live : server ready, match config loaded
+    provisioning --> failed : any error
+    live --> tearing_down : teardownMatchServer() (map_result, score write, admin stop)
+    tearing_down --> done : stop runs (inline, or on the first read after teardown_at)
+    live --> done : DatHost reports the server stopped (getReconciledServerState)
+```
+
+A provision refused with `ServerBusyError` (another match, a scrim or a console launch holds the
+server) leaves the row unchanged — see the concurrency guard below.
 
 The in-match `MatchServerPanel` starts from the `server_state` the match page reads with
 `getMatchServerState()` (passed as `initialState`, for every viewer) and then follows the row over
@@ -238,10 +254,29 @@ it parses.
 
 Schema-free by design — status lives in the existing table, detail lives in the R2 artifact:
 
-`received → queued → running → parsed | quarantined → confirmed | dismissed | failed`
+```mermaid
+stateDiagram-v2
+    [*] --> received : map_result (POST /api/ingest/matchzy-log)
+    [*] --> queued : manual dispatch (POST /api/matches/[id]/demo/dispatch)
+    received --> queued : demo-ingest.yml dispatched
+    queued --> running : the Action starts
+    running --> confirmed : trusted auto-commit (evaluateAutoCommit)
+    running --> parsed : staged for review
+    running --> quarantined : quarantineDemo() flags it
+    running --> failed : error
+    parsed --> confirmed : Confirm (writeMatchScore)
+    quarantined --> confirmed : Confirm (writeMatchScore)
+    parsed --> dismissed : Dismiss
+    quarantined --> dismissed : Dismiss
+    failed --> queued : manual dispatch
+    failed --> confirmed : score confirmed another way (writeMatchScore)
+    confirmed --> [*]
+    dismissed --> [*]
+```
 
-`stage` moves through `received → queued → fetch → parse → confirmed` within that — `fetch` covers the
-DatHost pull, `parse` the rest — for progress detail without a separate status. Auto-commit takes the
+`stage` adds progress detail without a separate status: it moves through
+`received → queued → fetch → parse → confirmed`, where `fetch` (the DatHost pull) and `parse` (the
+rest) both happen inside the `running` status. Auto-commit takes the
 `running → confirmed` status edge directly (no `parsed` stop) — the auto-commit predicate check and the write
 both happen inside the `running` status, after the `parse` stage.
 
