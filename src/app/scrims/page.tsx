@@ -24,7 +24,7 @@ export default async function ScrimsPage() {
   const [session, overview, playersById] = await Promise.all([getSession(), getScrimOverview(new Date()), getPlayersById()]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
-  const { schedule, slots, next, started, signups } = overview;
+  const { schedule, slots, next, started, checkInOpen, signups } = overview;
 
   return (
     <div className="min-h-screen">
@@ -37,6 +37,7 @@ export default async function ScrimsPage() {
               key={next.date}
               night={next}
               started={started}
+              checkInOpen={checkInOpen}
               signups={signups}
               currentPlayerId={currentPlayerId}
               isAdmin={isAdmin}

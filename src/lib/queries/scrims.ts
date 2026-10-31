@@ -4,6 +4,7 @@ import {
   scrimNightSlots,
   nextScrimNight,
   hasScrimNightStarted,
+  isScrimCheckInOpen,
   type ScrimCommitment,
   type ScrimNightRow,
   type ScrimNightSlot,
@@ -18,6 +19,8 @@ export interface ScrimSignupEntry {
   steam_avatar_url: string | null;
   commitment: ScrimCommitment;
   signed_up_at: string;
+  /** When they checked in on the night, or `null`. */
+  checked_in_at: string | null;
 }
 
 /** The weekly scrim slot, or `null` before an admin has set one. */
@@ -44,13 +47,13 @@ export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): 
  *  missing is omitted, as in `getSeasonRoster()`. */
 export const getScrimSignups = persistentQuery('getScrimSignups', async (nightId: number): Promise<ScrimSignupEntry[]> => {
   const [{ data, error }, playersById] = await Promise.all([
-    getAdminClient().from('scrim_signups').select('player_id, commitment, signed_up_at').eq('night_id', nightId),
+    getAdminClient().from('scrim_signups').select('player_id, commitment, signed_up_at, checked_in_at').eq('night_id', nightId),
     getPlayersById(),
   ]);
   if (error) throw error;
 
   const entries: ScrimSignupEntry[] = [];
-  for (const r of (data ?? []) as { player_id: number; commitment: ScrimCommitment; signed_up_at: string }[]) {
+  for (const r of (data ?? []) as { player_id: number; commitment: ScrimCommitment; signed_up_at: string; checked_in_at: string | null }[]) {
     const player = playersById.get(r.player_id);
     if (!player) continue;
     entries.push({ ...r, player_name: player.name, steam_avatar_url: player.steam_avatar_url });
@@ -73,6 +76,8 @@ export interface ScrimOverview {
   next: ScrimNightSlot | null;
   /** Whether `next` has started. */
   started: boolean;
+  /** Whether players can check in to `next` (`isScrimCheckInOpen()`). */
+  checkInOpen: boolean;
   /** `next`'s signups (empty while it has no `scrim_nights` row). */
   signups: ScrimSignupEntry[];
 }
@@ -82,5 +87,12 @@ export async function getScrimOverview(now: Date): Promise<ScrimOverview> {
   const { schedule, slots } = await getScrimNights(now);
   const next = nextScrimNight(slots);
   const signups = next?.nightId != null ? await getScrimSignups(next.nightId) : [];
-  return { schedule, slots, next, started: next != null && hasScrimNightStarted(next, now), signups };
+  return {
+    schedule,
+    slots,
+    next,
+    started: next != null && hasScrimNightStarted(next, now),
+    checkInOpen: next != null && isScrimCheckInOpen(next, now),
+    signups,
+  };
 }

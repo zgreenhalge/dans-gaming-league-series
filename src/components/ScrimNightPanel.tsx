@@ -10,12 +10,14 @@ import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPl
 import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
+import { StatusPill } from './StatusPill';
 import type { ScrimSignupEntry } from '@/lib/queries';
 import { SCRIM_COMMITMENTS, type ScrimCommitment, type ScrimNightSlot } from '@/lib/scrim-schedule';
 
 interface Props {
   night: ScrimNightSlot;
   started: boolean;
+  checkInOpen: boolean;
   signups: ScrimSignupEntry[];
   currentPlayerId: number | null;
   isAdmin: boolean;
@@ -40,8 +42,9 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
 };
 
 /** The next scrim night: when it is, who's coming (definite, then maybe), and the controls to sign up,
- *  switch between definite and maybe, or drop out. Admins can do the same for any player. */
-export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAdmin, allPlayers }: Props) {
+ *  switch between definite and maybe, or drop out — and, once check-in opens, to check in or out
+ *  (matchmaking only draws from checked-in players). Admins can do all of it for any player. */
+export function ScrimNightPanel({ night, started, checkInOpen, signups, currentPlayerId, isAdmin, allPlayers }: Props) {
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
   // The player whose signup is being changed, so only their controls show as pending.
@@ -52,14 +55,22 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
 
   const mine = signups.find((s) => s.player_id === currentPlayerId) ?? null;
 
-  function mutate(playerId: number, commitment: ScrimCommitment | null) {
+  const checkedInCount = signups.filter((s) => s.checked_in_at).length;
+
+  function send(playerId: number, method: 'POST' | 'DELETE', path: 'signups' | 'check-in', body: Record<string, unknown> = {}) {
     setTarget(playerId);
     return run(async () => {
-      const url = `/api/scrims/${night.date}/signups`;
-      if (commitment) await sendJsonRequest('POST', url, { player_id: playerId, commitment });
-      else await sendJsonRequest('DELETE', url, { player_id: playerId });
+      await sendJsonRequest(method, `/api/scrims/${night.date}/${path}`, { player_id: playerId, ...body });
       startTransition(() => router.refresh());
     });
+  }
+
+  function mutate(playerId: number, commitment: ScrimCommitment | null) {
+    return commitment ? send(playerId, 'POST', 'signups', { commitment }) : send(playerId, 'DELETE', 'signups');
+  }
+
+  function setCheckIn(playerId: number, checkedIn: boolean) {
+    return send(playerId, checkedIn ? 'POST' : 'DELETE', 'check-in');
   }
 
   function group(commitment: ScrimCommitment) {
@@ -81,19 +92,32 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
               avatarUrl={s.steam_avatar_url}
               isMe={s.player_id === currentPlayerId}
             >
-              {isAdmin && (
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => mutate(s.player_id, other)}
-                    disabled={pending === s.player_id}
-                    className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
-                  >
-                    Make {COMMITMENT_LABEL[other].toLowerCase()}
-                  </button>
-                  <RosterRemoveButton onClick={() => mutate(s.player_id, null)} pending={pending === s.player_id} />
-                </div>
-              )}
+              <div className="flex items-center gap-3 shrink-0">
+                {s.checked_in_at && <StatusPill variant="live">Here</StatusPill>}
+                {isAdmin && (
+                  <>
+                    {checkInOpen && (
+                      <button
+                        type="button"
+                        onClick={() => setCheckIn(s.player_id, !s.checked_in_at)}
+                        disabled={pending === s.player_id}
+                        className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
+                      >
+                        {s.checked_in_at ? 'Check out' : 'Check in'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => mutate(s.player_id, other)}
+                      disabled={pending === s.player_id}
+                      className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
+                    >
+                      Make {COMMITMENT_LABEL[other].toLowerCase()}
+                    </button>
+                    <RosterRemoveButton onClick={() => mutate(s.player_id, null)} pending={pending === s.player_id} />
+                  </>
+                )}
+              </div>
             </RosterPlayerRow>
           ))
         )}
@@ -115,6 +139,9 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
             <LocalTime iso={night.startsAt} opts={START_FORMAT} />
           </div>
           {!started && <CountdownTimer iso={night.startsAt} className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1" />}
+          {checkInOpen && (
+            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">{checkedInCount} checked in</div>
+          )}
         </div>
 
         {currentPlayerId != null && (
@@ -134,6 +161,16 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
             {mine && (
               <button type="button" onClick={() => mutate(currentPlayerId, null)} disabled={pending === currentPlayerId} className={IDLE_BTN_CLS}>
                 Drop out
+              </button>
+            )}
+            {checkInOpen && (
+              <button
+                type="button"
+                onClick={() => setCheckIn(currentPlayerId, !mine?.checked_in_at)}
+                disabled={pending === currentPlayerId}
+                className={mine?.checked_in_at ? IDLE_BTN_CLS : ACTIVE_BTN_CLS.definite}
+              >
+                {mine?.checked_in_at ? 'Check out' : 'Check in'}
               </button>
             )}
           </div>

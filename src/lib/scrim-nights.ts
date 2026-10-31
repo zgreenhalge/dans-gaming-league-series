@@ -39,3 +39,19 @@ export async function setScrimSignup(db: SupabaseClient, nightId: number, player
 export async function removeScrimSignup(db: SupabaseClient, nightId: number, playerId: number): Promise<void> {
   await db.from('scrim_signups').delete().eq('night_id', nightId).eq('player_id', playerId).throwOnError();
 }
+
+/** Checks `playerId` in to a night, or out again. Checking in makes the signup `definite`, creating
+ *  one for a player who turns up without having signed up; checking out keeps the signup. */
+export async function setScrimCheckIn(db: SupabaseClient, nightId: number, playerId: number, checkedIn: boolean): Promise<void> {
+  if (checkedIn) {
+    await db
+      .from('scrim_signups')
+      .upsert(
+        { night_id: nightId, player_id: playerId, commitment: 'definite', checked_in_at: new Date().toISOString() },
+        { onConflict: 'night_id,player_id' },
+      )
+      .throwOnError();
+  } else {
+    await db.from('scrim_signups').update({ checked_in_at: null }).eq('night_id', nightId).eq('player_id', playerId).throwOnError();
+  }
+}

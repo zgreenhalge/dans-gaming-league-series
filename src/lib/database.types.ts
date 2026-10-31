@@ -1303,6 +1303,7 @@ export type Database = {
       }
       scrim_signups: {
         Row: {
+          checked_in_at: string | null
           commitment: string
           id: number
           night_id: number
@@ -1310,6 +1311,7 @@ export type Database = {
           signed_up_at: string
         }
         Insert: {
+          checked_in_at?: string | null
           commitment: string
           id?: number
           night_id: number
@@ -1317,6 +1319,7 @@ export type Database = {
           signed_up_at?: string
         }
         Update: {
+          checked_in_at?: string | null
           commitment?: string
           id?: number
           night_id?: number

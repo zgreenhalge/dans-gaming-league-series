@@ -42,6 +42,9 @@ export interface ScrimNightSlot {
  *  night until this has passed. */
 export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 
+/** How long before a night starts players can check in. Check-in stays open until the night ends. */
+export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
+
 /** How many weekly nights ahead `scrimNightSlots()` lists by default. */
 export const SCRIM_NIGHTS_AHEAD = 4;
 
@@ -189,6 +192,12 @@ export function scrimNightSlots(
 /** The next night that isn't cancelled, or `null`. */
 export function nextScrimNight(slots: ScrimNightSlot[]): ScrimNightSlot | null {
   return slots.find((s) => !s.cancelled) ?? null;
+}
+
+/** Whether players can check in to `slot` yet: from `SCRIM_CHECK_IN_LEAD_MS` before it starts (a
+ *  listed slot hasn't ended, so check-in closes when it drops off the list). */
+export function isScrimCheckInOpen(slot: ScrimNightSlot, now: Date): boolean {
+  return !slot.cancelled && Date.parse(slot.startsAt) - SCRIM_CHECK_IN_LEAD_MS <= now.getTime();
 }
 
 /** Whether `slot` has started (and, being a listed slot, not yet ended). */

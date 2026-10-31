@@ -14,6 +14,8 @@ import {
   scrimNightSlots,
   nextScrimNight,
   hasScrimNightStarted,
+  isScrimCheckInOpen,
+  SCRIM_CHECK_IN_LEAD_MS,
   parseScrimScheduleInput,
   parseCommitment,
   normalizeStartTime,
@@ -120,6 +122,15 @@ test('scrimNightSlots: merges night rows, and keeps an off-schedule row that is 
       ['2026-11-12', null, false],
     ],
   );
+});
+
+test('isScrimCheckInOpen: opens SCRIM_CHECK_IN_LEAD_MS before the start, never for a cancelled night', () => {
+  const start = Date.parse('2026-11-06T01:00:00Z');
+  const [slot] = scrimNightSlots(THURSDAY_8PM, [], new Date(start - 86_400_000), 1);
+  assert.equal(isScrimCheckInOpen(slot, new Date(start - SCRIM_CHECK_IN_LEAD_MS - 1)), false);
+  assert.equal(isScrimCheckInOpen(slot, new Date(start - SCRIM_CHECK_IN_LEAD_MS)), true);
+  assert.equal(isScrimCheckInOpen(slot, new Date(start + 60_000)), true);
+  assert.equal(isScrimCheckInOpen({ ...slot, cancelled: true }, new Date(start)), false);
 });
 
 test('nextScrimNight: skips cancelled nights', () => {
