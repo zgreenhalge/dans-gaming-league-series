@@ -115,6 +115,18 @@ function weekdayOf(date: string): number {
   return new Date(`${date}T00:00:00Z`).getUTCDay();
 }
 
+/** `HH:MM` as a 12-hour clock time, e.g. `20:00` → `8:00 PM`. Deterministic (no locale or timezone),
+ *  so it renders the same on the server and in the browser. */
+export function formatStartTime(time: string): string {
+  const [hh, mm] = time.split(':').map(Number);
+  return `${hh % 12 || 12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'AM' : 'PM'}`;
+}
+
+/** A night's calendar date, e.g. `Thu, Nov 5`. Pinned to UTC, so it renders the same everywhere. */
+export function formatNightDate(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 /** When the night on `date` starts under `schedule`. */
 export function scrimNightStart(schedule: ScrimSchedule, date: string): Date {
   return zonedTimeToUtc(date, schedule.startTime, schedule.timezone);

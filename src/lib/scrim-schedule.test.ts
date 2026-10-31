@@ -17,6 +17,8 @@ import {
   parseScrimScheduleInput,
   parseCommitment,
   normalizeStartTime,
+  formatStartTime,
+  formatNightDate,
   SCRIM_NIGHT_LENGTH_MS,
   type ScrimSchedule,
 } from './scrim-schedule';
@@ -58,6 +60,13 @@ test('isNightDate: accepts real dates only', () => {
 test('normalizeStartTime: trims Postgres seconds', () => {
   assert.equal(normalizeStartTime('20:00:00'), '20:00');
   assert.equal(normalizeStartTime('20:00'), '20:00');
+});
+
+test('formatStartTime / formatNightDate: fixed, locale-free labels', () => {
+  assert.equal(formatStartTime('20:00'), '8:00 PM');
+  assert.equal(formatStartTime('00:05'), '12:05 AM');
+  assert.equal(formatStartTime('12:30'), '12:30 PM');
+  assert.equal(formatNightDate('2026-11-05'), 'Thu, Nov 5');
 });
 
 test('scrimNightSlots: no schedule or a disabled one lists nothing', () => {
