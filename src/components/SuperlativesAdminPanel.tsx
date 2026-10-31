@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
+import { sendJsonRequest } from './sendJsonRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
@@ -55,7 +55,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
         getKey={(s) => s.id}
         disabled={busy}
         readOnly={locked}
-        onReorder={(next) => mutate(() => sendFeedbackRequest('PUT', url, { order: next.map((x) => x.id) }))}
+        onReorder={(next) => mutate(() => sendJsonRequest('PUT', url, { order: next.map((x) => x.id) }))}
         renderRow={(s, _i, handle) => {
         return (
         <div key={s.id} className="flex flex-col gap-2 border-t border-[var(--color-border-tertiary)] pt-4">
@@ -67,7 +67,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
                 onSubmit={(e) => {
                   e.preventDefault();
                   void mutate(async () => {
-                    await sendFeedbackRequest('PATCH', url, { superlative_id: s.id, title: editTitle });
+                    await sendJsonRequest('PATCH', url, { superlative_id: s.id, title: editTitle });
                     setEditingId(null);
                   });
                 }}
@@ -107,7 +107,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
             {!locked && (
               <RemoveXButton
                 label={`Remove ${s.title}`}
-                onClick={() => mutate(() => sendFeedbackRequest('DELETE', url, { superlative_id: s.id }))}
+                onClick={() => mutate(() => sendJsonRequest('DELETE', url, { superlative_id: s.id }))}
                 disabled={busy}
               />
             )}
@@ -135,7 +135,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
         onSubmit={(e) => {
           e.preventDefault();
           void mutate(async () => {
-            await sendFeedbackRequest('POST', url, { title });
+            await sendJsonRequest('POST', url, { title });
             setTitle('');
           });
         }}

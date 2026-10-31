@@ -9,7 +9,7 @@
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
+import { sendJsonRequest } from './sendJsonRequest';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackFormFrame } from './FeedbackFormFrame';
 import ErrorText from '@/components/ErrorText';
@@ -51,7 +51,7 @@ export function FeedbackEditor({
 
   async function save() {
     await run(async () => {
-      await sendFeedbackRequest('PUT', url, body);
+      await sendJsonRequest('PUT', url, body);
       setSaved(true);
       setEditing(false);
       router.refresh();
