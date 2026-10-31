@@ -209,7 +209,7 @@ async function main() {
     const decision = evaluateAutoCommit({
       quarantinePassed: q.ok,
       warningCount: warnings.length,
-      sideTrusted: inputs.skinsSide !== null || inputs.isGauntlet,
+      sideTrusted: inputs.skinsSide !== null || inputs.knifeRound,
       alreadyPlayed: existing !== null,
       derived: { shirts: payload.shirts, skins: payload.skins },
       mapResult: mapResult ? { shirts: mapResult.team1.score, skins: mapResult.team2.score } : null,

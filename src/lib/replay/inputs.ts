@@ -14,8 +14,9 @@ export interface ReplayInputs {
   skinsSide: Side | null;
   targetWinRounds: number;
   roster: RosterEntry[];
-  /** True for gauntlet/knife-round seasons — see `BuildReplayInput.includeKnifeRound`. */
-  isGauntlet: boolean;
+  /** A knife round decides sides, so no starting side is stored: gauntlet matches and scrim matches.
+   *  See `BuildReplayInput.includeKnifeRound`. */
+  knifeRound: boolean;
   /** `matches.scheduled_at`, unparsed — feeds `demoBaseName()`'s date component (`matchzy.ts`). */
   scheduledAt: string | null;
 }
@@ -27,7 +28,7 @@ export async function getReplayInputs(
   const [{ data: matchRow, error: matchErr }, { data: matchStats }] = await Promise.all([
     supabaseAdmin
       .from('matches')
-      .select('id, shirts_pick, skins_pick, skins_starting_side, scheduled_at, weeks(seasons(target_win_rounds, is_gauntlet))')
+      .select('id, shirts_pick, skins_pick, skins_starting_side, scheduled_at, scrim_night_id, weeks(seasons(target_win_rounds, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
     supabaseAdmin
@@ -44,6 +45,7 @@ export async function getReplayInputs(
     skins_pick: string | null;
     skins_starting_side: Side | null;
     scheduled_at: string | null;
+    scrim_night_id: number | null;
     weeks: unknown;
   };
 
@@ -52,7 +54,7 @@ export async function getReplayInputs(
   const seasonsArr = Array.isArray(firstWeek?.seasons) ? firstWeek!.seasons : [firstWeek?.seasons];
   const firstSeason = seasonsArr[0] as { target_win_rounds?: number; is_gauntlet?: boolean } | undefined;
   const targetWinRounds = firstSeason?.target_win_rounds ?? 13;
-  const isGauntlet = firstSeason?.is_gauntlet ?? false;
+  const knifeRound = (firstSeason?.is_gauntlet ?? false) || match.scrim_night_id != null;
 
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const playerIds = allStats.map((s) => s.player_id);
@@ -86,7 +88,7 @@ export async function getReplayInputs(
     skinsSide: match.skins_starting_side,
     targetWinRounds,
     roster,
-    isGauntlet,
+    knifeRound,
     scheduledAt: match.scheduled_at,
   };
 }

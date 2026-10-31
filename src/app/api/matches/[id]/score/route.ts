@@ -6,7 +6,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore, toStatsByPlayerId } from '@/lib/matchScore';
-import { isVetoComplete, type VetoFields } from '@/lib/veto';
+import { isReadyToPlay } from '@/lib/veto';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
   DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent,
@@ -23,12 +23,14 @@ type MatchRow = {
   skins_ban2: string | null;
   shirts_pick: string | null;
   skins_starting_side: string | null;
+  scrim_night_id: number | null;
+  /** `null` for a scrim match. */
   weeks: {
     season_id: number;
     seasons: {
       is_gauntlet: boolean;
     };
-  };
+  } | null;
 };
 
 export async function PATCH(
@@ -50,7 +52,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
+        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, scrim_night_id, weeks(season_id, seasons(is_gauntlet))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -80,7 +82,7 @@ export async function PATCH(
   // constraint. Matters here specifically because an admin can reach this check on an already-played
   // (CSV-imported) match to correct its score.
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  if (!isVetoComplete(m as VetoFields, isGauntlet || m.is_playoff_game)) {
+  if (!isReadyToPlay(m, isGauntlet || m.is_playoff_game)) {
     return NextResponse.json({ error: 'Pick/ban phase not complete' }, { status: 403 });
   }
 
@@ -129,7 +131,7 @@ export async function PATCH(
       after,
       // Already fetched above to authorize the request — pass it through so writeMatchScore()
       // doesn't re-query matches/player_match_stats from scratch on this hot write path.
-      matchContext: { seasonId: m.weeks.season_id, isGauntlet, statsByPlayerId },
+      matchContext: { seasonId: m.weeks?.season_id ?? null, isGauntlet, statsByPlayerId },
     },
   );
   if (!result.ok) {

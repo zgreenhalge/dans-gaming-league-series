@@ -19,6 +19,12 @@ export function isScrimMatchEditable(m: { final_score: string | null; server_sta
   return m.final_score === null && !(m.server_state !== null && LOCKING_SERVER_STATES.has(m.server_state));
 }
 
+/** Whether `matchId` is a scrim match (`scrim_night_id` set). */
+export async function isScrimMatch(db: SupabaseClient, matchId: number): Promise<boolean> {
+  const { data } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle().throwOnError();
+  return (data as { scrim_night_id: number | null } | null)?.scrim_night_id != null;
+}
+
 /** Thrown by `createScrimMatch()` when the night already has a match without a score. */
 export class UnplayedScrimMatchError extends Error {
   constructor() {
