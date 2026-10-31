@@ -1,8 +1,8 @@
 // Session gate for a scrim night's signups: the "admin-or-self" shape `season-roster-access.ts` also
 // has — an admin can sign up or drop any player, a player only themselves — plus a check that the
-// night is one players can still sign up for: listed by `scrimNightSlots()` (scheduled, not yet
-// ended) and not cancelled. Signups stay open through the night itself, so players can join or drop
-// while it's running.
+// night is still listed by `scrimNightSlots()` (scheduled, not yet ended). Signups stay open through
+// the night itself, so players can join or drop while it's running. The signup route refuses new
+// signups for a cancelled night; dropping out of one is always allowed.
 
 import { NextRequest } from 'next/server';
 import { requireSession } from './session';
@@ -38,7 +38,6 @@ export async function requireScrimSignupAccess(req: NextRequest, date: string, n
   const target = selfOrAdminTarget(body, requestingPlayerId, admin);
   if (!target.ok) return target;
   if (!night.ok) return night;
-  if (night.slot.cancelled) return { ok: false, status: 409, error: 'That scrim night is cancelled' };
 
   return { ok: true, targetPlayerId: target.targetPlayerId, slot: night.slot, body };
 }

@@ -54,7 +54,7 @@ export default async function ScrimsPage() {
               <a href="/api/auth/steam" className="underline hover:text-[var(--color-text-primary)]">Log in</a> to sign up.
             </div>
           )}
-          {isAdmin && <ScrimAdminPanel schedule={schedule} slots={slots} timezones={timezoneOptions(schedule?.timezone)} />}
+          {isAdmin && <ScrimAdminPanel key={JSON.stringify(schedule)} schedule={schedule} slots={slots} timezones={timezoneOptions(schedule?.timezone)} />}
         </div>
       </main>
     </div>

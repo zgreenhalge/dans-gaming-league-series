@@ -89,8 +89,9 @@ export interface LaunchResult {
  * `applyConfigSetOnly` + boot + optionally assert extra cvars once ready — the one place "apply + push
  * + boot + cvars" is composed, shared by real-match provisioning (`provisionMatchServer`,
  * `configSetKey: 'golden'`, no `extraCvars` — `loadMatch` runs after instead) and the admin console's
- * launch route (its own config-set pick + `pugModeCvarLine`-derived `extraCvars`). Every boot echoes
- * `SERVER_BOOT_MARKER` to the console so `getConnectedPlayers` only trusts this boot's lines. A
+ * launch route (its own config-set pick + `pugModeCvarLine`-derived `extraCvars`). Every boot also
+ * echoes `SERVER_BOOT_MARKER` to the console (best-effort) so `getConnectedPlayers` only trusts this
+ * boot's lines. A
  * per-file cfg-push failure is logged, not fatal.
  */
 export async function launchServer(
@@ -106,7 +107,12 @@ export async function launchServer(
 
   await startServer(serverId);
   const server = await waitUntilReady(serverId);
-  await runConsole(serverId, [opts.extraCvars, `echo ${SERVER_BOOT_MARKER}`].filter(Boolean).join('; '));
+  if (opts.extraCvars) await runConsole(serverId, opts.extraCvars);
+  // Best-effort: the marker only keeps stale players out of the admin console's connected roster, so a
+  // failed echo must not fail the launch (or a real match's provisioning).
+  await runConsole(serverId, `echo ${SERVER_BOOT_MARKER}`).catch((err) => {
+    console.warn(`launchServer(${opts.configSetKey}): boot marker echo failed:`, err);
+  });
 
   const connect = connectHost(server);
   if (!connect) throw new Error('Server ready but no connectable host');

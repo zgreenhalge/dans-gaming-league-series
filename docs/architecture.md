@@ -41,7 +41,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/admin/seasons/superlatives/[id]` | Admin view of a regular season's superlatives vote: choose superlatives, open/close voting, tallies, reset the vote. Linked as "Superlatives" from the same Manage → Season row; independent of the survey page. A gauntlet season's id redirects to its paired regular season |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
-`/career-stats` is a permanent redirect to `/statistics`, not a standalone page.
+`/career-stats` is a permanent redirect to `/statistics`, and `/scrim` one to `/scrims`; neither is a standalone page.
 
 ### Week, round and group pages
 
@@ -145,7 +145,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `DELETE` | `/api/seasons/[id]/superlatives/votes` | Reset the vote: close voting and delete every vote, keeping the superlatives, as one `reset_superlative_votes()` RPC call (all-or-nothing) (admin only) |
 | `PUT` | `/api/scrims/schedule` | Set the weekly scrim slot (`{ weekday, startTime, timezone, enabled }`, validated by `parseScrimScheduleInput()`) (admin only) |
 | `PATCH` | `/api/scrims/[date]` | Cancel or restore one scrim night (`{ cancelled }`). The date must be one `scrimNightSlots()` still lists. Signups are kept either way (admin only) |
-| `POST/DELETE` | `/api/scrims/[date]/signups` | Sign a player up for a night or change their commitment (`{ player_id, commitment: 'definite' \| 'maybe' }`), or drop them (`{ player_id }`). Admins manage any player, a player only themselves (`requireScrimSignupAccess()`, `src/lib/scrim-signup-access.ts`). Open from when the night is listed until it ends, refused for a cancelled night |
+| `POST/DELETE` | `/api/scrims/[date]/signups` | Sign a player up for a night or change their commitment (`{ player_id, commitment: 'definite' \| 'maybe' }`), or drop them (`{ player_id }`). Admins manage any player, a player only themselves (`requireScrimSignupAccess()`, `src/lib/scrim-signup-access.ts`). Open from when the night is listed until it ends. A cancelled night takes no new signups, but players can still drop out of it |
 | `POST/DELETE` | `/api/seasons/[id]/schedule` | Generate (fully regenerating) or clear a season's schedule draft from its current roster (admin only, `UPCOMING` only) |
 | `PATCH` | `/api/seasons/[id]/schedule` | Save a hand-edit to an existing schedule draft — reassigns players within the generated week/match structure (admin only, `UPCOMING` only) |
 | `POST` | `/api/seasons/[id]/schedule/confirm` | Materialize a validated schedule draft into real `weeks`/`matches`/`player_match_stats` (admin only, `UPCOMING` only) |

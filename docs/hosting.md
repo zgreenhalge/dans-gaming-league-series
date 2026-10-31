@@ -438,8 +438,7 @@ a `DathostServer`, client or server, goes through instead of reading `.on`/`.boo
 `src/lib/dathost.ts` (REST client — `applyConfigSet`, `runConsole`, `getConsoleLines`) ·
 `src/lib/dathost-config.ts` (config-set data model — `resolveConfigSet`, `listConfigSets`,
 `pushCfgFiles`, `diffConfigSet`) · `src/lib/dathost-lifecycle.ts` (`launchServer` + `applyConfigSetOnly`
-+ `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` +
-`findNearbyUnscoredMatch`) · `src/lib/server-players.ts` (`getConnectedPlayers` — fetches + parses the
++ `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant`) · `src/lib/server-players.ts` (`getConnectedPlayers` — fetches + parses the
 connected roster from the raw console log, no stored state; `parseConnectedPlayers` is the pure parse
 step) · `src/lib/matchzy.ts` · `src/lib/server-schedule-collision.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` —
 shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·

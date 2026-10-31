@@ -133,6 +133,25 @@ async function main() {
     assert.equal(db.scrim_signups.length, 0);
   });
 
+  await test('POST: 404 when an admin names a player that does not exist, with no night row left behind', async () => {
+    const db = installFixture();
+    __setTestSession(sessionFor(ADMIN_ID));
+    const res = await call(POST, 'POST', NEXT, { player_id: 999, commitment: 'definite' });
+    assert.equal(res.status, 404);
+    assert.equal(db.scrim_nights.length, 0);
+  });
+
+  await test('DELETE: dropping out of a cancelled night is allowed', async () => {
+    const db = installFixture({
+      scrim_nights: [{ id: 5, night_date: NEXT, cancelled: true }],
+      scrim_signups: [{ id: 1, night_id: 5, player_id: PLAYER_ID, commitment: 'definite' }],
+    });
+    __setTestSession(sessionFor(PLAYER_ID));
+    const res = await call(DELETE, 'DELETE', NEXT, { player_id: PLAYER_ID });
+    assert.equal(res.status, 200);
+    assert.equal(db.scrim_signups.length, 0);
+  });
+
   await test('DELETE: a player can drop themselves, leaving others signed up', async () => {
     const db = installFixture({
       scrim_nights: [{ id: 5, night_date: NEXT, cancelled: false }],

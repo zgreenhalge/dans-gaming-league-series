@@ -1,6 +1,7 @@
 // Signs a player up for a scrim night (`POST { player_id, commitment: 'definite' | 'maybe' }` — again
 // to change their commitment) or drops them (`DELETE { player_id }`). Admin-or-self, open until the
-// night ends — see `requireScrimSignupAccess()`.
+// night ends — see `requireScrimSignupAccess()`. A cancelled night takes no new signups, but anyone
+// can still drop out of it.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
@@ -8,6 +9,7 @@ import { accessDenied } from '@/lib/access-control';
 import { requireScrimSignupAccess } from '@/lib/scrim-signup-access';
 import { parseCommitment } from '@/lib/scrim-schedule';
 import { ensureScrimNight, removeScrimSignup, setScrimSignup } from '@/lib/scrim-nights';
+import { getPlayersById } from '@/lib/queries';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
@@ -16,6 +18,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dat
 
   const commitment = parseCommitment((access.body as { commitment?: unknown } | null)?.commitment);
   if (!commitment) return NextResponse.json({ error: "commitment must be 'definite' or 'maybe'" }, { status: 400 });
+  if (access.slot.cancelled) return NextResponse.json({ error: 'That scrim night is cancelled' }, { status: 409 });
+  if (!(await getPlayersById()).has(access.targetPlayerId)) {
+    return NextResponse.json({ error: 'Player not found' }, { status: 404 });
+  }
 
   const db = getAdminClient();
   try {
