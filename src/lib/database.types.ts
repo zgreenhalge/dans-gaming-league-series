@@ -1249,6 +1249,94 @@ export type Database = {
         }
         Relationships: []
       }
+      scrim_nights: {
+        Row: {
+          cancelled: boolean
+          id: number
+          night_date: string
+        }
+        Insert: {
+          cancelled?: boolean
+          id?: number
+          night_date: string
+        }
+        Update: {
+          cancelled?: boolean
+          id?: number
+          night_date?: string
+        }
+        Relationships: []
+      }
+      scrim_schedule: {
+        Row: {
+          enabled: boolean
+          id: number
+          start_time: string
+          timezone: string
+          weekday: number
+        }
+        Insert: {
+          enabled?: boolean
+          id?: number
+          start_time: string
+          timezone: string
+          weekday: number
+        }
+        Update: {
+          enabled?: boolean
+          id?: number
+          start_time?: string
+          timezone?: string
+          weekday?: number
+        }
+        Relationships: []
+      }
+      scrim_signups: {
+        Row: {
+          commitment: string
+          id: number
+          night_id: number
+          player_id: number
+          signed_up_at: string
+        }
+        Insert: {
+          commitment: string
+          id?: number
+          night_id: number
+          player_id: number
+          signed_up_at?: string
+        }
+        Update: {
+          commitment?: string
+          id?: number
+          night_id?: number
+          player_id?: number
+          signed_up_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrim_signups_night_id_fkey"
+            columns: ["night_id"]
+            isOneToOne: false
+            referencedRelation: "scrim_nights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scrim_signups_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player_season_leaderboard"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "scrim_signups_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       season_players: {
         Row: {
           id: number
