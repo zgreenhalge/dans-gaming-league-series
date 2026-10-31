@@ -207,7 +207,9 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Scrim night** — a weekly practice night outside league competition, at an admin-set day and time
   (`scrim_schedule`). Players sign up for the next one as **definite** or **maybe**, so everyone can
   judge attendance ahead of time, and can switch or drop out right up until it ends. See `/scrims`
-  and [`architecture.md`](./architecture.md) (Database, `scrim_schedule`).
+  and [`architecture.md`](./architecture.md) (Database, `scrim_schedule`). A **scrim match** is a
+  `matches` row tied to a scrim night instead of a week; its stats never count toward league
+  figures (see `matches` in architecture.md).
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with

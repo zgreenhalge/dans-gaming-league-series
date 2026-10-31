@@ -713,6 +713,7 @@ export type Database = {
           recording_url: string | null
           replay_status: string
           round_history: Json | null
+          scrim_night_id: number | null
           scheduled_at: string | null
           shirts_ban: string | null
           shirts_ban2: string | null
@@ -734,6 +735,7 @@ export type Database = {
           recording_url?: string | null
           replay_status?: string
           round_history?: Json | null
+          scrim_night_id?: number | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -755,6 +757,7 @@ export type Database = {
           recording_url?: string | null
           replay_status?: string
           round_history?: Json | null
+          scrim_night_id?: number | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -765,6 +768,13 @@ export type Database = {
           week_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "matches_scrim_night_id_fkey"
+            columns: ["scrim_night_id"]
+            isOneToOne: false
+            referencedRelation: "scrim_nights"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "matches_week_id_fkey"
             columns: ["week_id"]
