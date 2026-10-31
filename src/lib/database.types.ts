@@ -1249,45 +1249,6 @@ export type Database = {
         }
         Relationships: []
       }
-      scrim_sessions: {
-        Row: {
-          id: number
-          started_by: number
-          warned_10: boolean
-          warned_15: boolean
-          warned_5: boolean
-        }
-        Insert: {
-          id?: number
-          started_by: number
-          warned_10?: boolean
-          warned_15?: boolean
-          warned_5?: boolean
-        }
-        Update: {
-          id?: number
-          started_by?: number
-          warned_10?: boolean
-          warned_15?: boolean
-          warned_5?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scrim_sessions_started_by_fkey"
-            columns: ["started_by"]
-            isOneToOne: false
-            referencedRelation: "player_season_leaderboard"
-            referencedColumns: ["player_id"]
-          },
-          {
-            foreignKeyName: "scrim_sessions_started_by_fkey"
-            columns: ["started_by"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       season_players: {
         Row: {
           id: number

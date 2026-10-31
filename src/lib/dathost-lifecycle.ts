@@ -15,8 +15,7 @@ import { effectivePickedMap } from './veto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
 import { workshopIdFromUrl } from './workshop';
-import { matchLabel, isPlayedScore, isServerOff, isServerLive } from './util';
-import { SCHEDULE_COLLISION_WINDOW_MS } from './server-schedule-collision';
+import { matchLabel, isServerOff, isServerLive } from './util';
 import {
   dathostServerId,
   applyConfigSet,
@@ -29,7 +28,7 @@ import {
   runConsole,
   type DathostServer,
 } from './dathost';
-import { releaseScrimSession } from './scrim-session';
+import { SERVER_BOOT_MARKER } from './server-players';
 import { resolveConfigSet, pushCfgFiles, type CfgPushResult } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { notifyMatchServerLive } from './discord-notify';
@@ -38,8 +37,8 @@ import { notifyMatchServerLive } from './discord-notify';
 const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
 
 /**
- * Cvars asserted right after boot for any launch with no roster loaded (scrim, or an admin-console
- * launch that doesn't follow up with `loadMatch`): no knife round (players pick their own side via
+ * Cvars asserted right after boot for any launch with no roster loaded (an admin-console launch
+ * that doesn't follow up with `loadMatch`): no knife round (players pick their own side via
  * `.ct`/`.t`/`.spec`), `matchzy_playout_enabled_default` and `FRIENDLY_CVARS` from their respective
  * launch-time toggles, and `mp_warmup_pausetimer`/`matchzy_minimum_ready_required 0` unconditionally —
  * the golden league config's `matchzy_minimum_ready_required 4` assumes a full 2v2 roster, which
@@ -68,8 +67,8 @@ export function pugModeCvarLine(opts: { playout: boolean; friendly: boolean }): 
 
 /**
  * Resolve a config set and push it to the server — settings PUT + cfg files — without starting it.
- * The no-boot half of `launchServer` below, shared by the admin and scrim "Apply config set" routes
- * so reasserting a config set can't drift between the two surfaces.
+ * The no-boot half of `launchServer` below, used on its own by the admin console's "Apply config
+ * set" route.
  */
 export async function applyConfigSetOnly(
   supabaseAdmin: SupabaseClient,
@@ -89,9 +88,10 @@ export interface LaunchResult {
 /**
  * `applyConfigSetOnly` + boot + optionally assert extra cvars once ready — the one place "apply + push
  * + boot + cvars" is composed, shared by real-match provisioning (`provisionMatchServer`,
- * `configSetKey: 'golden'`, no `extraCvars` — `loadMatch` runs after instead) and the admin/scrim
- * launch routes (their own config-set pick + `pugModeCvarLine`-derived `extraCvars`). A per-file
- * cfg-push failure is logged, not fatal.
+ * `configSetKey: 'golden'`, no `extraCvars` — `loadMatch` runs after instead) and the admin console's
+ * launch route (its own config-set pick + `pugModeCvarLine`-derived `extraCvars`). Every boot echoes
+ * `SERVER_BOOT_MARKER` to the console so `getConnectedPlayers` only trusts this boot's lines. A
+ * per-file cfg-push failure is logged, not fatal.
  */
 export async function launchServer(
   supabaseAdmin: SupabaseClient,
@@ -106,7 +106,7 @@ export async function launchServer(
 
   await startServer(serverId);
   const server = await waitUntilReady(serverId);
-  if (opts.extraCvars) await runConsole(serverId, opts.extraCvars);
+  await runConsole(serverId, [opts.extraCvars, `echo ${SERVER_BOOT_MARKER}`].filter(Boolean).join('; '));
 
   const connect = connectHost(server);
   if (!connect) throw new Error('Server ready but no connectable host');
@@ -118,20 +118,6 @@ export async function launchServer(
  *  teardown (admin console "Tear down") is unaffected — that's a deliberate operator stop-now. */
 export const AUTO_TEARDOWN_DELAY_MS = 2.5 * 60 * 1000;
 
-/**
- * Stops the shared server and releases any active scrim session in one call — the single choke point
- * every "stop the server" path (`/api/scrim/stop`, the raw admin console stop, real-match teardown
- * below) should go through, so a scrim session can never outlive a stop this app itself initiated.
- * Lives here rather than in `scrim-session.ts` since "what it takes to stop the one shared, reused
- * server" is this module's concern (it already tracks who else occupies it) — scrim-session.ts stays
- * scoped to the session row itself. Doesn't cover a stop DatHost initiates on its own (an idle
- * timeout) — that's what `reconcileScrimSession` is for.
- */
-export async function stopSharedServer(supabaseAdmin: SupabaseClient, serverId: string): Promise<void> {
-  await stopServer(serverId);
-  await releaseScrimSession(supabaseAdmin);
-}
-
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
 /** Server-states in which a match currently occupies the single shared server. */
@@ -139,7 +125,7 @@ const OCCUPYING_STATES: readonly ServerState[] = ['provisioning', 'live', 'teari
 
 /** Thrown when a provision is refused because the shared server is already in use — either another
  *  match holds it (#134, `occupantMatchId` set) or it's genuinely live with no `match_server_state`
- *  row to explain it (a scrim, or a manual admin-console launch — `occupantMatchId: null`). */
+ *  row to explain it (a manual admin-console launch — `occupantMatchId: null`). */
 export class ServerBusyError extends Error {
   constructor(readonly occupantMatchId: number | null) {
     super(
@@ -171,59 +157,6 @@ export async function findServerOccupant(
     .limit(1);
   const rows = (data ?? []) as { match_id: number }[];
   return rows.length ? rows[0].match_id : null;
-}
-
-export interface NearbyUnscoredMatch {
-  matchId: number;
-  label: string;
-  scheduledAt: string;
-}
-
-/**
- * A league match scheduled within `windowMs` of right now that hasn't been scored yet, or `null`.
- * Scrims share the one physical server with league matches — a match's scheduled time passing
- * doesn't mean the server is free, since it may still be mid-veto or mid-play. Nearest match wins if
- * more than one falls in the window.
- */
-export async function findNearbyUnscoredMatch(
-  supabaseAdmin: SupabaseClient,
-  windowMs: number = SCHEDULE_COLLISION_WINDOW_MS,
-): Promise<NearbyUnscoredMatch | null> {
-  const now = Date.now();
-  const { data } = await supabaseAdmin
-    .from('matches')
-    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
-    .not('scheduled_at', 'is', null)
-    .gte('scheduled_at', new Date(now - windowMs).toISOString())
-    .lte('scheduled_at', new Date(now + windowMs).toISOString());
-  const rows = (data ?? []) as unknown as {
-    id: number;
-    match_number: number | null;
-    scheduled_at: string;
-    final_score: string | null;
-    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
-  }[];
-
-  let best: NearbyUnscoredMatch | null = null;
-  let bestDelta = Infinity;
-  for (const row of rows) {
-    if (isPlayedScore(row.final_score)) continue;
-    const delta = Math.abs(new Date(row.scheduled_at).getTime() - now);
-    if (delta < bestDelta) {
-      bestDelta = delta;
-      best = {
-        matchId: row.id,
-        label: matchLabel({
-          matchId: row.id,
-          seasonName: row.weeks?.seasons?.name,
-          weekNumber: row.weeks?.week_number,
-          matchNumber: row.match_number,
-        }),
-        scheduledAt: row.scheduled_at,
-      };
-    }
-  }
-  return best;
 }
 
 /** Shape of a `match_server_state` row. Shared by every read/write below instead of each call site
@@ -330,7 +263,7 @@ export async function provisionMatchServer(
   const occupant = await findServerOccupant(supabaseAdmin, matchId);
   if (occupant !== null) throw new ServerBusyError(occupant);
 
-  // Ground-truth check: a scrim or a manual admin-console launch never claims a `match_server_state`
+  // Ground-truth check: a manual admin-console launch never claims a `match_server_state`
   // row, so the DB-only check above can't see them — ask DatHost itself rather than cross-referencing
   // another table. Not interrupting ongoing play outranks starting a new match on time. An unreachable
   // DatHost can't confirm liveness either way, so it's treated as not-live rather than blocking
@@ -400,9 +333,7 @@ export function provisionErrorHandler(
  * is read (match page, admin server console, or its 2s poll) once `teardown_at` has passed — the
  * automatic paths use this so players see the post-match scoreboard instead of an instant disconnect.
  * Omit it (the explicit teardown route does) for an immediate stop.
- *
- * Goes through `stopSharedServer` — a scrim should never be active while a real match owns the
- * server, but this clears any `scrim_sessions` row defensively regardless.
+
  */
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,
@@ -423,7 +354,7 @@ export async function teardownMatchServer(
 
   if (opts.delayMs) {
     // Unlike the marker write below, this IS the whole action for the delayed path (no immediate
-    // stopSharedServer follows it) — a failure here must propagate to the caller so its own
+    // stopServer follows it) — a failure here must propagate to the caller so its own
     // recordOpsError sees it, not get silently swallowed.
     await setServerState(supabaseAdmin, matchId, {
       server_state: 'tearing_down',
@@ -433,7 +364,7 @@ export async function teardownMatchServer(
   }
 
   await setServerState(supabaseAdmin, matchId, { server_state: 'tearing_down' }).catch(() => {});
-  await stopSharedServer(supabaseAdmin, serverId);
+  await stopServer(serverId);
   await setServerState(supabaseAdmin, matchId, {
     server_state: 'done',
     connect_string: null,
@@ -468,7 +399,7 @@ async function downgradeToDone(
  * idempotent, so the deferred attempt below still lands cleanly against an already-stopped server once
  * due. A null `teardown_at` (the explicit, non-delayed teardown route entering `tearing_down` without
  * ever setting one) counts as due immediately — it means an immediate stop was requested and its own
- * `stopSharedServer` call failed, so this is the retry path for that stuck case, not "nothing
+ * `stopServer` call failed, so this is the retry path for that stuck case, not "nothing
  * scheduled". Returns whether it downgraded the row to `done`.
  */
 async function runDueTeardown(
@@ -479,7 +410,7 @@ async function runDueTeardown(
 ): Promise<boolean> {
   if (teardownAt != null && Date.parse(teardownAt) > Date.now()) return false;
   try {
-    await stopSharedServer(supabaseAdmin, serverId);
+    await stopServer(serverId);
     await downgradeToDone(supabaseAdmin, matchId, { teardown_at: null });
     await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
     return true;

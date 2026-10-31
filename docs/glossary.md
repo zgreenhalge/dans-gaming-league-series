@@ -199,7 +199,7 @@ so you don't have to reverse-engineer them from scratch each time.
     with no advancement attached.
 - **Tools** — the `/tools` section: open sandbox pages anyone can use, with no sign-in and no side
   effects (each only reads league data and computes in the browser), listed in `TOOLS`
-  (`src/lib/tools.ts`). Operational pages that act on real systems, like Scrim, stay outside it.
+  (`src/lib/tools.ts`). Operational pages that act on real systems stay outside it.
 - **Gauntlet Preview** — the `/tools/gauntlet-preview` tool: pick a qualifier count (optionally a
   regular season's standings for named seeds) and see the bracket and per-seed outcome (bye, plays in,
   won't qualify) before any season gets there. A thin layer over `buildGauntletBracket()` and

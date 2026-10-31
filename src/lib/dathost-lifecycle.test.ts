@@ -5,7 +5,7 @@
  *
  * No live DatHost connection exists in this environment. Rather than mock `fetch` (against
  * docs/patterns.md's IO-boundary convention), this exploits the real, documented failure modes of
- * the functions under test: findServerOccupant()/findNearbyUnscoredMatch()/fetchServerStateRow() are
+ * the functions under test: findServerOccupant()/fetchServerStateRow() are
  * pure DB reads that never touch DatHost at all; getReconciledServerState()'s `idle`/`provisioning`/
  * `tearing_down`-not-yet-due branches likewise never call out; its `live` branch's real DatHost call
  * fails fast without a live connection, which its own `catch { keep DB value }` is specifically
@@ -25,7 +25,6 @@ import {
   occupancyMessage,
   pugModeCvarLine,
   findServerOccupant,
-  findNearbyUnscoredMatch,
   fetchServerStateRow,
   getReconciledServerState,
   getActiveServerMatch,
@@ -153,31 +152,6 @@ async function testFindServerOccupant() {
   });
 }
 
-async function testFindNearbyUnscoredMatch() {
-  await test('findNearbyUnscoredMatch: picks the nearest unplayed match within the window, skipping played ones', async () => {
-    const now = Date.now();
-    const db: FakeDb = {
-      weeks: [{ id: 1, season_id: 1, week_number: 2 }],
-      seasons: [{ id: 1, name: 'Season 5' }],
-      matches: [
-        { id: 100, week_id: 1, match_number: 1, scheduled_at: new Date(now - 60_000).toISOString(), final_score: null },
-        { id: 101, week_id: 1, match_number: 2, scheduled_at: new Date(now - 5_000).toISOString(), final_score: null }, // nearest
-        { id: 102, week_id: 1, match_number: 3, scheduled_at: new Date(now).toISOString(), final_score: '13-9' }, // played -> skipped despite being nearest
-      ],
-    };
-    const client = createFakeSupabaseClient(db);
-    const result = await findNearbyUnscoredMatch(client as never, 10 * 60 * 1000);
-    assert.equal(result?.matchId, 101);
-    assert.equal(result?.label, 'Season 5 · Wk 2 · Match 2');
-  });
-
-  await test('findNearbyUnscoredMatch: null when nothing is scheduled nearby', async () => {
-    const db: FakeDb = { weeks: [], seasons: [], matches: [] };
-    const client = createFakeSupabaseClient(db);
-    assert.equal(await findNearbyUnscoredMatch(client as never), null);
-  });
-}
-
 async function testFetchServerStateRow() {
   await test('fetchServerStateRow: null when the match has never been provisioned', async () => {
     const db: FakeDb = { match_server_state: [] };
@@ -219,7 +193,6 @@ async function testGetReconciledServerState() {
   await test('getReconciledServerState: a due teardown that fails (no live DatHost) stays tearing_down and records an ops-error', async () => {
     const db: FakeDb = {
       match_server_state: [{ match_id: 100, server_state: 'tearing_down', connect_string: null, server_started_at: null, dathost_server_id: 'srv-1', teardown_at: null }],
-      scrim_sessions: [],
       ops_errors: [],
     };
     const client = createFakeSupabaseClient(db);
@@ -387,7 +360,6 @@ async function main() {
   await testMatchzyConfigContext();
   await testProvisionErrorHandler();
   await testFindServerOccupant();
-  await testFindNearbyUnscoredMatch();
   await testFetchServerStateRow();
   await testGetReconciledServerState();
   await testGetActiveServerMatch();

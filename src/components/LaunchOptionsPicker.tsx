@@ -1,8 +1,7 @@
 'use client';
 
-// Shared config-set + map + launch-time-toggle controls — the picker both `ScrimPanel` and
-// `ServerConsolePanel` use to choose what a Start/Apply config set action launches with, so the two
-// surfaces can't drift on this piece the way the rest of the launch flow did before (#315).
+// Config-set + map + launch-time-toggle controls — what `ServerConsolePanel`'s Start/Apply config set
+// actions launch with.
 
 import { MapPicker } from '@/components/MapPicker';
 import type { ConfigSetOption } from '@/lib/dathost-config';

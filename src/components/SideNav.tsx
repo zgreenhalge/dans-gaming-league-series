@@ -6,7 +6,6 @@ import { useEffect } from 'react';
 import { useNav } from './NavContext';
 import { usePersistedToggle } from './usePersistedToggle';
 import { extractSeasonNumber } from '@/lib/util';
-import { ScrimNavStatus } from './ScrimNavStatus';
 
 interface NavSeason {
   id: number;
@@ -116,12 +115,7 @@ export function SideNav({ seasons }: Props) {
       <NavLink href="/statistics">Statistics</NavLink>
       <NavLink href="/maps">Maps</NavLink>
       <NavLink href="/tools">Tools</NavLink>
-      <NavLink href="/scrim" prefetch={false}>
-        <span className="inline-flex items-center gap-1.5">
-          Scrim
-          <ScrimNavStatus />
-        </span>
-      </NavLink>
+      <NavLink href="/scrims">Scrims</NavLink>
     </nav>
   );
 

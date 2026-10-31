@@ -13,8 +13,8 @@
  * comparators real call sites use, and none of `.insert()`/`.delete()`/`.update()`/`.upsert()` emulate
  * FK constraints. The one exception is `.insert()`'s primary-key collision: inserting a row whose
  * explicit `id` already exists in the table returns a `23505` (unique-violation) error instead of
- * silently duplicating it, since `claimScrimSession()`'s race-safety (the `scrim_sessions` singleton
- * row, always `id: 1`) depends on exactly that DB behavior.
+ * silently duplicating it, since a singleton row claimed by a fixed `id` depends on exactly that DB
+ * behavior.
  *
  * `.insert()`/`.upsert()` assign an auto-incrementing `id` (current max in the table + 1) to any row
  * that doesn't already specify one, mirroring a real serial primary key — this only matters when a
@@ -62,9 +62,6 @@ const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
     // (gauntlet-engine.ts) disambiguates with `gauntlet_pod_slots!pod_id(...)`, which this fake
     // resolves to the one mapping below regardless of the `!hint` (see parseSelect()).
     gauntlet_pod_slots: { kind: 'many', fk: 'pod_id', table: 'gauntlet_pod_slots' },
-  },
-  scrim_sessions: {
-    players: { kind: 'one', fk: 'started_by', table: 'players' },
   },
   match_server_state: {
     matches: { kind: 'one', fk: 'match_id', table: 'matches' },
@@ -451,7 +448,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private async execute(): Promise<{ data: T[] | T | null; error: FakeError | null }> {
     if (this.mode === 'insert') {
       const table = (this.db[this.table] ??= []);
-      // A collision on an explicitly-provided id (e.g. the scrim_sessions singleton's fixed `id: 1`)
+      // A collision on an explicitly-provided id (e.g. a singleton row's fixed `id: 1`)
       // — see the file header. Real Postgres rejects the whole statement, so this checks every row
       // in the batch before inserting any of them.
       const collision = this.insertRows.find((r) => r.id !== undefined && table.some((existing) => existing.id === r.id));

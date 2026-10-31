@@ -1,6 +1,6 @@
 // Launch the shared DatHost server: apply a config set + map, boot it, and assert launch-time cvars
-// (play-out-all-rounds / friendly) — the same one-click flow `/api/scrim/start` uses, so the admin
-// console and scrim panel can't drift on what "start the server" means (#315). `/apply-config` stays
+// (play-out-all-rounds / friendly) through `launchServer`, the same orchestration real-match
+// provisioning uses, so the two can't drift on what "start the server" means (#315). `/apply-config` stays
 // the separate no-boot "reassert settings on an already-running server" action. Refuses (409) if the
 // server is occupied (a DGLS match holds it, or live players are on it outside any match) unless
 // `override: true`.
