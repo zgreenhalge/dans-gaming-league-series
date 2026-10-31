@@ -333,7 +333,6 @@ export function provisionErrorHandler(
  * is read (match page, admin server console, or its 2s poll) once `teardown_at` has passed — the
  * automatic paths use this so players see the post-match scoreboard instead of an instant disconnect.
  * Omit it (the explicit teardown route does) for an immediate stop.
-
  */
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,

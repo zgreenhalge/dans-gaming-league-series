@@ -2,17 +2,16 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlayerLink } from './PlayerLink';
-import PlayerAvatar from './PlayerAvatar';
-import { PlayerName } from './PlayerName';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import { LocalTime } from './LocalTime';
 import { CountdownTimer } from './CountdownTimer';
+import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPlayerRow';
+import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import type { ScrimSignupEntry } from '@/lib/queries';
-import type { ScrimCommitment, ScrimNightSlot } from '@/lib/scrim-schedule';
+import { SCRIM_COMMITMENTS, type ScrimCommitment, type ScrimNightSlot } from '@/lib/scrim-schedule';
 
 interface Props {
   night: ScrimNightSlot;
@@ -25,11 +24,11 @@ interface Props {
 
 const COMMITMENT_LABEL: Record<ScrimCommitment, string> = { definite: 'Definite', maybe: 'Maybe' };
 
-const BTN_CLS = 'tracked text-[10px] font-semibold px-2.5 py-1.5 border transition-colors disabled:opacity-40';
-const IDLE_BTN_CLS = `${BTN_CLS} border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]`;
-const GREEN_BTN_CLS = `${BTN_CLS} border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)]`;
-const AMBER_BTN_CLS = `${BTN_CLS} border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)]`;
-const ACTIVE_BTN_CLS: Record<ScrimCommitment, string> = { definite: GREEN_BTN_CLS, maybe: AMBER_BTN_CLS };
+const IDLE_BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
+const ACTIVE_BTN_CLS: Record<ScrimCommitment, string> = {
+  definite: `${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`,
+  maybe: `${ADMIN_SMALL_AMBER_BUTTON_CLS} disabled:opacity-40`,
+};
 
 const START_FORMAT: Intl.DateTimeFormatOptions = {
   weekday: 'long',
@@ -52,10 +51,6 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
   const [, startTransition] = useTransition();
 
   const mine = signups.find((s) => s.player_id === currentPlayerId) ?? null;
-  const definite = signups.filter((s) => s.commitment === 'definite');
-  const maybe = signups.filter((s) => s.commitment === 'maybe');
-  const signedUpIds = new Set(signups.map((s) => s.player_id));
-  const addablePlayers = allPlayers.filter((p) => !signedUpIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
 
   function mutate(playerId: number, commitment: ScrimCommitment | null) {
     setTarget(playerId);
@@ -67,53 +62,40 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
     });
   }
 
-  function row(s: ScrimSignupEntry) {
-    const other: ScrimCommitment = s.commitment === 'definite' ? 'maybe' : 'definite';
+  function group(commitment: ScrimCommitment) {
+    const entries = signups.filter((s) => s.commitment === commitment);
+    const other: ScrimCommitment = commitment === 'definite' ? 'maybe' : 'definite';
     return (
-      <div
-        key={s.player_id}
-        className="lift-row flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border-tertiary)] last:border-b-0"
-      >
-        <PlayerLink playerId={s.player_id} className="flex items-center gap-3 min-w-0">
-          <PlayerAvatar name={s.player_name} imageUrl={s.steam_avatar_url} size="sm" />
-          <span className="font-display text-[14px] font-semibold truncate">
-            <PlayerName name={s.player_name} isMe={s.player_id === currentPlayerId} />
-          </span>
-        </PlayerLink>
-        {isAdmin && (
-          <div className="flex items-center gap-3 shrink-0 font-mono text-[11px] text-[var(--color-text-secondary)]">
-            <button
-              type="button"
-              onClick={() => mutate(s.player_id, other)}
-              disabled={pending === s.player_id}
-              className="hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
-            >
-              Make {COMMITMENT_LABEL[other].toLowerCase()}
-            </button>
-            <button
-              type="button"
-              onClick={() => mutate(s.player_id, null)}
-              disabled={pending === s.player_id}
-              className="hover:text-[var(--color-accent-red-fg,#f87171)] transition-colors disabled:opacity-40"
-            >
-              Remove
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function group(commitment: ScrimCommitment, entries: ScrimSignupEntry[]) {
-    return (
-      <div>
+      <div key={commitment}>
         <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] tracked text-[10px] text-[var(--color-text-secondary)]">
           {COMMITMENT_LABEL[commitment]} · {entries.length}
         </div>
         {entries.length === 0 ? (
           <EmptyState message={commitment === 'definite' ? 'Nobody locked in yet.' : 'No maybes.'} className="px-4 py-3" />
         ) : (
-          entries.map(row)
+          entries.map((s) => (
+            <RosterPlayerRow
+              key={s.player_id}
+              playerId={s.player_id}
+              name={s.player_name}
+              avatarUrl={s.steam_avatar_url}
+              isMe={s.player_id === currentPlayerId}
+            >
+              {isAdmin && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => mutate(s.player_id, other)}
+                    disabled={pending === s.player_id}
+                    className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
+                  >
+                    Make {COMMITMENT_LABEL[other].toLowerCase()}
+                  </button>
+                  <RosterRemoveButton onClick={() => mutate(s.player_id, null)} pending={pending === s.player_id} />
+                </div>
+              )}
+            </RosterPlayerRow>
+          ))
         )}
       </div>
     );
@@ -137,7 +119,7 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
 
         {currentPlayerId != null && (
           <div className="flex flex-wrap items-center gap-2">
-            {(['definite', 'maybe'] as const).map((c) => (
+            {SCRIM_COMMITMENTS.map((c) => (
               <button
                 key={c}
                 type="button"
@@ -158,31 +140,24 @@ export function ScrimNightPanel({ night, started, signups, currentPlayerId, isAd
         )}
       </div>
 
-      {group('definite', definite)}
-      {group('maybe', maybe)}
+      {SCRIM_COMMITMENTS.map(group)}
 
       {isAdmin && (
         <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-t border-[var(--color-border-tertiary)]">
-          <select
+          <AddPlayerSelect
+            players={allPlayers}
+            excludeIds={new Set(signups.map((s) => s.player_id))}
             value={addPlayerId}
-            onChange={(e) => setAddPlayerId(e.target.value)}
-            aria-label="Sign up a player"
-            className="flex-1 min-w-[160px] font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
-          >
-            <option value="">Sign up a player…</option>
-            {addablePlayers.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          {(['definite', 'maybe'] as const).map((c) => (
+            onChange={setAddPlayerId}
+            placeholder="Sign up a player…"
+          />
+          {SCRIM_COMMITMENTS.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => {
-                const id = Number(addPlayerId);
-                if (!addPlayerId || !Number.isFinite(id)) return;
                 setAddPlayerId('');
-                mutate(id, c);
+                mutate(Number(addPlayerId), c);
               }}
               disabled={!addPlayerId || pending != null}
               className={addPlayerId ? ACTIVE_BTN_CLS[c] : IDLE_BTN_CLS}

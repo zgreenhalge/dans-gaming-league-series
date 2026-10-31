@@ -1,22 +1,23 @@
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
-import { AccentTag } from './AccentTag';
-import type { ScrimOverview } from '@/lib/queries';
+import { StatusPill } from './StatusPill';
+import type { ScrimSignupEntry } from '@/lib/queries';
+import type { ScrimNightSlot } from '@/lib/scrim-schedule';
 
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
 
 /** Home-page row for the next scrim night: when, how many are coming, and whether the viewer is in. */
 export function NextScrimCard({
-  overview,
+  night,
   started,
+  signups,
   currentPlayerId,
 }: {
-  overview: ScrimOverview;
+  night: ScrimNightSlot;
   started: boolean;
+  signups: ScrimSignupEntry[];
   currentPlayerId: number | null;
 }) {
-  const { next, signups } = overview;
-  if (!next) return null;
   const definite = signups.filter((s) => s.commitment === 'definite').length;
   const maybe = signups.length - definite;
   const mine = signups.find((s) => s.player_id === currentPlayerId);
@@ -31,13 +32,13 @@ export function NextScrimCard({
           {started ? 'Scrims · happening now' : 'Next scrims'}
         </div>
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
-          <LocalTime iso={next.startsAt} opts={START_FORMAT} />
+          <LocalTime iso={night.startsAt} opts={START_FORMAT} />
         </div>
         <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
           {definite} definite · {maybe} maybe
         </div>
       </div>
-      <AccentTag>{mine ? (mine.commitment === 'definite' ? "You're in" : "You're a maybe") : 'Sign up'}</AccentTag>
+      <StatusPill variant="accent">{mine ? (mine.commitment === 'definite' ? "You're in" : "You're a maybe") : 'Sign up'}</StatusPill>
     </Link>
   );
 }

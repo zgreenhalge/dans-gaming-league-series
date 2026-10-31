@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getSession } from '@/lib/session';
 import { getPlayersById, getScrimOverview } from '@/lib/queries';
-import { hasScrimNightStarted } from '@/lib/scrim-schedule';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimAdminPanel } from '@/components/ScrimAdminPanel';
 import EmptyState from '@/components/EmptyState';
@@ -22,11 +21,10 @@ function timezoneOptions(current: string | undefined): string[] {
 }
 
 export default async function ScrimsPage() {
-  const now = new Date();
-  const [session, overview, playersById] = await Promise.all([getSession(), getScrimOverview(now), getPlayersById()]);
+  const [session, overview, playersById] = await Promise.all([getSession(), getScrimOverview(new Date()), getPlayersById()]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
-  const { schedule, slots, next, signups } = overview;
+  const { schedule, slots, next, started, signups } = overview;
 
   return (
     <div className="min-h-screen">
@@ -38,7 +36,7 @@ export default async function ScrimsPage() {
             <ScrimNightPanel
               key={next.date}
               night={next}
-              started={hasScrimNightStarted(next, now)}
+              started={started}
               signups={signups}
               currentPlayerId={currentPlayerId}
               isAdmin={isAdmin}

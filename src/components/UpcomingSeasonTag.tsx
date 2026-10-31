@@ -1,7 +1,7 @@
-import { AccentTag } from './AccentTag';
+import { StatusPill } from './StatusPill';
 
 /** Status pill for an UPCOMING season: "Sign up now" while the viewer isn't on its roster,
  *  "Soon" once they are. */
 export function UpcomingSeasonTag({ needsSignup }: { needsSignup: boolean }) {
-  return <AccentTag>{needsSignup ? 'Sign up now' : 'Soon'}</AccentTag>;
+  return <StatusPill variant="accent">{needsSignup ? 'Sign up now' : 'Soon'}</StatusPill>;
 }

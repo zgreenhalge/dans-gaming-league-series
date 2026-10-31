@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import ErrorText from './ErrorText';
+import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SELECT_CLS } from './formStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { WEEKDAY_NAMES, formatNightDate, formatStartTime, type ScrimNightSlot, type ScrimSchedule } from '@/lib/scrim-schedule';
@@ -15,10 +17,7 @@ interface Props {
 }
 
 const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
-const INPUT_CLS =
-  'font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]';
-const BTN_CLS =
-  'tracked text-[10px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40';
+const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
 
 const DEFAULT_SCHEDULE: ScrimSchedule = { weekday: 4, startTime: '20:00', timezone: 'America/New_York', enabled: true };
 
@@ -60,7 +59,7 @@ export function ScrimAdminPanel({ schedule, slots, timezones }: Props) {
           <select
             value={draft.weekday}
             onChange={(e) => setDraft({ ...draft, weekday: Number(e.target.value) })}
-            className={INPUT_CLS}
+            className={SELECT_CLS}
           >
             {WEEKDAY_NAMES.map((name, i) => (
               <option key={name} value={i}>{name}</option>
@@ -73,7 +72,7 @@ export function ScrimAdminPanel({ schedule, slots, timezones }: Props) {
             type="time"
             value={draft.startTime}
             onChange={(e) => setDraft({ ...draft, startTime: e.target.value })}
-            className={INPUT_CLS}
+            className={SELECT_CLS}
           />
         </label>
         <label className="flex flex-col gap-1 min-w-0 flex-1">
@@ -81,7 +80,7 @@ export function ScrimAdminPanel({ schedule, slots, timezones }: Props) {
           <select
             value={draft.timezone}
             onChange={(e) => setDraft({ ...draft, timezone: e.target.value })}
-            className={`${INPUT_CLS} min-w-0`}
+            className={`${SELECT_CLS} min-w-0`}
           >
             {timezones.map((tz) => (
               <option key={tz} value={tz}>{tz}</option>

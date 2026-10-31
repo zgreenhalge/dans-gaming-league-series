@@ -97,7 +97,7 @@ function JoinServerButton({ connect }: { connect: string }) {
 
 /**
  * The connect-related bits shown for a live/connectable server — a one-click Steam join icon right in
- * front of the connect string + copy button. Renders inline (no wrapping element) so callers lay it out in their own flex row
+ * front of the connect string + copy button. Renders inline so callers lay it out in their own flex row
  * alongside anything else they show (e.g. admin's `mode` field) — same pattern as
  * `MapPicker`/`LaunchOptionsPicker`.
  */
@@ -110,13 +110,11 @@ export function ServerConnectionDetails({
 }) {
   if (!connect) return null;
   return (
-    <>
-      <span className="inline-flex items-center gap-1.5">
-        {serverOn && <JoinServerButton connect={connect} />}
-        connect {connect}
-        <CopyConnectButton connect={connect} />
-      </span>
-    </>
+    <span className="inline-flex items-center gap-1.5">
+      {serverOn && <JoinServerButton connect={connect} />}
+      connect {connect}
+      <CopyConnectButton connect={connect} />
+    </span>
   );
 }
 

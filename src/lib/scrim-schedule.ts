@@ -72,18 +72,31 @@ export function normalizeStartTime(time: string): string {
   return time.slice(0, 5);
 }
 
+const wallClockFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** A cached formatter reading an instant's wall-clock fields in `tz` — building one is the expensive
+ *  part of every conversion below. */
+function wallClockFormat(tz: string): Intl.DateTimeFormat {
+  let format = wallClockFormats.get(tz);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    wallClockFormats.set(tz, format);
+  }
+  return format;
+}
+
 /** Milliseconds `tz` is ahead of UTC at `instant`. */
 function zoneOffsetMs(instant: number, tz: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(instant));
+  const parts = wallClockFormat(tz).formatToParts(new Date(instant));
   const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
   const wallAsUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
   return wallAsUtc - Math.floor(instant / 1000) * 1000;
@@ -102,7 +115,9 @@ export function zonedTimeToUtc(date: string, time: string, tz: string): Date {
 
 /** `instant`'s calendar date in `tz`, `YYYY-MM-DD`. */
 export function dateInZone(instant: Date, tz: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+  const parts = wallClockFormat(tz).formatToParts(instant);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 function addDays(date: string, days: number): string {
@@ -128,7 +143,7 @@ export function formatNightDate(date: string): string {
 }
 
 /** When the night on `date` starts under `schedule`. */
-export function scrimNightStart(schedule: ScrimSchedule, date: string): Date {
+function scrimNightStart(schedule: ScrimSchedule, date: string): Date {
   return zonedTimeToUtc(date, schedule.startTime, schedule.timezone);
 }
 
@@ -145,27 +160,30 @@ export function scrimNightSlots(
   weeks: number = SCRIM_NIGHTS_AHEAD,
 ): ScrimNightSlot[] {
   if (!schedule?.enabled) return [];
-  const notEnded = (date: string) => scrimNightStart(schedule, date).getTime() + SCRIM_NIGHT_LENGTH_MS > now.getTime();
-
-  // Start a day back: a late-evening night can still be running after midnight local time.
-  let date = addDays(dateInZone(now, schedule.timezone), -1);
-  while (weekdayOf(date) !== schedule.weekday) date = addDays(date, 1);
-  const dates: string[] = [];
-  for (; dates.length < weeks; date = addDays(date, 7)) {
-    if (notEnded(date)) dates.push(date);
-  }
-  const scheduled = new Set(dates);
-  for (const n of nights) {
-    if (!scheduled.has(n.night_date) && notEnded(n.night_date)) dates.push(n.night_date);
-  }
-
+  // Start a day back: a late-evening night can still be running after midnight local time. Any date
+  // before that has certainly ended, which skips past rows with a string compare.
+  const earliest = addDays(dateInZone(now, schedule.timezone), -1);
   const rowByDate = new Map(nights.map((n) => [n.night_date, n]));
-  return dates
-    .map((d) => {
-      const row = rowByDate.get(d);
-      return { date: d, startsAt: scrimNightStart(schedule, d).toISOString(), nightId: row?.id ?? null, cancelled: row?.cancelled ?? false };
-    })
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const slots: ScrimNightSlot[] = [];
+  /** Lists `date` if its night hasn't ended; returns whether it did. */
+  const add = (date: string): boolean => {
+    const start = scrimNightStart(schedule, date);
+    if (start.getTime() + SCRIM_NIGHT_LENGTH_MS <= now.getTime()) return false;
+    const row = rowByDate.get(date);
+    slots.push({ date, startsAt: start.toISOString(), nightId: row?.id ?? null, cancelled: row?.cancelled ?? false });
+    return true;
+  };
+
+  let date = earliest;
+  while (weekdayOf(date) !== schedule.weekday) date = addDays(date, 1);
+  const scheduled = new Set<string>();
+  for (; scheduled.size < weeks; date = addDays(date, 7)) {
+    if (add(date)) scheduled.add(date);
+  }
+  for (const n of nights) {
+    if (n.night_date >= earliest && !scheduled.has(n.night_date)) add(n.night_date);
+  }
+  return slots.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
 
 /** The next night that isn't cancelled, or `null`. */

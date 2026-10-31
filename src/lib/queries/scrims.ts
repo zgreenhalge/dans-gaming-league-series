@@ -3,6 +3,7 @@ import {
   normalizeStartTime,
   scrimNightSlots,
   nextScrimNight,
+  hasScrimNightStarted,
   type ScrimCommitment,
   type ScrimNightRow,
   type ScrimNightSlot,
@@ -70,6 +71,8 @@ export interface ScrimOverview {
   slots: ScrimNightSlot[];
   /** The next night that isn't cancelled. */
   next: ScrimNightSlot | null;
+  /** Whether `next` has started. */
+  started: boolean;
   /** `next`'s signups (empty while it has no `scrim_nights` row). */
   signups: ScrimSignupEntry[];
 }
@@ -79,5 +82,5 @@ export async function getScrimOverview(now: Date): Promise<ScrimOverview> {
   const { schedule, slots } = await getScrimNights(now);
   const next = nextScrimNight(slots);
   const signups = next?.nightId != null ? await getScrimSignups(next.nightId) : [];
-  return { schedule, slots, next, signups };
+  return { schedule, slots, next, started: next != null && hasScrimNightStarted(next, now), signups };
 }

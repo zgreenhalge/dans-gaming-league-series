@@ -13,11 +13,11 @@ export async function saveScrimSchedule(db: SupabaseClient, schedule: ScrimSched
     .throwOnError();
 }
 
-/** The `scrim_nights` row id for `date`, creating the row if it doesn't exist yet. The upsert leaves
- *  an existing row (and its `cancelled` flag) untouched, so concurrent first signups share one row. */
+/** The `scrim_nights` row id for `date`, creating the row if it doesn't exist yet. The upsert only
+ *  writes `night_date`, so an existing row keeps its `cancelled` flag, and concurrent first signups
+ *  share one row. */
 export async function ensureScrimNight(db: SupabaseClient, date: string): Promise<number> {
-  await db.from('scrim_nights').upsert({ night_date: date }, { onConflict: 'night_date', ignoreDuplicates: true }).throwOnError();
-  const { data } = await db.from('scrim_nights').select('id').eq('night_date', date).single().throwOnError();
+  const { data } = await db.from('scrim_nights').upsert({ night_date: date }, { onConflict: 'night_date' }).select('id').single().throwOnError();
   return (data as { id: number }).id;
 }
 

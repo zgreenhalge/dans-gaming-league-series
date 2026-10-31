@@ -11,10 +11,7 @@
  * PostgREST/Supabase reimplementation — it covers real call shapes, nothing more (e.g. `.not()`
  * only supports the `'is'` operator, `.or()` only supports the `eq`/`is`/`neq`/`gt`/`gte`/`lt`/`lte`
  * comparators real call sites use, and none of `.insert()`/`.delete()`/`.update()`/`.upsert()` emulate
- * FK constraints. The one exception is `.insert()`'s primary-key collision: inserting a row whose
- * explicit `id` already exists in the table returns a `23505` (unique-violation) error instead of
- * silently duplicating it, since a singleton row claimed by a fixed `id` depends on exactly that DB
- * behavior.
+ * FK or unique constraints.
  *
  * `.insert()`/`.upsert()` assign an auto-incrementing `id` (current max in the table + 1) to any row
  * that doesn't already specify one, mirroring a real serial primary key — this only matters when a
@@ -448,13 +445,6 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private async execute(): Promise<{ data: T[] | T | null; error: FakeError | null }> {
     if (this.mode === 'insert') {
       const table = (this.db[this.table] ??= []);
-      // A collision on an explicitly-provided id (e.g. a singleton row's fixed `id: 1`)
-      // — see the file header. Real Postgres rejects the whole statement, so this checks every row
-      // in the batch before inserting any of them.
-      const collision = this.insertRows.find((r) => r.id !== undefined && table.some((existing) => existing.id === r.id));
-      if (collision) {
-        return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint (id=${collision.id})` } };
-      }
       let counter = nextId(table);
       const inserted = this.insertRows.map((r) => {
         const row: Row = { ...r };
