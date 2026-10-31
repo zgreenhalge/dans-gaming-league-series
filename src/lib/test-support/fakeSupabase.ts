@@ -46,6 +46,7 @@ const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
   matches: {
     weeks: { kind: 'one', fk: 'week_id', table: 'weeks' },
     player_match_stats: { kind: 'many', fk: 'match_id', table: 'player_match_stats' },
+    match_server_state: { kind: 'many', fk: 'match_id', table: 'match_server_state' },
   },
   player_match_stats: {
     matches: { kind: 'one', fk: 'match_id', table: 'matches' },
@@ -512,6 +513,10 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
  * `FakeDb`, returns (or resolves to) whatever `data` the real RPC would have returned. */
 export type RpcHandler = (args: Record<string, unknown>, db: FakeDb) => unknown | Promise<unknown>;
 
+/** Throw from an `RpcHandler` to have `.rpc()` resolve with `{ data: null, error }` — the shape a real
+ *  Postgres function's `raise exception` reaches the caller in. Any other thrown error rejects. */
+export class FakeRpcError extends Error {}
+
 export class FakeSupabaseClient {
   /** Every fake db carries the `data_version` row the persistent read cache keys on, so a test can
    *  run with the cache engaged without declaring it. */
@@ -524,14 +529,22 @@ export class FakeSupabaseClient {
   /** Looks up a handler registered under `name` (see `createFakeSupabaseClient`'s second argument)
    * and runs it against the live fake db. Throws synchronously if nothing was registered for `name`
    * — a test exercising an `.rpc()` call site must register a fake implementation for it. */
-  rpc(name: string, args: Record<string, unknown> = {}): PromiseLike<{ data: unknown; error: null }> {
+  rpc(name: string, args: Record<string, unknown> = {}): PromiseLike<{ data: unknown; error: { message: string } | null }> {
     const handler = this.rpcHandlers[name];
     if (!handler) {
       throw new Error(
         `fakeSupabase: no .rpc() handler registered for "${name}" — pass one via createFakeSupabaseClient(db, { ${name}: (args, db) => ... })`,
       );
     }
-    return Promise.resolve(handler(args, this.db)).then((data) => ({ data, error: null }));
+    return Promise.resolve()
+      .then(() => handler(args, this.db))
+      .then(
+        (data) => ({ data, error: null }),
+        (err) => {
+          if (err instanceof FakeRpcError) return { data: null, error: { message: err.message } };
+          throw err;
+        },
+      );
   }
 }
 

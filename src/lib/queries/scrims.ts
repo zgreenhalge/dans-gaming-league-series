@@ -96,3 +96,48 @@ export async function getScrimOverview(now: Date): Promise<ScrimOverview> {
     signups,
   };
 }
+
+export interface ScrimMatch {
+  id: number;
+  match_number: number;
+  /** The match's map (`shirts_pick`), chosen in the lobby. */
+  map: string | null;
+  shirts: number[];
+  skins: number[];
+  final_score: string | null;
+  /** `match_server_state.server_state`, or `null` before the match was ever started. */
+  server_state: string | null;
+}
+
+/** A scrim night's matches in play order, with lineups and server state. Not cached: server state is
+ *  operational and changes without bumping `data_version`. */
+export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[]> {
+  const db = getAdminClient();
+  const { data, error } = await db
+    .from('matches')
+    .select('id, match_number, shirts_pick, final_score, player_match_stats(player_id, faction), match_server_state(server_state)')
+    .eq('scrim_night_id', nightId)
+    .order('match_number');
+  if (error) throw error;
+  type Row = {
+    id: number;
+    match_number: number;
+    shirts_pick: string | null;
+    final_score: string | null;
+    player_match_stats: { player_id: number; faction: string }[] | null;
+    match_server_state: { server_state: string } | { server_state: string }[] | null;
+  };
+  return ((data ?? []) as unknown as Row[]).map((r) => {
+    const stats = r.player_match_stats ?? [];
+    const state = Array.isArray(r.match_server_state) ? r.match_server_state[0] : r.match_server_state;
+    return {
+      id: r.id,
+      match_number: r.match_number,
+      map: r.shirts_pick,
+      shirts: stats.filter((s) => s.faction === 'SHIRTS').map((s) => s.player_id),
+      skins: stats.filter((s) => s.faction === 'SKINS').map((s) => s.player_id),
+      final_score: r.final_score,
+      server_state: state?.server_state ?? null,
+    };
+  });
+}

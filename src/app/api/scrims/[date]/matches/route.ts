@@ -1,0 +1,42 @@
+// Makes a scrim night's next match: `pickNextScrimMatch()` over the checked-in players (by current
+// EHOG, against the night's earlier matches) on a random map from every map the server can load.
+// Any checked-in player or an admin, once check-in is open (`requireScrimNightMatchAccess()`). 409
+// while fewer than four are checked in, or while the night has a match without a score.
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminClient } from '@/lib/supabase-admin';
+import { accessDenied } from '@/lib/access-control';
+import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
+import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from '@/lib/queries';
+import { pickNextScrimMatch, SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { createScrimMatch, UnplayedScrimMatchError } from '@/lib/scrim-matches';
+
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ date: string }> }) {
+  const { date } = await params;
+  const access = await requireScrimNightMatchAccess(date);
+  if (!access.ok) return accessDenied(access);
+  const { slot, checkedIn } = access;
+
+  if (checkedIn.length < SCRIM_MATCH_SIZE) {
+    return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
+  }
+
+  const [ratings, history, maps] = await Promise.all([
+    getPlayerRatings(checkedIn),
+    getScrimNightMatches(slot.nightId),
+    getMapsForWorkshopPicker(),
+  ]);
+  if (maps.length === 0) return NextResponse.json({ error: 'No maps with a workshop id to play on' }, { status: 409 });
+
+  const plan = pickNextScrimMatch(ratings, history.map((m) => ({ shirts: m.shirts as [number, number], skins: m.skins as [number, number] })));
+  if (!plan) return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
+  const map = maps[Math.floor(Math.random() * maps.length)].name;
+
+  try {
+    const matchId = await createScrimMatch(getAdminClient(), slot.nightId, map, plan);
+    return NextResponse.json({ ok: true, matchId }, { status: 201 });
+  } catch (err) {
+    if (err instanceof UnplayedScrimMatchError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Making the match failed' }, { status: 500 });
+  }
+}

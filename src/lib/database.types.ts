@@ -1828,6 +1828,10 @@ export type Database = {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
       }
+      create_scrim_match: {
+        Args: { p_map: string; p_night_id: number; p_shirts: number[]; p_skins: number[] }
+        Returns: number
+      }
       delete_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json
@@ -1885,6 +1889,10 @@ export type Database = {
       schedule_match_reminder: {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
+      }
+      set_scrim_match_lineup: {
+        Args: { p_match_id: number; p_shirts: number[]; p_skins: number[] }
+        Returns: undefined
       }
       set_season_buy_in: {
         Args: { p_amount: number | null; p_season_id: number }
