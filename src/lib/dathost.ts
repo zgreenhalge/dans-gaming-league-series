@@ -167,9 +167,9 @@ export async function stopServer(id: string): Promise<void> {
  * PUT a resolved config set's full `server` + `cs2_settings` baseline (+ a pinned map) to overwrite
  * any recreational-mode drift. Callers resolve the set first (`resolveConfigSet` in
  * `dathost-config.ts`, Supabase-backed) so this stays a pure REST call with no DB dependency — the
- * same PUT whether it's real-match provisioning, the admin console's "Apply config set"/"Start", or
- * `/scrim/start`, so they can never disagree on which fields get re-asserted. The `server`-level
- * fields (`autostop`, `autostop_minutes`, …) apply to every caller intentionally, scrim included —
+ * same PUT whether it's real-match provisioning or the admin console's "Apply config set"/"Start", so
+ * they can never disagree on which fields get re-asserted. The `server`-level fields (`autostop`,
+ * `autostop_minutes`, …) apply to every caller intentionally —
  * they're a shared-server idle/billing policy, not something that should vary by how the current boot
  * was started.
  *

@@ -32,3 +32,4 @@ export * from './utility';
 export * from './damage';
 export * from './duels';
 export * from './roundEconomy';
+export * from './scrims';

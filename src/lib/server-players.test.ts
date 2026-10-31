@@ -76,9 +76,9 @@ test('linesSinceMarker + parseConnectedPlayers: a stale connect from a previous 
   // the reused-server staleness bug (a phantom "connected" player from a prior session/boot).
   const lines = [
     'Jul 16 00:10:00:  "GhostFromLastSession<3><[U:1:999]><CT>" purchased "ak47"',
-    'DGLS-SCRIM-BOOT',
+    'DGLS-SERVER-BOOT',
   ];
-  assert.deepEqual(parseConnectedPlayers(linesSinceMarker(lines, 'DGLS-SCRIM-BOOT')), []);
+  assert.deepEqual(parseConnectedPlayers(linesSinceMarker(lines, 'DGLS-SERVER-BOOT')), []);
 });
 
 report();

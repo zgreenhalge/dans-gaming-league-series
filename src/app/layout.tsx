@@ -6,7 +6,6 @@ import AuthProvider from "@/components/AuthProvider";
 import { SideNav } from "@/components/SideNav";
 import { NavProvider } from "@/components/NavContext";
 import { MapProvider } from "@/components/MapContext";
-import { ScrimStatusProvider } from "@/components/ScrimStatusContext";
 import { LiveMatchTicker, TICKER_HEIGHT_PX } from "@/components/LiveMatchTicker";
 import { getSeasons, getMapLookup, getLiveTickerMatch } from "@/lib/queries";
 import { SITE_URL } from "@/lib/seo/site";
@@ -79,7 +78,6 @@ export default async function RootLayout({
           strategy="beforeInteractive"
         />
         <AuthProvider>
-          <ScrimStatusProvider>
           <MapProvider maps={mapLookup}>
           <NavProvider>
             <LiveMatchTicker initial={liveTicker} />
@@ -91,7 +89,6 @@ export default async function RootLayout({
             </div>
           </NavProvider>
           </MapProvider>
-          </ScrimStatusProvider>
           <Analytics />
           <SpeedInsights />
         </AuthProvider>

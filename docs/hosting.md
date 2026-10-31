@@ -59,10 +59,9 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
   (`discord_notify_server_live`, entity `match`) — see [`architecture.md`](./architecture.md)'s
   "Surfacing best-effort failures". Marks `failed` and rethrows on any error. A per-file
   cfg-push failure is logged, not fatal. `launchServer` is the same shared orchestration the admin
-  console's Start and `/api/scrim/start` use (with a different `configSetKey`/`extraCvars`, no
-  `loadMatch` after), so all three can't disagree on what "apply + push + boot" means (#315) — only
-  `provisionMatchServer` itself triggers the live notification, since scrims and admin-console starts
-  don't go through it.
+  console's Start uses (with a different `configSetKey`/`extraCvars`, no `loadMatch` after), so the
+  two can't disagree on what "apply + push + boot" means (#315) — only `provisionMatchServer` itself
+  triggers the live notification, since admin-console starts don't go through it.
 - **`teardownMatchServer`** — `stop` (never delete) → `done`, or, given `delayMs`, schedules the stop
   instead of running it inline (`tearing_down` + `teardown_at`, see Reconciliation below).
   `onlyIfOwnsServer` no-ops unless this match is the current occupant, so tearing down one match never
@@ -101,8 +100,8 @@ claims the server (so a refusal never marks *it* failed). There is a tiny check-
 (two vetos completing within the same DB round-trip); accepted, since veto completions are seconds+
 apart in practice and this turns a silent mid-game clobber into a clean refusal.
 
-`findServerOccupant` only sees matches tracked in `match_server_state` — a scrim or a manual
-admin-console launch never claims a row there, so `provisionMatchServer` also asks DatHost itself
+`findServerOccupant` only sees matches tracked in `match_server_state` — a manual admin-console
+launch never claims a row there, so `provisionMatchServer` also asks DatHost itself
 whether the server is live (`isServerLive`, `src/lib/util.ts`) rather than cross-referencing another
 table, and refuses with the same `ServerBusyError` (`occupantMatchId: null`) when it's genuinely live.
 Not interrupting ongoing play outranks starting a new match on time, for both the automatic
@@ -245,27 +244,13 @@ DatHost pull, `parse` the rest — for progress detail without a separate status
 `running → confirmed` status edge directly (no `parsed` stop) — the auto-commit predicate check and the write
 both happen inside the `running` status, after the `parse` stage.
 
-## Scrims
+## Roster-less launches (Pug Mode)
 
-**`/scrim`** — any signed-in player can pick a config set + map (the shared `LaunchOptionsPicker`,
-`src/components/LaunchOptionsPicker.tsx`) and start the shared server for a casual, free-form game
-outside the DGLS match model entirely: no roster, no veto, no `matches` row, no stats. It calls the
-same `launchServer` orchestration (`dathost-lifecycle.ts`) the admin console's Start button uses via
-`POST /api/scrim/start`, minus the admin-only override — starting is refused outright (409, no
-override) if `getServerOccupancy` reports the server occupied, if a scrim is already running, or if
-`findNearbyUnscoredMatch` (`dathost-lifecycle.ts`) finds a league match scheduled within
-`SCHEDULE_COLLISION_WINDOW_MS` of right now that hasn't been scored yet (`isPlayedScore`) — a scrim
-never bumps a real match, even one whose scheduled time has already passed. `POST /api/scrim/apply-
-config` is the no-boot counterpart — reasserts the picked config set without starting the server,
-using `applyConfigSetOnly` (`dathost-lifecycle.ts`, the admin console's Apply config set button uses
-the same one) and the identical two refusals Start has (occupancy, nearby unscored match) — applying
-a config set is exactly as disruptive as starting, so it's gated the same way, not just occupancy
-alone.
-
-A scrim never calls `loadMatch` — with no roster loaded, MatchZy stays in **Pug Mode** (teams
-unlocked; players self-assign with `.ct`/`.t`/`.spec`, no locked roster like a real match). Right
-after boot, `launchServer`'s `extraCvars` (built by `pugModeCvarLine`, `dathost-lifecycle.ts`) asserts
-`matchzy_knife_enabled_default 0` (no knife round — sides are whatever players pick),
+The admin console's **Start** (`POST /api/admin/server/start`) boots the shared server through
+`launchServer` without ever calling `loadMatch` — with no roster loaded, MatchZy stays in **Pug Mode**
+(teams unlocked; players self-assign with `.ct`/`.t`/`.spec`, no locked roster like a real match).
+Right after boot, `launchServer`'s `extraCvars` (built by `pugModeCvarLine`, `dathost-lifecycle.ts`)
+asserts `matchzy_knife_enabled_default 0` (no knife round — sides are whatever players pick),
 `matchzy_playout_enabled_default` from the launch-time "play out all rounds" toggle,
 `mp_warmup_pausetimer 1`, and `matchzy_minimum_ready_required 0` unconditionally — the golden league
 config's `matchzy_minimum_ready_required 4` assumes a full 2v2 roster, which doesn't hold with no
@@ -278,55 +263,25 @@ session's demo would land at the same unresolved path — colliding with itself 
 risking collision with a real match's `MatchZy/{matchId}.dem` if that empty token ever resolved to
 something an actual match id could match. A separate "Friendly" toggle gates `FRIENDLY_CVARS`
 (`mp_autokick 0`, `mp_drop_knife_enable 1`, `mp_forcecamera 0`, `mp_shoot_dropped_grenades true`) —
-only asserted when checked, left at whatever the config set sets otherwise. `pugModeCvarLine` is
-shared with the admin console's Start button (below), which offers the same two toggles — any launch
-with no roster loaded behaves the same way regardless of who starts it.
+only asserted when checked, left at whatever the config set sets otherwise.
 
-Concurrency is tracked by `scrim_sessions`, a **singleton** table (`src/lib/scrim-session.ts`): its
-primary key is pinned to a fixed value, so at most one row can ever exist, and `/api/scrim/start`
-claims it with a plain `INSERT` — a primary-key collision on a second concurrent start fails
-atomically (409) rather than racing on a check-then-act read. `POST /api/scrim/stop` is refused (403)
-unless the requester is the player who started it or an admin, refused (409) if a real DGLS match
-holds the server, and otherwise stoppable (e.g. no session row at all — the server on for some other
-reason, like the admin console). `GET /api/scrim/status` surfaces `startedByName`/`canStop` so
-`ScrimPanel` can show a "Scrim started by …" notice and hide the Stop button for anyone who isn't the
-starter or an admin.
-
-Every path that stops the server — `/api/scrim/stop`, the raw admin console stop
-(`/api/admin/server/stop`), and real-match teardown (`teardownMatchServer`) — goes through
-`stopSharedServer` (`dathost-lifecycle.ts`, alongside the rest of "who occupies the shared server")
-instead of the raw `stopServer`, so a scrim session is always cleared alongside whatever actually
-stopped the box, no matter which of those triggered it. The one stop this can't observe is DatHost
-stopping the server on its own (an idle timeout) — for that, `/api/scrim/start` and `GET /api/scrim/
-status` both call `reconcileScrimSession` before anything else: if the session table says active but
-the server's actually off, the row is cleared right there, so the singleton can never get permanently
-stuck either from an unobserved stop or from a failed start.
-
-Since a scrim otherwise has no roster data model, "who's connected" can't come from a DB row —
-`players_online` on the DatHost server object is a bare count with no roster, and there's no dedicated
-player-list endpoint. Instead `getConnectedPlayers` (`server-players.ts`) reads the server's raw
-console log (`getConsoleLines`, a rolling ~1000-line window) and derives the current roster from the
-connect/disconnect/round events already in it — every one carries `"name<userid><steamid><team>"` —
-via `parseConnectedPlayers`. Both `GET /api/scrim/status` and `GET /api/admin/server/status` call it,
-so the admin console gets the same real name list (`ConnectedRoster`, `ServerStatusBits.tsx`) instead
-of a bare count. This is best-effort: a player whose connect line has scrolled out of the 1000-line
-window before any later event re-mentions them (e.g. a very long session with heavy chatter) won't
-appear even though they're still connected.
+With no roster loaded, "who's connected" can't come from a DB row — `players_online` on the DatHost
+server object is a bare count with no roster, and there's no dedicated player-list endpoint. Instead
+`getConnectedPlayers` (`server-players.ts`) reads the server's raw console log (`getConsoleLines`, a
+rolling ~1000-line window) and derives the current roster from the connect/disconnect/round events
+already in it — every one carries `"name<userid><steamid><team>"` — via `parseConnectedPlayers`.
+`GET /api/admin/server/status` calls it, so the admin console gets a real name list
+(`ConnectedRoster`, `ServerStatusBits.tsx`) instead of a bare count. This is best-effort: a player
+whose connect line has scrolled out of the 1000-line window before any later event re-mentions them
+(e.g. a very long session with heavy chatter) won't appear even though they're still connected.
 
 **The reused server's console log isn't reset by a stop/start** — a "connected" line from whatever
-last used the box (a previous scrim, a real match, a leftover test) with no matching "disconnected"
+last used the box (a previous pug, a real match, a leftover test) with no matching "disconnected"
 line after it otherwise reads as a still-connected phantom player until a real connection happens to
-reuse the same `userid` slot and overwrite it. `/api/scrim/start` echoes `SCRIM_BOOT_MARKER`
-(`server-players.ts`) to the console right after boot, and `GET /api/scrim/status` discards every line
-at or before the *last* occurrence of that marker (`linesSinceMarker`) before parsing the roster — so
-only lines from the current boot are ever trusted.
-
-**Pre-match warnings.** `scripts/scrim-warnings.ts`, run every 5 minutes by the `scrim-warnings`
-GitHub Actions workflow (not a Vercel cron — this project's plan only allows daily crons), no-ops
-unless a scrim session is active. When one is, and `findNearbyUnscoredMatch` finds a nearby unscored
-league match, it `say`s an in-game warning once each time the time-until-match crosses the 15/10/5-
-minute bands (tracked per-session via `scrim_sessions.warned_15/10/5`, one-shot per threshold) —
-purely advisory, since a scrim never blocks a match from actually starting.
+reuse the same `userid` slot and overwrite it. `launchServer` echoes `SERVER_BOOT_MARKER`
+(`server-players.ts`) to the console right after every boot, and `getConnectedPlayers` discards every
+line at or before the *last* occurrence of that marker (`linesSinceMarker`) before parsing the roster
+— so only lines from the current boot are ever trusted.
 
 ## Admin surfaces
 
@@ -369,12 +324,11 @@ Manage:
   Connection details (a one-click Steam join, the raw `connect` string + copy button) and the
   **connected roster** (`ConnectedRoster`, `ServerStatusBits.tsx` — a real name list via
   `getConnectedPlayers`, not a bare count; its heading tints amber for "casual use," someone connected
-  outside a DGLS match) are the same shared components `/scrim` uses — no separate "idle"/player-count
+  outside a DGLS match) — no separate "idle"/player-count
   lines duplicating what the state pill and roster already say; the state pill also renders as the
   panel's collapsed-preview. **Server config** holds the shared `LaunchOptionsPicker` (config set + map
-  + "Play out all rounds"/"Friendly" toggles — the same component `/scrim` uses) with **Start** and
-  **Apply config set** side by side: Start launches via `launchServer` (same orchestration and toggles
-  `/api/scrim/start` uses, so the two surfaces can't drift, #315); Apply config set pushes the picked
+  + "Play out all rounds"/"Friendly" toggles) with **Start** and **Apply config set** side by side:
+  Start launches via `launchServer` in Pug Mode (see "Roster-less launches" above); Apply config set pushes the picked
   set's `server`/`cs2_settings` + cfg files without starting (`applyConfigSetOnly`) — the same fields
   `dathost-golden-apply.ts --reassert` pushes, and the same call real-match provisioning makes via
   `launchServer`, so a manual apply here and an automatic one at the next match provision can never
@@ -423,9 +377,7 @@ the admin console and `dathost-golden-diff.ts`). Because launching re-pushes a s
 every boot, a cfg edited only in the DatHost panel is overwritten on the next launch.
 
 **`applyConfigSetOnly`** (`dathost-lifecycle.ts`) is `resolveConfigSet` + the settings PUT + cfg-file
-push, without booting — the no-start half of `launchServer`, shared by `/api/admin/server/apply-config`
-and `/api/scrim/apply-config` so "reassert a config set" can't drift between the admin and scrim
-surfaces either.
+push, without booting — the no-start half of `launchServer`, used on its own by `/api/admin/server/apply-config`.
 
 ## Config generation
 
@@ -436,7 +388,7 @@ surfaces either.
 `scripts/gen-matchzy-config.ts` CLI. `matchzy_demo_path` (the deterministic `MatchZy/` directory the
 demo pull relies on) lives in the `golden` config set's static `cfg/MatchZy/config.cfg`, alongside a
 `matchzy_demo_name_format "{MATCH_ID}"` fallback that only matters if some future launch path forgets
-to set its own override (a real match's per-match cvar here, or a scrim/pug's `pugModeCvarLine`).
+to set its own override (a real match's per-match cvar here, or a pug launch's `pugModeCvarLine`).
 
 ## Routes
 
@@ -456,10 +408,6 @@ to set its own override (a real match's per-match cvar here, or a scrim/pug's `p
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
 | POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo (manual counterpart to `matchzy-log`'s auto-dispatch) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
-| GET | `/api/scrim/status` | session | raw server state + active match + connected roster + blocking-match check + scrim ownership |
-| POST | `/api/scrim/start` | session | claim the singleton scrim session + apply the picked config set at a picked map + start in Pug Mode (409 if occupied, a scrim's already running, or a nearby match is unscored) |
-| POST | `/api/scrim/apply-config` | session | reassert the picked config set without starting (`applyConfigSetOnly`, 409 if occupied, no override) |
-| POST | `/api/scrim/stop` | session | stop + release the scrim session (409 if a DGLS match holds the server, 403 if not the session's starter/an admin) |
 
 ## Environment
 
@@ -490,8 +438,7 @@ a `DathostServer`, client or server, goes through instead of reading `.on`/`.boo
 `src/lib/dathost.ts` (REST client — `applyConfigSet`, `runConsole`, `getConsoleLines`) ·
 `src/lib/dathost-config.ts` (config-set data model — `resolveConfigSet`, `listConfigSets`,
 `pushCfgFiles`, `diffConfigSet`) · `src/lib/dathost-lifecycle.ts` (`launchServer` + `applyConfigSetOnly`
-+ `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` +
-`findNearbyUnscoredMatch`) · `src/lib/server-players.ts` (`getConnectedPlayers` — fetches + parses the
++ `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant`) · `src/lib/server-players.ts` (`getConnectedPlayers` — fetches + parses the
 connected roster from the raw console log, no stored state; `parseConnectedPlayers` is the pure parse
 step) · `src/lib/matchzy.ts` · `src/lib/server-schedule-collision.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` —
 shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
@@ -501,17 +448,11 @@ shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` p
 `src/components/AdminActivityFeed.tsx` · `src/lib/jobs.ts` (`jobIsStale`, `isStale`, `STALE_IN_FLIGHT_MS`) ·
 `src/lib/background-jobs.ts` (`isJobInFlight`) · `src/components/QuickActionsPanel.tsx` ·
 `src/components/useDemoMatchIds.ts` ·
-`src/components/ServerConsolePanel.tsx` · `src/components/LaunchOptionsPicker.tsx` (shared config-set +
-map + playout/friendly toggle controls, used by both `ServerConsolePanel` and `ScrimPanel`) ·
-`src/components/MapPicker.tsx` (shared map-select + custom-workshop-ID input) ·
-`src/components/ServerStatusBits.tsx` (shared status pill, `ServerConnectionDetails` — join link +
-connect string + copy button — and `ConnectedRoster`, all used by both `ServerConsolePanel` and
-`ScrimPanel`) ·
-`src/components/ScrimStatusContext.tsx` (single shared poll of `GET /api/scrim/status`, consumed by
-both `ScrimPanel` and `ScrimNavStatus`) · `src/components/ScrimPanel.tsx` ·
-`src/components/ScrimNavStatus.tsx` · `src/app/scrim/page.tsx` ·
-`src/lib/scrim-session.ts` (the singleton `scrim_sessions` claim/release/reconcile) ·
-`scripts/scrim-warnings.ts` + `.github/workflows/scrim-warnings.yml` (pre-match warning cron) ·
+`src/components/ServerConsolePanel.tsx` · `src/components/LaunchOptionsPicker.tsx` (config-set +
+map + playout/friendly toggle controls) ·
+`src/components/MapPicker.tsx` (map-select + custom-workshop-ID input) ·
+`src/components/ServerStatusBits.tsx` (status pill, `ServerConnectionDetails` — join link +
+connect string + copy button — and `ConnectedRoster`) ·
 `src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/page.tsx` ·
 `src/components/AdminActivityFeed.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
 `scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`

@@ -1,7 +1,7 @@
 'use client';
 
-// Small presentational bits shared between the admin server console (`ServerConsolePanel`) and the
-// public scrim panel (`ScrimPanel`) — both render the same raw DatHost server state.
+// Small presentational bits for rendering raw DatHost server state in the admin server console
+// (`ServerConsolePanel`).
 
 import { useState } from 'react';
 import { Copy, Check, Play } from 'lucide-react';
@@ -96,38 +96,31 @@ function JoinServerButton({ connect }: { connect: string }) {
 }
 
 /**
- * The connect-related bits both the admin console and scrim panel show for a live/connectable server —
- * a one-click Steam join icon right in front of the connect string + copy button, and (scrim only) who
- * started it. Renders inline (no wrapping element) so callers lay it out in their own flex row
+ * The connect-related bits shown for a live/connectable server — a one-click Steam join icon right in
+ * front of the connect string + copy button. Renders inline so callers lay it out in their own flex row
  * alongside anything else they show (e.g. admin's `mode` field) — same pattern as
  * `MapPicker`/`LaunchOptionsPicker`.
  */
 export function ServerConnectionDetails({
   connect,
   serverOn,
-  startedByName,
 }: {
   connect: string | null;
   serverOn: boolean;
-  startedByName?: string | null;
 }) {
   if (!connect) return null;
   return (
-    <>
-      <span className="inline-flex items-center gap-1.5">
-        {serverOn && <JoinServerButton connect={connect} />}
-        connect {connect}
-        <CopyConnectButton connect={connect} />
-      </span>
-      {startedByName && <span>Scrim started by {startedByName}</span>}
-    </>
+    <span className="inline-flex items-center gap-1.5">
+      {serverOn && <JoinServerButton connect={connect} />}
+      connect {connect}
+      <CopyConnectButton connect={connect} />
+    </span>
   );
 }
 
 /**
- * The currently-connected roster — shared by the admin console and scrim panel so "who's on the box"
- * reads the same way in both (a name list, not a bare count). `highlight` tints the heading amber for
- * admin's "casual use" signal (someone connected outside a DGLS match); scrim has no such concept.
+ * The currently-connected roster — "who's on the box" as a name list, not a bare count. `highlight`
+ * tints the heading amber for the "casual use" signal (someone connected outside a DGLS match).
  */
 export function ConnectedRoster({ connectedPlayers, highlight }: { connectedPlayers: ConnectedPlayer[]; highlight?: boolean }) {
   return (

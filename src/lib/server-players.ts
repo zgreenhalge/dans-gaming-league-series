@@ -17,14 +17,14 @@ export interface ConnectedPlayer {
 const PLAYER_TOKEN_RE = /"([^"<]+)<(\d+)><([^>]*)><[^>]*>"/g;
 
 /**
- * Echoed to the console right after boot (see `/api/scrim/start`) so `linesSinceMarker` can discard
- * everything before it. The server is reused (never deleted, see `dathost.ts`), and stopping/starting
+ * Echoed to the console right after every boot (`launchServer`, `dathost-lifecycle.ts`) so
+ * `linesSinceMarker` can discard everything before it. The server is reused (never deleted, see `dathost.ts`), and stopping/starting
  * it doesn't clear its console log — so without this, a stale "connected" line from whatever last used
- * the box (a previous scrim, a real match, a leftover test) with no matching "disconnected" line after
+ * the box (a previous pug, a real match, a leftover test) with no matching "disconnected" line after
  * it reads as a currently-connected phantom player until a real connection happens to reuse the same
  * `userid` slot and overwrite it.
  */
-export const SCRIM_BOOT_MARKER = 'DGLS-SCRIM-BOOT';
+export const SERVER_BOOT_MARKER = 'DGLS-SERVER-BOOT';
 
 /**
  * `lines` (oldest first, as `getConsoleLines` returns them) from the last occurrence of `marker`
@@ -65,14 +65,14 @@ export function parseConnectedPlayers(lines: string[]): ConnectedPlayer[] {
 
 /**
  * The currently-connected roster for a server, or `[]` if it's not live or the console log couldn't
- * be read — shared by the admin and scrim status routes so "who's on the box" is derived the same way
- * regardless of who's asking. Only worth reading the console log while the box is actually up.
+ * be read — the admin server status route's source for "who's on the box". Only worth reading the
+ * console log while the box is actually up.
  */
 export async function getConnectedPlayers(serverId: string, server: DathostServer | null): Promise<ConnectedPlayer[]> {
   if (!isServerLive(server)) return [];
   try {
     const lines = await getConsoleLines(serverId);
-    return parseConnectedPlayers(linesSinceMarker(lines, SCRIM_BOOT_MARKER));
+    return parseConnectedPlayers(linesSinceMarker(lines, SERVER_BOOT_MARKER));
   } catch {
     return [];
   }

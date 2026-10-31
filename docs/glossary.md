@@ -199,11 +199,15 @@ so you don't have to reverse-engineer them from scratch each time.
     with no advancement attached.
 - **Tools** — the `/tools` section: open sandbox pages anyone can use, with no sign-in and no side
   effects (each only reads league data and computes in the browser), listed in `TOOLS`
-  (`src/lib/tools.ts`). Operational pages that act on real systems, like Scrim, stay outside it.
+  (`src/lib/tools.ts`). Operational pages that act on real systems stay outside it.
 - **Gauntlet Preview** — the `/tools/gauntlet-preview` tool: pick a qualifier count (optionally a
   regular season's standings for named seeds) and see the bracket and per-seed outcome (bye, plays in,
   won't qualify) before any season gets there. A thin layer over `buildGauntletBracket()` and
   `projectGauntletSeeding()` — see [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
+- **Scrim night** — a weekly practice night outside league competition, at an admin-set day and time
+  (`scrim_schedule`). Players sign up for the next one as **definite** or **maybe**, so everyone can
+  judge attendance ahead of time, and can switch or drop out right up until it ends. See `/scrims`
+  and [`architecture.md`](./architecture.md) (Database, `scrim_schedule`).
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
@@ -247,7 +251,8 @@ so you don't have to reverse-engineer them from scratch each time.
 | Gauntlet Preview tool | `src/lib/gauntlet-preview.ts`, `src/lib/queries/gauntlet-preview.ts`, `src/components/GauntletPreviewView.tsx`, `src/app/tools/gauntlet-preview/` |
 | Tools section (open sandbox pages) | `src/lib/tools.ts` (`TOOLS` registry, links, breadcrumbs), `src/app/tools/` |
 | Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
-| Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts` (survey questions, validation, summary), `src/lib/superlatives.ts` (superlatives validation, tally), `src/lib/feedback-rules.ts` (`isFeedbackLocked()`, `Validated`), `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/lib/feedback-lifecycle.ts` (shared open/close, reset and answer-save handlers; the lock rule is `isFeedbackLocked()` in `feedback-rules.ts`), `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/survey/[id]/`, `src/app/admin/seasons/superlatives/[id]/` (via `resolveFeedbackAdminSeason()`, `src/lib/feedback-page.ts`), `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `Feedback*.tsx` (banner, player editor, admin controls, form frame, reset control) / `feedbackRequest.ts` / `RemoveXButton.tsx` |
+| Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts` (survey questions, validation, summary), `src/lib/superlatives.ts` (superlatives validation, tally), `src/lib/feedback-rules.ts` (`isFeedbackLocked()`, `Validated`), `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/lib/feedback-lifecycle.ts` (shared open/close, reset and answer-save handlers; the lock rule is `isFeedbackLocked()` in `feedback-rules.ts`), `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/survey/[id]/`, `src/app/admin/seasons/superlatives/[id]/` (via `resolveFeedbackAdminSeason()`, `src/lib/feedback-page.ts`), `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `Feedback*.tsx` (banner, player editor, admin controls, form frame, reset control) / `RemoveXButton.tsx` |
+| Scrim nights (schedule → nights, reads, writes, access gate, page) | `src/lib/scrim-schedule.ts` (pure: `scrimNightSlots()`, timezone conversion, input parsing), `src/lib/queries/scrims.ts` (`getScrimOverview()`), `src/lib/scrim-nights.ts` (writes), `src/lib/scrim-signup-access.ts`, `src/app/api/scrims/`, `src/app/scrims/page.tsx`, `src/components/ScrimNightPanel.tsx` / `ScrimAdminPanel.tsx` / `NextScrimCard.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
 | Pages (routes) | `src/app/**` — see the route table in [`architecture.md`](./architecture.md) |
 | Historical CSV ingestion (Python, not deployed) | `ingestion/` |

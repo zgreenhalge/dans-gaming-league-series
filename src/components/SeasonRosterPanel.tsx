@@ -2,10 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlayerLink } from './PlayerLink';
 import EmptyState from './EmptyState';
-import PlayerAvatar from './PlayerAvatar';
-import { PlayerName } from './PlayerName';
+import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPlayerRow';
 import { formatBuyIn } from '@/lib/season-buy-in';
 import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
 import ErrorText from '@/components/ErrorText';
@@ -44,7 +42,6 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
   const [, startTransition] = useTransition();
 
   const rosterIds = new Set(roster.map((r) => r.player_id));
-  const addablePlayers = allPlayers.filter((p) => !rosterIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
   // Admin-only: players joining/leaving don't need to see gauntlet-planning warnings.
   const gauntletSizeUnsupported =
@@ -111,43 +108,27 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
         <EmptyState message="No players on the roster yet." className="px-4 py-3" />
       ) : (
         roster.map((r) => (
-          <div
+          <RosterPlayerRow
             key={r.player_id}
-            className="lift-row flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border-tertiary)] last:border-b-0"
+            playerId={r.player_id}
+            name={r.player_name}
+            avatarUrl={r.steam_avatar_url}
+            isMe={currentPlayerId !== null && r.player_id === currentPlayerId}
           >
-            <PlayerLink playerId={r.player_id} className="flex items-center gap-3">
-              <PlayerAvatar name={r.player_name} imageUrl={r.steam_avatar_url} size="sm" />
-              <span className="font-display text-[14px] font-semibold">
-                <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
-              </span>
-            </PlayerLink>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => mutate(r.player_id, 'DELETE')}
-                disabled={pendingPlayerId === r.player_id}
-                className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg,#f87171)] transition-colors disabled:opacity-40"
-              >
-                {pendingPlayerId === r.player_id ? '…' : 'Remove'}
-              </button>
-            )}
-          </div>
+            {isAdmin && <RosterRemoveButton onClick={() => mutate(r.player_id, 'DELETE')} pending={pendingPlayerId === r.player_id} />}
+          </RosterPlayerRow>
         ))
       )}
 
       {isAdmin && (
         <div className="px-4 py-3 flex items-center gap-2">
-          <select
+          <AddPlayerSelect
+            players={allPlayers}
+            excludeIds={rosterIds}
             value={addPlayerId}
-            onChange={(e) => setAddPlayerId(e.target.value)}
-            aria-label="Add a player to the roster"
-            className="flex-1 font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
-          >
-            <option value="">Add a player…</option>
-            {addablePlayers.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+            onChange={setAddPlayerId}
+            placeholder="Add a player…"
+          />
           <button
             type="button"
             onClick={() => {
