@@ -62,7 +62,6 @@ import { SITE_URL, matchUrl } from './seo/site';
 import { discordErrorDetail } from './discord-threads';
 import { formatDuration, deriveAdr } from './util';
 import type { Player } from './types';
-import { isScrimMatch } from './scrim-matches';
 
 type MatchMeta = NonNullable<Awaited<ReturnType<typeof getMatchMeta>>>;
 
@@ -335,15 +334,13 @@ async function fetchMatchMeta(supabaseAdmin: SupabaseClient, matchId: number, op
   }
 }
 
-/** Posted once a league match's server transitions to `live` (provisionMatchServer()) — or, if
+/** Posted once a match's server transitions to `live` (provisionMatchServer()) — or, if
  *  `notifyMatchReminder()` already posted this match's reminder, edited into that message in place
  *  rather than posting a second one, the same reuse `notifyMatchScoreReported()` does below. Connect
- *  info is deliberately never included — it's per-player, not something to broadcast to a channel.
- *  A scrim match posts nothing: the channel is for league matches. */
+ *  info is deliberately never included — it's per-player, not something to broadcast to a channel. */
 export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
-  if (await isScrimMatch(supabaseAdmin, matchId)) return;
 
   const [meta, existingMessageId] = await Promise.all([
     fetchMatchMeta(supabaseAdmin, matchId, OPERATION_SERVER_LIVE),

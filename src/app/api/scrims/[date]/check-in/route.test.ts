@@ -11,25 +11,15 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
+import { scrimScheduleStartingIn } from '@/lib/test-support/scrimFixtures';
 import { POST, DELETE } from './route';
 
 const ADMIN_ID = 1;
 const PLAYER_ID = 2;
 const OTHER_PLAYER_ID = 3;
 
-/** A UTC weekly schedule whose next night starts `offsetMs` from the real clock (the route reads it). */
-function scheduleStartingIn(offsetMs: number): { row: Record<string, unknown>; date: string } {
-  const start = new Date(Date.now() + offsetMs);
-  const hh = String(start.getUTCHours()).padStart(2, '0');
-  const mm = String(start.getUTCMinutes()).padStart(2, '0');
-  return {
-    row: { id: 1, weekday: start.getUTCDay(), start_time: `${hh}:${mm}:00`, timezone: 'UTC', enabled: true },
-    date: start.toISOString().slice(0, 10),
-  };
-}
-
 function installFixture(offsetMs: number, extra: Partial<FakeDb> = {}): { db: FakeDb; date: string } {
-  const { row, date } = scheduleStartingIn(offsetMs);
+  const { row, date } = scrimScheduleStartingIn(offsetMs);
   const db: FakeDb = {
     players: [
       { id: ADMIN_ID, name: 'Admin', is_admin: true },
@@ -70,7 +60,7 @@ async function main() {
   });
 
   await test('POST: a maybe who checks in becomes definite', async () => {
-    const { date } = scheduleStartingIn(SOON);
+    const { date } = scrimScheduleStartingIn(SOON);
     const { db } = installFixture(SOON, {
       scrim_nights: [{ id: 5, night_date: date, cancelled: false }],
       scrim_signups: [{ id: 1, night_id: 5, player_id: PLAYER_ID, commitment: 'maybe', checked_in_at: null }],
@@ -82,7 +72,7 @@ async function main() {
   });
 
   await test('DELETE: checking out keeps the signup', async () => {
-    const { date } = scheduleStartingIn(SOON);
+    const { date } = scrimScheduleStartingIn(SOON);
     const { db } = installFixture(SOON, {
       scrim_nights: [{ id: 5, night_date: date, cancelled: false }],
       scrim_signups: [{ id: 1, night_id: 5, player_id: PLAYER_ID, commitment: 'definite', checked_in_at: '2026-01-01T00:00:00Z' }],
@@ -103,7 +93,7 @@ async function main() {
   });
 
   await test('POST: 409 for a cancelled night', async () => {
-    const { date } = scheduleStartingIn(SOON);
+    const { date } = scrimScheduleStartingIn(SOON);
     installFixture(SOON, { scrim_nights: [{ id: 5, night_date: date, cancelled: true }] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await call(POST, 'POST', date, { player_id: PLAYER_ID })).status, 409);

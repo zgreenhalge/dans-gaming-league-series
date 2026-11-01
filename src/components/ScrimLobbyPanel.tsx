@@ -13,7 +13,7 @@ import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScrimMatch } from '@/lib/queries';
-import type { ScrimSideChoice } from '@/lib/scrim-matches';
+import { SCRIM_SIDE_CHOICES, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 
 interface Props {
@@ -46,44 +46,59 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 
 type Lineup = [number, number, number, number];
 
-/** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
- *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
-export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canManage, editable }: Props) {
+/** A lobby mutation: send it, then refresh the page so it shows the result. */
+function useLobbyAction() {
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
   const [, startTransition] = useTransition();
-  const current: Lineup | null = match ? [...match.shirts, ...match.skins].slice(0, 4) as Lineup : null;
-  const [draft, setDraft] = useState<Lineup | null>(current);
-
   const act = (method: 'POST' | 'PATCH' | 'DELETE', url: string, body: unknown = {}) =>
     run(async () => {
       await sendJsonRequest(method, url, body);
       startTransition(() => router.refresh());
     });
+  return { busy, error, act };
+}
 
-  if (!match) {
-    return (
-      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className={LABEL_CLS}>Lobby</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-            {pool.length} checked in{pool.length < 4 && ' — a match needs 4'}
-          </div>
+/** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
+ *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
+export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canManage, editable }: Props) {
+  const { busy, error, act } = useLobbyAction();
+  if (match) return <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} editable={editable} />;
+  return (
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div className={LABEL_CLS}>Lobby</div>
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
+          {pool.length} checked in{pool.length < 4 && ' — a match needs 4'}
         </div>
-        {canMake && (
-          <button type="button" onClick={() => act('POST', `/api/scrims/${date}/matches`)} disabled={busy || pool.length < 4} className={GO_BTN_CLS}>
-            {busy ? '…' : 'Make next match'}
-          </button>
-        )}
-        <ErrorText error={error} size={12} className="w-full" />
       </div>
-    );
-  }
+      {canMake && (
+        <button type="button" onClick={() => act('POST', `/api/scrims/${date}/matches`)} disabled={busy || pool.length < 4} className={GO_BTN_CLS}>
+          {busy ? '…' : 'Make next match'}
+        </button>
+      )}
+      <ErrorText error={error} size={12} className="w-full" />
+    </div>
+  );
+}
+
+/** The lobby's current match: map, starting side and lineup pickers, Discard, and the server panel. */
+function LobbyMatch({
+  match,
+  pool,
+  names,
+  maps,
+  canManage,
+  editable,
+}: Pick<Props, 'pool' | 'names' | 'maps' | 'canManage' | 'editable'> & { match: ScrimMatch }) {
+  const { busy, error, act } = useLobbyAction();
+  const current: Lineup = [...match.shirts, ...match.skins];
+  const [draft, setDraft] = useState<Lineup>(current);
 
   const canEdit = canManage && editable;
   const url = `/api/scrims/matches/${match.id}`;
-  const lineupChanged = draft != null && current != null && draft.some((id, i) => id !== current[i]);
-  const lineupValid = draft != null && new Set(draft).size === 4;
+  const lineupChanged = draft.some((id, i) => id !== current[i]);
+  const lineupValid = new Set(draft).size === 4;
   // A slot can hold anyone in the pool, plus whoever holds it now (even if they've since checked out).
   const slotOptions = (holder: number) =>
     [...pool, ...(pool.some((p) => p.id === holder) ? [] : [{ id: holder, name: names[holder] ?? `#${holder}` }])];
@@ -91,13 +106,13 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
   const slot = (i: number) => (
     <select
       key={i}
-      value={draft?.[i] ?? ''}
+      value={draft[i]}
       disabled={!canEdit || busy}
-      onChange={(e) => draft && setDraft(draft.map((id, j) => (j === i ? Number(e.target.value) : id)) as Lineup)}
+      onChange={(e) => setDraft(draft.map((id, j) => (j === i ? Number(e.target.value) : id)) as Lineup)}
       aria-label={`${i < 2 ? 'Shirts' : 'Skins'} player ${(i % 2) + 1}`}
       className={`${SELECT_CLS} w-full`}
     >
-      {slotOptions(current![i]).map((p) => (
+      {slotOptions(current[i]).map((p) => (
         <option key={p.id} value={p.id}>{p.name}</option>
       ))}
     </select>
@@ -138,7 +153,7 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
             onChange={(e) => act('PATCH', url, { side: e.target.value })}
             className={`${SELECT_CLS} w-full`}
           >
-            {(Object.keys(SIDE_LABEL) as ScrimSideChoice[]).map((c) => (
+            {SCRIM_SIDE_CHOICES.map((c) => (
               <option key={c} value={c}>{SIDE_LABEL[c]}</option>
             ))}
           </select>
@@ -159,7 +174,7 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
         <div className="px-4 pb-3 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => draft && act('PATCH', url, { lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
+            onClick={() => act('PATCH', url, { lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
             disabled={busy || !lineupValid}
             className={GO_BTN_CLS}
           >

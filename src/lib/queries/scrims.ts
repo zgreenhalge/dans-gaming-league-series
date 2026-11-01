@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import {
   normalizeStartTime,
@@ -16,7 +17,7 @@ import { getPlayersById } from './player';
 import { aggregatePlayerStats, type PlayerAggregateRow, type PlayerAggregateStats } from '../player-stats';
 import { canonicalSortValues, isPlayedScore } from '../util';
 import type { Player, PlayerMatchStat, RoundHistoryEntry } from '../types';
-import type { MatchStatRow } from './match';
+import { toMatchStatRows, type MatchStatRow } from './match';
 import type { ScrimSideChoice } from '../scrim-matches';
 
 export interface ScrimSignupEntry {
@@ -119,54 +120,72 @@ export interface ScrimMatchPlayer {
 
 export interface ScrimMatch {
   id: number;
+  night_id: number;
   match_number: number;
   /** The match's map (`shirts_pick`), chosen in the lobby. */
   map: string | null;
   /** The lobby's starting-side choice; it becomes `skins_starting_side` as the match starts. */
   side_choice: ScrimSideChoice;
-  shirts: number[];
-  skins: number[];
+  shirts: [number, number];
+  skins: [number, number];
   players: ScrimMatchPlayer[];
   final_score: string | null;
   /** `match_server_state.server_state`, or `null` before the match was ever started. */
   server_state: string | null;
 }
 
-const SCRIM_MATCH_PLAYER_COLUMNS = 'player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win';
+const SCRIM_MATCH_COLUMNS =
+  'id, scrim_night_id, match_number, shirts_pick, scrim_side_choice, final_score, ' +
+  'player_match_stats(player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win), ' +
+  'match_server_state(server_state)';
+
+interface ScrimMatchRow {
+  id: number;
+  scrim_night_id: number;
+  match_number: number;
+  shirts_pick: string | null;
+  scrim_side_choice: ScrimSideChoice;
+  final_score: string | null;
+  player_match_stats: ScrimMatchPlayer[] | null;
+  match_server_state: { server_state: string } | { server_state: string }[] | null;
+}
+
+function toScrimMatch(r: ScrimMatchRow): ScrimMatch {
+  const players = r.player_match_stats ?? [];
+  const state = Array.isArray(r.match_server_state) ? r.match_server_state[0] : r.match_server_state;
+  const side = (faction: 'SHIRTS' | 'SKINS') => players.filter((p) => p.faction === faction).map((p) => p.player_id) as [number, number];
+  return {
+    id: r.id,
+    night_id: r.scrim_night_id,
+    match_number: r.match_number,
+    map: r.shirts_pick,
+    side_choice: r.scrim_side_choice,
+    shirts: side('SHIRTS'),
+    skins: side('SKINS'),
+    players,
+    final_score: r.final_score,
+    server_state: state?.server_state ?? null,
+  };
+}
 
 /** A scrim night's matches in play order, with lineups, stat lines and server state. Not cached:
  *  server state is operational and changes without bumping `data_version`. */
 export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[]> {
+  const { data, error } = await getAdminClient().from('matches').select(SCRIM_MATCH_COLUMNS).eq('scrim_night_id', nightId).order('match_number');
+  if (error) throw error;
+  return ((data ?? []) as unknown as ScrimMatchRow[]).map(toScrimMatch);
+}
+
+/** One scrim match, as `getScrimNightMatches()` returns it, or `null` for a league match. */
+export async function getScrimMatch(matchId: number): Promise<ScrimMatch | null> {
   const { data, error } = await getAdminClient()
     .from('matches')
-    .select(`id, match_number, shirts_pick, scrim_side_choice, final_score, player_match_stats(${SCRIM_MATCH_PLAYER_COLUMNS}), match_server_state(server_state)`)
-    .eq('scrim_night_id', nightId)
-    .order('match_number');
+    .select(SCRIM_MATCH_COLUMNS)
+    .eq('id', matchId)
+    .not('scrim_night_id', 'is', null)
+    .maybeSingle();
   if (error) throw error;
-  type Row = {
-    id: number;
-    match_number: number;
-    shirts_pick: string | null;
-    scrim_side_choice: ScrimSideChoice | null;
-    final_score: string | null;
-    player_match_stats: ScrimMatchPlayer[] | null;
-    match_server_state: { server_state: string } | { server_state: string }[] | null;
-  };
-  return ((data ?? []) as unknown as Row[]).map((r) => {
-    const players = r.player_match_stats ?? [];
-    const state = Array.isArray(r.match_server_state) ? r.match_server_state[0] : r.match_server_state;
-    return {
-      id: r.id,
-      match_number: r.match_number,
-      map: r.shirts_pick,
-      side_choice: r.scrim_side_choice ?? 'knife',
-      shirts: players.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id),
-      skins: players.filter((p) => p.faction === 'SKINS').map((p) => p.player_id),
-      players,
-      final_score: r.final_score,
-      server_state: state?.server_state ?? null,
-    };
-  });
+  return data ? toScrimMatch(data as unknown as ScrimMatchRow) : null;
 }
 
 export interface ScrimLeaderboardRow extends PlayerAggregateStats {
@@ -284,8 +303,8 @@ export interface ScrimMatchDetail {
 }
 
 /** A scrim match's page data — the `getMatch()` counterpart for a match with no week — or `null`
- *  for a match that isn't a scrim match. */
-export async function getScrimMatchDetail(matchId: number): Promise<ScrimMatchDetail | null> {
+ *  for a match that isn't a scrim match. `cache()`-wrapped so the page and its metadata share one read. */
+export const getScrimMatchDetail = cache(async (matchId: number): Promise<ScrimMatchDetail | null> => {
   const [{ data, error }, playersById] = await Promise.all([
     getAdminClient()
       .from('matches')
@@ -305,10 +324,6 @@ export async function getScrimMatchDetail(matchId: number): Promise<ScrimMatchDe
   return {
     ...match,
     night_date: scrim_nights?.night_date ?? '',
-    stats: (player_match_stats ?? []).map((s) => ({
-      ...s,
-      player_name: playersById.get(s.player_id)?.name ?? `#${s.player_id}`,
-      steam_avatar_url: playersById.get(s.player_id)?.steam_avatar_url ?? null,
-    })),
+    stats: toMatchStatRows(player_match_stats ?? [], playersById),
   };
-}
+});

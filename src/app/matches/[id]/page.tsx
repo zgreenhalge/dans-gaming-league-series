@@ -20,6 +20,7 @@ import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
+import { MatchMapBackdrop, MatchPanelSlot } from '@/components/MatchBackdrop';
 import MatchScoreHero from '@/components/MatchScoreHero';
 import MatchTabView from '@/components/MatchTabView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -286,16 +287,7 @@ export default async function MatchPage({
       <TopbarShell crumbs={crumbs} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
-        <div
-          className={`-mx-6 px-6 ${map ? 'map-card-bg light-boost' : 'map-no-img'}`}
-          style={
-            map
-              ? ({
-                  ['--map-img' as string]: mapImg ? `url("${mapImg}")` : 'none',
-                } as React.CSSProperties)
-              : undefined
-          }
-        >
+        <MatchMapBackdrop map={map} mapImg={mapImg}>
           <div className="pt-8 pb-6">
             <MatchHeaderSection
               map={map}
@@ -353,23 +345,19 @@ export default async function MatchPage({
               Hidden once the match has a final score — a scored match doesn't need a server,
               whether or not it went through the demo pipeline (#140). */}
           {showServerPanel && (
-            <div className="pb-6 flex justify-center">
-              <div className="w-full max-w-md">
-                <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} initialState={serverState} />
-              </div>
-            </div>
+            <MatchPanelSlot>
+              <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} initialState={serverState} />
+            </MatchPanelSlot>
           )}
 
           {/* Pending demo result — admin/in-match review & confirm; self-hides when none. */}
           {canManageServer && (
-            <div className="pb-6 flex justify-center">
-              <div className="w-full max-w-md">
-                <MatchDemoReviewBlock matchId={match.id} />
-              </div>
-            </div>
+            <MatchPanelSlot>
+              <MatchDemoReviewBlock matchId={match.id} />
+            </MatchPanelSlot>
           )}
 
-        </div>
+        </MatchMapBackdrop>
 
         {played && match.round_history && (
           <RoundHistoryStrip

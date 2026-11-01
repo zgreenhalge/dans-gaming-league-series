@@ -16,6 +16,7 @@
 import type { PlayerRating } from './ehog';
 import { pairKey, chooseSides } from './season-schedule';
 import { rankSplits, lopsidedness } from './win-probability';
+import { shuffled } from './season-format';
 
 export interface ScrimTeams {
   shirts: [number, number];
@@ -29,16 +30,6 @@ export interface ScrimMatchPlan extends ScrimTeams {
 
 /** Players a match needs. */
 export const SCRIM_MATCH_SIZE = 4;
-
-/** Shuffles a copy of `items` (Fisher–Yates) with `rand`. */
-function shuffled<T>(items: T[], rand: () => number): T[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 /** The four players who should play next: fewest matches tonight, then longest since their last
  *  one (never played counts as longest), with `rand` breaking remaining ties. */

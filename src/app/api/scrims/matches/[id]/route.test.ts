@@ -10,10 +10,11 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
+import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { scrimMatchRpcs } from '@/lib/test-support/scrimMatchRpcs';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
+import { scrimScheduleStartingIn } from '@/lib/test-support/scrimFixtures';
 import { POST as CREATE } from '../../[date]/matches/route';
 import { PATCH, DELETE } from './route';
 
@@ -21,20 +22,10 @@ const ADMIN_ID = 1;
 const OUTSIDER_ID = 9;
 const NIGHT_ID = 5;
 
-/** A UTC schedule whose next night starts in 10 minutes, so check-in is open on the real clock. */
-function scheduleOpenNow(): { row: Row; date: string } {
-  const start = new Date(Date.now() + 10 * 60 * 1000);
-  const hh = String(start.getUTCHours()).padStart(2, '0');
-  const mm = String(start.getUTCMinutes()).padStart(2, '0');
-  return {
-    row: { id: 1, weekday: start.getUTCDay(), start_time: `${hh}:${mm}:00`, timezone: 'UTC', enabled: true },
-    date: start.toISOString().slice(0, 10),
-  };
-}
-
 /** Players 1 (admin) and 2–7, with `checkedIn` of them checked in to the night. */
 function installFixture(checkedIn: number[], extra: Partial<FakeDb> = {}): { db: FakeDb; date: string } {
-  const { row, date } = scheduleOpenNow();
+  // Starts in 10 minutes, so check-in is open on the real clock.
+  const { row, date } = scrimScheduleStartingIn(10 * 60 * 1000);
   const db: FakeDb = {
     players: [1, 2, 3, 4, 5, 6, 7, OUTSIDER_ID].map((id) => ({ id, name: `P${id}`, is_admin: id === ADMIN_ID, seed_ehog: null })),
     player_rating_history: [],

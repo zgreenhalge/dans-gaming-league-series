@@ -17,10 +17,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ da
   if (!access.ok) return accessDenied(access);
   const { slot, checkedIn } = access;
 
-  if (checkedIn.length < SCRIM_MATCH_SIZE) {
-    return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
-  }
-
   const [ratings, history, maps] = await Promise.all([
     getPlayerRatings(checkedIn),
     getScrimNightMatches(slot.nightId),
@@ -28,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ da
   ]);
   if (maps.length === 0) return NextResponse.json({ error: 'No maps with a workshop id to play on' }, { status: 409 });
 
-  const plan = pickNextScrimMatch(ratings, history.map((m) => ({ shirts: m.shirts as [number, number], skins: m.skins as [number, number] })));
+  const plan = pickNextScrimMatch(ratings, history);
   if (!plan) return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
   const map = maps[Math.floor(Math.random() * maps.length)].name;
 

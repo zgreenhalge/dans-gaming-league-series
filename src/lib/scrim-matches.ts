@@ -28,9 +28,9 @@ export async function isScrimMatch(db: SupabaseClient, matchId: number): Promise
 }
 
 /** How a scrim match's starting sides are decided, picked in the lobby. */
-export type ScrimSideChoice = 'skins_t' | 'shirts_t' | 'knife' | 'random';
+export const SCRIM_SIDE_CHOICES = ['skins_t', 'shirts_t', 'knife', 'random'] as const;
 
-export const SCRIM_SIDE_CHOICES: readonly ScrimSideChoice[] = ['skins_t', 'shirts_t', 'knife', 'random'];
+export type ScrimSideChoice = (typeof SCRIM_SIDE_CHOICES)[number];
 
 /** The `skins_starting_side` a choice becomes as the match starts: SKINS start T, SHIRTS start T (so
  *  SKINS start CT), no side for a knife round, or a coin flip for random. */

@@ -17,7 +17,6 @@ import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
 import { effectivePickedMap } from '../veto';
-import { isScrimMatch } from '../scrim-matches';
 import { persistentQuery } from './_persistentCache';
 
 
@@ -31,6 +30,19 @@ export interface MatchDetail {
   week: Week;
   season: Season;
   stats: MatchStatRow[];
+}
+
+/** A match's `player_match_stats` rows with each player's name and avatar; a missing player row reads
+ *  as `#id`. Shared by `getMatch()` and `getScrimMatchDetail()`. */
+export function toMatchStatRows(
+  stats: PlayerMatchStat[],
+  players: Map<number, { name: string; steam_avatar_url: string | null }>,
+): MatchStatRow[] {
+  return stats.map((s) => ({
+    ...s,
+    player_name: players.get(s.player_id)?.name ?? `#${s.player_id}`,
+    steam_avatar_url: players.get(s.player_id)?.steam_avatar_url ?? null,
+  }));
 }
 
 export const getMatch = persistentQuery('getMatch', async (matchId: number): Promise<MatchDetail | null> => {
@@ -69,15 +81,7 @@ export const getMatch = persistentQuery('getMatch', async (matchId: number): Pro
     ? { ...rawSeason, map_pool: (await getLinkedRegularSeason(rawSeason.name))?.map_pool ?? null }
     : rawSeason;
 
-  const statRows: MatchStatRow[] = ((stats ?? []) as PlayerMatchStat[]).map(
-    (s) => ({
-      ...s,
-      player_name: players.get(s.player_id)?.name ?? `#${s.player_id}`,
-      steam_avatar_url: players.get(s.player_id)?.steam_avatar_url ?? null,
-    }),
-  );
-
-  return { match: m, week: weekRow as Week, season, stats: statRows };
+  return { match: m, week: weekRow as Week, season, stats: toMatchStatRows((stats ?? []) as PlayerMatchStat[], players) };
 });
 
 /** A rostered player's name plus their personal Discord name-color role
@@ -239,14 +243,14 @@ export interface LiveTickerMatch extends MatchTeamNames {
   updatedAt: string;
 }
 
-/** The site-wide live-match ticker's data — whichever league match is currently live (there's at most
- *  one, since the league runs one shared match server), or `null` when nothing's live or the live
- *  match is a scrim, which the ticker doesn't show. Backs both the root layout's initial server render
- *  and `GET /api/live-match`, which `LiveMatchTicker` calls to refresh itself off Realtime changes on
- *  `live_match_score`. */
+/** The site-wide live-match ticker's data — whichever match is currently live (there's at most one,
+ *  since the league runs one shared match server), or `null` when nothing's live. Backs both the
+ *  root layout's initial server render and `GET /api/live-match`, which `LiveMatchTicker` calls to
+ *  refresh itself off Realtime changes on `live_match_score`. A live scrim match has no week, so
+ *  `getMatchTeamNames()` returns `null` for it and the ticker shows nothing. */
 export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
   const live = await getCurrentLiveMatch();
-  if (!live || (await isScrimMatch(getAdminClient(), live.matchId))) return null;
+  if (!live) return null;
   const teams = await getMatchTeamNames(live.matchId);
   if (!teams) return null;
   return { matchId: live.matchId, shirts: live.shirts, skins: live.skins, updatedAt: live.updatedAt, ...teams };

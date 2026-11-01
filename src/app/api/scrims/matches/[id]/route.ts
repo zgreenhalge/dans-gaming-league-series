@@ -1,8 +1,8 @@
 // Changes a scrim match before it starts — any of `PATCH { map }`, `{ side }` (a `ScrimSideChoice`)
 // and `{ lineup: { shirts, skins } }`, the lineup drawn from the night's checked-in players — or
-// discards it (`DELETE`). The players in
-// the match or an admin (`requireScrimMatchAccess()`); 409 once it has a score or has been started
-// (`isScrimMatchEditable()`). Starting it is the shared `POST /api/matches/[id]/server/provision`.
+// discards it (`DELETE`). The players in the match or an admin (`requireScrimMatchAccess()`); 409 once
+// it has a score or has been started (`isScrimMatchEditable()`). Starting it is the shared
+// `POST /api/matches/[id]/server/provision`.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const [maps, checkedIn] = await Promise.all([
     map !== undefined ? getMapsForWorkshopPicker() : Promise.resolve([]),
-    lineup ? checkedInPlayerIds(access.nightId) : Promise.resolve([]),
+    lineup ? checkedInPlayerIds(access.match.night_id) : Promise.resolve([]),
   ]);
   if (map !== undefined && !maps.some((m) => m.name === map)) {
     return NextResponse.json({ error: `Unknown map "${map}"` }, { status: 400 });

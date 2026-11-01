@@ -33,10 +33,9 @@ export function matchMvpPlayerId(stats: { player_id: number; adr: number; rounds
 }
 
 /**
- * The demo link and every played-match stat the tabs show. Only a played match has stats or a
- * replay, so those reads are skipped otherwise. The replay's events load whenever a job has ever run
- * (`status !== 'none'`), not only when `ready`, so a failed or in-flight regeneration never hides a
- * replay whose payload still exists — the Recap tab gates on the payload, not the status.
+ * The demo link and every played-match stat the tabs show, all in one parallel batch. Only a played
+ * match has stats or a replay, and the Recap tab is gated on `played`, so those reads are skipped
+ * otherwise.
  */
 export async function loadMatchPageFacts(matchId: number, played: boolean) {
   const key = demoKey(matchId);
@@ -56,12 +55,19 @@ export async function loadMatchPageFacts(matchId: number, played: boolean) {
       .catch(() => null),
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
     played ? getMatchKills(matchId) : Promise.resolve([]),
-    // The H2H tab's per-pair damage bar — a match's own kill/damage exchange.
+    // Feeds the H2H tab's per-pair damage bar (#461) — a match's own kill/damage exchange, not
+    // each player's own damage total (`player_match_stats.damage`).
     played ? getMatchDamageEvents(matchId) : Promise.resolve([]),
     played ? getMatchWeaponClassStats(matchId) : Promise.resolve([]),
     played ? getMatchEconomyStats(matchId) : Promise.resolve([]),
-    // The Economy sub-tab's round-by-round chart — per-round equipment value per player.
+    // Feeds the Economy sub-tab's round-by-round chart (#519) — per-round equipment value per
+    // player, distinct from `matchEconomyStats`'s tier-bucketed aggregate above.
     played ? getMatchRoundEconomy(matchId) : Promise.resolve([]),
+    // Replay/Events (issue #121), chained rather than a second query: the events lookup needs the
+    // job's own status first. Status is defensive (tolerates missing DB columns). The events payload
+    // loads whenever a job has ever run (status !== 'none'), NOT only when status === 'ready', so a
+    // failed/in-flight *re*generation never hides a replay whose payload still exists in R2 — the
+    // Recap tab gates on the payload, not the status flag.
     played
       ? getReplayJobState(matchId).then(async (job) => ({
           job,
@@ -71,8 +77,9 @@ export async function loadMatchPageFacts(matchId: number, played: boolean) {
           job: { status: 'none' as const, stage: null, ghRunUrl: null, errorMessage: null },
           events: null,
         }),
-    // A demo recovered from several recordings (a server restart): the Recap tab doesn't offer replay
-    // generation for it, since the replay only ever reads a single demo.
+    // Whether this match's demo was recovered from multiple recordings (a server restart) — the
+    // Recap tab uses this to skip offering replay generation, which only ever reads a single demo
+    // and would just fail or produce a one-segment replay for a match like this.
     played ? getDemoManifest(matchId).then((m) => !!m).catch(() => false) : Promise.resolve(false),
   ]);
   return {

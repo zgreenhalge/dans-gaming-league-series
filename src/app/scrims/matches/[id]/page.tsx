@@ -5,6 +5,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import MatchScoreHero from '@/components/MatchScoreHero';
 import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
+import { MatchMapBackdrop, MatchPanelSlot } from '@/components/MatchBackdrop';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -75,10 +76,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
         ]}
       />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
-        <div
-          className={`-mx-6 px-6 ${map ? 'map-card-bg light-boost' : 'map-no-img'}`}
-          style={map ? ({ ['--map-img' as string]: mapImg ? `url("${mapImg}")` : 'none' } as React.CSSProperties) : undefined}
-        >
+        <MatchMapBackdrop map={map} mapImg={mapImg}>
           <div className="pt-8 pb-6">
             <MatchScoreHero
               matchId={match.id}
@@ -91,20 +89,16 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
             />
           </div>
           {!played && (
-            <div className="pb-6 flex justify-center">
-              <div className="w-full max-w-md">
-                <MatchServerPanel matchId={match.id} canManage={canManage} initialState={serverState} />
-              </div>
-            </div>
+            <MatchPanelSlot>
+              <MatchServerPanel matchId={match.id} canManage={canManage} initialState={serverState} />
+            </MatchPanelSlot>
           )}
           {canManage && (
-            <div className="pb-6 flex justify-center">
-              <div className="w-full max-w-md">
-                <MatchDemoReviewBlock matchId={match.id} />
-              </div>
-            </div>
+            <MatchPanelSlot>
+              <MatchDemoReviewBlock matchId={match.id} />
+            </MatchPanelSlot>
           )}
-        </div>
+        </MatchMapBackdrop>
 
         {played && match.round_history && <RoundHistoryStrip rounds={match.round_history} targetWinRounds={SCRIM_TARGET_WIN_ROUNDS} />}
 

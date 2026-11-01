@@ -1,13 +1,10 @@
 import { StatTable, Tr, Td, PlayerCell } from './StatTable';
 import Th from './Th';
 import EmptyState from './EmptyState';
-import Link from 'next/link';
+import { MatchCard, matchCardRight } from './MatchCard';
 import { playerHref, scrimMatchHref } from '@/lib/crumbs';
-import { toSentenceCase } from '@/lib/maps';
-import { parseScore, isPlayedScore } from '@/lib/util';
+import { isPlayedScore } from '@/lib/util';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';
-
-const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 
 /** A scrim night's standings: every player who played a scored match, ranked Wins → RWR% → ADR
  *  (`buildScrimNightLeaderboard()`). */
@@ -41,50 +38,34 @@ export function ScrimNightLeaderboard({ rows }: { rows: ScrimLeaderboardRow[] })
   );
 }
 
-/** A scrim night's scored matches, newest first: map, score and each side's K/D/ADR as stored. */
-export function ScrimNightMatchList({ matches, names }: { matches: ScrimMatch[]; names: Record<number, string> }) {
+/** A scrim night's scored matches, newest first, as the same `MatchCard` rows every match list uses. */
+export function ScrimNightMatchList({
+  matches,
+  names,
+  currentPlayerId,
+}: {
+  matches: ScrimMatch[];
+  names: Record<number, string>;
+  currentPlayerId: number | null;
+}) {
   const played = matches.filter((m) => isPlayedScore(m.final_score)).reverse();
   if (played.length === 0) return <EmptyState message="No matches played yet." className="py-2" />;
+  const statsFor = (m: ScrimMatch, faction: 'SHIRTS' | 'SKINS') =>
+    m.players.filter((p) => p.faction === faction).map((p) => ({ ...p, player_name: names[p.player_id] ?? `#${p.player_id}` }));
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      {played.map((m) => {
-        const score = parseScore(m.final_score);
-        const side = (faction: 'SHIRTS' | 'SKINS') => {
-          const won = score != null && (faction === 'SHIRTS' ? score.shirts > score.skins : score.skins > score.shirts);
-          return (
-            <div className="min-w-0">
-              <div className={`${LABEL_CLS} mb-1`}>
-                {faction === 'SHIRTS' ? 'Shirts' : 'Skins'} {score && (faction === 'SHIRTS' ? score.shirts : score.skins)}
-                {won && ' · W'}
-              </div>
-              {m.players
-                .filter((p) => p.faction === faction)
-                .map((p) => (
-                  <div key={p.player_id} className="flex items-center justify-between gap-2 font-mono text-[12px]">
-                    <span className="truncate font-display font-semibold text-[13px]">{names[p.player_id] ?? `#${p.player_id}`}</span>
-                    <span className="text-[var(--color-text-secondary)] tnum">
-                      {p.kills}/{p.deaths} · {p.adr}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          );
-        };
-        return (
-          <div key={m.id} className="px-4 py-3 border-b border-[var(--color-border-tertiary)] last:border-b-0">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <Link href={scrimMatchHref(m.id)} className="font-display text-[15px] font-semibold hover:underline">
-                Match {m.match_number}
-              </Link>
-              <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">{m.map ? toSentenceCase(m.map) : 'No map'}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {side('SHIRTS')}
-              {side('SKINS')}
-            </div>
-          </div>
-        );
-      })}
+      {played.map((m) => (
+        <MatchCard
+          key={m.id}
+          href={scrimMatchHref(m.id)}
+          map={m.map}
+          label={{ type: 'match', matchNumber: m.match_number, isFeatureMatch: false }}
+          right={matchCardRight(m.final_score, null, null)}
+          shirtsStats={statsFor(m, 'SHIRTS')}
+          skinsStats={statsFor(m, 'SKINS')}
+          currentPlayerId={currentPlayerId}
+        />
+      ))}
     </div>
   );
 }

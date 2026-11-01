@@ -40,7 +40,6 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
   const lobbyMatch = night.matches.find((m) => m.final_score === null) ?? null;
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
   const inLobbyMatch = currentPlayerId != null && !!lobbyMatch && [...lobbyMatch.shirts, ...lobbyMatch.skins].includes(currentPlayerId);
-  const showLobby = night.current && !night.cancelled && night.checkInOpen;
 
   return (
     <div className="min-h-screen">
@@ -65,7 +64,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
         </div>
 
         <div className="flex flex-col gap-8">
-          {showLobby && (
+          {/* Check-in is only open for a current night that isn't cancelled (`isScrimCheckInOpen()`). */}
+          {night.checkInOpen && (
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
               <ScrimLobbyPanel
@@ -99,7 +99,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
 
           <section>
             <div className={SECTION_LABEL_CLS}>Matches</div>
-            <ScrimNightMatchList matches={night.matches} names={names} />
+            <ScrimNightMatchList matches={night.matches} names={names} currentPlayerId={currentPlayerId} />
           </section>
         </div>
       </main>

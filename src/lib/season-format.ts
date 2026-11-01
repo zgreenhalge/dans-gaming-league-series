@@ -657,7 +657,8 @@ function swap(arr: number[], i: number, j: number): void {
   arr[j] = tmp;
 }
 
-function shuffled(items: number[], rand: () => number): number[] {
+/** A shuffled copy of `items` (Fisher–Yates) drawn from `rand`. */
+export function shuffled(items: number[], rand: () => number): number[] {
   const a = [...items];
   for (let i = a.length - 1; i > 0; i--) swap(a, i, Math.floor(rand() * (i + 1)));
   return a;
