@@ -17,12 +17,10 @@ import { formatNightDate } from '@/lib/scrim-schedule';
 import { effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
+import { DEFAULT_TARGET_WIN_ROUNDS } from '@/lib/replay/inputs';
 
 // The server panel's state and the lobby's lock change live; don't cache.
 export const dynamic = 'force-dynamic';
-
-/** A scrim match plays to the default 13 — it has no season to set `target_win_rounds`. */
-const SCRIM_TARGET_WIN_ROUNDS = 13;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const matchId = parseRouteId((await params).id);
@@ -100,7 +98,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           )}
         </MatchMapBackdrop>
 
-        {played && match.round_history && <RoundHistoryStrip rounds={match.round_history} targetWinRounds={SCRIM_TARGET_WIN_ROUNDS} />}
+        {played && match.round_history && <RoundHistoryStrip rounds={match.round_history} targetWinRounds={DEFAULT_TARGET_WIN_ROUNDS} />}
 
         <Suspense>
           <UrlStateProvider>
@@ -118,7 +116,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
               isCurrentUserAdmin={isAdmin}
               matchId={match.id}
               matchPlayers={stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name, faction: s.faction as 'SHIRTS' | 'SKINS' }))}
-              targetWinRounds={SCRIM_TARGET_WIN_ROUNDS}
+              targetWinRounds={DEFAULT_TARGET_WIN_ROUNDS}
               skinsSide={skinsStartingSide}
               sabremetrics={facts.sabremetrics}
               matchKills={facts.matchKills}

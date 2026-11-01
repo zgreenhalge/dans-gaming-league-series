@@ -165,6 +165,29 @@ async function main() {
     assert.equal((await discard(matchId)).status, 409);
   });
 
+  await test('a match whose server stopped without a score can be discarded but not changed', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5]);
+    const matchId = await makeMatch(db, date);
+    db.match_server_state.push({ match_id: matchId, server_state: 'done' });
+    __setTestSession(sessionFor(ADMIN_ID));
+    assert.equal((await patch(matchId, { map: 'Cobblestone' })).status, 409);
+    assert.equal((await discard(matchId)).status, 200);
+    assert.equal(db.matches.length, 0);
+  });
+
+  await test('patch: a player who checked out can stay in the lineup while another slot changes', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5, 6]);
+    const matchId = await makeMatch(db, date);
+    const inMatch = lineupOf(db, matchId);
+    const benched = [2, 3, 4, 5, 6].find((id) => !inMatch.includes(id))!;
+    const leaver = inMatch[0];
+    db.scrim_signups.find((s) => s.player_id === leaver)!.checked_in_at = null;
+    __setTestSession(sessionFor(ADMIN_ID));
+    const lineup = { shirts: [leaver, inMatch[1]], skins: [benched, inMatch[3]] };
+    assert.equal((await patch(matchId, { lineup })).status, 200);
+    assert.deepEqual(lineupOf(db, matchId), [...lineup.shirts, ...lineup.skins].sort((a, b) => a - b));
+  });
+
   await test('patch: a failed start unlocks the match again', async () => {
     const { db, date } = installFixture([2, 3, 4, 5]);
     const matchId = await makeMatch(db, date);

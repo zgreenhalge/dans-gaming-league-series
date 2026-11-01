@@ -1,7 +1,8 @@
 // Changes a scrim match before it starts — any of `PATCH { map }`, `{ side }` (a `ScrimSideChoice`)
 // and `{ lineup: { shirts, skins } }`, the lineup drawn from the night's checked-in players — or
-// discards it (`DELETE`). The players in the match or an admin (`requireScrimMatchAccess()`); 409 once
-// it has a score or has been started (`isScrimMatchEditable()`). Starting it is the shared
+// discards it (`DELETE`). The players in the match or an admin (`requireScrimMatchAccess()`). Changes
+// are refused (409) once it has a score or has been started (`isScrimMatchEditable()`); discarding
+// once it has a score or holds the server (`isScrimMatchDiscardable()`). Starting it is the shared
 // `POST /api/matches/[id]/server/provision`.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,6 +13,7 @@ import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { requireScrimMatchAccess, checkedInPlayerIds } from '@/lib/scrim-match-access';
 import {
   deleteScrimMatch,
+  isScrimMatchDiscardable,
   isScrimMatchEditable,
   parseScrimTeams,
   setScrimMatchLineup,
@@ -49,8 +51,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (map !== undefined && !maps.some((m) => m.name === map)) {
     return NextResponse.json({ error: `Unknown map "${map}"` }, { status: 400 });
   }
-  if (lineup && ![...lineup.shirts, ...lineup.skins].every((id) => checkedIn.includes(id))) {
-    return NextResponse.json({ error: 'Every player in the lineup must be checked in' }, { status: 400 });
+  // A player joining the lineup must be checked in; one already in it stays even after checking out.
+  const current = [...access.match.shirts, ...access.match.skins];
+  if (lineup && ![...lineup.shirts, ...lineup.skins].every((id) => checkedIn.includes(id) || current.includes(id))) {
+    return NextResponse.json({ error: 'Every player joining the lineup must be checked in' }, { status: 400 });
   }
 
   const db = getAdminClient();
@@ -69,7 +73,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (matchId === null) return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   const access = await requireScrimMatchAccess(matchId);
   if (!access.ok) return accessDenied(access);
-  if (!isScrimMatchEditable(access.match)) return NextResponse.json({ error: LOCKED }, { status: 409 });
+  if (!isScrimMatchDiscardable(access.match)) {
+    return NextResponse.json({ error: 'This match is scored or running on the server, so it can no longer be discarded' }, { status: 409 });
+  }
 
   try {
     await deleteScrimMatch(getAdminClient(), matchId);

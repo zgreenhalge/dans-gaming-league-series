@@ -54,6 +54,8 @@ export const getMatch = persistentQuery('getMatch', async (matchId: number): Pro
   if (error) throw error;
   if (!match) return null;
   const m = match as Match;
+  // A scrim match has no week (`week_id` null) and has its own page.
+  if (m.week_id == null) return null;
 
   // Week and season resolve in one embedded query — the DB does the join instead of two
   // sequential hand-rolled round trips (#332).

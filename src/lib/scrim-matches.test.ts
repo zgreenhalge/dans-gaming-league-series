@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { applyScrimSideChoice, isScrimMatchEditable, parseScrimTeams, resolveScrimSide } from './scrim-matches';
+import { applyScrimSideChoice, isScrimMatchDiscardable, isScrimMatchEditable, parseScrimTeams, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
@@ -18,6 +18,16 @@ test('isScrimMatchEditable: open until scored or started; a failed start reopens
     assert.equal(isScrimMatchEditable({ final_score: null, server_state: state }), false, state);
   }
   assert.equal(isScrimMatchEditable({ final_score: '13-9', server_state: null }), false);
+});
+
+test('isScrimMatchDiscardable: until scored, unless it holds the server; a stopped, unscored match can go', () => {
+  for (const state of [null, 'idle', 'failed', 'done']) {
+    assert.equal(isScrimMatchDiscardable({ final_score: null, server_state: state }), true, String(state));
+  }
+  for (const state of ['provisioning', 'live', 'tearing_down']) {
+    assert.equal(isScrimMatchDiscardable({ final_score: null, server_state: state }), false, state);
+  }
+  assert.equal(isScrimMatchDiscardable({ final_score: '13-9', server_state: 'done' }), false);
 });
 
 test('resolveScrimSide: each choice stores the side SKINS start on; random flips a coin', () => {
@@ -40,6 +50,18 @@ test('applyScrimSideChoice: turns a scrim choice into the starting side; leaves 
   const client = createFakeSupabaseClient(db) as never;
   for (const id of [1, 2, 3, 4]) await applyScrimSideChoice(client, id, () => 0.9);
   assert.deepEqual(db.matches.map((m) => m.skins_starting_side), ['CT', 'CT', null, 'T']);
+});
+
+test('applyScrimSideChoice: a random side already flipped is kept; a new choice clears it for the next start', async () => {
+  const db: FakeDb = { matches: [{ id: 1, scrim_night_id: 5, scrim_side_choice: 'random', skins_starting_side: null }] };
+  const client = createFakeSupabaseClient(db) as never;
+  await applyScrimSideChoice(client, 1, () => 0.1);
+  await applyScrimSideChoice(client, 1, () => 0.9);
+  assert.equal(db.matches[0].skins_starting_side, 'T', 'starting again does not re-flip');
+  await setScrimMatchSideChoice(client, 1, 'random');
+  assert.equal(db.matches[0].skins_starting_side, null);
+  await applyScrimSideChoice(client, 1, () => 0.9);
+  assert.equal(db.matches[0].skins_starting_side, 'CT');
 });
 
 test('parseScrimTeams: two distinct positive ids per side', () => {

@@ -10,15 +10,25 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
+import { isPlayedScore } from './util';
 
-/** `match_server_state.server_state` values once a match has claimed the server — from then on its
- *  lineup and map are what the server loaded, so the lobby is locked. `failed` and `idle` don't
- *  lock it: a failed start can be fixed and retried. */
-const LOCKING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down', 'done']);
+/** `match_server_state.server_state` values while a match holds the server. */
+const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down']);
 
-/** Whether a scrim match can still be changed or discarded: it has no score and hasn't been started. */
-export function isScrimMatchEditable(m: { final_score: string | null; server_state: string | null }): boolean {
-  return m.final_score === null && !(m.server_state !== null && LOCKING_SERVER_STATES.has(m.server_state));
+type ScrimMatchState = { final_score: string | null; server_state: string | null };
+
+/** Whether a scrim match's map, side and lineup can still change: not scored and never started — once
+ *  it has claimed the server (`done` included), they're what the server loaded. `failed` and `idle`
+ *  don't lock it: a failed start can be fixed and retried. */
+export function isScrimMatchEditable(m: ScrimMatchState): boolean {
+  return !isPlayedScore(m.final_score) && (m.server_state === null || !(RUNNING_SERVER_STATES.has(m.server_state) || m.server_state === 'done'));
+}
+
+/** Whether a scrim match can be discarded: not scored, and not holding the server right now. That
+ *  includes one whose server stopped without a score (a crash, or a demo still waiting for review on
+ *  its match page) — the night can only make its next match once this one is scored or discarded. */
+export function isScrimMatchDiscardable(m: ScrimMatchState): boolean {
+  return !isPlayedScore(m.final_score) && !(m.server_state !== null && RUNNING_SERVER_STATES.has(m.server_state));
 }
 
 /** Whether `matchId` is a scrim match (`scrim_night_id` set). */
@@ -40,18 +50,26 @@ export function resolveScrimSide(choice: ScrimSideChoice, rand: () => number = M
   return choice === 'skins_t' ? 'T' : 'CT';
 }
 
-/** Sets a scrim match's starting-side choice (`scrim_side_choice`). */
+/** Sets a scrim match's starting-side choice (`scrim_side_choice`), clearing any side an earlier start
+ *  resolved so the next start applies the new choice. */
 export async function setScrimMatchSideChoice(db: SupabaseClient, matchId: number, choice: ScrimSideChoice): Promise<void> {
-  await db.from('matches').update({ scrim_side_choice: choice }).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
+  await db
+    .from('matches')
+    .update({ scrim_side_choice: choice, skins_starting_side: null })
+    .eq('id', matchId)
+    .not('scrim_night_id', 'is', null)
+    .throwOnError();
 }
 
 /** Turns a scrim match's side choice into its `skins_starting_side` — called as the match starts,
- *  before the server loads its config, so a random side is flipped only then. A no-op for a league
- *  match, which has no choice. */
+ *  before the server loads its config, so a random side is flipped only then. A random side that's
+ *  already been flipped is kept, so pressing Start again never changes the sides of a match the server
+ *  already loaded. A no-op for a league match, which has no choice. */
 export async function applyScrimSideChoice(db: SupabaseClient, matchId: number, rand: () => number = Math.random): Promise<void> {
-  const { data } = await db.from('matches').select('scrim_side_choice').eq('id', matchId).maybeSingle().throwOnError();
-  const choice = (data as { scrim_side_choice: ScrimSideChoice | null } | null)?.scrim_side_choice ?? null;
-  if (choice === null) return;
+  const { data } = await db.from('matches').select('scrim_side_choice, skins_starting_side').eq('id', matchId).maybeSingle().throwOnError();
+  const row = data as { scrim_side_choice: ScrimSideChoice | null; skins_starting_side: 'CT' | 'T' | null } | null;
+  const choice = row?.scrim_side_choice ?? null;
+  if (choice === null || (choice === 'random' && row?.skins_starting_side != null)) return;
   await db.from('matches').update({ skins_starting_side: resolveScrimSide(choice, rand) }).eq('id', matchId).throwOnError();
 }
 

@@ -13,7 +13,7 @@ import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScrimMatch } from '@/lib/queries';
-import { SCRIM_SIDE_CHOICES, type ScrimSideChoice } from '@/lib/scrim-matches';
+import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 
 interface Props {
@@ -29,8 +29,6 @@ interface Props {
   canMake: boolean;
   /** The viewer may change, discard or start `match` (in it, or an admin). */
   canManage: boolean;
-  /** `match` hasn't been scored or started (`isScrimMatchEditable()`). */
-  editable: boolean;
 }
 
 const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
@@ -61,9 +59,9 @@ function useLobbyAction() {
 
 /** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
  *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
-export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canManage, editable }: Props) {
+export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canManage }: Props) {
   const { busy, error, act } = useLobbyAction();
-  if (match) return <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} editable={editable} />;
+  if (match) return <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />;
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-wrap items-center justify-between gap-3">
       <div>
@@ -89,13 +87,15 @@ function LobbyMatch({
   names,
   maps,
   canManage,
-  editable,
-}: Pick<Props, 'pool' | 'names' | 'maps' | 'canManage' | 'editable'> & { match: ScrimMatch }) {
+}: Pick<Props, 'pool' | 'names' | 'maps' | 'canManage'> & { match: ScrimMatch }) {
   const { busy, error, act } = useLobbyAction();
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
 
-  const canEdit = canManage && editable;
+  const canEdit = canManage && isScrimMatchEditable(match);
+  const canDiscard = canManage && isScrimMatchDiscardable(match);
+  // The server stopped without a score: a crash, or a demo waiting for review on the match page.
+  const stoppedUnscored = match.server_state === 'done';
   const url = `/api/scrims/matches/${match.id}`;
   const lineupChanged = draft.some((id, i) => id !== current[i]);
   const lineupValid = new Set(draft).size === 4;
@@ -124,12 +124,19 @@ function LobbyMatch({
         <Link href={scrimMatchHref(match.id)} className={`${LABEL_CLS} hover:underline`}>
           Lobby · Match {match.match_number} →
         </Link>
-        {canEdit && (
+        {canDiscard && (
           <button type="button" onClick={() => act('DELETE', url)} disabled={busy} className={BTN_CLS}>
             Discard
           </button>
         )}
       </div>
+      {stoppedUnscored && (
+        <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] font-mono text-[12px] text-[var(--color-text-secondary)]">
+          The server stopped without a score.{' '}
+          <Link href={scrimMatchHref(match.id)} className="underline hover:text-[var(--color-text-primary)]">Confirm its result</Link>
+          {canDiscard ? ' or discard it to make the next match.' : ' to make the next match.'}
+        </div>
+      )}
 
       <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="flex flex-col gap-1">

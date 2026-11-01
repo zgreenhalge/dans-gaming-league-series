@@ -9,6 +9,9 @@ import type { RosterEntry } from '../demoParser';
 import type { Side } from './types';
 import { effectivePickedMap } from '../veto';
 
+/** Rounds to win for a match with no season to set `target_win_rounds` — a scrim match. */
+export const DEFAULT_TARGET_WIN_ROUNDS = 13;
+
 export interface ReplayInputs {
   map: string;
   skinsSide: Side | null;
@@ -53,7 +56,7 @@ export async function getReplayInputs(
   const firstWeek = weeksArr[0] as { seasons: unknown } | undefined;
   const seasonsArr = Array.isArray(firstWeek?.seasons) ? firstWeek!.seasons : [firstWeek?.seasons];
   const firstSeason = seasonsArr[0] as { target_win_rounds?: number; is_gauntlet?: boolean } | undefined;
-  const targetWinRounds = firstSeason?.target_win_rounds ?? 13;
+  const targetWinRounds = firstSeason?.target_win_rounds ?? DEFAULT_TARGET_WIN_ROUNDS;
   const knifeRound = (firstSeason?.is_gauntlet ?? false) || match.scrim_side_choice === 'knife';
 
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];

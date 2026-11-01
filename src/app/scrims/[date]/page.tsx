@@ -9,7 +9,7 @@ import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, getScrimNight } from '@/lib/queries';
 import { formatNightDate, isNightDate } from '@/lib/scrim-schedule';
-import { isScrimMatchEditable } from '@/lib/scrim-matches';
+import { isPlayedScore } from '@/lib/util';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
@@ -37,7 +37,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
-  const lobbyMatch = night.matches.find((m) => m.final_score === null) ?? null;
+  const lobbyMatch = night.matches.find((m) => !isPlayedScore(m.final_score)) ?? null;
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
   const inLobbyMatch = currentPlayerId != null && !!lobbyMatch && [...lobbyMatch.shirts, ...lobbyMatch.skins].includes(currentPlayerId);
 
@@ -77,7 +77,6 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
                 maps={maps.map((m) => m.name)}
                 canMake={isAdmin || viewerCheckedIn}
                 canManage={isAdmin || inLobbyMatch}
-                editable={lobbyMatch ? isScrimMatchEditable(lobbyMatch) : false}
               />
               {!viewerCheckedIn && currentPlayerId != null && (
                 <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">

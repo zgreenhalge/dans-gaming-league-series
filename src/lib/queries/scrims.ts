@@ -13,6 +13,7 @@ import {
   type ScrimSchedule,
 } from '../scrim-schedule';
 import { persistentQuery } from './_persistentCache';
+import { asPage, fetchAllPages } from './_shared';
 import { getPlayersById } from './player';
 import { aggregatePlayerStats, type PlayerAggregateRow, type PlayerAggregateStats } from '../player-stats';
 import { canonicalSortValues, isPlayedScore } from '../util';
@@ -268,15 +269,17 @@ export interface PastScrimNight {
 
 /** Nights that are over and had at least one scored match, newest first. */
 export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
-  const [{ slots }, rows, { data, error }] = await Promise.all([
+  type MatchRow = { scrim_night_id: number; final_score: string | null; player_match_stats: { player_id: number }[] | null };
+  const [{ slots }, rows, data] = await Promise.all([
     getScrimNights(now),
     getScrimNightRows(),
-    getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null),
+    fetchAllPages<MatchRow>((from, to) =>
+      asPage(getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null).range(from, to)),
+    ),
   ]);
-  if (error) throw error;
   const listed = new Set(slots.map((s) => s.date));
   const byNight = new Map<number, { matches: number; players: Set<number> }>();
-  for (const m of (data ?? []) as unknown as { scrim_night_id: number; final_score: string | null; player_match_stats: { player_id: number }[] | null }[]) {
+  for (const m of data) {
     if (!isPlayedScore(m.final_score)) continue;
     const entry = byNight.get(m.scrim_night_id) ?? { matches: 0, players: new Set<number>() };
     entry.matches++;
