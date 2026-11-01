@@ -126,6 +126,22 @@ async function main() {
     assert.equal((await patch(matchId, { map: 'Dust II' })).status, 400);
   });
 
+  await test('patch: the starting side — skins T, shirts T, knife; anything else refused', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5]);
+    const matchId = await makeMatch(db, date);
+    const match = db.matches.find((m) => m.id === matchId)!;
+    __setTestSession(sessionFor(ADMIN_ID));
+    assert.equal((await patch(matchId, { side: 'skins_t' })).status, 200);
+    assert.equal(match.skins_starting_side, 'T');
+    assert.equal((await patch(matchId, { side: 'shirts_t' })).status, 200);
+    assert.equal(match.skins_starting_side, 'CT');
+    assert.equal((await patch(matchId, { side: 'knife' })).status, 200);
+    assert.equal(match.skins_starting_side, null);
+    assert.equal((await patch(matchId, { side: 'random' })).status, 200);
+    assert.ok(match.skins_starting_side === 'CT' || match.skins_starting_side === 'T');
+    assert.equal((await patch(matchId, { side: 'ct' })).status, 400);
+  });
+
   await test('patch: the lineup can swap in another checked-in player, but not someone not checked in', async () => {
     const { db, date } = installFixture([2, 3, 4, 5, 6]);
     const matchId = await makeMatch(db, date);

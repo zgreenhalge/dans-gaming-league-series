@@ -1,5 +1,6 @@
-// Changes a scrim match before it starts — `PATCH { map }` and/or `PATCH { lineup: { shirts, skins } }`,
-// the lineup drawn from the night's checked-in players — or discards it (`DELETE`). The players in
+// Changes a scrim match before it starts — any of `PATCH { map }`, `{ side }` (a `ScrimSideChoice`)
+// and `{ lineup: { shirts, skins } }`, the lineup drawn from the night's checked-in players — or
+// discards it (`DELETE`). The players in
 // the match or an admin (`requireScrimMatchAccess()`); 409 once it has a score or has been started
 // (`isScrimMatchEditable()`). Starting it is the shared `POST /api/matches/[id]/server/provision`.
 
@@ -9,7 +10,17 @@ import { accessDenied } from '@/lib/access-control';
 import { parseRouteId } from '@/lib/util';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { requireScrimMatchAccess, checkedInPlayerIds } from '@/lib/scrim-match-access';
-import { deleteScrimMatch, isScrimMatchEditable, parseScrimTeams, setScrimMatchLineup, setScrimMatchMap } from '@/lib/scrim-matches';
+import {
+  deleteScrimMatch,
+  isScrimMatchEditable,
+  parseScrimTeams,
+  resolveScrimSide,
+  setScrimMatchLineup,
+  setScrimMatchMap,
+  setScrimMatchSide,
+  SCRIM_SIDE_CHOICES,
+  type ScrimSideChoice,
+} from '@/lib/scrim-matches';
 
 const LOCKED = 'This match has started or been scored, so it can no longer be changed';
 
@@ -20,13 +31,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!access.ok) return accessDenied(access);
   if (!isScrimMatchEditable(access.match)) return NextResponse.json({ error: LOCKED }, { status: 409 });
 
-  const body = (await req.json().catch(() => null)) as { map?: unknown; lineup?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { map?: unknown; lineup?: unknown; side?: unknown } | null;
   const map = typeof body?.map === 'string' ? body.map : undefined;
   const lineup = body?.lineup !== undefined ? parseScrimTeams(body.lineup) : undefined;
-  if (map === undefined && lineup === undefined) {
-    return NextResponse.json({ error: 'Send a map and/or a lineup' }, { status: 400 });
+  const side = body?.side;
+  if (map === undefined && lineup === undefined && side === undefined) {
+    return NextResponse.json({ error: 'Send a map, a side and/or a lineup' }, { status: 400 });
   }
   if (lineup === null) return NextResponse.json({ error: 'lineup must be two distinct players per side' }, { status: 400 });
+  if (side !== undefined && !SCRIM_SIDE_CHOICES.includes(side as ScrimSideChoice)) {
+    return NextResponse.json({ error: `side must be one of ${SCRIM_SIDE_CHOICES.join(', ')}` }, { status: 400 });
+  }
 
   const [maps, checkedIn] = await Promise.all([
     map !== undefined ? getMapsForWorkshopPicker() : Promise.resolve([]),
@@ -42,6 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const db = getAdminClient();
   try {
     if (map !== undefined) await setScrimMatchMap(db, matchId, map);
+    if (side !== undefined) await setScrimMatchSide(db, matchId, resolveScrimSide(side as ScrimSideChoice));
     if (lineup) await setScrimMatchLineup(db, matchId, lineup);
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Updating the match failed' }, { status: 500 });

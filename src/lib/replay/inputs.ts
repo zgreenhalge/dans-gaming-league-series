@@ -14,8 +14,8 @@ export interface ReplayInputs {
   skinsSide: Side | null;
   targetWinRounds: number;
   roster: RosterEntry[];
-  /** A knife round decides sides, so no starting side is stored: gauntlet matches and scrim matches.
-   *  See `BuildReplayInput.includeKnifeRound`. */
+  /** A knife round decides sides, so no starting side is stored: gauntlet matches, and scrim matches
+   *  whose lobby picked a knife round. See `BuildReplayInput.includeKnifeRound`. */
   knifeRound: boolean;
   /** `matches.scheduled_at`, unparsed — feeds `demoBaseName()`'s date component (`matchzy.ts`). */
   scheduledAt: string | null;
@@ -54,7 +54,7 @@ export async function getReplayInputs(
   const seasonsArr = Array.isArray(firstWeek?.seasons) ? firstWeek!.seasons : [firstWeek?.seasons];
   const firstSeason = seasonsArr[0] as { target_win_rounds?: number; is_gauntlet?: boolean } | undefined;
   const targetWinRounds = firstSeason?.target_win_rounds ?? 13;
-  const knifeRound = (firstSeason?.is_gauntlet ?? false) || match.scrim_night_id != null;
+  const knifeRound = (firstSeason?.is_gauntlet ?? false) || (match.scrim_night_id != null && match.skins_starting_side === null);
 
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const playerIds = allStats.map((s) => s.player_id);

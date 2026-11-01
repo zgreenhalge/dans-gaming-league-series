@@ -102,6 +102,8 @@ export interface ScrimMatch {
   match_number: number;
   /** The match's map (`shirts_pick`), chosen in the lobby. */
   map: string | null;
+  /** The side SKINS start on, or `null` for a knife round. */
+  skins_starting_side: 'CT' | 'T' | null;
   shirts: number[];
   skins: number[];
   final_score: string | null;
@@ -115,7 +117,7 @@ export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[
   const db = getAdminClient();
   const { data, error } = await db
     .from('matches')
-    .select('id, match_number, shirts_pick, final_score, player_match_stats(player_id, faction), match_server_state(server_state)')
+    .select('id, match_number, shirts_pick, skins_starting_side, final_score, player_match_stats(player_id, faction), match_server_state(server_state)')
     .eq('scrim_night_id', nightId)
     .order('match_number');
   if (error) throw error;
@@ -123,6 +125,7 @@ export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[
     id: number;
     match_number: number;
     shirts_pick: string | null;
+    skins_starting_side: 'CT' | 'T' | null;
     final_score: string | null;
     player_match_stats: { player_id: number; faction: string }[] | null;
     match_server_state: { server_state: string } | { server_state: string }[] | null;
@@ -134,6 +137,7 @@ export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[
       id: r.id,
       match_number: r.match_number,
       map: r.shirts_pick,
+      skins_starting_side: r.skins_starting_side,
       shirts: stats.filter((s) => s.faction === 'SHIRTS').map((s) => s.player_id),
       skins: stats.filter((s) => s.faction === 'SKINS').map((s) => s.player_id),
       final_score: r.final_score,

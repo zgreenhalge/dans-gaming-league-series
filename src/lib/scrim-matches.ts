@@ -4,7 +4,8 @@
 //
 // A scrim match is a `matches` row with `scrim_night_id` set and no week, so league stats never see
 // it (see `onlyLeagueMatches()`). Its map is chosen in the lobby — there's no ban/pick — and lives in
-// `shirts_pick`, which `effectivePickedMap()` reads.
+// `shirts_pick`, which `effectivePickedMap()` reads; so does its starting side (`ScrimSideChoice`),
+// stored as `skins_starting_side` with `null` meaning a knife round.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
@@ -23,6 +24,25 @@ export function isScrimMatchEditable(m: { final_score: string | null; server_sta
 export async function isScrimMatch(db: SupabaseClient, matchId: number): Promise<boolean> {
   const { data } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle().throwOnError();
   return (data as { scrim_night_id: number | null } | null)?.scrim_night_id != null;
+}
+
+/** How a scrim match's starting sides are decided, picked in the lobby. */
+export type ScrimSideChoice = 'skins_t' | 'shirts_t' | 'knife' | 'random';
+
+export const SCRIM_SIDE_CHOICES: readonly ScrimSideChoice[] = ['skins_t', 'shirts_t', 'knife', 'random'];
+
+/** The `skins_starting_side` a choice stores: SKINS start T, SHIRTS start T (so SKINS start CT), no
+ *  stored side for a knife round, or a coin flip for random — flipped once, when chosen, so everyone
+ *  in the lobby sees the result before the match starts. */
+export function resolveScrimSide(choice: ScrimSideChoice, rand: () => number = Math.random): 'CT' | 'T' | null {
+  if (choice === 'knife') return null;
+  if (choice === 'random') return rand() < 0.5 ? 'T' : 'CT';
+  return choice === 'skins_t' ? 'T' : 'CT';
+}
+
+/** Sets a scrim match's stored starting side (`null` = knife round). */
+export async function setScrimMatchSide(db: SupabaseClient, matchId: number, skinsSide: 'CT' | 'T' | null): Promise<void> {
+  await db.from('matches').update({ skins_starting_side: skinsSide }).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
 }
 
 /** Thrown by `createScrimMatch()` when the night already has a match without a score. */

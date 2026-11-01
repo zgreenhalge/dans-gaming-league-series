@@ -41,6 +41,11 @@ function buildDb(): FakeDb {
         id: 300, week_id: null, scrim_night_id: 1, shirts_pick: 'Foroglio', skins_pick: null,
         skins_starting_side: null, scheduled_at: null,
       },
+      {
+        // A scrim match whose lobby set a starting side: no knife round.
+        id: 301, week_id: null, scrim_night_id: 1, shirts_pick: 'Foroglio', skins_pick: null,
+        skins_starting_side: 'T', scheduled_at: null,
+      },
     ],
     player_match_stats: [
       { match_id: 100, player_id: 1, faction: 'SHIRTS' },
@@ -85,11 +90,17 @@ async function main() {
     assert.equal(inputs.skinsSide, 'T');
   });
 
-  await test('getReplayInputs: a scrim match plays a knife round to the default 13 rounds', async () => {
+  await test('getReplayInputs: a scrim match with no set side plays a knife round to the default 13 rounds', async () => {
     const inputs = await getReplayInputs(supabase, 300);
     assert.equal(inputs.knifeRound, true);
     assert.equal(inputs.targetWinRounds, 13);
     assert.equal(inputs.map, 'Foroglio');
+  });
+
+  await test('getReplayInputs: a scrim match with a set side plays no knife round', async () => {
+    const inputs = await getReplayInputs(supabase, 301);
+    assert.equal(inputs.knifeRound, false);
+    assert.equal(inputs.skinsSide, 'T');
   });
 
   await test('getReplayInputs: a roster player missing its own players row gets a placeholder name and null steam fields', async () => {
