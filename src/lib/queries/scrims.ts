@@ -120,8 +120,10 @@ export interface ScrimMatch {
   match_number: number;
   /** The match's map (`shirts_pick`), chosen in the lobby. */
   map: string | null;
-  /** The side SKINS start on, or `null` for a knife round. */
+  /** The side SKINS start on, or `null` for a knife round — or for a random side not yet flipped. */
   skins_starting_side: 'CT' | 'T' | null;
+  /** The lobby chose a random side, flipped when the match starts (`flipPendingScrimSide()`). */
+  scrim_random_side: boolean;
   shirts: number[];
   skins: number[];
   players: ScrimMatchPlayer[];
@@ -137,7 +139,7 @@ const SCRIM_MATCH_PLAYER_COLUMNS = 'player_id, faction, kills, assists, deaths, 
 export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[]> {
   const { data, error } = await getAdminClient()
     .from('matches')
-    .select(`id, match_number, shirts_pick, skins_starting_side, final_score, player_match_stats(${SCRIM_MATCH_PLAYER_COLUMNS}), match_server_state(server_state)`)
+    .select(`id, match_number, shirts_pick, skins_starting_side, scrim_random_side, final_score, player_match_stats(${SCRIM_MATCH_PLAYER_COLUMNS}), match_server_state(server_state)`)
     .eq('scrim_night_id', nightId)
     .order('match_number');
   if (error) throw error;
@@ -146,6 +148,7 @@ export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[
     match_number: number;
     shirts_pick: string | null;
     skins_starting_side: 'CT' | 'T' | null;
+    scrim_random_side: boolean;
     final_score: string | null;
     player_match_stats: ScrimMatchPlayer[] | null;
     match_server_state: { server_state: string } | { server_state: string }[] | null;
@@ -158,6 +161,7 @@ export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[
       match_number: r.match_number,
       map: r.shirts_pick,
       skins_starting_side: r.skins_starting_side,
+      scrim_random_side: r.scrim_random_side ?? false,
       shirts: players.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id),
       skins: players.filter((p) => p.faction === 'SKINS').map((p) => p.player_id),
       players,

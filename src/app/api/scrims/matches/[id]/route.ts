@@ -14,7 +14,6 @@ import {
   deleteScrimMatch,
   isScrimMatchEditable,
   parseScrimTeams,
-  resolveScrimSide,
   setScrimMatchLineup,
   setScrimMatchMap,
   setScrimMatchSide,
@@ -57,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const db = getAdminClient();
   try {
     if (map !== undefined) await setScrimMatchMap(db, matchId, map);
-    if (side !== undefined) await setScrimMatchSide(db, matchId, resolveScrimSide(side as ScrimSideChoice));
+    if (side !== undefined) await setScrimMatchSide(db, matchId, side as ScrimSideChoice);
     if (lineup) await setScrimMatchLineup(db, matchId, lineup);
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Updating the match failed' }, { status: 500 });

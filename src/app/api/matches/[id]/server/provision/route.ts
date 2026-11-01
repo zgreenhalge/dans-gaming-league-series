@@ -15,6 +15,7 @@ import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
+import { flipPendingScrimSide } from '@/lib/scrim-matches';
 
 export async function POST(
   req: NextRequest,
@@ -44,6 +45,14 @@ export async function POST(
       { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
       { status: 409 },
     );
+  }
+
+  // A scrim match whose lobby chose a random side gets it now, before the server boots and loads its
+  // config — the sides stay hidden until the match starts.
+  try {
+    await flipPendingScrimSide(getAdminClient(), matchId);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Picking a random side failed' }, { status: 500 });
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.

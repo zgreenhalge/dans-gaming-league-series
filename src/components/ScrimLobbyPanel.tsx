@@ -11,7 +11,7 @@ import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScrimMatch } from '@/lib/queries';
-import type { ScrimSideChoice } from '@/lib/scrim-matches';
+import { scrimSideChoiceOf, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 
 interface Props {
@@ -41,12 +41,6 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
   knife: 'Knife round',
   random: 'Random',
 };
-
-/** The stored side as the lobby choice it came from. `random` is never stored — it resolves to one
- *  of the other two when picked. */
-function sideChoiceOf(side: 'CT' | 'T' | null): ScrimSideChoice {
-  return side === null ? 'knife' : side === 'T' ? 'skins_t' : 'shirts_t';
-}
 
 type Lineup = [number, number, number, number];
 
@@ -135,7 +129,7 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
         <label className="flex flex-col gap-1">
           <span className={LABEL_CLS}>Starting side</span>
           <select
-            value={sideChoiceOf(match.skins_starting_side)}
+            value={scrimSideChoiceOf(match)}
             disabled={!canEdit || busy}
             onChange={(e) => act('PATCH', url, { side: e.target.value })}
             className={`${SELECT_CLS} w-full`}
