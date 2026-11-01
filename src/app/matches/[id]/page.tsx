@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getMatchServerState, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats, getMatchRoundEconomy } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchIdsForMap, getMatchServerState, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive } from '@/lib/queries';
+import { loadMatchPageFacts, matchMvpPlayerId, shirtsFaction } from '@/lib/match-page-data';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -11,7 +12,9 @@ import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
-import { buildCrumbs } from '@/lib/crumbs';
+import { buildCrumbs, scrimMatchHref } from '@/lib/crumbs';
+import { isScrimMatch } from '@/lib/scrim-matches';
+import { getAdminClient } from '@/lib/supabase-admin';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
@@ -28,10 +31,6 @@ import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
 import { isVetoComplete, effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
-import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
-import { getDemoManifest } from '@/lib/demo/segmentManifest';
 
 export async function generateMetadata({
   params,
@@ -59,12 +58,6 @@ export async function generateMetadata({
 }
 
 type Faction = 'CT' | 'T' | null;
-
-function shirtsFaction(skinsSide: 'CT' | 'T' | null): Faction {
-  if (skinsSide === 'CT') return 'T';
-  if (skinsSide === 'T') return 'CT';
-  return null;
-}
 
 function matchWeekWindow(
   startDate: string | null,
@@ -94,7 +87,11 @@ export default async function MatchPage({
     getMapLookup(),
     getServerSession(authOptions),
   ]);
-  if (!detail) notFound();
+  if (!detail) {
+    // A scrim match has no week, so `getMatch()` doesn't return it — it has its own page.
+    if (await isScrimMatch(getAdminClient(), matchId)) redirect(scrimMatchHref(matchId));
+    notFound();
+  }
 
   const { match, week, season, stats } = detail;
   const played = isPlayedScore(match.final_score);
@@ -115,7 +112,6 @@ export default async function MatchPage({
   // to the H2H tab (this match's own actual matchups, computed below) — so the scouting fetches
   // are only worth making beforehand.
   const showPreMatchScouting = hasFull2v2Roster && !played;
-  const key = makeDemoKey(matchId);
 
   // Rating projections/win-probability render for an unplayed match either in its own week's date
   // window, or — if that window hasn't opened yet — once the previous week is fully scored (a
@@ -135,24 +131,6 @@ export default async function MatchPage({
   // promises have resolved.
   const otherScheduledPromise = !played ? getOtherScheduledMatches(match.id) : Promise.resolve([]);
 
-  // Replay/Events (issue #121), chained rather than a second query: the events lookup needs the
-  // job's own status first. Independent of the big Promise.all below (depends only on `played`,
-  // known right after the first Promise.all), so it's folded in instead of awaited after it.
-  // Only played matches can have a replay, and the Recap tab is gated on `played`, so skip the
-  // queries entirely otherwise. Status is defensive (tolerates missing DB columns). We load the
-  // events payload whenever a job has ever run (status !== 'none'), NOT only when status === 'ready',
-  // so a failed/in-flight *re*generation never hides a replay whose payload still exists in R2 —
-  // the Recap tab gates on the payload, not the status flag.
-  const replayPromise = played
-    ? getReplayJobState(matchId).then(async (job) => ({
-        job,
-        events: job.status !== 'none' ? await getReplayEventsView(matchId) : null,
-      }))
-    : Promise.resolve({
-        job: { status: 'none' as const, stage: null, ghRunUrl: null, errorMessage: null },
-        events: null,
-      });
-
   // Pre-match win probability's player ratings — depends only on shirts/skins, both available
   // right after the first Promise.all, so it's folded into this batch instead of awaited
   // afterward. Whether the result is actually *used* still gates on the time-window check below
@@ -165,22 +143,15 @@ export default async function MatchPage({
   // The match server panel shows once the veto is done (always in dev) and the match is unplayed.
   const showServerPanel = !played && (vetoComplete || process.env.NODE_ENV === 'development');
 
-  const [scope, pod, scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replay, playerRatingsRows, isMultiSegmentDemo, serverState] = await Promise.all([
+  const [scope, pod, scoutingData, scoutingH2H, facts, ratingDeltaMap, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, playerRatingsRows, serverState] = await Promise.all([
     getSeasonScope(season),
     podPromise,
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
     showPreMatchScouting ? getCareerH2HDataCached() : Promise.resolve(null),
-    r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }))
-      .then(() =>
-        getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), {
-          expiresIn: 3600,
-        }),
-      )
-      .catch(() => null),
+    loadMatchPageFacts(matchId, played),
     played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
-    played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showPreMatchScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     podSiblingPromise,
@@ -188,27 +159,13 @@ export default async function MatchPage({
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
     played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
-    played ? getMatchKills(matchId) : Promise.resolve([]),
-    // Feeds the H2H tab's per-pair damage bar (#461) — a match's own kill/damage exchange, not
-    // each player's own damage total (`player_match_stats.damage`).
-    played ? getMatchDamageEvents(matchId) : Promise.resolve([]),
-    played ? getMatchWeaponClassStats(matchId) : Promise.resolve([]),
-    played ? getMatchEconomyStats(matchId) : Promise.resolve([]),
-    // Feeds the Economy sub-tab's round-by-round chart (#519) — per-round equipment value per
-    // player, distinct from `matchEconomyStats`'s tier-bucketed aggregate above.
-    played ? getMatchRoundEconomy(matchId) : Promise.resolve([]),
-    replayPromise,
     playerRatingsPromise,
-    // Whether this match's demo was recovered from multiple recordings (a server restart) — the
-    // Recap tab uses this to skip offering replay generation, which only ever reads a single demo
-    // and would just fail or produce a one-segment replay for a match like this.
-    played ? getDemoManifest(matchId).then((m) => !!m).catch(() => false) : Promise.resolve(false),
     // The server panel's starting state for every viewer — non-managers can't call the status
     // route, and a server that is live all match may never fire another Realtime update.
     showServerPanel ? getMatchServerState(matchId) : Promise.resolve<ServerState>('idle'),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
-  const { job: replayJob, events: replayEvents } = replay;
+  const { demoDownloadUrl, sabremetrics, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, matchRoundEconomy, replayJob, replayEvents, isMultiSegmentDemo } = facts;
 
   let ratingProjections: RatingProjection[] = [];
   const ratingCurrent: Record<number, number> = {};
@@ -226,11 +183,7 @@ export default async function MatchPage({
   }
   const postMatchWinProb = played ? match.pre_match_win_prob : null;
 
-  const allByAdr = [...stats]
-    .filter((s) => s.rounds_played > 0)
-    .sort((a, b) => b.adr - a.adr);
-  const mvpPlayerId =
-    played && allByAdr.length > 0 ? allByAdr[0].player_id : null;
+  const mvpPlayerId = matchMvpPlayerId(stats, played);
 
   const shirtsWon = score ? score.shirts > score.skins : false;
   const skinsStartingSide = effectiveSkinsStartingSide(match);

@@ -1,7 +1,8 @@
 import { StatTable, Tr, Td, PlayerCell } from './StatTable';
 import Th from './Th';
 import EmptyState from './EmptyState';
-import { playerHref } from '@/lib/crumbs';
+import Link from 'next/link';
+import { playerHref, scrimMatchHref } from '@/lib/crumbs';
 import { toSentenceCase } from '@/lib/maps';
 import { parseScore, isPlayedScore } from '@/lib/util';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';
@@ -72,7 +73,9 @@ export function ScrimNightMatchList({ matches, names }: { matches: ScrimMatch[];
         return (
           <div key={m.id} className="px-4 py-3 border-b border-[var(--color-border-tertiary)] last:border-b-0">
             <div className="flex items-center justify-between gap-3 mb-2">
-              <span className="font-display text-[15px] font-semibold">Match {m.match_number}</span>
+              <Link href={scrimMatchHref(m.id)} className="font-display text-[15px] font-semibold hover:underline">
+                Match {m.match_number}
+              </Link>
               <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">{m.map ? toSentenceCase(m.map) : 'No map'}</span>
             </div>
             <div className="grid grid-cols-2 gap-4">

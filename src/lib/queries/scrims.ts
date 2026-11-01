@@ -15,7 +15,8 @@ import { persistentQuery } from './_persistentCache';
 import { getPlayersById } from './player';
 import { aggregatePlayerStats, type PlayerAggregateRow, type PlayerAggregateStats } from '../player-stats';
 import { canonicalSortValues, isPlayedScore } from '../util';
-import type { Player } from '../types';
+import type { Player, PlayerMatchStat, RoundHistoryEntry } from '../types';
+import type { MatchStatRow } from './match';
 
 export interface ScrimSignupEntry {
   player_id: number;
@@ -270,4 +271,47 @@ export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
     .filter((r) => !listed.has(r.night_date) && byNight.has(r.id))
     .map((r) => ({ date: r.night_date, matches: byNight.get(r.id)!.matches, players: byNight.get(r.id)!.players.size }))
     .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export interface ScrimMatchDetail {
+  id: number;
+  match_number: number;
+  night_date: string;
+  final_score: string | null;
+  shirts_pick: string | null;
+  skins_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
+  round_history: RoundHistoryEntry[] | null;
+  recording_url: string | null;
+  stats: MatchStatRow[];
+}
+
+/** A scrim match's page data — the `getMatch()` counterpart for a match with no week — or `null`
+ *  for a match that isn't a scrim match. */
+export async function getScrimMatchDetail(matchId: number): Promise<ScrimMatchDetail | null> {
+  const [{ data, error }, playersById] = await Promise.all([
+    getAdminClient()
+      .from('matches')
+      .select('id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, recording_url, scrim_nights(night_date), player_match_stats(*)')
+      .eq('id', matchId)
+      .not('scrim_night_id', 'is', null)
+      .maybeSingle(),
+    getPlayersById(),
+  ]);
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as unknown as Omit<ScrimMatchDetail, 'night_date' | 'stats'> & {
+    scrim_nights: { night_date: string } | null;
+    player_match_stats: PlayerMatchStat[] | null;
+  };
+  const { scrim_nights, player_match_stats, ...match } = row;
+  return {
+    ...match,
+    night_date: scrim_nights?.night_date ?? '',
+    stats: (player_match_stats ?? []).map((s) => ({
+      ...s,
+      player_name: playersById.get(s.player_id)?.name ?? `#${s.player_id}`,
+      steam_avatar_url: playersById.get(s.player_id)?.steam_avatar_url ?? null,
+    })),
+  };
 }

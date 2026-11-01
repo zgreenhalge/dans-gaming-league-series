@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { scrimMatchHref } from '@/lib/crumbs';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
@@ -104,7 +106,9 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
-        <div className={LABEL_CLS}>Lobby · Match {match.match_number}</div>
+        <Link href={scrimMatchHref(match.id)} className={`${LABEL_CLS} hover:underline`}>
+          Lobby · Match {match.match_number} →
+        </Link>
         {canEdit && (
           <button type="button" onClick={() => act('DELETE', url)} disabled={busy} className={BTN_CLS}>
             Discard

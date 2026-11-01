@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightLeaderboard, getPastScrimNights, getScrimNight, type ScrimMatch, type ScrimMatchPlayer } from './queries';
+import { buildScrimNightLeaderboard, getPastScrimNights, getScrimMatchDetail, getScrimNight, type ScrimMatch, type ScrimMatchPlayer } from './queries';
 import { scrimNightSlots, type ScrimSchedule } from './scrim-schedule';
 
 const SCHEDULE: ScrimSchedule = { weekday: 4, startTime: '20:00', timezone: 'America/New_York', enabled: true };
@@ -102,6 +102,15 @@ async function main() {
     assert.equal(night.current, true);
     assert.equal(night.checkInOpen, false);
     assert.deepEqual(night.signups.map((s) => s.player_id), [1]);
+  });
+
+  await test('getScrimMatchDetail: a scrim match with its night date and named stat rows; null for a league match', async () => {
+    const detail = await getScrimMatchDetail(900);
+    assert.ok(detail);
+    assert.equal(detail.night_date, PAST);
+    assert.equal(detail.final_score, '13-7');
+    assert.deepEqual(detail.stats.map((r) => r.player_name).sort(), ['P1', 'P2', 'P3', 'P4']);
+    assert.equal(await getScrimMatchDetail(12345), null);
   });
 
   await test('getScrimNight: null for a date with no night', async () => {

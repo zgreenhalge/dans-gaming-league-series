@@ -25,6 +25,11 @@ export function scrimNightHref(date: string): string {
   return `/scrims/${date}`;
 }
 
+/** The path to a scrim match's page. */
+export function scrimMatchHref(matchId: number): string {
+  return `/scrims/matches/${matchId}`;
+}
+
 export function seasonHref(hubSeasonId: number): string {
   return `/seasons/${hubSeasonId}`;
 }
