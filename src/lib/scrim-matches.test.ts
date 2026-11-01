@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { applyScrimSideChoice, isScrimMatchDiscardable, isScrimMatchEditable, parseScrimTeams, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
+import { applyScrimSideChoice, isScrimMatchDiscardable, isScrimMatchEditable, parseScrimTeams, resolveScrimMap, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
@@ -62,6 +62,13 @@ test('applyScrimSideChoice: a random side already flipped is kept; a new choice 
   assert.equal(db.matches[0].skins_starting_side, null);
   await applyScrimSideChoice(client, 1, () => 0.9);
   assert.equal(db.matches[0].skins_starting_side, 'CT');
+});
+
+test('resolveScrimMap: a known map keeps its name; any other item is named by Steam, or by its id', async () => {
+  const known = [{ name: 'Foroglio', workshopId: '111' }];
+  assert.deepEqual(await resolveScrimMap('111', known, async () => null), { name: 'Foroglio', workshopId: '111' });
+  assert.deepEqual(await resolveScrimMap('999', known, async () => ({ title: 'Dust Wingman', previewUrl: null })), { name: 'Dust Wingman', workshopId: '999' });
+  assert.deepEqual(await resolveScrimMap('999', known, async () => null), { name: 'Workshop 999', workshopId: '999' });
 });
 
 test('parseScrimTeams: two distinct positive ids per side', () => {

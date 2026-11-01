@@ -26,7 +26,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ da
 
   const plan = pickNextScrimMatch(ratings, history);
   if (!plan) return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
-  const map = maps[Math.floor(Math.random() * maps.length)].name;
+  const pick = maps[Math.floor(Math.random() * maps.length)];
+  const map = { name: pick.name, workshopId: pick.workshopId };
 
   try {
     const matchId = await createScrimMatch(getAdminClient(), slot.nightId, map, plan);

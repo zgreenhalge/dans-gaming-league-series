@@ -40,8 +40,8 @@ function installFixture(checkedIn: number[], extra: Partial<FakeDb> = {}): { db:
       checked_in_at: '2026-01-01T01:00:00Z',
     })),
     maps: [
-      { id: 1, name: 'Foroglio', workshop_url: 'https://steamcommunity.com/sharedfiles/filedetails/?id=111' },
-      { id: 2, name: 'Cobblestone', workshop_url: 'https://steamcommunity.com/sharedfiles/filedetails/?id=222' },
+      { id: 1, name: 'Foroglio', workshop_url: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3070000111' },
+      { id: 2, name: 'Cobblestone', workshop_url: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3070000222' },
     ],
     matches: [],
     player_match_stats: [],
@@ -77,6 +77,7 @@ async function main() {
     assert.equal(match.scrim_night_id, NIGHT_ID);
     assert.equal(match.week_id, null);
     assert.ok(['Foroglio', 'Cobblestone'].includes(match.shirts_pick as string));
+    assert.equal(match.scrim_workshop_id, match.shirts_pick === 'Foroglio' ? '3070000111' : '3070000222');
     const lineup = lineupOf(db, matchId);
     assert.equal(lineup.length, 4);
     assert.ok(lineup.every((id) => [2, 3, 4, 5, 6].includes(id)));
@@ -107,14 +108,15 @@ async function main() {
     assert.equal(db.matches.find((m) => m.id === second)!.match_number, 2);
   });
 
-  await test('patch: a player in the match changes the map; an unknown map is refused', async () => {
+  await test('patch: a player in the match changes the map by workshop link; text that is not one is refused', async () => {
     const { db, date } = installFixture([2, 3, 4, 5]);
     const matchId = await makeMatch(db, date);
     const inMatch = lineupOf(db, matchId)[0];
     __setTestSession(sessionFor(inMatch));
-    assert.equal((await patch(matchId, { map: 'Cobblestone' })).status, 200);
-    assert.equal(db.matches.find((m) => m.id === matchId)!.shirts_pick, 'Cobblestone');
-    assert.equal((await patch(matchId, { map: 'Dust II' })).status, 400);
+    assert.equal((await patch(matchId, { workshop: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3070000222' })).status, 200);
+    const match = db.matches.find((m) => m.id === matchId)!;
+    assert.deepEqual([match.shirts_pick, match.scrim_workshop_id], ['Cobblestone', '3070000222']);
+    assert.equal((await patch(matchId, { workshop: 'not a map' })).status, 400);
   });
 
   await test('patch: the starting side choice is stored as chosen, random included; the side itself waits for the start', async () => {
@@ -149,7 +151,7 @@ async function main() {
     const matchId = await makeMatch(db, date);
     const benched = [2, 3, 4, 5, 6].find((id) => !lineupOf(db, matchId).includes(id))!;
     __setTestSession(sessionFor(benched));
-    assert.equal((await patch(matchId, { map: 'Cobblestone' })).status, 403);
+    assert.equal((await patch(matchId, { workshop: '3070000222' })).status, 403);
     assert.equal((await discard(matchId)).status, 403);
     __setTestSession(sessionFor(ADMIN_ID));
     assert.equal((await discard(matchId)).status, 200);
@@ -161,7 +163,7 @@ async function main() {
     const matchId = await makeMatch(db, date);
     db.match_server_state.push({ match_id: matchId, server_state: 'live' });
     __setTestSession(sessionFor(ADMIN_ID));
-    assert.equal((await patch(matchId, { map: 'Cobblestone' })).status, 409);
+    assert.equal((await patch(matchId, { workshop: '3070000222' })).status, 409);
     assert.equal((await discard(matchId)).status, 409);
   });
 
@@ -170,7 +172,7 @@ async function main() {
     const matchId = await makeMatch(db, date);
     db.match_server_state.push({ match_id: matchId, server_state: 'done' });
     __setTestSession(sessionFor(ADMIN_ID));
-    assert.equal((await patch(matchId, { map: 'Cobblestone' })).status, 409);
+    assert.equal((await patch(matchId, { workshop: '3070000222' })).status, 409);
     assert.equal((await discard(matchId)).status, 200);
     assert.equal(db.matches.length, 0);
   });
@@ -193,7 +195,7 @@ async function main() {
     const matchId = await makeMatch(db, date);
     db.match_server_state.push({ match_id: matchId, server_state: 'failed' });
     __setTestSession(sessionFor(ADMIN_ID));
-    assert.equal((await patch(matchId, { map: 'Cobblestone' })).status, 200);
+    assert.equal((await patch(matchId, { workshop: '3070000222' })).status, 200);
   });
 
   await test('patch: 404 for a league match', async () => {
@@ -202,7 +204,7 @@ async function main() {
       player_match_stats: [{ id: 1, match_id: 50, player_id: ADMIN_ID, faction: 'SHIRTS' }],
     });
     __setTestSession(sessionFor(ADMIN_ID));
-    assert.equal((await patch(50, { map: 'Cobblestone' })).status, 404);
+    assert.equal((await patch(50, { workshop: '3070000222' })).status, 404);
   });
 
   report();

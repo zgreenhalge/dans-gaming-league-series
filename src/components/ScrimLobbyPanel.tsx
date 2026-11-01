@@ -7,14 +7,16 @@ import { scrimMatchHref } from '@/lib/crumbs';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
+import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
 import { SELECT_CLS } from './formStyles';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import type { ServerState } from '@/lib/dathost-lifecycle';
-import type { ScrimMatch } from '@/lib/queries';
+import type { ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
+import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
   date: string;
@@ -24,7 +26,8 @@ interface Props {
   pool: { id: number; name: string }[];
   /** Every player's name, for lineup slots holding someone no longer checked in. */
   names: Record<number, string>;
-  maps: string[];
+  /** Known workshop maps for the picker; any other Workshop item can be entered as a link or id. */
+  maps: WorkshopMapOption[];
   /** The viewer may make the next match (checked in, or an admin, with check-in open). */
   canMake: boolean;
   /** The viewer may change, discard or start `match` (in it, or an admin). */
@@ -91,6 +94,10 @@ function LobbyMatch({
   const { busy, error, act } = useLobbyAction();
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
+  const knownMap = maps.some((m) => m.workshopId === match.workshop_id);
+  const [mapChoice, setMapChoice] = useState(knownMap ? match.workshop_id ?? '' : CUSTOM_MAP_CHOICE);
+  const [customMap, setCustomMap] = useState(knownMap ? '' : match.workshop_id ?? '');
+  const customId = workshopIdFromInput(customMap);
 
   const canEdit = canManage && isScrimMatchEditable(match);
   const canDiscard = canManage && isScrimMatchDiscardable(match);
@@ -139,19 +146,26 @@ function LobbyMatch({
       )}
 
       <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1">
-          <span className={LABEL_CLS}>Map</span>
-          <select
-            value={match.map ?? ''}
+        <div className="flex flex-col gap-1">
+          <span className={LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
+          <MapPicker
+            maps={maps}
+            value={mapChoice}
+            onChange={(value) => {
+              setMapChoice(value);
+              if (value && value !== CUSTOM_MAP_CHOICE) act('PATCH', url, { workshop: value });
+            }}
+            customValue={customMap}
+            onCustomChange={setCustomMap}
+            customInvalid={customMap.trim() !== '' && !customId}
             disabled={!canEdit || busy}
-            onChange={(e) => act('PATCH', url, { map: e.target.value })}
-            className={`${SELECT_CLS} w-full`}
-          >
-            {maps.map((m) => (
-              <option key={m} value={m}>{toSentenceCase(m)}</option>
-            ))}
-          </select>
-        </label>
+          />
+          {canEdit && mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
+            <button type="button" onClick={() => act('PATCH', url, { workshop: customId })} disabled={busy} className={`${GO_BTN_CLS} self-start`}>
+              Use this map
+            </button>
+          )}
+        </div>
         <label className="flex flex-col gap-1">
           <span className={LABEL_CLS}>Starting side</span>
           <select

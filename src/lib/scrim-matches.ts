@@ -3,14 +3,16 @@
 // starting a match is the shared `provisionMatchServer()` path every match uses.
 //
 // A scrim match is a `matches` row with `scrim_night_id` set and no week, so league stats never see
-// it (see `onlyLeagueMatches()`). Its map is chosen in the lobby — there's no ban/pick — and lives in
-// `shirts_pick`, which `effectivePickedMap()` reads. Its starting side is the lobby's `ScrimSideChoice`
+// it (see `onlyLeagueMatches()`). Its map is chosen in the lobby — there's no ban/pick — from any
+// Steam Workshop item: the name lives in `shirts_pick`, which `effectivePickedMap()` reads, and the item
+// id in `scrim_workshop_id`, which the server is started on (`resolveMapWorkshopId()`). Its starting side is the lobby's `ScrimSideChoice`
 // (`scrim_side_choice`), turned into `skins_starting_side` only as the match starts
 // (`applyScrimSideChoice()`), so a random side stays unknown until then.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
 import { isPlayedScore } from './util';
+import { fetchWorkshopItem } from './workshop';
 
 /** `match_server_state.server_state` values while a match holds the server. */
 const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down']);
@@ -81,12 +83,33 @@ export class UnplayedScrimMatchError extends Error {
   }
 }
 
+/** A scrim match's map: its name (`shirts_pick`) and the workshop item the server loads. */
+export interface ScrimMap {
+  name: string;
+  workshopId: string;
+}
+
+/** The map for workshop item `workshopId`: a known map keeps its name; any other item is named after
+ *  its Steam title (`fetchWorkshopItem()`), falling back to its id when Steam can't say. Nothing is
+ *  added to `maps` — a scrim map stays on its match. */
+export async function resolveScrimMap(
+  workshopId: string,
+  knownMaps: { name: string; workshopId: string }[],
+  lookup: typeof fetchWorkshopItem = fetchWorkshopItem,
+): Promise<ScrimMap> {
+  const known = knownMaps.find((m) => m.workshopId === workshopId);
+  if (known) return { name: known.name, workshopId };
+  const title = (await lookup(workshopId))?.title;
+  return { name: title ?? `Workshop ${workshopId}`, workshopId };
+}
+
 /** Creates the night's next match on `map` with `teams` (`create_scrim_match()`, one transaction).
  *  Returns the new match id. */
-export async function createScrimMatch(db: SupabaseClient, nightId: number, map: string, teams: ScrimTeams): Promise<number> {
+export async function createScrimMatch(db: SupabaseClient, nightId: number, map: ScrimMap, teams: ScrimTeams): Promise<number> {
   const { data, error } = await db.rpc('create_scrim_match', {
     p_night_id: nightId,
-    p_map: map,
+    p_map: map.name,
+    p_workshop_id: map.workshopId,
     p_shirts: teams.shirts,
     p_skins: teams.skins,
   });
@@ -104,8 +127,13 @@ export async function setScrimMatchLineup(db: SupabaseClient, matchId: number, t
 }
 
 /** Sets a scrim match's map. */
-export async function setScrimMatchMap(db: SupabaseClient, matchId: number, map: string): Promise<void> {
-  await db.from('matches').update({ shirts_pick: map }).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
+export async function setScrimMatchMap(db: SupabaseClient, matchId: number, map: ScrimMap): Promise<void> {
+  await db
+    .from('matches')
+    .update({ shirts_pick: map.name, scrim_workshop_id: map.workshopId })
+    .eq('id', matchId)
+    .not('scrim_night_id', 'is', null)
+    .throwOnError();
 }
 
 /** Deletes a scrim match; its player rows (and anything else keyed to it) cascade. */

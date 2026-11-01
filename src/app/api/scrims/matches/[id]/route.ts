@@ -1,4 +1,5 @@
-// Changes a scrim match before it starts — any of `PATCH { map }`, `{ side }` (a `ScrimSideChoice`)
+// Changes a scrim match before it starts — any of `PATCH { workshop }` (a Steam Workshop link or item
+// id, any map, `resolveScrimMap()`), `{ side }` (a `ScrimSideChoice`)
 // and `{ lineup: { shirts, skins } }`, the lineup drawn from the night's checked-in players — or
 // discards it (`DELETE`). The players in the match or an admin (`requireScrimMatchAccess()`). Changes
 // are refused (409) once it has a score or has been started (`isScrimMatchEditable()`); discarding
@@ -10,6 +11,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { accessDenied } from '@/lib/access-control';
 import { parseRouteId } from '@/lib/util';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
+import { workshopIdFromInput } from '@/lib/workshop';
 import { requireScrimMatchAccess, checkedInPlayerIds } from '@/lib/scrim-match-access';
 import {
   deleteScrimMatch,
@@ -17,6 +19,7 @@ import {
   isScrimMatchEditable,
   parseScrimTeams,
   setScrimMatchLineup,
+  resolveScrimMap,
   setScrimMatchMap,
   setScrimMatchSideChoice,
   SCRIM_SIDE_CHOICES,
@@ -32,12 +35,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!access.ok) return accessDenied(access);
   if (!isScrimMatchEditable(access.match)) return NextResponse.json({ error: LOCKED }, { status: 409 });
 
-  const body = (await req.json().catch(() => null)) as { map?: unknown; lineup?: unknown; side?: unknown } | null;
-  const map = typeof body?.map === 'string' ? body.map : undefined;
+  const body = (await req.json().catch(() => null)) as { workshop?: unknown; lineup?: unknown; side?: unknown } | null;
+  const workshopId = body?.workshop !== undefined ? workshopIdFromInput(typeof body.workshop === 'string' ? body.workshop : null) : undefined;
   const lineup = body?.lineup !== undefined ? parseScrimTeams(body.lineup) : undefined;
   const side = body?.side;
-  if (map === undefined && lineup === undefined && side === undefined) {
-    return NextResponse.json({ error: 'Send a map, a side and/or a lineup' }, { status: 400 });
+  if (workshopId === undefined && lineup === undefined && side === undefined) {
+    return NextResponse.json({ error: 'Send a workshop map, a side and/or a lineup' }, { status: 400 });
+  }
+  if (workshopId === null) {
+    return NextResponse.json({ error: 'workshop must be a Steam Workshop link or item id' }, { status: 400 });
   }
   if (lineup === null) return NextResponse.json({ error: 'lineup must be two distinct players per side' }, { status: 400 });
   if (side !== undefined && !SCRIM_SIDE_CHOICES.includes(side as ScrimSideChoice)) {
@@ -45,12 +51,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const [maps, checkedIn] = await Promise.all([
-    map !== undefined ? getMapsForWorkshopPicker() : Promise.resolve([]),
+    workshopId !== undefined ? getMapsForWorkshopPicker() : Promise.resolve([]),
     lineup ? checkedInPlayerIds(access.match.night_id) : Promise.resolve([]),
   ]);
-  if (map !== undefined && !maps.some((m) => m.name === map)) {
-    return NextResponse.json({ error: `Unknown map "${map}"` }, { status: 400 });
-  }
   // A player joining the lineup must be checked in; one already in it stays even after checking out.
   const current = [...access.match.shirts, ...access.match.skins];
   if (lineup && ![...lineup.shirts, ...lineup.skins].every((id) => checkedIn.includes(id) || current.includes(id))) {
@@ -59,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const db = getAdminClient();
   try {
-    if (map !== undefined) await setScrimMatchMap(db, matchId, map);
+    if (workshopId !== undefined) await setScrimMatchMap(db, matchId, await resolveScrimMap(workshopId, maps));
     if (side !== undefined) await setScrimMatchSideChoice(db, matchId, side as ScrimSideChoice);
     if (lineup) await setScrimMatchLineup(db, matchId, lineup);
   } catch (err) {

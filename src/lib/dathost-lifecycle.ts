@@ -204,17 +204,21 @@ async function setServerState(
   if (error) throw new Error(`Failed to write server_state for match ${matchId}: ${error.message}`);
 }
 
-/** Resolve the picked map's Steam workshop id from the `maps` table, or `null` if unknown. */
+/** Resolve the picked map's Steam workshop id: a scrim match's own (`scrim_workshop_id`), else from
+ *  the `maps` table, or `null` if unknown. */
 export async function resolveMapWorkshopId(
   supabaseAdmin: SupabaseClient,
   matchId: number,
 ): Promise<string | null> {
   const { data: match } = await supabaseAdmin
     .from('matches')
-    .select('shirts_pick, skins_pick')
+    .select('shirts_pick, skins_pick, scrim_workshop_id')
     .eq('id', matchId)
     .maybeSingle();
-  const mapName = match ? effectivePickedMap(match as { shirts_pick: string | null; skins_pick: string | null }) : null;
+  const row = match as { shirts_pick: string | null; skins_pick: string | null; scrim_workshop_id: string | null } | null;
+  // A scrim match can be on any workshop map, so it carries its own id rather than one from `maps`.
+  if (row?.scrim_workshop_id) return row.scrim_workshop_id;
+  const mapName = row ? effectivePickedMap(row) : null;
   if (!mapName) return null;
   const { data: mapRow } = await supabaseAdmin
     .from('maps')

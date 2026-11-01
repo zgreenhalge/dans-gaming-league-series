@@ -74,7 +74,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
                 match={lobbyMatch}
                 pool={pool}
                 names={names}
-                maps={maps.map((m) => m.name)}
+                maps={maps}
                 canMake={isAdmin || viewerCheckedIn}
                 canManage={isAdmin || inLobbyMatch}
               />

@@ -125,6 +125,8 @@ export interface ScrimMatch {
   match_number: number;
   /** The match's map (`shirts_pick`), chosen in the lobby. */
   map: string | null;
+  /** The workshop item the server loads for it (`scrim_workshop_id`). */
+  workshop_id: string | null;
   /** The lobby's starting-side choice; it becomes `skins_starting_side` as the match starts. */
   side_choice: ScrimSideChoice;
   shirts: [number, number];
@@ -136,7 +138,7 @@ export interface ScrimMatch {
 }
 
 const SCRIM_MATCH_COLUMNS =
-  'id, scrim_night_id, match_number, shirts_pick, scrim_side_choice, final_score, ' +
+  'id, scrim_night_id, match_number, shirts_pick, scrim_workshop_id, scrim_side_choice, final_score, ' +
   'player_match_stats(player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win), ' +
   'match_server_state(server_state)';
 
@@ -145,6 +147,7 @@ interface ScrimMatchRow {
   scrim_night_id: number;
   match_number: number;
   shirts_pick: string | null;
+  scrim_workshop_id: string | null;
   scrim_side_choice: ScrimSideChoice;
   final_score: string | null;
   player_match_stats: ScrimMatchPlayer[] | null;
@@ -160,6 +163,7 @@ function toScrimMatch(r: ScrimMatchRow): ScrimMatch {
     night_id: r.scrim_night_id,
     match_number: r.match_number,
     map: r.shirts_pick,
+    workshop_id: r.scrim_workshop_id,
     side_choice: r.scrim_side_choice,
     shirts: side('SHIRTS'),
     skins: side('SKINS'),

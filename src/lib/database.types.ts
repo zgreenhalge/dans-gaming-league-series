@@ -715,6 +715,7 @@ export type Database = {
           round_history: Json | null
           scrim_night_id: number | null
           scrim_side_choice: string | null
+          scrim_workshop_id: string | null
           scheduled_at: string | null
           shirts_ban: string | null
           shirts_ban2: string | null
@@ -738,6 +739,7 @@ export type Database = {
           round_history?: Json | null
           scrim_night_id?: number | null
           scrim_side_choice?: string | null
+          scrim_workshop_id?: string | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -761,6 +763,7 @@ export type Database = {
           round_history?: Json | null
           scrim_night_id?: number | null
           scrim_side_choice?: string | null
+          scrim_workshop_id?: string | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -1832,7 +1835,7 @@ export type Database = {
         Returns: Json
       }
       create_scrim_match: {
-        Args: { p_map: string; p_night_id: number; p_shirts: number[]; p_skins: number[] }
+        Args: { p_map: string; p_night_id: number; p_shirts: number[]; p_skins: number[]; p_workshop_id: string }
         Returns: number
       }
       delete_season_schedule_draft: {

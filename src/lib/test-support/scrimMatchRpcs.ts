@@ -37,6 +37,7 @@ export const scrimMatchRpcs: Record<string, RpcHandler> = {
       week_id: null,
       match_number: Math.max(0, ...nightMatches.map((m) => m.match_number as number)) + 1,
       shirts_pick: args.p_map,
+      scrim_workshop_id: args.p_workshop_id,
       scrim_side_choice: 'knife',
       final_score: null,
     });
