@@ -17,6 +17,7 @@ import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
 import { effectivePickedMap } from '../veto';
+import { isScrimMatch } from '../scrim-matches';
 import { persistentQuery } from './_persistentCache';
 
 
@@ -238,13 +239,14 @@ export interface LiveTickerMatch extends MatchTeamNames {
   updatedAt: string;
 }
 
-/** The site-wide live-match ticker's data — whichever match is currently live (there's at most one,
- *  since the league runs one shared match server), or `null` when nothing's live. Backs both the
- *  root layout's initial server render and `GET /api/live-match`, which `LiveMatchTicker` calls to
- *  refresh itself off Realtime changes on `live_match_score`. */
+/** The site-wide live-match ticker's data — whichever league match is currently live (there's at most
+ *  one, since the league runs one shared match server), or `null` when nothing's live or the live
+ *  match is a scrim, which the ticker doesn't show. Backs both the root layout's initial server render
+ *  and `GET /api/live-match`, which `LiveMatchTicker` calls to refresh itself off Realtime changes on
+ *  `live_match_score`. */
 export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
   const live = await getCurrentLiveMatch();
-  if (!live) return null;
+  if (!live || (await isScrimMatch(getAdminClient(), live.matchId))) return null;
   const teams = await getMatchTeamNames(live.matchId);
   if (!teams) return null;
   return { matchId: live.matchId, shirts: live.shirts, skins: live.skins, updatedAt: live.updatedAt, ...teams };
