@@ -1,7 +1,8 @@
 /**
  * Route-handler harness for POST /api/matches/[id]/server/provision (#379) — exercises
  * requireMatchAccess()'s admin-or-in-match gate, the hosting-not-configured and server-busy
- * pre-checks, and that the deferred provisionMatchServer() call actually fires (and its failure is
+ * pre-checks, a scrim match's side choice becoming its starting side, and that the deferred
+ * provisionMatchServer() call actually fires (and its failure is
  * handled, not left unhandled) via __setTestAfterMode()/__flushTestAfter().
  *
  * No live DatHost connection exists here, so provisionMatchServer() itself always fails fast (no
@@ -109,6 +110,18 @@ async function main() {
     // having run (and its failure captured, not left unhandled) is what this asserts.
     assert.ok(db.ops_errors.some((e) => e.entity_id === MATCH_ID && e.operation === 'server_provision'));
 
+    delete process.env.MATCHZY_CONFIG_SECRET;
+    __setTestAfterMode(false);
+  });
+
+  await test('POST — a scrim match gets its starting side from its lobby choice as it starts', async () => {
+    __setTestAfterMode(true);
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    db.matches = [{ id: MATCH_ID, scrim_night_id: 5, week_id: null, scrim_side_choice: 'skins_t', skins_starting_side: null }];
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+    assert.equal(db.matches[0].skins_starting_side, 'T');
+    await __flushTestAfter();
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);
   });

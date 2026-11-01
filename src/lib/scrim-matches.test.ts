@@ -7,7 +7,8 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { isScrimMatchEditable, parseScrimTeams, resolveScrimSide, scrimSideChoiceOf } from './scrim-matches';
+import { applyScrimSideChoice, isScrimMatchEditable, parseScrimTeams, resolveScrimSide } from './scrim-matches';
+import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
   assert.equal(isScrimMatchEditable({ final_score: null, server_state: null }), true);
@@ -27,10 +28,18 @@ test('resolveScrimSide: each choice stores the side SKINS start on; random flips
   assert.equal(resolveScrimSide('random', () => 0.9), 'CT');
 });
 
-test('scrimSideChoiceOf: reads a stored side back as its lobby choice', () => {
-  assert.equal(scrimSideChoiceOf('T'), 'skins_t');
-  assert.equal(scrimSideChoiceOf('CT'), 'shirts_t');
-  assert.equal(scrimSideChoiceOf(null), 'knife');
+test('applyScrimSideChoice: turns a scrim choice into the starting side; leaves a league match alone', async () => {
+  const db: FakeDb = {
+    matches: [
+      { id: 1, scrim_night_id: 5, scrim_side_choice: 'random', skins_starting_side: null },
+      { id: 2, scrim_night_id: 5, scrim_side_choice: 'shirts_t', skins_starting_side: null },
+      { id: 3, scrim_night_id: 5, scrim_side_choice: 'knife', skins_starting_side: null },
+      { id: 4, week_id: 10, scrim_night_id: null, scrim_side_choice: null, skins_starting_side: 'T' },
+    ],
+  };
+  const client = createFakeSupabaseClient(db) as never;
+  for (const id of [1, 2, 3, 4]) await applyScrimSideChoice(client, id, () => 0.9);
+  assert.deepEqual(db.matches.map((m) => m.skins_starting_side), ['CT', 'CT', null, 'T']);
 });
 
 test('parseScrimTeams: two distinct positive ids per side', () => {

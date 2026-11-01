@@ -41,9 +41,10 @@ begin
 end;
 $function$;
 
--- Creates a scrim night's next match (numbered after its others) on `p_map`, with its lineup. Row-locks
--- the night so concurrent creates serialize, and refuses while the night already has a match without a
--- score — a night plays one match at a time on the one shared server. Returns the new match id.
+-- Creates a scrim night's next match (numbered after its others) on `p_map`, with its lineup and a
+-- knife round as its starting-side choice. Row-locks the night so concurrent creates serialize, and
+-- refuses while the night already has a match without a score — a night plays one match at a time on
+-- the one shared server. Returns the new match id.
 create or replace function public.create_scrim_match(
   p_night_id integer,
   p_map text,
@@ -67,8 +68,8 @@ begin
   end if;
 
   select coalesce(max(match_number), 0) + 1 into v_match_number from matches where scrim_night_id = p_night_id;
-  insert into matches (scrim_night_id, match_number, shirts_pick)
-  values (p_night_id, v_match_number, p_map)
+  insert into matches (scrim_night_id, match_number, shirts_pick, scrim_side_choice)
+  values (p_night_id, v_match_number, p_map, 'knife')
   returning id into v_match_id;
 
   perform set_scrim_match_lineup(v_match_id, p_shirts, p_skins);

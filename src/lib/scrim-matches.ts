@@ -4,8 +4,9 @@
 //
 // A scrim match is a `matches` row with `scrim_night_id` set and no week, so league stats never see
 // it (see `onlyLeagueMatches()`). Its map is chosen in the lobby — there's no ban/pick — and lives in
-// `shirts_pick`, which `effectivePickedMap()` reads; so does its starting side (`ScrimSideChoice`),
-// stored as `skins_starting_side` with `null` meaning a knife round.
+// `shirts_pick`, which `effectivePickedMap()` reads. Its starting side is the lobby's `ScrimSideChoice`
+// (`scrim_side_choice`), turned into `skins_starting_side` only as the match starts
+// (`applyScrimSideChoice()`), so a random side stays unknown until then.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
@@ -31,23 +32,27 @@ export type ScrimSideChoice = 'skins_t' | 'shirts_t' | 'knife' | 'random';
 
 export const SCRIM_SIDE_CHOICES: readonly ScrimSideChoice[] = ['skins_t', 'shirts_t', 'knife', 'random'];
 
-/** The `skins_starting_side` a choice stores: SKINS start T, SHIRTS start T (so SKINS start CT), no
- *  side for a knife round, or a coin flip for random. The lobby only sends `random` as the match
- *  starts (`MatchServerPanel`'s `beforeProvision`), so nobody sees a random side beforehand. */
+/** The `skins_starting_side` a choice becomes as the match starts: SKINS start T, SHIRTS start T (so
+ *  SKINS start CT), no side for a knife round, or a coin flip for random. */
 export function resolveScrimSide(choice: ScrimSideChoice, rand: () => number = Math.random): 'CT' | 'T' | null {
   if (choice === 'knife') return null;
   if (choice === 'random') return rand() < 0.5 ? 'T' : 'CT';
   return choice === 'skins_t' ? 'T' : 'CT';
 }
 
-/** The lobby choice a stored side came from — never `random`, which isn't stored until it's flipped. */
-export function scrimSideChoiceOf(skinsSide: 'CT' | 'T' | null): ScrimSideChoice {
-  return skinsSide === null ? 'knife' : skinsSide === 'T' ? 'skins_t' : 'shirts_t';
+/** Sets a scrim match's starting-side choice (`scrim_side_choice`). */
+export async function setScrimMatchSideChoice(db: SupabaseClient, matchId: number, choice: ScrimSideChoice): Promise<void> {
+  await db.from('matches').update({ scrim_side_choice: choice }).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
 }
 
-/** Sets a scrim match's stored starting side (`null` = knife round). */
-export async function setScrimMatchSide(db: SupabaseClient, matchId: number, skinsSide: 'CT' | 'T' | null): Promise<void> {
-  await db.from('matches').update({ skins_starting_side: skinsSide }).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
+/** Turns a scrim match's side choice into its `skins_starting_side` — called as the match starts,
+ *  before the server loads its config, so a random side is flipped only then. A no-op for a league
+ *  match, which has no choice. */
+export async function applyScrimSideChoice(db: SupabaseClient, matchId: number, rand: () => number = Math.random): Promise<void> {
+  const { data } = await db.from('matches').select('scrim_side_choice').eq('id', matchId).maybeSingle().throwOnError();
+  const choice = (data as { scrim_side_choice: ScrimSideChoice | null } | null)?.scrim_side_choice ?? null;
+  if (choice === null) return;
+  await db.from('matches').update({ skins_starting_side: resolveScrimSide(choice, rand) }).eq('id', matchId).throwOnError();
 }
 
 /** Thrown by `createScrimMatch()` when the night already has a match without a score. */

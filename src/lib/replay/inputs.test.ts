@@ -37,13 +37,13 @@ function buildDb(): FakeDb {
         skins_starting_side: 'T', scheduled_at: '2026-03-01T00:00:00.000Z',
       },
       {
-        // A scrim match: no week, a knife round instead of a stored side.
-        id: 300, week_id: null, scrim_night_id: 1, shirts_pick: 'Foroglio', skins_pick: null,
+        // A scrim match whose lobby chose a knife round.
+        id: 300, week_id: null, scrim_night_id: 1, scrim_side_choice: 'knife', shirts_pick: 'Foroglio', skins_pick: null,
         skins_starting_side: null, scheduled_at: null,
       },
       {
-        // A scrim match whose lobby set a starting side: no knife round.
-        id: 301, week_id: null, scrim_night_id: 1, shirts_pick: 'Foroglio', skins_pick: null,
+        // A scrim match whose lobby chose a side, applied as it started: no knife round.
+        id: 301, week_id: null, scrim_night_id: 1, scrim_side_choice: 'skins_t', shirts_pick: 'Foroglio', skins_pick: null,
         skins_starting_side: 'T', scheduled_at: null,
       },
     ],
@@ -90,7 +90,7 @@ async function main() {
     assert.equal(inputs.skinsSide, 'T');
   });
 
-  await test('getReplayInputs: a scrim match with no set side plays a knife round to the default 13 rounds', async () => {
+  await test('getReplayInputs: a scrim match whose lobby chose a knife round plays one, to the default 13 rounds', async () => {
     const inputs = await getReplayInputs(supabase, 300);
     assert.equal(inputs.knifeRound, true);
     assert.equal(inputs.targetWinRounds, 13);

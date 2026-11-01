@@ -714,6 +714,7 @@ export type Database = {
           replay_status: string
           round_history: Json | null
           scrim_night_id: number | null
+          scrim_side_choice: string | null
           scheduled_at: string | null
           shirts_ban: string | null
           shirts_ban2: string | null
@@ -736,6 +737,7 @@ export type Database = {
           replay_status?: string
           round_history?: Json | null
           scrim_night_id?: number | null
+          scrim_side_choice?: string | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -758,6 +760,7 @@ export type Database = {
           replay_status?: string
           round_history?: Json | null
           scrim_night_id?: number | null
+          scrim_side_choice?: string | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
