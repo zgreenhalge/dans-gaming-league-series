@@ -20,6 +20,11 @@ export function playerHref(playerId: number): string {
   return `/players/${playerId}`;
 }
 
+/** The path to a scrim night's page; `date` is the night's `YYYY-MM-DD`. */
+export function scrimNightHref(date: string): string {
+  return `/scrims/${date}`;
+}
+
 export function seasonHref(hubSeasonId: number): string {
   return `/seasons/${hubSeasonId}`;
 }

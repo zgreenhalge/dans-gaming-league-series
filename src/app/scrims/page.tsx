@@ -1,14 +1,17 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getSession } from '@/lib/session';
-import { getPlayersById, getScrimOverview } from '@/lib/queries';
+import { getPastScrimNights, getPlayersById, getScrimOverview } from '@/lib/queries';
+import { scrimNightHref } from '@/lib/crumbs';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimAdminPanel } from '@/components/ScrimAdminPanel';
 import EmptyState from '@/components/EmptyState';
+import { ScrimPastNights } from '@/components/ScrimPastNights';
 
 export const metadata: Metadata = {
   title: 'Scrims',
-  description: 'Weekly DGLS scrim nights — sign up as definite or maybe and see who is coming.',
+  description: 'Weekly DGLS scrim nights — sign up, check in, and see each night\'s matches and standings.',
 };
 
 // Which night is next, and whether it has started, depend on the current time.
@@ -21,7 +24,13 @@ function timezoneOptions(current: string | undefined): string[] {
 }
 
 export default async function ScrimsPage() {
-  const [session, overview, playersById] = await Promise.all([getSession(), getScrimOverview(new Date()), getPlayersById()]);
+  const now = new Date();
+  const [session, overview, playersById, pastNights] = await Promise.all([
+    getSession(),
+    getScrimOverview(now),
+    getPlayersById(),
+    getPastScrimNights(now),
+  ]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const { schedule, slots, next, started, checkInOpen, signups } = overview;
@@ -48,6 +57,14 @@ export default async function ScrimsPage() {
               <EmptyState message="No scrims scheduled right now." className="px-4 py-6" />
             </div>
           )}
+          {next && (
+            <Link
+              href={scrimNightHref(next.date)}
+              className="self-start font-mono text-[12px] text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)]"
+            >
+              {checkInOpen ? 'Open the lobby →' : 'Night page →'}
+            </Link>
+          )}
           {currentPlayerId == null && next && (
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
               {/* A Route Handler that 302s to Steam, not an app page (see TopbarShell). */}
@@ -55,6 +72,10 @@ export default async function ScrimsPage() {
               <a href="/api/auth/steam" className="underline hover:text-[var(--color-text-primary)]">Log in</a> to sign up.
             </div>
           )}
+          <section>
+            <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">Past nights</div>
+            <ScrimPastNights nights={pastNights} />
+          </section>
           {isAdmin && <ScrimAdminPanel key={JSON.stringify(schedule)} schedule={schedule} slots={slots} timezones={timezoneOptions(schedule?.timezone)} />}
         </div>
       </main>
