@@ -1,4 +1,5 @@
-// Provision the DatHost match server for a match. Session-gated (admin or in-match). Fired
+// Provision the DatHost match server for a match. Session-gated (admin or in-match); a scrim match
+// also needs all four of its players checked in (`requireScrimMatchReadyToStart()`). Fired
 // when the 5-stage veto completes. Returns immediately with `provisioning`; the boot + loadmatch
 // (~15–20s) runs in `after()` and the client polls `…/server/status` for the connect string.
 
@@ -16,6 +17,7 @@ import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
 import { flipPendingScrimSide } from '@/lib/scrim-matches';
+import { requireScrimMatchReadyToStart } from '@/lib/scrim-match-access';
 
 export async function POST(
   req: NextRequest,
@@ -46,6 +48,9 @@ export async function POST(
       { status: 409 },
     );
   }
+
+  const ready = await requireScrimMatchReadyToStart(matchId);
+  if (!ready.ok) return accessDenied(ready);
 
   // A scrim match whose lobby chose a random side gets it now, before the server boots and loads its
   // config — the sides stay hidden until the match starts.

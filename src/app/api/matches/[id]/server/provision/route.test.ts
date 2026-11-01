@@ -1,7 +1,8 @@
 /**
  * Route-handler harness for POST /api/matches/[id]/server/provision (#379) — exercises
  * requireMatchAccess()'s admin-or-in-match gate, the hosting-not-configured and server-busy
- * pre-checks, and that the deferred provisionMatchServer() call actually fires (and its failure is
+ * pre-checks, a scrim match's checked-in requirement and random-side flip, and that the deferred
+ * provisionMatchServer() call actually fires (and its failure is
  * handled, not left unhandled) via __setTestAfterMode()/__flushTestAfter().
  *
  * No live DatHost connection exists here, so provisionMatchServer() itself always fails fast (no
@@ -27,6 +28,25 @@ const OUT_OF_MATCH_ID = 3;
 const MATCH_ID = 100;
 const BUSY_MATCH_ID = 101;
 const OCCUPYING_MATCH_ID = 999;
+const SCRIM_MATCH_ID = 700;
+const NIGHT_ID = 5;
+
+/** `MATCH_ID`'s fixture plus a scrim match (players 2, 4, 5, 6) with a pending random side, and
+ *  `checkedIn` of those players checked in to its night. */
+function installScrimFixture(checkedIn: number[]): FakeDb {
+  const db = makeDb();
+  db.players.push(...[4, 5, 6].map((id) => ({ id, is_admin: false })));
+  db.scrim_nights = [{ id: NIGHT_ID, night_date: '2026-11-05', cancelled: false }];
+  db.matches = [{ id: SCRIM_MATCH_ID, scrim_night_id: NIGHT_ID, week_id: null, match_number: 1, final_score: null, skins_starting_side: null, scrim_random_side: true }];
+  db.player_match_stats.push(
+    ...[IN_MATCH_ID, 4, 5, 6].map((player_id, i) => ({ id: 50 + i, match_id: SCRIM_MATCH_ID, player_id, faction: i < 2 ? 'SHIRTS' : 'SKINS' })),
+  );
+  db.scrim_signups = checkedIn.map((player_id, i) => ({
+    id: i + 1, night_id: NIGHT_ID, player_id, commitment: 'definite', signed_up_at: '2026-11-05T00:00:00Z', checked_in_at: '2026-11-05T00:30:00Z',
+  }));
+  __setTestAdminClient(createFakeSupabaseClient(db));
+  return db;
+}
 
 function makeDb(): FakeDb {
   return {
@@ -109,6 +129,26 @@ async function main() {
     // having run (and its failure captured, not left unhandled) is what this asserts.
     assert.ok(db.ops_errors.some((e) => e.entity_id === MATCH_ID && e.operation === 'server_provision'));
 
+    delete process.env.MATCHZY_CONFIG_SECRET;
+    __setTestAfterMode(false);
+  });
+
+  await test('POST — a scrim match with a player no longer checked in is refused (409), its side still hidden', async () => {
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installScrimFixture([IN_MATCH_ID, 4, 5]);
+    assert.equal((await call(SCRIM_MATCH_ID, IN_MATCH_ID)).status, 409);
+    assert.equal(db.matches[0].scrim_random_side, true);
+    delete process.env.MATCHZY_CONFIG_SECRET;
+  });
+
+  await test('POST — a fully checked-in scrim match starts, and its random side is flipped first', async () => {
+    __setTestAfterMode(true);
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installScrimFixture([IN_MATCH_ID, 4, 5, 6]);
+    assert.equal((await call(SCRIM_MATCH_ID, IN_MATCH_ID)).status, 202);
+    assert.equal(db.matches[0].scrim_random_side, false);
+    assert.ok(db.matches[0].skins_starting_side === 'CT' || db.matches[0].skins_starting_side === 'T');
+    await __flushTestAfter();
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);
   });

@@ -54,3 +54,23 @@ export async function requireScrimMatchAccess(matchId: number): Promise<ScrimMat
   if (!match) return { ok: false, status: 404, error: 'Scrim match not found' };
   return { ok: true, playerId: access.playerId, isAdmin: access.isAdmin, nightId, match };
 }
+
+/** Gate for starting a match on the server: a scrim match needs all four of its players still
+ *  checked in (409 otherwise); any other match passes. `nightId` is the scrim night, `null` for a
+ *  league match. */
+export async function requireScrimMatchReadyToStart(matchId: number): Promise<AccessResult<{ nightId: number | null }>> {
+  const { data, error } = await getAdminClient().from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle();
+  if (error) return { ok: false, status: 500, error: error.message };
+  const nightId = (data as { scrim_night_id: number | null } | null)?.scrim_night_id ?? null;
+  if (nightId === null) return { ok: true, nightId };
+
+  const [match, checkedIn] = await Promise.all([
+    getScrimNightMatches(nightId).then((ms) => ms.find((m) => m.id === matchId)),
+    checkedInPlayerIds(nightId),
+  ]);
+  const lineup = match ? [...match.shirts, ...match.skins] : [];
+  if (lineup.length !== 4 || !lineup.every((id) => checkedIn.includes(id))) {
+    return { ok: false, status: 409, error: 'All four players in the match must be checked in to start it' };
+  }
+  return { ok: true, nightId };
+}
