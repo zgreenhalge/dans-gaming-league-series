@@ -5,8 +5,7 @@
 // A scrim match is a `matches` row with `scrim_night_id` set and no week, so league stats never see
 // it (see `onlyLeagueMatches()`). Its map is chosen in the lobby — there's no ban/pick — and lives in
 // `shirts_pick`, which `effectivePickedMap()` reads; so does its starting side (`ScrimSideChoice`),
-// stored as `skins_starting_side` with `null` meaning a knife round — or, for a random side still to be
-// flipped, `scrim_random_side`.
+// stored as `skins_starting_side` with `null` meaning a knife round.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
@@ -32,36 +31,23 @@ export type ScrimSideChoice = 'skins_t' | 'shirts_t' | 'knife' | 'random';
 
 export const SCRIM_SIDE_CHOICES: readonly ScrimSideChoice[] = ['skins_t', 'shirts_t', 'knife', 'random'];
 
-/** What a side choice stores: SKINS start T (`skins_starting_side` `T`), SHIRTS start T (so SKINS
- *  start `CT`), a knife round (no side), or random — no side yet, just `scrim_random_side`, so nobody
- *  sees the sides until `flipPendingScrimSide()` picks them as the match starts. */
-export function scrimSideColumns(choice: ScrimSideChoice): { skins_starting_side: 'CT' | 'T' | null; scrim_random_side: boolean } {
-  if (choice === 'random') return { skins_starting_side: null, scrim_random_side: true };
-  return { skins_starting_side: choice === 'knife' ? null : choice === 'skins_t' ? 'T' : 'CT', scrim_random_side: false };
+/** The `skins_starting_side` a choice stores: SKINS start T, SHIRTS start T (so SKINS start CT), no
+ *  side for a knife round, or a coin flip for random. The lobby only sends `random` as the match
+ *  starts (`MatchServerPanel`'s `beforeProvision`), so nobody sees a random side beforehand. */
+export function resolveScrimSide(choice: ScrimSideChoice, rand: () => number = Math.random): 'CT' | 'T' | null {
+  if (choice === 'knife') return null;
+  if (choice === 'random') return rand() < 0.5 ? 'T' : 'CT';
+  return choice === 'skins_t' ? 'T' : 'CT';
 }
 
-/** The lobby choice a match's stored columns came from. */
-export function scrimSideChoiceOf(m: { skins_starting_side: 'CT' | 'T' | null; scrim_random_side: boolean }): ScrimSideChoice {
-  if (m.scrim_random_side) return 'random';
-  return m.skins_starting_side === null ? 'knife' : m.skins_starting_side === 'T' ? 'skins_t' : 'shirts_t';
+/** The lobby choice a stored side came from — never `random`, which isn't stored until it's flipped. */
+export function scrimSideChoiceOf(skinsSide: 'CT' | 'T' | null): ScrimSideChoice {
+  return skinsSide === null ? 'knife' : skinsSide === 'T' ? 'skins_t' : 'shirts_t';
 }
 
-/** Sets a scrim match's starting-side choice. */
-export async function setScrimMatchSide(db: SupabaseClient, matchId: number, choice: ScrimSideChoice): Promise<void> {
-  await db.from('matches').update(scrimSideColumns(choice)).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
-}
-
-/** For a scrim match whose lobby chose a random side, flips the coin and stores the result — called as
- *  the match starts, before the server loads its config, so the sides stay hidden until then. A no-op
- *  for any other match. */
-export async function flipPendingScrimSide(db: SupabaseClient, matchId: number, rand: () => number = Math.random): Promise<void> {
-  const { data } = await db.from('matches').select('scrim_random_side').eq('id', matchId).maybeSingle().throwOnError();
-  if (!(data as { scrim_random_side: boolean } | null)?.scrim_random_side) return;
-  await db
-    .from('matches')
-    .update({ skins_starting_side: rand() < 0.5 ? 'T' : 'CT', scrim_random_side: false })
-    .eq('id', matchId)
-    .throwOnError();
+/** Sets a scrim match's stored starting side (`null` = knife round). */
+export async function setScrimMatchSide(db: SupabaseClient, matchId: number, skinsSide: 'CT' | 'T' | null): Promise<void> {
+  await db.from('matches').update({ skins_starting_side: skinsSide }).eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
 }
 
 /** Thrown by `createScrimMatch()` when the night already has a match without a score. */

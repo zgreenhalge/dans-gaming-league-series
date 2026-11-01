@@ -1,5 +1,4 @@
-// Provision the DatHost match server for a match. Session-gated (admin or in-match); a scrim match
-// also needs all four of its players checked in (`requireScrimMatchReadyToStart()`). Fired
+// Provision the DatHost match server for a match. Session-gated (admin or in-match). Fired
 // when the 5-stage veto completes. Returns immediately with `provisioning`; the boot + loadmatch
 // (~15–20s) runs in `after()` and the client polls `…/server/status` for the connect string.
 
@@ -16,8 +15,6 @@ import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
-import { flipPendingScrimSide } from '@/lib/scrim-matches';
-import { requireScrimMatchReadyToStart } from '@/lib/scrim-match-access';
 
 export async function POST(
   req: NextRequest,
@@ -47,17 +44,6 @@ export async function POST(
       { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
       { status: 409 },
     );
-  }
-
-  const ready = await requireScrimMatchReadyToStart(matchId);
-  if (!ready.ok) return accessDenied(ready);
-
-  // A scrim match whose lobby chose a random side gets it now, before the server boots and loads its
-  // config — the sides stay hidden until the match starts.
-  try {
-    await flipPendingScrimSide(getAdminClient(), matchId);
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Picking a random side failed' }, { status: 500 });
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.

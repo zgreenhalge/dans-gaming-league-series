@@ -137,12 +137,9 @@ async function main() {
     assert.equal(match.skins_starting_side, 'CT');
     assert.equal((await patch(matchId, { side: 'knife' })).status, 200);
     assert.equal(match.skins_starting_side, null);
+    // The lobby only sends random as the match starts; the coin is flipped then.
     assert.equal((await patch(matchId, { side: 'random' })).status, 200);
-    // Random stays hidden until the match starts: no side stored yet.
-    assert.equal(match.skins_starting_side, null);
-    assert.equal(match.scrim_random_side, true);
-    assert.equal((await patch(matchId, { side: 'skins_t' })).status, 200);
-    assert.equal(match.scrim_random_side, false);
+    assert.ok(match.skins_starting_side === 'CT' || match.skins_starting_side === 'T');
     assert.equal((await patch(matchId, { side: 'ct' })).status, 400);
   });
 

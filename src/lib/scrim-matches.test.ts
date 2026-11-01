@@ -7,8 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { flipPendingScrimSide, isScrimMatchEditable, parseScrimTeams, scrimSideChoiceOf, scrimSideColumns } from './scrim-matches';
-import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { isScrimMatchEditable, parseScrimTeams, resolveScrimSide, scrimSideChoiceOf } from './scrim-matches';
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
   assert.equal(isScrimMatchEditable({ final_score: null, server_state: null }), true);
@@ -20,30 +19,18 @@ test('isScrimMatchEditable: open until scored or started; a failed start reopens
   assert.equal(isScrimMatchEditable({ final_score: '13-9', server_state: null }), false);
 });
 
-test('scrimSideColumns: each choice stores the side SKINS start on; random stores none yet', () => {
-  assert.deepEqual(scrimSideColumns('skins_t'), { skins_starting_side: 'T', scrim_random_side: false });
-  assert.deepEqual(scrimSideColumns('shirts_t'), { skins_starting_side: 'CT', scrim_random_side: false });
-  assert.deepEqual(scrimSideColumns('knife'), { skins_starting_side: null, scrim_random_side: false });
-  assert.deepEqual(scrimSideColumns('random'), { skins_starting_side: null, scrim_random_side: true });
+test('resolveScrimSide: each choice stores the side SKINS start on; random flips a coin', () => {
+  assert.equal(resolveScrimSide('skins_t'), 'T');
+  assert.equal(resolveScrimSide('shirts_t'), 'CT');
+  assert.equal(resolveScrimSide('knife'), null);
+  assert.equal(resolveScrimSide('random', () => 0.1), 'T');
+  assert.equal(resolveScrimSide('random', () => 0.9), 'CT');
 });
 
-test('scrimSideChoiceOf: reads each choice back from what it stored', () => {
-  for (const choice of ['skins_t', 'shirts_t', 'knife', 'random'] as const) {
-    assert.equal(scrimSideChoiceOf(scrimSideColumns(choice)), choice);
-  }
-});
-
-test('flipPendingScrimSide: a pending random side is flipped and stored; anything else is left alone', async () => {
-  const db: FakeDb = {
-    matches: [
-      { id: 1, scrim_night_id: 5, skins_starting_side: null, scrim_random_side: true },
-      { id: 2, scrim_night_id: 5, skins_starting_side: null, scrim_random_side: false },
-    ],
-  };
-  const client = createFakeSupabaseClient(db) as never;
-  await flipPendingScrimSide(client, 1, () => 0.1);
-  await flipPendingScrimSide(client, 2, () => 0.1);
-  assert.deepEqual(db.matches.map((m) => [m.skins_starting_side, m.scrim_random_side]), [['T', false], [null, false]]);
+test('scrimSideChoiceOf: reads a stored side back as its lobby choice', () => {
+  assert.equal(scrimSideChoiceOf('T'), 'skins_t');
+  assert.equal(scrimSideChoiceOf('CT'), 'shirts_t');
+  assert.equal(scrimSideChoiceOf(null), 'knife');
 });
 
 test('parseScrimTeams: two distinct positive ids per side', () => {

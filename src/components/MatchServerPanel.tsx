@@ -29,6 +29,7 @@ export default function MatchServerPanel({
   canManage,
   autoProvisioning,
   initialState,
+  beforeProvision,
 }: {
   matchId: number;
   canManage: boolean;
@@ -38,6 +39,9 @@ export default function MatchServerPanel({
   /** The row's `server_state` as of the page render. Managers re-read it, with the connect string,
    *  from the status route on mount. */
   initialState: ServerState;
+  /** Runs before the provision request — the scrim lobby uses it to flip a random starting side at
+   *  the moment the match starts. A throw stops the start and shows its message. */
+  beforeProvision?: () => Promise<void>;
 }) {
   const [state, setState] = useState<ServerState>(initialState);
   const [connect, setConnect] = useState<string | null>(null);
@@ -91,6 +95,15 @@ export default function MatchServerPanel({
     // Optimistic: show the spinner immediately, before Realtime confirms.
     setState('provisioning');
     try {
+      if (beforeProvision) {
+        try {
+          await beforeProvision();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Could not start the server');
+          setState('idle');
+          return;
+        }
+      }
       const res = await fetch(`/api/matches/${matchId}/server/provision`, { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

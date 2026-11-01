@@ -54,6 +54,9 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
   const [, startTransition] = useTransition();
   const current: Lineup | null = match ? [...match.shirts, ...match.skins].slice(0, 4) as Lineup : null;
   const [draft, setDraft] = useState<Lineup | null>(current);
+  // Random is held here, not saved: it's sent as the match starts (`beforeProvision` below), so the
+  // coin is only flipped then and nobody sees the sides beforehand.
+  const [side, setSide] = useState<ScrimSideChoice>(scrimSideChoiceOf(match?.skins_starting_side ?? null));
 
   const act = (method: 'POST' | 'PATCH' | 'DELETE', url: string, body: unknown = {}) =>
     run(async () => {
@@ -133,9 +136,13 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
         <label className="flex flex-col gap-1">
           <span className={LABEL_CLS}>Starting side</span>
           <select
-            value={scrimSideChoiceOf(match)}
+            value={side}
             disabled={!canEdit || busy}
-            onChange={(e) => act('PATCH', url, { side: e.target.value })}
+            onChange={(e) => {
+              const choice = e.target.value as ScrimSideChoice;
+              setSide(choice);
+              if (choice !== 'random') act('PATCH', url, { side: choice });
+            }}
             className={`${SELECT_CLS} w-full`}
           >
             {(Object.keys(SIDE_LABEL) as ScrimSideChoice[]).map((c) => (
@@ -177,7 +184,12 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
 
       <div className="px-4 pb-4 flex justify-center">
         <div className="w-full max-w-md">
-          <MatchServerPanel matchId={match.id} canManage={canManage} initialState={(match.server_state ?? 'idle') as ServerState} />
+          <MatchServerPanel
+            matchId={match.id}
+            canManage={canManage}
+            initialState={(match.server_state ?? 'idle') as ServerState}
+            beforeProvision={side === 'random' ? () => sendJsonRequest('PATCH', url, { side: 'random' }) : undefined}
+          />
         </div>
       </div>
     </div>
