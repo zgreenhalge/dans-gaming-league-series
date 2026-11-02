@@ -25,7 +25,7 @@ const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The scrims calendar: a month grid in the viewer's own timezone where each day shows its nights —
- *  upcoming ones as a pawn per signup (solid definite, dashed maybe), past ones marked played — and,
+ *  upcoming ones as a little person per signup (filled definite, hollow maybe), past ones marked played — and,
  *  under it, the picked day's nights: an upcoming night's signup panel (`ScrimNightPanel`), a past
  *  night's results link, and the form to start a night that day. Opens on the soonest upcoming
  *  night's day, or today. Renders only in the browser, since its days depend on the viewer's timezone. */
@@ -111,42 +111,39 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
   );
 }
 
-/** How many pawns a day cell draws before the rest fold into a `+N`. */
-const MAX_PAWNS = 6;
+/** How many people a day cell draws before the rest fold into a `+N`. */
+const MAX_PEOPLE = 6;
 
-/** Who's coming as pawns: a solid one per definite signup, then a dashed outline per maybe, up to
- *  `MAX_PAWNS` with the rest as `+N`. Decorative — the cell's label carries the counts. */
-function Pawns({ definite, maybe }: { definite: number; maybe: number }) {
+/** Who's coming as little people: a filled one per definite signup, then a hollow outline per maybe,
+ *  up to `MAX_PEOPLE` (wrapping to a second row) with the rest as `+N`. Decorative — the cell's label
+ *  carries the counts. */
+function SignupPeople({ definite, maybe }: { definite: number; maybe: number }) {
   const kinds = [...Array<boolean>(definite).fill(true), ...Array<boolean>(maybe).fill(false)];
-  const shown = kinds.slice(0, MAX_PAWNS);
+  const shown = kinds.slice(0, MAX_PEOPLE);
   const rest = kinds.length - shown.length;
   return (
-    <span aria-hidden className="flex flex-wrap justify-center items-end gap-px px-0.5 text-[var(--color-site-accent)]">
-      {shown.map((solid, i) => (
-        <Pawn key={i} solid={solid} />
+    <span aria-hidden className="flex flex-wrap justify-center items-center gap-x-px max-w-[40px] text-[var(--color-site-accent)]">
+      {shown.map((definite, i) => (
+        <PersonIcon key={i} filled={definite} />
       ))}
-      {rest > 0 && <span className="font-mono text-[9px] leading-none text-[var(--color-text-secondary)]">+{rest}</span>}
+      {rest > 0 && <span className="font-mono text-[10px] leading-none text-[var(--color-text-secondary)]">+{rest}</span>}
     </span>
   );
 }
 
-/** A pawn silhouette: solid for a definite signup, a dashed outline for a maybe. */
-function Pawn({ solid }: { solid: boolean }) {
+/** A generic person — head and shoulders: filled for a definite signup, a hollow outline for a maybe. */
+function PersonIcon({ filled }: { filled: boolean }) {
   return (
-    <svg viewBox="0 0 10 14" width="7" height="10">
-      <path
-        d="M5 1.2a2.1 2.1 0 1 1 0 4.2a2.1 2.1 0 1 1 0-4.2ZM3.6 6.2h2.8l1 4.3H2.6ZM1.4 10.8h7.2v2H1.4Z"
-        fill={solid ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth={solid ? 0 : 0.9}
-        strokeDasharray={solid ? undefined : '1.4 0.9'}
-        strokeLinejoin="round"
-      />
+    <svg viewBox="0 0 12 12" width="12" height="12">
+      <g fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={filled ? 0 : 1.3}>
+        <circle cx="6" cy="3.6" r="2.4" />
+        <path d="M1.6 11.2a4.4 4.1 0 0 1 8.8 0Z" strokeLinejoin="round" />
+      </g>
     </svg>
   );
 }
 
-/** One day of the grid: its date, a pawn per player coming to its upcoming nights (`Pawns`), or a
+/** One day of the grid: its date, a person per player coming to its upcoming nights (`SignupPeople`), or a
  *  played mark for a past one. */
 function DayCell({
   day,
@@ -180,14 +177,14 @@ function DayCell({
       aria-pressed={selected}
       aria-label={`${day}${title ? ` — ${title}` : ''}`}
       title={title || undefined}
-      className={`relative flex flex-col items-center justify-start gap-0.5 min-h-[48px] sm:min-h-[56px] pt-1 border transition-colors ${
+      className={`relative flex flex-col items-center justify-start gap-0.5 min-h-[56px] sm:min-h-[64px] pt-1 border transition-colors ${
         selected
           ? 'border-[var(--color-site-accent)] bg-[var(--color-bg-secondary)]'
           : 'border-[var(--color-border-tertiary)] hover:bg-[var(--color-bg-secondary)]'
       } ${day < today && !hasPast ? 'text-[var(--color-text-secondary)] opacity-60' : ''}`}
     >
       <span className={`font-mono text-[12px] ${day === today ? 'font-bold text-[var(--color-site-accent)]' : ''}`}>{Number(day.slice(8))}</span>
-      {hasUpcoming && <Pawns definite={definite} maybe={maybe} />}
+      {hasUpcoming && <SignupPeople definite={definite} maybe={maybe} />}
       {!hasUpcoming && hasPast && <span className="font-mono text-[10px] leading-none text-[var(--color-text-secondary)]">played</span>}
     </button>
   );
