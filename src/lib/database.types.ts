@@ -713,6 +713,9 @@ export type Database = {
           recording_url: string | null
           replay_status: string
           round_history: Json | null
+          scrim_night_id: number | null
+          scrim_side_choice: string | null
+          scrim_workshop_id: string | null
           scheduled_at: string | null
           shirts_ban: string | null
           shirts_ban2: string | null
@@ -734,6 +737,9 @@ export type Database = {
           recording_url?: string | null
           replay_status?: string
           round_history?: Json | null
+          scrim_night_id?: number | null
+          scrim_side_choice?: string | null
+          scrim_workshop_id?: string | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -755,6 +761,9 @@ export type Database = {
           recording_url?: string | null
           replay_status?: string
           round_history?: Json | null
+          scrim_night_id?: number | null
+          scrim_side_choice?: string | null
+          scrim_workshop_id?: string | null
           scheduled_at?: string | null
           shirts_ban?: string | null
           shirts_ban2?: string | null
@@ -765,6 +774,13 @@ export type Database = {
           week_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "matches_scrim_night_id_fkey"
+            columns: ["scrim_night_id"]
+            isOneToOne: false
+            referencedRelation: "scrim_nights"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "matches_week_id_fkey"
             columns: ["week_id"]
@@ -1251,48 +1267,22 @@ export type Database = {
       }
       scrim_nights: {
         Row: {
-          cancelled: boolean
           id: number
-          night_date: string
+          starts_at: string
         }
         Insert: {
-          cancelled?: boolean
           id?: number
-          night_date: string
+          starts_at: string
         }
         Update: {
-          cancelled?: boolean
           id?: number
-          night_date?: string
-        }
-        Relationships: []
-      }
-      scrim_schedule: {
-        Row: {
-          enabled: boolean
-          id: number
-          start_time: string
-          timezone: string
-          weekday: number
-        }
-        Insert: {
-          enabled?: boolean
-          id?: number
-          start_time: string
-          timezone: string
-          weekday: number
-        }
-        Update: {
-          enabled?: boolean
-          id?: number
-          start_time?: string
-          timezone?: string
-          weekday?: number
+          starts_at?: string
         }
         Relationships: []
       }
       scrim_signups: {
         Row: {
+          checked_in_at: string | null
           commitment: string
           id: number
           night_id: number
@@ -1300,6 +1290,7 @@ export type Database = {
           signed_up_at: string
         }
         Insert: {
+          checked_in_at?: string | null
           commitment: string
           id?: number
           night_id: number
@@ -1307,6 +1298,7 @@ export type Database = {
           signed_up_at?: string
         }
         Update: {
+          checked_in_at?: string | null
           commitment?: string
           id?: number
           night_id?: number
@@ -1823,9 +1815,17 @@ export type Database = {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
       }
+      leave_scrim_night: {
+        Args: { p_night_id: number; p_player_id: number }
+        Returns: boolean
+      }
       lock_and_check_season_materialized: {
         Args: { p_season_id: number }
         Returns: boolean
+      }
+      queue_scrim_matches: {
+        Args: { p_matches: Json; p_night_id: number }
+        Returns: number[]
       }
       reconcile_gauntlet_draft: {
         Args: {
@@ -1873,9 +1873,17 @@ export type Database = {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
+      set_scrim_match_lineup: {
+        Args: { p_match_id: number; p_shirts: number[]; p_skins: number[] }
+        Returns: undefined
+      }
       set_season_buy_in: {
         Args: { p_amount: number | null; p_season_id: number }
         Returns: Json
+      }
+      start_scrim_night: {
+        Args: { p_commitment: string; p_night_minutes: number; p_player_id: number; p_starts_at: string }
+        Returns: number
       }
     }
     Enums: {

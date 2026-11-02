@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { isValidWorkshopUrl, workshopIdFromUrl } from './workshop';
+import { fetchWorkshopItem, isValidWorkshopUrl, workshopIdFromUrl } from './workshop';
 
 /** A regular season's map pool is either unset (signups can open before maps are decided) or
  * exactly this many maps. A season can't go live — confirm its schedule or be marked active —
@@ -26,21 +26,8 @@ export function isValidNewMap(name: string, workshopUrl: string): boolean {
 async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | null> {
   const fileId = workshopIdFromUrl(workshopUrl);
   if (!fileId) return null;
-  try {
-    const res = await fetch(
-      'https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `itemcount=1&publishedfileids[0]=${fileId}`,
-      },
-    );
-    const data = await res.json();
-    const detail = data?.response?.publishedfiledetails?.[0];
-    return detail?.preview_url ?? null;
-  } catch {
-    return null;
-  }
+  // The preview is decoration: a map is still added when Steam can't be reached.
+  return fetchWorkshopItem(fileId).then((item) => item?.previewUrl ?? null, () => null);
 }
 
 export type MapPoolInput =

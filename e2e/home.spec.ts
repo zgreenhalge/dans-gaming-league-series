@@ -47,8 +47,11 @@ test.describe('with a running season', () => {
       await expect(page.getByRole('link', { name: 'Top duos', exact: true })).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 90_000, intervals: [3_000] });
 
-    await expect(page.getByText('My Stats', { exact: true })).toBeVisible();
-    await expect(page.getByText('Match history', { exact: true })).toBeVisible();
+    // Scoped to the page's visible <main>: `getByText` also matches hidden nodes, and React can still
+    // hold a streamed copy of the page in a hidden `<div hidden id="S:…">` just after a reload.
+    const main = page.getByRole('main');
+    await expect(main.getByText('My Stats', { exact: true })).toBeVisible();
+    await expect(main.getByText('Match history', { exact: true })).toBeVisible();
 
     for (const title of ['Top duos', 'Hottest Rivalries']) {
       const link = page.getByRole('link', { name: title, exact: true });

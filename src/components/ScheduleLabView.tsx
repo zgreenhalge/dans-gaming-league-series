@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   divisionSizesFor,
   formatIssues,
@@ -9,6 +9,8 @@ import {
   FORMAT_MIN_DIVISION_SIZE,
   FORMAT_MIN_WEEKS,
   LOPSIDED_MARGIN,
+  canReshuffle,
+  reshuffles,
   type DraftBasis,
   type DraftOrder,
   type FormatGame,
@@ -64,22 +66,32 @@ const HALFWAY_REDRAFTS: { value: HalfwayRedraft; label: string }[] = [
 ];
 const CAREER = 'career';
 
+/** What a plan's `weeks` count: a season's weeks, or a scrim night's rounds. `span` is what the plan
+ *  covers as a whole. */
+export interface PlanPeriod {
+  one: string;
+  many: string;
+  span: string;
+}
+const WEEK_PERIOD: PlanPeriod = { one: 'week', many: 'weeks', span: 'season' };
+const cap = (word: string) => word[0].toUpperCase() + word.slice(1);
+
 const MAX_PREVIEWS = 6;
 const LOPSIDED_PCT = `${Math.round((0.5 - LOPSIDED_MARGIN) * 100)}–${Math.round((0.5 + LOPSIDED_MARGIN) * 100)}%`;
 
 /** Scorecard rows of the comparison table, in display order. */
-const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string }[] = [
+const scoreRows = (period: PlanPeriod): { label: string; title?: string; value: (p: Preview) => string }[] => [
   { label: 'Players', value: (p) => String(playerCount(p)) },
   { label: 'Games each', value: (p) => range(p.plan.scorecard.gamesPerPlayer) },
-  { label: 'Most games in a week', title: 'The busiest single week any one player has', value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
+  { label: `Most games in a ${period.one}`, title: `The busiest single ${period.one} any one player has`, value: (p) => String(p.plan.scorecard.maxGamesInAWeek) },
   {
-    label: 'Doubleheader weeks',
-    title: 'Weeks where someone plays twice — a second match, or a second group in a group-week season',
+    label: `Doubleheader ${period.many}`,
+    title: `${cap(period.many)} where someone plays twice — a second match, or a second group in a group-${period.one} ${period.span}`,
     value: (p) => String(p.plan.scorecard.doubleheaderWeeks),
   },
   {
-    label: 'Bye weeks',
-    title: 'Weeks where someone sits out, when a division doesn’t divide into whole matches or groups',
+    label: `Bye ${period.many}`,
+    title: `${cap(period.many)} where someone sits out, when a division doesn’t divide into whole matches or groups`,
     value: (p) => String(p.plan.scorecard.byeWeeks),
   },
   {
@@ -90,7 +102,7 @@ const SCORE_ROWS: { label: string; title?: string; value: (p: Preview) => string
   { label: 'Pairs who partner', value: (p) => `${p.plan.scorecard.pairsPartnered} / ${p.plan.scorecard.pairs}` },
   {
     label: 'Players who miss someone',
-    title: 'Players who never play with or against at least one other player all season',
+    title: `Players who never play with or against at least one other player all ${period.span}`,
     value: (p) => `${p.plan.scorecard.playersMissingSomeone} / ${playerCount(p)}`,
   },
   { label: 'Repeat teammate pairs', title: 'Pairs who are teammates more than once', value: (p) => String(p.plan.scorecard.repeatTeammatePairs) },
@@ -113,11 +125,11 @@ const labelOf = <T extends string>(options: { value: T; label: string }[], value
 
 /** A preview's settings line, e.g. "8 weeks · 1 match a week · 2 divisions (snake, EHOG), halfway
  * re-draft: most new pairings", naming the season a win-rate draft ranked by. */
-function previewSummary({ plan: { settings: s }, draftSeasonLabel }: Preview): string {
-  const parts = [`${s.weeks} weeks`, `${labelOf(WEEK_SHAPES, s.weekShape)} a week`];
+function previewSummary({ plan: { settings: s }, draftSeasonLabel }: Preview, period: PlanPeriod): string {
+  const parts = [`${s.weeks} ${s.weeks === 1 ? period.one : period.many}`, `${labelOf(WEEK_SHAPES, s.weekShape)} a ${period.one}`];
   if (s.divisions > 1) {
     const order = labelOf(DRAFT_ORDERS, s.draftOrder).toLowerCase() + (s.draftOrder === 'tiered' && s.tierSizes ? ` ${s.tierSizes.join('/')}` : '');
-    const halfway = s.halfwayShuffle ? `, halfway re-draft: ${labelOf(HALFWAY_REDRAFTS, s.halfwayRedraft).toLowerCase()}` : '';
+    const halfway = reshuffles(s) ? `, halfway re-draft: ${labelOf(HALFWAY_REDRAFTS, s.halfwayRedraft).toLowerCase()}` : '';
     parts.push(`${s.divisions} divisions (${order}, ${labelOf(DRAFT_BASES, s.draftBasis)})${halfway}`);
   }
   if (!s.ehogBalance) parts.push('no EHOG balancing');
@@ -142,14 +154,27 @@ export function ScheduleLabView({
   players,
   rosters,
   careerRecords,
+  period = WEEK_PERIOD,
+  fixedRoster = false,
+  defaultWeeks = 8,
+  planActions,
 }: {
   players: ScheduleLabPlayer[];
   rosters: ScheduleLabRoster[];
   careerRecords: Record<number, FormatRecord>;
+  /** What the plan's weeks are called (default: weeks of a season). */
+  period?: PlanPeriod;
+  /** Plan for exactly `players`, with no roster picker. */
+  fixedRoster?: boolean;
+  defaultWeeks?: number;
+  /** Rendered beside the shown preview's schedule, e.g. a button that acts on its plan. */
+  planActions?: (plan: FormatPlan) => ReactNode;
 }) {
-  const [selected, setSelected] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
+  const [picked, setPicked] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
+  const allIds = useMemo(() => new Set(players.map((p) => p.playerId)), [players]);
+  const selected = fixedRoster ? allIds : picked;
   const [chosen, setSettings] = useState<Settings>({
-    weeks: 8,
+    weeks: defaultWeeks,
     weekShape: 'match',
     divisions: 1,
     draftBasis: 'ehog',
@@ -194,7 +219,7 @@ export function ScheduleLabView({
 
   const update = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }));
   const togglePlayer = (id: number) =>
-    setSelected((s) => {
+    setPicked((s) => {
       const next = new Set(s);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -253,7 +278,7 @@ export function ScheduleLabView({
 
   return (
     <div className="flex flex-col gap-10">
-      <section>
+      {!fixedRoster && <section>
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <SectionLabel>Roster · {selected.size} selected</SectionLabel>
           <select
@@ -262,7 +287,7 @@ export function ScheduleLabView({
             value=""
             onChange={(e) => {
               const roster = rosters.find((r) => r.seasonId === Number(e.target.value));
-              if (roster) setSelected(new Set(roster.playerIds));
+              if (roster) setPicked(new Set(roster.playerIds));
             }}
           >
             <option value="" disabled>
@@ -274,7 +299,7 @@ export function ScheduleLabView({
               </option>
             ))}
           </select>
-          <button type="button" className={`${ADMIN_SMALL_BUTTON_CLS} mb-2`} onClick={() => setSelected(new Set())}>
+          <button type="button" className={`${ADMIN_SMALL_BUTTON_CLS} mb-2`} onClick={() => setPicked(new Set())}>
             Clear
           </button>
         </div>
@@ -299,13 +324,13 @@ export function ScheduleLabView({
             );
           })}
         </div>
-      </section>
+      </section>}
 
       <section className="flex flex-col gap-5">
         <SectionLabel>Format</SectionLabel>
         <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
-          <Stepper label="Weeks" value={settings.weeks} min={FORMAT_MIN_WEEKS} max={FORMAT_MAX_WEEKS} onChange={(weeks) => update({ weeks })} />
-          <Choice label="Each week" options={WEEK_SHAPES} value={settings.weekShape} onChange={(weekShape) => update({ weekShape })} />
+          <Stepper label={cap(period.many)} value={settings.weeks} min={FORMAT_MIN_WEEKS} max={FORMAT_MAX_WEEKS} onChange={(weeks) => update({ weeks })} />
+          <Choice label={`Each ${period.one}`} options={WEEK_SHAPES} value={settings.weekShape} onChange={(weekShape) => update({ weekShape })} />
           <Stepper label="Divisions" value={settings.divisions} min={1} max={maxDivisions} onChange={(divisions) => update({ divisions })} />
         </div>
         {settings.divisions > 1 && (
@@ -351,8 +376,8 @@ export function ScheduleLabView({
         )}
         <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
           <div className="flex flex-col gap-2 font-mono text-[12px]">
-            <label className={`flex items-center gap-2 ${settings.divisions === 1 ? 'opacity-40' : ''}`}>
-              <input type="checkbox" checked={settings.halfwayShuffle} disabled={settings.divisions === 1} onChange={(e) => update({ halfwayShuffle: e.target.checked })} />
+            <label className={`flex items-center gap-2 ${canReshuffle(settings) ? '' : 'opacity-40'}`}>
+              <input type="checkbox" checked={settings.halfwayShuffle} disabled={!canReshuffle(settings)} onChange={(e) => update({ halfwayShuffle: e.target.checked })} />
               Re-draft divisions at halfway
             </label>
             <label className="flex items-center gap-2">
@@ -361,7 +386,7 @@ export function ScheduleLabView({
             </label>
           </div>
         </div>
-        {settings.divisions > 1 && settings.halfwayShuffle && (
+        {reshuffles(settings) && (
           <Choice label="Halfway re-draft by" options={HALFWAY_REDRAFTS} value={settings.halfwayRedraft} onChange={(halfwayRedraft) => update({ halfwayRedraft })} />
         )}
         <div className="flex flex-col gap-2">
@@ -394,7 +419,7 @@ export function ScheduleLabView({
                     <div className="flex items-start justify-between gap-2">
                       <button type="button" className="text-left hover:underline" onClick={() => setShownId(previewId(p))}>
                         <span className="font-display text-[14px]">{previewLetter(p)}</span>
-                        <span className="block font-normal text-[var(--color-text-secondary)]">{previewSummary(p)}</span>
+                        <span className="block font-normal text-[var(--color-text-secondary)]">{previewSummary(p, period)}</span>
                       </button>
                       <RemoveXButton
                         label={`Remove preview ${previewLetter(p)}`}
@@ -409,7 +434,7 @@ export function ScheduleLabView({
               </tr>
             </thead>
             <tbody>
-              {SCORE_ROWS.map((row) => (
+              {scoreRows(period).map((row) => (
                 <Tr key={row.label}>
                   <Td align="left" muted className="sticky-col" title={row.title}>
                     {row.label}
@@ -426,7 +451,8 @@ export function ScheduleLabView({
         )}
       </section>
 
-      {shown && <PlanSchedule preview={shown} namesById={namesById} />}
+      {shown && planActions && <div className="flex justify-end">{planActions(shown.plan)}</div>}
+      {shown && <PlanSchedule preview={shown} namesById={namesById} period={period} />}
     </div>
   );
 }
@@ -448,7 +474,7 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
 
 // Memoized: the schedule can run to hundreds of rows, and its inputs don't change when the controls
 // above it do.
-const PlanSchedule = memo(function PlanSchedule({ preview, namesById }: { preview: Preview; namesById: Map<number, string> }) {
+const PlanSchedule = memo(function PlanSchedule({ preview, namesById, period }: { preview: Preview; namesById: Map<number, string>; period: PlanPeriod }) {
   const { plan } = preview;
   const name = (id: number) => namesById.get(id) ?? `#${id}`;
   const multiDivision = plan.settings.divisions > 1;
@@ -457,14 +483,14 @@ const PlanSchedule = memo(function PlanSchedule({ preview, namesById }: { previe
     <section className="flex flex-col gap-8">
       <div>
         <SectionLabel>Preview {previewLetter(preview)} schedule</SectionLabel>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview)}</div>
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview, period)}</div>
       </div>
       {plan.halves.map((half) => (
         <div key={half.half} className="flex flex-col gap-4">
           {multiDivision && (
             <div className="flex flex-col gap-2">
               <div className="tracked text-[11px]">
-                Weeks {half.firstWeek}–{half.lastWeek} · {halfDraftLabel(half, plan.settings.draftOrder, preview.draftSeasonLabel)}
+                {cap(period.many)} {half.firstWeek}–{half.lastWeek} · {halfDraftLabel(half, plan.settings.draftOrder, preview.draftSeasonLabel)}
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {half.divisions.map((ids, d) => (
@@ -493,7 +519,7 @@ const PlanSchedule = memo(function PlanSchedule({ preview, namesById }: { previe
               .filter((w) => w.half === half.half)
               .map((w) => (
                 <div key={w.week} className="border border-[var(--color-border-primary)]">
-                  <div className="px-3 py-1.5 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-primary)] tracked text-[11px]">Week {w.week}</div>
+                  <div className="px-3 py-1.5 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-primary)] tracked text-[11px]">{cap(period.one)} {w.week}</div>
                   <div className="p-3 flex flex-col gap-3">
                     {w.divisions.map((d) => (
                       <div key={d.division} className="flex flex-col gap-1">

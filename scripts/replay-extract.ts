@@ -188,7 +188,7 @@ async function main() {
       roster: inputs.roster,
       skinsSide: inputs.skinsSide,
       targetWinRounds: inputs.targetWinRounds,
-      includeKnifeRound: inputs.isGauntlet,
+      includeKnifeRound: inputs.knifeRound,
     };
     return demoBuffers.length > 1
       ? buildReplaySegments({ ...common, demoBuffers })

@@ -1,30 +1,21 @@
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { StatusPill } from './StatusPill';
-import type { ScrimSignupEntry } from '@/lib/queries';
-import type { ScrimNightSlot } from '@/lib/scrim-schedule';
+import type { UpcomingScrimNight } from '@/lib/queries';
+import { scrimNightHref } from '@/lib/crumbs';
 
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
 
 /** Home-page row for the next scrim night: when, how many are coming, and whether the viewer is in. */
-export function NextScrimCard({
-  night,
-  started,
-  signups,
-  currentPlayerId,
-}: {
-  night: ScrimNightSlot;
-  started: boolean;
-  signups: ScrimSignupEntry[];
-  currentPlayerId: number | null;
-}) {
+export function NextScrimCard({ upcoming, currentPlayerId }: { upcoming: UpcomingScrimNight; currentPlayerId: number | null }) {
+  const { night, started, signups } = upcoming;
   const definite = signups.filter((s) => s.commitment === 'definite').length;
   const maybe = signups.length - definite;
   const mine = signups.find((s) => s.player_id === currentPlayerId);
 
   return (
     <Link
-      href="/scrims"
+      href={scrimNightHref(night.id)}
       className="lift-row mb-8 flex items-center justify-between gap-6 px-5 py-4 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
     >
       <div className="min-w-0">

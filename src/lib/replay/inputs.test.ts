@@ -1,6 +1,6 @@
 /**
  * Unit tests for `getReplayInputs()` — resolves `buildReplay()`'s DB inputs (map, starting side,
- * target rounds, roster, gauntlet flag, scheduled date) for a match, shared by the in-app dispatch
+ * target rounds, roster, knife-round flag, scheduled date) for a match, shared by the in-app dispatch
  * path and the `replay-extract` Action. Against `fakeSupabase.ts`, exercising the
  * `matches -> weeks -> seasons` embed chain and the `shirts_pick`/`skins_pick` map fallback.
  *
@@ -36,6 +36,16 @@ function buildDb(): FakeDb {
         id: 200, week_id: 11, shirts_pick: 'Cobblestone', skins_pick: 'Cobblestone',
         skins_starting_side: 'T', scheduled_at: '2026-03-01T00:00:00.000Z',
       },
+      {
+        // A scrim match whose lobby chose a knife round.
+        id: 300, week_id: null, scrim_night_id: 1, scrim_side_choice: 'knife', shirts_pick: 'Foroglio', skins_pick: null,
+        skins_starting_side: null, scheduled_at: null,
+      },
+      {
+        // A scrim match whose lobby chose a side, applied as it started: no knife round.
+        id: 301, week_id: null, scrim_night_id: 1, scrim_side_choice: 'skins_t', shirts_pick: 'Foroglio', skins_pick: null,
+        skins_starting_side: 'T', scheduled_at: null,
+      },
     ],
     player_match_stats: [
       { match_id: 100, player_id: 1, faction: 'SHIRTS' },
@@ -59,7 +69,7 @@ async function main() {
     assert.equal(inputs.map, 'Foroglio');
     assert.equal(inputs.skinsSide, 'CT');
     assert.equal(inputs.targetWinRounds, 13);
-    assert.equal(inputs.isGauntlet, false);
+    assert.equal(inputs.knifeRound, false);
     assert.equal(inputs.scheduledAt, '2026-01-15T19:00:00.000Z');
     assert.equal(inputs.roster.length, 2);
     const alice = inputs.roster.find((r) => r.player_id === 1)!;
@@ -76,7 +86,20 @@ async function main() {
   await test('getReplayInputs: reads target rounds and the gauntlet flag off the paired season', async () => {
     const inputs = await getReplayInputs(supabase, 200);
     assert.equal(inputs.targetWinRounds, 16);
-    assert.equal(inputs.isGauntlet, true);
+    assert.equal(inputs.knifeRound, true);
+    assert.equal(inputs.skinsSide, 'T');
+  });
+
+  await test('getReplayInputs: a scrim match whose lobby chose a knife round plays one, to the default 13 rounds', async () => {
+    const inputs = await getReplayInputs(supabase, 300);
+    assert.equal(inputs.knifeRound, true);
+    assert.equal(inputs.targetWinRounds, 13);
+    assert.equal(inputs.map, 'Foroglio');
+  });
+
+  await test('getReplayInputs: a scrim match with a set side plays no knife round', async () => {
+    const inputs = await getReplayInputs(supabase, 301);
+    assert.equal(inputs.knifeRound, false);
     assert.equal(inputs.skinsSide, 'T');
   });
 

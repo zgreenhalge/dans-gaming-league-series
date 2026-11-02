@@ -1,43 +1,45 @@
-// Session gate for a scrim night's signups: the "admin-or-self" shape `season-roster-access.ts` also
-// has — an admin can sign up or drop any player, a player only themselves — plus a check that the
-// night is still listed by `scrimNightSlots()` (scheduled, not yet ended). Signups stay open through
-// the night itself, so players can join or drop while it's running. The signup route refuses new
-// signups for a cancelled night; dropping out of one is always allowed.
+// Session gates for scrim night signups: the "admin-or-self" shape `season-roster-access.ts` also
+// has — an admin can sign up or drop any player, a player only themselves — plus, for an existing
+// night, a check that it hasn't ended. Signups stay open through the night itself, so players can
+// join or drop while it's running.
 
 import { NextRequest } from 'next/server';
 import { requireSession } from './session';
-import { isPlayerAdmin, getScrimNights } from './queries';
-import { isNightDate, type ScrimNightSlot } from './scrim-schedule';
+import { isPlayerAdmin, getScrimNightById } from './queries';
+import { hasScrimNightEnded, type ScrimNight } from './scrim-schedule';
 import { selfOrAdminTarget, type AccessResult } from './access-control';
+import { parseRouteId } from './util';
 
-/** The listed (not yet ended) scrim night on `date`, cancelled or not — 400 for a malformed date,
- *  404 for one with no upcoming night. Shared by the signup gate and the admin cancel route. */
-export async function findUpcomingScrimNight(date: string, now: Date): Promise<AccessResult<{ slot: ScrimNightSlot }>> {
-  if (!isNightDate(date)) return { ok: false, status: 400, error: 'Invalid scrim night date' };
-  const { slots } = await getScrimNights(now);
-  const slot = slots.find((s) => s.date === date);
-  if (!slot) return { ok: false, status: 404, error: 'No upcoming scrim night on that date' };
-  return { ok: true, slot };
+/** The night with route param `id`, if it hasn't ended — 400 for a malformed id, 404 for no such
+ *  night, 409 for one that's over. */
+export async function findCurrentScrimNight(id: string, now: Date): Promise<AccessResult<{ night: ScrimNight }>> {
+  const nightId = parseRouteId(id);
+  if (nightId === null) return { ok: false, status: 400, error: 'Invalid scrim night id' };
+  const night = await getScrimNightById(nightId);
+  if (!night) return { ok: false, status: 404, error: 'Scrim night not found' };
+  if (hasScrimNightEnded(night, now)) return { ok: false, status: 409, error: 'That scrim night is over' };
+  return { ok: true, night };
 }
 
-export type ScrimSignupAccess = AccessResult<{ targetPlayerId: number; slot: ScrimNightSlot; body: unknown }>;
+export type ScrimSignupTarget = AccessResult<{ targetPlayerId: number; body: unknown }>;
 
-export async function requireScrimSignupAccess(req: NextRequest, date: string, now: Date = new Date()): Promise<ScrimSignupAccess> {
-  if (!isNightDate(date)) return { ok: false, status: 400, error: 'Invalid scrim night date' };
-
+/** The player a signup request acts on (`body.player_id`): the requester, or anyone for an admin. */
+export async function requireScrimSignupTarget(req: NextRequest): Promise<ScrimSignupTarget> {
   const session = await requireSession();
   const requestingPlayerId = session?.user?.playerId;
   if (!requestingPlayerId) return { ok: false, status: 401, error: 'Unauthorized' };
-
-  const [night, body, admin] = await Promise.all([
-    findUpcomingScrimNight(date, now),
-    req.json().catch(() => null),
-    isPlayerAdmin(requestingPlayerId),
-  ]);
-
+  const [body, admin] = await Promise.all([req.json().catch(() => null), isPlayerAdmin(requestingPlayerId)]);
   const target = selfOrAdminTarget(body, requestingPlayerId, admin);
   if (!target.ok) return target;
-  if (!night.ok) return night;
+  return { ok: true, targetPlayerId: target.targetPlayerId, body };
+}
 
-  return { ok: true, targetPlayerId: target.targetPlayerId, slot: night.slot, body };
+export type ScrimSignupAccess = AccessResult<{ targetPlayerId: number; night: ScrimNight; body: unknown }>;
+
+/** `requireScrimSignupTarget()` for a night that hasn't ended (`findCurrentScrimNight()`). */
+export async function requireScrimSignupAccess(req: NextRequest, id: string, now: Date = new Date()): Promise<ScrimSignupAccess> {
+  const [target, found] = await Promise.all([requireScrimSignupTarget(req), findCurrentScrimNight(id, now)]);
+  if (!target.ok) return target;
+  if (!found.ok) return found;
+  return { ok: true, targetPlayerId: target.targetPlayerId, night: found.night, body: target.body };
 }

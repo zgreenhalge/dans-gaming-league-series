@@ -103,6 +103,16 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
   return requested.filter((id) => !coveredSet.has(id));
 }
 
+/**
+ * Restricts a `matches` query to league matches — the ones in a season week. A scrim match
+ * (`scrim_night_id` set) has no week, so any league read of `matches` that doesn't already scope
+ * through `weeks` (`getWeekLookup()`, `resolveAllMatches()`) goes through this. Pinned by
+ * `queries-scrim-isolation.test.ts`.
+ */
+export function onlyLeagueMatches<Q extends { not(column: string, operator: string, value: null): Q }>(query: Q): Q {
+  return query.not('week_id', 'is', null);
+}
+
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
 const getAllWeeks = persistentQuery('getAllWeeks', async (client?: SupabaseClient): Promise<WeekLookup> => {
