@@ -8,46 +8,47 @@ import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './ad
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { scrimNightHref } from '@/lib/crumbs';
-import type { ScrimCommitment } from '@/lib/scrim-schedule';
+import { SCRIM_START_STEP_MINUTES, type ScrimCommitment } from '@/lib/scrim-schedule';
 
 const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 
-/** Starts a scrim night at a date and time the viewer picks (in their own timezone), with them as its
- *  first signup, then opens its page. */
-export function StartScrimNightForm({ playerId }: { playerId: number }) {
+/** Starts a scrim night on `day` (`YYYY-MM-DD`, the viewer's own calendar day) at a time they pick in
+ *  `SCRIM_START_STEP_MINUTES` steps, with them as its first signup, then opens its page. */
+export function StartScrimNightForm({ playerId, day }: { playerId: number; day: string }) {
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
   const [, startTransition] = useTransition();
-  const [when, setWhen] = useState('');
+  const [time, setTime] = useState('20:00');
 
   const start = (commitment: ScrimCommitment) =>
     run(async () => {
-      // A `datetime-local` value has no zone; `new Date()` reads it as the browser's local time.
-      const startsAt = new Date(when).toISOString();
+      // A date and time with no zone: `new Date()` reads it as the browser's local time.
+      const startsAt = new Date(`${day}T${time}`).toISOString();
       const res = await sendJsonRequest<{ nightId: number }>('POST', '/api/scrims', { player_id: playerId, startsAt, commitment });
       startTransition(() => router.push(scrimNightHref(res.nightId)));
     });
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-col gap-2">
-      <div className={LABEL_CLS}>Start a night</div>
+      <div className={LABEL_CLS}>Start a night this day</div>
       <div className="flex flex-wrap items-center gap-2">
         <input
-          type="datetime-local"
-          value={when}
-          onChange={(e) => setWhen(e.target.value)}
-          aria-label="Night start"
+          type="time"
+          step={SCRIM_START_STEP_MINUTES * 60}
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          aria-label="Night start time"
           className={SELECT_CLS}
         />
-        <button type="button" onClick={() => start('definite')} disabled={busy || !when} className={`${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}>
+        <button type="button" onClick={() => start('definite')} disabled={busy || !time} className={`${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}>
           I&apos;m in
         </button>
-        <button type="button" onClick={() => start('maybe')} disabled={busy || !when} className={`${ADMIN_SMALL_AMBER_BUTTON_CLS} disabled:opacity-40`}>
+        <button type="button" onClick={() => start('maybe')} disabled={busy || !time} className={`${ADMIN_SMALL_AMBER_BUTTON_CLS} disabled:opacity-40`}>
           Maybe
         </button>
       </div>
       <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        You&apos;ll be its first signup. A night is removed if everyone drops out.
+        Starts on the quarter hour. You&apos;ll be its first signup; a night is removed if everyone drops out.
       </div>
       <ErrorText error={error} size={12} />
     </div>
