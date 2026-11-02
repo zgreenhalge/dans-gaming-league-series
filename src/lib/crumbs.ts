@@ -4,6 +4,9 @@ import { seasonTitle, weekLabel } from './util';
 export interface Crumb {
   label: string;
   href?: string;
+  /** An instant (ISO 8601) the crumb names by its date: once the page hydrates it shows that date in
+   *  the viewer's timezone (`LocalTime`), with `label` as the server-rendered text until then. */
+  localDate?: string;
 }
 
 // Every public URL for a season's sub-pages is assembled here, so a link and the breadcrumb that

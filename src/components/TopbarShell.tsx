@@ -7,6 +7,10 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
 import { useNav } from './NavContext';
 import { playerHref, type Crumb } from '@/lib/crumbs';
+import { LocalTime } from './LocalTime';
+
+/** A dated crumb's format — the same shape as `formatNightDate()`'s server label, e.g. `Thu, Nov 5`. */
+const CRUMB_DATE: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
 
 const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
   { label: 'Anonymous', playerId: null, providerId: null },
@@ -127,7 +131,7 @@ export function TopbarShell({
                         : 'tracked text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors'
                     }
                   >
-                    {crumb.label}
+                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={CRUMB_DATE} fallback={crumb.label} /> : crumb.label}
                   </Link>
                 ) : (
                   <span
@@ -140,7 +144,7 @@ export function TopbarShell({
                     }
                     aria-current={isLast ? 'page' : undefined}
                   >
-                    {crumb.label}
+                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={CRUMB_DATE} fallback={crumb.label} /> : crumb.label}
                   </span>
                 )}
               </span>

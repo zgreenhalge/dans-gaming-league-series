@@ -19,8 +19,9 @@ export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
 export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
 
-/** The timezone server-rendered night labels (titles, breadcrumbs) use — the league's, as in
- *  `seo/og.ts`. In-page times render in the viewer's own timezone (`LocalTime`). */
+/** The timezone server-rendered night labels use — the league's, as in `seo/og.ts`: page titles, and
+ *  breadcrumbs until they hydrate into the viewer's own timezone (`Crumb.localDate`). In-page times
+ *  render in the viewer's timezone (`LocalTime`). */
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
 /** Whether `night` is over. */

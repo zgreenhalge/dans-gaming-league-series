@@ -69,7 +69,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
         crumbs={[
           { label: 'DGLS', href: '/' },
           { label: 'Scrims', href: '/scrims' },
-          { label: formatNightDate(match.night_starts_at), href: scrimNightHref(match.night_id) },
+          { label: formatNightDate(match.night_starts_at), localDate: match.night_starts_at, href: scrimNightHref(match.night_id) },
           { label: `Match ${match.match_number}` },
         ]}
       />

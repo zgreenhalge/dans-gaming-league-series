@@ -51,7 +51,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: formatNightDate(night.night.startsAt) }]} />
+      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: formatNightDate(night.night.startsAt), localDate: night.night.startsAt }]} />
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-16">
         <div className="mt-8 mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
