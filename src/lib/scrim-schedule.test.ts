@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
 import {
   formatNightDate,
+  formatNightStart,
   hasScrimNightEnded,
   hasScrimNightStarted,
   isScrimCheckInOpen,
@@ -50,6 +51,10 @@ test('upcomingScrimNights: drops ended nights, soonest first', () => {
 
 test('formatNightDate: the date in the league timezone, not UTC', () => {
   assert.equal(formatNightDate(START), 'Thu, Nov 5');
+});
+
+test('formatNightStart: date and time in the league timezone, labelled ET', () => {
+  assert.equal(formatNightStart(START), 'Thu, Nov 5, 8:00 PM ET');
 });
 
 test('parseNightStart: a quarter-hour instant that has not already ended, within SCRIM_MAX_DAYS_AHEAD', () => {

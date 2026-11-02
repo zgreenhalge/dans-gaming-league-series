@@ -22,7 +22,7 @@ export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
 
 /** The timezone server-rendered night labels use — the league's, as in `seo/og.ts`: the page title
- *  (until `LocalDateInTitle` swaps in the viewer's own date) and link previews. Breadcrumbs and in-page
+ *  (until `LocalDateInTitle` swaps in the viewer's own date) and link previews (`formatNightStart()`). Breadcrumbs and in-page
  *  times render in the viewer's timezone (`Crumb.localDate`, `LocalTime`). */
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
@@ -51,6 +51,13 @@ export function upcomingScrimNights(nights: ScrimNight[], now: Date): ScrimNight
  *  `SCRIM_LABEL_TIMEZONE`. */
 export function formatNightDate(startsAt: string): string {
   return new Date(startsAt).toLocaleDateString('en-US', { ...SHORT_DATE_FORMAT, timeZone: SCRIM_LABEL_TIMEZONE });
+}
+
+/** A night's start for a link preview, e.g. `Thu, Nov 5, 8:00 PM ET`, in `SCRIM_LABEL_TIMEZONE`
+ *  and labelled so — a preview is read wherever it's shared, so it names its zone. */
+export function formatNightStart(startsAt: string): string {
+  const time = new Date(startsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: SCRIM_LABEL_TIMEZONE });
+  return `${formatNightDate(startsAt)}, ${time} ET`;
 }
 
 /** How far ahead a night can be started. */

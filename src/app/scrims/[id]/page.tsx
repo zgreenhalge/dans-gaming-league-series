@@ -7,8 +7,9 @@ import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight, getScrimNightById } from '@/lib/queries';
-import { formatNightDate } from '@/lib/scrim-schedule';
+import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
+import { scrimNightHref } from '@/lib/crumbs';
+import { formatNightDate, formatNightStart, hasScrimNightEnded } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
@@ -19,7 +20,20 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const nightId = parseRouteId((await params).id);
   const night = nightId === null ? null : await getScrimNightById(nightId);
-  return { title: night ? `Scrims · ${formatNightDate(night.startsAt)}` : 'Scrims' };
+  if (!night) return { title: 'Scrims' };
+  // A link preview is read wherever it's shared, so it names the start in the league timezone.
+  const signups = await getScrimSignups(night.id);
+  const definite = signups.filter((s) => s.commitment === 'definite').length;
+  const status = hasScrimNightEnded(night, new Date()) ? 'final' : `${definite} definite, ${signups.length - definite} maybe`;
+  const title = `Scrims · ${formatNightDate(night.startsAt)}`;
+  const description = `Scrim night · ${formatNightStart(night.startsAt)} · ${status} — sign up, check in and see the night's results on DGLS.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: scrimNightHref(night.id) },
+    openGraph: { title: `DGLS · ${title}`, description },
+    twitter: { card: 'summary', title: `DGLS · ${title}`, description },
+  };
 }
 
 const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
