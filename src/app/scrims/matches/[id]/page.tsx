@@ -13,7 +13,7 @@ import { getSession } from '@/lib/session';
 import { getMapLookup, getMatchServerState, getPlayersById, getScrimMatchDetail } from '@/lib/queries';
 import { loadMatchPageFacts, matchMvpPlayerId, shirtsFaction } from '@/lib/match-page-data';
 import { scrimNightHref } from '@/lib/crumbs';
-import { formatNightDate, NIGHT_DATE_FORMAT } from '@/lib/scrim-schedule';
+import { formatNightDate } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
@@ -60,18 +60,19 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
   const skinsStartingSide = effectiveSkinsStartingSide(match);
   const shirtsF = shirtsFaction(skinsStartingSide);
 
+  const nightLabel = formatNightDate(match.night_starts_at);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const canManage = currentPlayerId != null && (isAdmin || stats.some((s) => s.player_id === currentPlayerId));
 
   return (
     <div className="min-h-screen">
-      <LocalDateInTitle iso={match.night_starts_at} serverLabel={formatNightDate(match.night_starts_at)} opts={NIGHT_DATE_FORMAT} />
+      <LocalDateInTitle iso={match.night_starts_at} serverLabel={nightLabel} />
       <TopbarShell
         crumbs={[
           { label: 'DGLS', href: '/' },
           { label: 'Scrims', href: '/scrims' },
-          { label: formatNightDate(match.night_starts_at), localDate: match.night_starts_at, href: scrimNightHref(match.night_id) },
+          { label: nightLabel, localDate: match.night_starts_at, href: scrimNightHref(match.night_id) },
           { label: `Match ${match.match_number}` },
         ]}
       />

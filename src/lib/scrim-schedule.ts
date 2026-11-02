@@ -2,6 +2,8 @@
 // signup and removed when its last player drops out (see `scrim-nights.ts`). Pure — every function
 // takes `now` and the rows as arguments, so the clock and the database stay at the edges.
 
+import { SHORT_DATE_FORMAT } from './util';
+
 export type ScrimCommitment = 'definite' | 'maybe';
 
 export const SCRIM_COMMITMENTS: readonly ScrimCommitment[] = ['definite', 'maybe'];
@@ -45,12 +47,10 @@ export function upcomingScrimNights(nights: ScrimNight[], now: Date): ScrimNight
   return nights.filter((n) => !hasScrimNightEnded(n, now)).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
 
-/** How a night's date reads in a label, e.g. `Thu, Nov 5`. */
-export const NIGHT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
-
-/** A night's date for a server-rendered label (`NIGHT_DATE_FORMAT`), in `SCRIM_LABEL_TIMEZONE`. */
+/** A night's date for a server-rendered label (`SHORT_DATE_FORMAT`, e.g. `Thu, Nov 5`), in
+ *  `SCRIM_LABEL_TIMEZONE`. */
 export function formatNightDate(startsAt: string): string {
-  return new Date(startsAt).toLocaleDateString('en-US', { ...NIGHT_DATE_FORMAT, timeZone: SCRIM_LABEL_TIMEZONE });
+  return new Date(startsAt).toLocaleDateString('en-US', { ...SHORT_DATE_FORMAT, timeZone: SCRIM_LABEL_TIMEZONE });
 }
 
 /** Parses a new night's start from a request body value (an ISO 8601 instant), or returns why it's
