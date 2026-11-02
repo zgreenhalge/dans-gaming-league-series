@@ -2,9 +2,7 @@ import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getSession } from '@/lib/session';
 import { getPastScrimNights, getPlayersById, getUpcomingScrimNights } from '@/lib/queries';
-import { ScrimNightPanel } from '@/components/ScrimNightPanel';
-import { StartScrimNightForm } from '@/components/StartScrimNightForm';
-import EmptyState from '@/components/EmptyState';
+import { ScrimCalendar } from '@/components/ScrimCalendar';
 import { ScrimPastNights } from '@/components/ScrimPastNights';
 
 export const metadata: Metadata = {
@@ -35,33 +33,7 @@ export default async function ScrimsPage() {
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-16">
         <h1 className="mt-8 mb-6 font-display text-[28px] font-semibold leading-tight">Scrims</h1>
         <div className="flex flex-col gap-6">
-          <section className="flex flex-col gap-4">
-            <div className={SECTION_LABEL_CLS}>Upcoming nights</div>
-            {upcoming.length === 0 && (
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-                <EmptyState message="No scrim nights planned — start one." className="px-4 py-6" />
-              </div>
-            )}
-            {upcoming.map((u) => (
-              <ScrimNightPanel
-                key={u.night.id}
-                upcoming={u}
-                currentPlayerId={currentPlayerId}
-                isAdmin={isAdmin}
-                allPlayers={allPlayers}
-                showNightLink
-              />
-            ))}
-          </section>
-          {currentPlayerId != null ? (
-            <StartScrimNightForm playerId={currentPlayerId} />
-          ) : (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              {/* A Route Handler that 302s to Steam, not an app page (see TopbarShell). */}
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-              <a href="/api/auth/steam" className="underline hover:text-[var(--color-text-primary)]">Log in</a> to start or sign up for a night.
-            </div>
-          )}
+          <ScrimCalendar upcoming={upcoming} past={pastNights} currentPlayerId={currentPlayerId} isAdmin={isAdmin} allPlayers={allPlayers} />
           <section>
             <div className={SECTION_LABEL_CLS}>Past nights</div>
             <ScrimPastNights nights={pastNights} />

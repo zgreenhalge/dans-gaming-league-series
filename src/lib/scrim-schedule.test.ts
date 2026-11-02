@@ -17,6 +17,7 @@ import {
   upcomingScrimNights,
   SCRIM_CHECK_IN_LEAD_MS,
   SCRIM_MAX_DAYS_AHEAD,
+  SCRIM_START_STEP_MINUTES,
   SCRIM_NIGHT_LENGTH_MS,
 } from './scrim-schedule';
 
@@ -51,14 +52,17 @@ test('formatNightDate: the date in the league timezone, not UTC', () => {
   assert.equal(formatNightDate(START), 'Thu, Nov 5');
 });
 
-test('parseNightStart: an instant that has not already ended, within SCRIM_MAX_DAYS_AHEAD', () => {
+test('parseNightStart: a quarter-hour instant that has not already ended, within SCRIM_MAX_DAYS_AHEAD', () => {
   const now = at(0);
+  const quarter = SCRIM_START_STEP_MINUTES * 60_000;
   assert.deepEqual(parseNightStart('2026-11-06T02:30:00Z', now), { ok: true, startsAt: '2026-11-06T02:30:00.000Z' });
-  assert.equal(parseNightStart(new Date(now.getTime() - SCRIM_NIGHT_LENGTH_MS + 60_000).toISOString(), now).ok, true);
+  assert.equal(parseNightStart(new Date(now.getTime() - SCRIM_NIGHT_LENGTH_MS + quarter).toISOString(), now).ok, true);
   assert.equal(parseNightStart(new Date(now.getTime() - SCRIM_NIGHT_LENGTH_MS).toISOString(), now).ok, false);
   const day = 24 * 60 * 60 * 1000;
   assert.equal(parseNightStart(new Date(now.getTime() + SCRIM_MAX_DAYS_AHEAD * day).toISOString(), now).ok, true);
-  assert.equal(parseNightStart(new Date(now.getTime() + SCRIM_MAX_DAYS_AHEAD * day + 60_000).toISOString(), now).ok, false);
+  assert.equal(parseNightStart(new Date(now.getTime() + SCRIM_MAX_DAYS_AHEAD * day + quarter).toISOString(), now).ok, false);
+  assert.equal(parseNightStart('2026-11-06T02:40:00Z', now).ok, false, 'not on a quarter hour');
+  assert.equal(parseNightStart('2026-11-06T02:45:30Z', now).ok, false, 'seconds off the mark');
   assert.equal(parseNightStart('next thursday', now).ok, false);
   assert.equal(parseNightStart(12, now).ok, false);
 });
