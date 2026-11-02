@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { ScheduleLabView, type PlanPeriod } from './ScheduleLabView';
 import ErrorText from './ErrorText';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
@@ -15,37 +14,30 @@ function planGames(plan: FormatPlan): { shirts: [number, number]; skins: [number
   return plan.weeks.flatMap((w) => w.divisions.flatMap((d) => d.games.map((g) => ({ shirts: g.shirts, skins: g.skins }))));
 }
 
-/** Pre-match any number of rounds for a scrim night: the Schedule Lab's controls, previews and
- *  scorecard over the checked-in players, with rounds in place of weeks, and a button that queues the
- *  shown preview's games as the night's next matches (`POST /api/scrims/[id]/rounds`). Closed by
- *  default — making one match at a time is the usual flow. */
-export function ScrimPreMatchPanel({
+/** Generate Rounds for a scrim night: the Schedule Lab's controls over the checked-in players, with
+ *  rounds in place of weeks and one preview at a time — its matchups first, its scorecard folded into
+ *  Details — and a button that queues those games as the night's next matches
+ *  (`POST /api/scrims/[id]/rounds`). Opened from the lobby beside Next Match. */
+export function ScrimRoundsGenerator({
   nightId,
   players,
   rosters,
   careerRecords,
+  onClose,
 }: {
   nightId: number;
   /** The checked-in players, with their EHOG state. */
   players: ScheduleLabPlayer[];
   rosters: ScheduleLabRoster[];
   careerRecords: Record<number, FormatRecord>;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const { busy, error, act } = useRefreshingAction();
-
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)} className={`${ADMIN_SMALL_BUTTON_CLS} self-start`}>
-        Pre-match rounds…
-      </button>
-    );
-  }
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Pre-match rounds</div>
-        <button type="button" onClick={() => setOpen(false)} className={ADMIN_SMALL_BUTTON_CLS}>
+        <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Generate rounds</div>
+        <button type="button" onClick={onClose} className={ADMIN_SMALL_BUTTON_CLS}>
           Close
         </button>
       </div>
@@ -55,6 +47,7 @@ export function ScrimPreMatchPanel({
         careerRecords={careerRecords}
         period={ROUND}
         fixedRoster
+        comparePreviews={false}
         defaultWeeks={2}
         planActions={(plan) => {
           const games = planGames(plan);

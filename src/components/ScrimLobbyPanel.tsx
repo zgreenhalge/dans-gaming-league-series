@@ -10,8 +10,10 @@ import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
 import { SELECT_CLS } from './formStyles';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
+import { ScrimRoundsGenerator } from './ScrimRoundsGenerator';
 import type { ServerState } from '@/lib/dathost-lifecycle';
-import type { ScrimMatch, WorkshopMapOption } from '@/lib/queries';
+import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOption } from '@/lib/queries';
+import type { FormatRecord } from '@/lib/season-format';
 import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
@@ -33,6 +35,11 @@ interface Props {
   canMake: boolean;
   /** The viewer may change, discard or start `match` (in it, or an admin). */
   canManage: boolean;
+  /** The signed-in viewer and whether they're checked in; `null` when signed out. */
+  viewer: { playerId: number; checkedIn: boolean } | null;
+  /** What Generate Rounds plans over — the checked-in players' ratings and season records — when the
+   *  viewer may make matches and none is waiting; `null` otherwise. */
+  rounds: { players: ScheduleLabPlayer[]; rosters: ScheduleLabRoster[]; careerRecords: Record<number, FormatRecord> } | null;
 }
 
 const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
@@ -49,32 +56,54 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 type Lineup = [number, number, number, number];
 
 
-/** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
- *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
-export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage }: Props) {
+/** The scrim night lobby: checking in first, then the next match — Next Match makes one, Generate
+ *  Rounds queues several — and, for the players in the lobby's match or an admin, its map, starting
+ *  side and lineup (from the checked-in pool), starting it on the server, or discarding it. */
+export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, viewer, rounds }: Props) {
   const { busy, error, act } = useRefreshingAction();
-  if (match) {
-    return (
-      <div className="flex flex-col gap-3">
-        <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />
-        {queued.length > 0 && <UpNext queued={queued} names={names} />}
-      </div>
-    );
-  }
+  const [generating, setGenerating] = useState(false);
+  const enough = pool.length >= SCRIM_MATCH_SIZE;
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <div className={LABEL_CLS}>Lobby</div>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-          {pool.length} checked in{pool.length < SCRIM_MATCH_SIZE && ` — a match needs ${SCRIM_MATCH_SIZE}`}
+    <div className="flex flex-col gap-3">
+      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+          {pool.length} checked in{!enough && ` — a match needs ${SCRIM_MATCH_SIZE}`}
         </div>
+        {viewer && (
+          <button
+            type="button"
+            onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
+            disabled={busy}
+            className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
+          >
+            {viewer.checkedIn ? 'Check out' : 'Check in'}
+          </button>
+        )}
       </div>
-      {canMake && (
-        <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || pool.length < SCRIM_MATCH_SIZE} className={GO_BTN_CLS}>
-          {busy ? '…' : 'Make next match'}
-        </button>
+
+      {match ? (
+        <>
+          <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />
+          {queued.length > 0 && <UpNext queued={queued} names={names} />}
+        </>
+      ) : (
+        canMake && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
+              {busy ? '…' : 'Next Match'}
+            </button>
+            {rounds && (
+              <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
+                Generate Rounds
+              </button>
+            )}
+          </div>
+        )
       )}
-      <ErrorText error={error} size={12} className="w-full" />
+      <ErrorText error={error} size={12} />
+      {generating && rounds && !match && (
+        <ScrimRoundsGenerator nightId={nightId} {...rounds} onClose={() => setGenerating(false)} />
+      )}
     </div>
   );
 }

@@ -42,10 +42,10 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
   timeZoneName: 'short',
 };
 
-/** A scrim night that hasn't ended: when it is, who's coming (definite, then maybe), and the controls
- *  to sign up, switch between definite and maybe, or drop out — and, once check-in opens, to check in
- *  or out (matchmaking only draws from checked-in players). Admins can do all of it for any
- *  player, from an Admin controls toggle that stays closed until opened.
+/** A scrim night that hasn't ended: when it is, who's coming (definite, then maybe, with a "Here" pill
+ *  on whoever has checked in), and the controls to sign up, switch between definite and maybe, or drop
+ *  out. Checking in is the lobby's (`ScrimLobbyPanel`). Admins can do all of it for any player, and
+ *  check players in or out, from an Admin controls toggle that stays closed until opened.
  *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. */
 export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers, showNightLink }: Props) {
   const { night, started, checkInOpen, signups } = upcoming;
@@ -62,7 +62,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
 
   const mine = signups.find((s) => s.player_id === currentPlayerId) ?? null;
 
-  const checkedInCount = signups.filter((s) => s.checked_in_at).length;
 
   function send(playerId: number, method: 'POST' | 'DELETE', path: 'signups' | 'check-in', body: Record<string, unknown> = {}) {
     setTarget(playerId);
@@ -152,9 +151,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
             )}
           </div>
           {!started && <CountdownTimer iso={night.startsAt} className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1" />}
-          {checkInOpen && (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">{checkedInCount} checked in</div>
-          )}
         </div>
 
         {currentPlayerId != null && (
@@ -174,16 +170,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
             {mine && (
               <button type="button" onClick={() => mutate(currentPlayerId, null)} disabled={pending === currentPlayerId} className={IDLE_BTN_CLS}>
                 Drop out
-              </button>
-            )}
-            {checkInOpen && (
-              <button
-                type="button"
-                onClick={() => setCheckIn(currentPlayerId, !mine?.checked_in_at)}
-                disabled={pending === currentPlayerId}
-                className={mine?.checked_in_at ? IDLE_BTN_CLS : ACTIVE_BTN_CLS.definite}
-              >
-                {mine?.checked_in_at ? 'Check out' : 'Check in'}
               </button>
             )}
           </div>

@@ -4,7 +4,6 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
 import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
-import { ScrimPreMatchPanel } from '@/components/ScrimPreMatchPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
@@ -48,8 +47,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
   const inLobbyMatch = !!lobbyMatch && inMatch(lobbyMatch);
   const canMake = isAdmin || viewerCheckedIn;
-  // Pre-matching rounds is offered where making the next match is: no match waiting, four checked in.
-  const preMatch = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
+  // Generate Rounds is offered where Next Match is: no match waiting, four checked in.
+  const rounds = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
 
   return (
     <div className="min-h-screen">
@@ -94,20 +93,9 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                 maps={maps}
                 canMake={canMake}
                 canManage={isAdmin || inLobbyMatch}
+                viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
+                rounds={rounds}
               />
-              {preMatch && (
-                <div className="mt-3 flex flex-col">
-                  <ScrimPreMatchPanel
-                    nightId={night.night.id}
-                    players={preMatch.players}
-                    rosters={preMatch.rosters}
-                    careerRecords={preMatch.careerRecords}
-                  />
-                </div>
-              )}
-              {!viewerCheckedIn && currentPlayerId != null && (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">Check in above to be matched.</div>
-              )}
             </section>
           )}
 
