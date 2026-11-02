@@ -75,6 +75,23 @@ export async function applyScrimSideChoice(db: SupabaseClient, matchId: number, 
   await db.from('matches').update({ skins_starting_side: resolveScrimSide(choice, rand) }).eq('id', matchId).throwOnError();
 }
 
+/** The number of the earlier match `matchId` waits behind — its night's lowest-numbered match without
+ *  a score, when that isn't `matchId` — or `null` when it's next (or isn't a scrim match). A night plays
+ *  its matches in `match_number` order on its one server. */
+export async function scrimMatchPlaysAfter(db: SupabaseClient, matchId: number): Promise<number | null> {
+  const { data } = await db.from('matches').select('scrim_night_id, match_number').eq('id', matchId).maybeSingle().throwOnError();
+  const match = data as { scrim_night_id: number | null; match_number: number } | null;
+  if (!match?.scrim_night_id) return null;
+  const { data: unscored } = await db
+    .from('matches')
+    .select('match_number')
+    .eq('scrim_night_id', match.scrim_night_id)
+    .is('final_score', null)
+    .throwOnError();
+  const first = Math.min(...((unscored ?? []) as { match_number: number }[]).map((m) => m.match_number));
+  return first < match.match_number ? first : null;
+}
+
 /** Thrown by `queueScrimMatches()` when the night can't take new matches yet: it already has a match
  *  without a score, or there is no map to start one on. */
 export class ScrimMatchConflictError extends Error {
@@ -91,13 +108,14 @@ export interface ScrimMap {
 }
 
 /** The map for workshop item `workshopId`: a known map keeps its name; any other item is named after
- *  its Steam title (`fetchWorkshopItem()`), falling back to its id when Steam can't say. Nothing is
- *  added to `maps` — a scrim map stays on its match. */
-export async function resolveScrimMap(workshopId: string, knownMaps: ScrimMap[], lookup: typeof fetchWorkshopItem = fetchWorkshopItem): Promise<ScrimMap> {
+ *  its Steam title (`fetchWorkshopItem()`), or after its id when Steam can't be reached. `null` when
+ *  Steam doesn't know the item. Nothing is added to `maps` — a scrim map stays on its match. */
+export async function resolveScrimMap(workshopId: string, knownMaps: ScrimMap[], lookup: typeof fetchWorkshopItem = fetchWorkshopItem): Promise<ScrimMap | null> {
   const known = knownMaps.find((m) => m.workshopId === workshopId);
   if (known) return known;
-  const title = (await lookup(workshopId))?.title;
-  return { name: title ?? `Workshop ${workshopId}`, workshopId };
+  const item = await lookup(workshopId).catch(() => ({ title: null }));
+  if (item === null) return null;
+  return { name: item.title ?? `Workshop ${workshopId}`, workshopId };
 }
 
 /** Queues `lineups` as the night's next matches, numbered in order after its others

@@ -118,9 +118,27 @@ async function main() {
     __setTestAfterMode(true);
     process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
     const db = installFixture();
-    db.matches = [{ id: MATCH_ID, scrim_night_id: 5, week_id: null, scrim_side_choice: 'skins_t', skins_starting_side: null }];
+    db.matches = [{ id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'skins_t', skins_starting_side: null }];
     assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
     assert.equal(db.matches[0].skins_starting_side, 'T');
+    await __flushTestAfter();
+    delete process.env.MATCHZY_CONFIG_SECRET;
+    __setTestAfterMode(false);
+  });
+
+  await test('POST — 409 for a queued scrim match while an earlier one has no score', async () => {
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    db.matches = [
+      { id: 900, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'knife' },
+      { id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 2, final_score: null, scrim_side_choice: 'random', skins_starting_side: null },
+    ];
+    const res = await call(MATCH_ID, IN_MATCH_ID);
+    assert.equal(res.status, 409);
+    assert.equal(db.matches[1].skins_starting_side, null, 'a refused start flips no side');
+    db.matches[0].final_score = '13-7';
+    __setTestAfterMode(true);
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
     await __flushTestAfter();
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);

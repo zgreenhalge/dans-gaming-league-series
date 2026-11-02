@@ -15,7 +15,7 @@ import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
-import { applyScrimSideChoice } from '@/lib/scrim-matches';
+import { applyScrimSideChoice, scrimMatchPlaysAfter } from '@/lib/scrim-matches';
 
 export async function POST(
   req: NextRequest,
@@ -45,6 +45,12 @@ export async function POST(
       { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
       { status: 409 },
     );
+  }
+
+  // A scrim night plays its matches in order: a queued match waits for the ones ahead of it.
+  const playsAfter = await scrimMatchPlaysAfter(getAdminClient(), matchId);
+  if (playsAfter !== null) {
+    return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
   }
 
   // A scrim match's lobby side choice becomes its starting side now, before the server boots and loads

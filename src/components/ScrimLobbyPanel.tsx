@@ -90,9 +90,11 @@ function LobbyMatch({
   const { busy, error, act } = useRefreshingAction();
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
-  const knownMap = maps.some((m) => m.workshopId === match.workshop_id);
-  const [mapChoice, setMapChoice] = useState(knownMap ? match.workshop_id ?? '' : CUSTOM_MAP_CHOICE);
-  const [customMap, setCustomMap] = useState(knownMap ? '' : match.workshop_id ?? '');
+  // The picker shows the saved map; only the custom-id field is local, opened by picking "Custom".
+  const customSaved = match.workshop_id != null && !maps.some((m) => m.workshopId === match.workshop_id);
+  const [customOpen, setCustomOpen] = useState(customSaved);
+  const [customMap, setCustomMap] = useState(customSaved ? (match.workshop_id ?? '') : '');
+  const mapChoice = customOpen ? CUSTOM_MAP_CHOICE : (match.workshop_id ?? '');
   const customId = workshopIdFromInput(customMap);
 
   const canEdit = canManage && isScrimMatchEditable(match);
@@ -148,7 +150,7 @@ function LobbyMatch({
             maps={maps}
             value={mapChoice}
             onChange={(value) => {
-              setMapChoice(value);
+              setCustomOpen(value === CUSTOM_MAP_CHOICE);
               if (value && value !== CUSTOM_MAP_CHOICE) act('PATCH', url, { workshop: value });
             }}
             customValue={customMap}

@@ -60,9 +60,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Every player joining the lineup must be checked in' }, { status: 400 });
   }
 
+  const map = workshopId !== undefined ? await resolveScrimMap(workshopId, maps) : undefined;
+  if (map === null) return NextResponse.json({ error: 'Steam has no workshop item with that id' }, { status: 400 });
+
   const db = getAdminClient();
   try {
-    if (workshopId !== undefined) await setScrimMatchMap(db, matchId, await resolveScrimMap(workshopId, maps));
+    if (map) await setScrimMatchMap(db, matchId, map);
     if (side !== undefined) await setScrimMatchSideChoice(db, matchId, side as ScrimSideChoice);
     if (lineup) await setScrimMatchLineup(db, matchId, lineup);
   } catch (err) {

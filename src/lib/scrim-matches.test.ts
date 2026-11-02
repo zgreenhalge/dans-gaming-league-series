@@ -64,11 +64,12 @@ test('applyScrimSideChoice: a random side already flipped is kept; a new choice 
   assert.equal(db.matches[0].skins_starting_side, 'CT');
 });
 
-test('resolveScrimMap: a known map keeps its name; any other item is named by Steam, or by its id', async () => {
+test('resolveScrimMap: a known map keeps its name; any other item is named by Steam, or by its id when Steam is down; null for an item Steam does not know', async () => {
   const known = [{ name: 'Foroglio', workshopId: '111' }];
   assert.deepEqual(await resolveScrimMap('111', known, async () => null), { name: 'Foroglio', workshopId: '111' });
   assert.deepEqual(await resolveScrimMap('999', known, async () => ({ title: 'Dust Wingman', previewUrl: null })), { name: 'Dust Wingman', workshopId: '999' });
-  assert.deepEqual(await resolveScrimMap('999', known, async () => null), { name: 'Workshop 999', workshopId: '999' });
+  assert.deepEqual(await resolveScrimMap('999', known, async () => { throw new Error('down'); }), { name: 'Workshop 999', workshopId: '999' });
+  assert.equal(await resolveScrimMap('999', known, async () => null), null);
 });
 
 test('parseScrimTeams: two distinct positive ids per side', () => {

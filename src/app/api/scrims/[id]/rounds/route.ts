@@ -13,8 +13,9 @@ import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { parseScrimTeams, queueScrimMatches, ScrimMatchConflictError } from '@/lib/scrim-matches';
 import type { ScrimTeams } from '@/lib/scrim-matchmaking';
 
-/** The most matches one request may queue. */
-const MAX_QUEUED = 64;
+/** The most matches one request may queue — above the largest plan the Schedule Lab builds (24 players,
+ *  16 rounds of groups, with doubleheaders). */
+const MAX_QUEUED = 256;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireScrimNightMatchAccess((await params).id);

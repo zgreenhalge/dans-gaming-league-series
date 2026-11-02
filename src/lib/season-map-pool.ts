@@ -25,7 +25,9 @@ export function isValidNewMap(name: string, workshopUrl: string): boolean {
 
 async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | null> {
   const fileId = workshopIdFromUrl(workshopUrl);
-  return fileId ? ((await fetchWorkshopItem(fileId))?.previewUrl ?? null) : null;
+  if (!fileId) return null;
+  // The preview is decoration: a map is still added when Steam can't be reached.
+  return fetchWorkshopItem(fileId).then((item) => item?.previewUrl ?? null, () => null);
 }
 
 export type MapPoolInput =

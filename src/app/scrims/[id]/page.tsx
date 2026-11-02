@@ -82,7 +82,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
               <ScrimLobbyPanel
-                key={lobbyMatch ? `${lobbyMatch.id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
+                key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
                 nightId={night.night.id}
                 match={lobbyMatch}
                 queued={queuedMatches.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) }))}

@@ -38,9 +38,8 @@ export type ScrimSignupAccess = AccessResult<{ targetPlayerId: number; night: Sc
 
 /** `requireScrimSignupTarget()` for a night that hasn't ended (`findCurrentScrimNight()`). */
 export async function requireScrimSignupAccess(req: NextRequest, id: string, now: Date = new Date()): Promise<ScrimSignupAccess> {
-  const target = await requireScrimSignupTarget(req);
+  const [target, found] = await Promise.all([requireScrimSignupTarget(req), findCurrentScrimNight(id, now)]);
   if (!target.ok) return target;
-  const found = await findCurrentScrimNight(id, now);
   if (!found.ok) return found;
   return { ok: true, targetPlayerId: target.targetPlayerId, night: found.night, body: target.body };
 }

@@ -31,19 +31,17 @@ export function isValidWorkshopUrl(workshopUrl: string): boolean {
 }
 
 /** A Workshop item's title and preview image from Steam (`GetPublishedFileDetails`, no API key), or
- *  `null` when Steam can't be reached or doesn't know the item. */
+ *  `null` when Steam doesn't know the item (it answers an unknown id with a `result` other than 1).
+ *  Throws when Steam can't be reached or answers with an error. */
 export async function fetchWorkshopItem(fileId: string): Promise<{ title: string | null; previewUrl: string | null } | null> {
-  try {
-    const res = await fetch('https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `itemcount=1&publishedfileids[0]=${fileId}`,
-    });
-    const data = await res.json();
-    const detail = data?.response?.publishedfiledetails?.[0];
-    if (!detail) return null;
-    return { title: detail.title || null, previewUrl: detail.preview_url ?? null };
-  } catch {
-    return null;
-  }
+  const res = await fetch('https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `itemcount=1&publishedfileids[0]=${fileId}`,
+  });
+  if (!res.ok) throw new Error(`Steam answered ${res.status} for workshop item ${fileId}`);
+  const data = await res.json();
+  const detail = data?.response?.publishedfiledetails?.[0];
+  if (!detail || detail.result !== 1) return null;
+  return { title: detail.title || null, previewUrl: detail.preview_url ?? null };
 }
