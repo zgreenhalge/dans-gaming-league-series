@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import { LocalTime } from './LocalTime';
 import { CountdownTimer } from './CountdownTimer';
@@ -83,13 +82,12 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
     const other: ScrimCommitment = commitment === 'definite' ? 'maybe' : 'definite';
     return (
       <div key={commitment}>
-        <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] tracked text-[10px] text-[var(--color-text-secondary)]">
+        <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] bg-[var(--color-bg-secondary)] tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
           {COMMITMENT_LABEL[commitment]} · {entries.length}
         </div>
-        {entries.length === 0 ? (
-          <EmptyState message={commitment === 'definite' ? 'Nobody locked in yet.' : 'No maybes.'} className="px-4 py-3" />
-        ) : (
-          entries.map((s) => (
+        {/* Indented under its heading; an empty group shows just the heading's count. */}
+        <div className="pl-4">
+          {entries.map((s) => (
             <RosterPlayerRow
               key={s.player_id}
               playerId={s.player_id}
@@ -124,8 +122,8 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
                 )}
               </div>
             </RosterPlayerRow>
-          ))
-        )}
+          ))}
+        </div>
       </div>
     );
   }
@@ -143,7 +141,7 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
           <div className="font-display text-[22px] font-semibold leading-tight">
             {showNightLink ? (
               <Link href={scrimNightHref(night.id)} className="hover:underline">
-                <LocalTime iso={night.startsAt} opts={START_FORMAT} /> →
+                <LocalTime iso={night.startsAt} opts={START_FORMAT} />
               </Link>
             ) : (
               <LocalTime iso={night.startsAt} opts={START_FORMAT} />
