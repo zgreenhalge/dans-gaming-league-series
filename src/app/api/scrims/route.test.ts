@@ -20,7 +20,11 @@ const ADMIN_ID = 1;
 const PLAYER_ID = 2;
 const OTHER_PLAYER_ID = 3;
 const HOUR = 60 * 60 * 1000;
-const inHours = (h: number) => new Date(Date.now() + h * HOUR).toISOString();
+/** `h` hours from now, rounded down to the quarter hour a night must start on. */
+const inHours = (h: number) => {
+  const quarter = 15 * 60 * 1000;
+  return new Date(Math.floor((Date.now() + h * HOUR) / quarter) * quarter).toISOString();
+};
 
 function installFixture(extra: Partial<FakeDb> = {}): FakeDb {
   const db: FakeDb = {
@@ -61,11 +65,13 @@ async function main() {
     assert.equal((await start({ player_id: OTHER_PLAYER_ID, startsAt: inHours(48), commitment: 'definite' })).status, 201);
   });
 
-  await test('400 for a bad start, a night already over, or a bad commitment; 404 for an unknown player', async () => {
+  await test('400 for a bad start, one off the quarter hour, a night already over, or a bad commitment; 404 for an unknown player', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(ADMIN_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: 'soon', commitment: 'definite' })).status, 400);
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(-5), commitment: 'definite' })).status, 400);
+    const offTheMark = new Date(Date.parse(inHours(48)) + 7 * 60 * 1000).toISOString();
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: offTheMark, commitment: 'definite' })).status, 400);
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(48), commitment: 'yes' })).status, 400);
     assert.equal((await start({ player_id: 999, startsAt: inHours(48), commitment: 'definite' })).status, 404);
     assert.equal(db.scrim_nights.length, 0);

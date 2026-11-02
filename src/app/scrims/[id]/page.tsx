@@ -110,9 +110,6 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
               )}
             </section>
           )}
-          {night.current && !night.checkInOpen && (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">The lobby opens when check-in does.</div>
-          )}
 
           <section>
             <div className={SECTION_LABEL_CLS}>Leaderboard</div>

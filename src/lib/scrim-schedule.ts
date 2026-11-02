@@ -56,12 +56,19 @@ export function formatNightDate(startsAt: string): string {
 /** How far ahead a night can be started. */
 export const SCRIM_MAX_DAYS_AHEAD = 60;
 
+/** Nights start on a multiple of this many minutes past the hour. Every timezone's UTC offset is a
+ *  multiple of 15 minutes, so a local quarter hour is a UTC one too. */
+export const SCRIM_START_STEP_MINUTES = 15;
+
 /** Parses a new night's start from a request body value (an ISO 8601 instant), or returns why it's
- *  invalid. A night that would already be over, or that starts more than `SCRIM_MAX_DAYS_AHEAD` days
- *  out, can't be started. */
+ *  invalid. A night must start on a `SCRIM_START_STEP_MINUTES` step, and can't already be over or start
+ *  more than `SCRIM_MAX_DAYS_AHEAD` days out. */
 export function parseNightStart(value: unknown, now: Date): { ok: true; startsAt: string } | { ok: false; error: string } {
   const ms = typeof value === 'string' ? Date.parse(value) : NaN;
   if (Number.isNaN(ms)) return { ok: false, error: 'startsAt must be a date and time' };
+  if (ms % (SCRIM_START_STEP_MINUTES * 60_000) !== 0) {
+    return { ok: false, error: `A night starts on a ${SCRIM_START_STEP_MINUTES}-minute mark` };
+  }
   const startsAt = new Date(ms).toISOString();
   if (hasScrimNightEnded({ id: 0, startsAt }, now)) return { ok: false, error: 'That night would already be over' };
   if (ms > now.getTime() + SCRIM_MAX_DAYS_AHEAD * 24 * 60 * 60 * 1000) {
