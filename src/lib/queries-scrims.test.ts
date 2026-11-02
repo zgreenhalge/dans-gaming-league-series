@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightLeaderboard, getMatch, getPastScrimNights, getScrimMatchDetail, getNextScrimNight, getScrimNight, getUpcomingScrimNights, type ScrimMatch, type ScrimMatchPlayer } from './queries';
+import { buildScrimNightLeaderboard, getMatch, getPastScrimNights, getScrimMatchDetail, getScrimNight, getUpcomingScrimNights, type ScrimMatch, type ScrimMatchPlayer } from './queries';
 
 const NOW = new Date('2026-11-02T12:00:00Z');
 const UPCOMING = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
@@ -112,12 +112,6 @@ async function main() {
 
   await test('getMatch: null for a scrim match, which has no week (its page is the scrim one)', async () => {
     assert.equal(await getMatch(900), null);
-  });
-
-  await test('getNextScrimNight: the soonest night not yet ended, with its signups; null when none is ahead', async () => {
-    const next = await getNextScrimNight(NOW);
-    assert.deepEqual([next?.night.id, next?.signups.map((s) => s.player_id)], [3, [1]]);
-    assert.equal(await getNextScrimNight(new Date('2027-01-01T00:00:00Z')), null);
   });
 
   await test('getUpcomingScrimNights: nights not yet ended, soonest first, with signups', async () => {

@@ -13,7 +13,6 @@ import {
   getOpenFeedbackSeasonIds,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
-  getNextScrimNight,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { gauntletHref, seasonHref } from '@/lib/crumbs';
@@ -25,7 +24,6 @@ import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 import { HomeStandingsPanel } from '@/components/HomeStandingsPanel';
 import { MyStatsPanel, MyStatsLockedPanel } from '@/components/MyStatsPanel';
 import { TopDuosPanel, HottestRivalriesPanel } from '@/components/TopPairsPanels';
-import { NextScrimCard } from '@/components/NextScrimCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,13 +67,12 @@ function UpcomingSeasonRow({
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
-  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds, nextScrims] = await Promise.all([
+  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
     getCareerH2HDataCached(),
     currentPlayerId != null ? getOpenFeedbackSeasonIds().then((ids) => new Set(ids)) : new Set<number>(),
-    getNextScrimNight(new Date()),
   ]);
 
   const upcoming = seasons
@@ -136,9 +133,6 @@ export default async function Home() {
           </div>
         )}
 
-        {nextScrims && (
-          <NextScrimCard upcoming={nextScrims} currentPlayerId={currentPlayerId} />
-        )}
 
         {/* One grid, so My Stats is a single element: first on a phone (above the games and
             standings) and top of the right-hand column on a wide screen, where the games and
