@@ -158,6 +158,7 @@ export function ScheduleLabView({
   fixedRoster = false,
   defaultWeeks = 8,
   planActions,
+  comparePreviews = true,
 }: {
   players: ScheduleLabPlayer[];
   rosters: ScheduleLabRoster[];
@@ -169,6 +170,9 @@ export function ScheduleLabView({
   defaultWeeks?: number;
   /** Rendered beside the shown preview's schedule, e.g. a button that acts on its plan. */
   planActions?: (plan: FormatPlan) => ReactNode;
+  /** Keep several previews side by side in a comparison table (default). Off, each Generate replaces
+   *  the one preview, its matchups lead, and its scorecard sits in a collapsed Details section. */
+  comparePreviews?: boolean;
 }) {
   const [picked, setPicked] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
   const allIds = useMemo(() => new Set(players.map((p) => p.playerId)), [players]);
@@ -250,7 +254,7 @@ export function ScheduleLabView({
           return;
         }
         const plan = e.data.plan;
-        setPreviews((prev) => [...prev, { plan, draftSeasonLabel: source?.label ?? null }].slice(-MAX_PREVIEWS));
+        setPreviews((prev) => [...prev, { plan, draftSeasonLabel: source?.label ?? null }].slice(comparePreviews ? -MAX_PREVIEWS : -1));
         setShownId(seed);
       };
       worker.onerror = () => {
@@ -392,7 +396,7 @@ export function ScheduleLabView({
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <button type="button" className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`} disabled={busy || issues.length > 0} onClick={generate}>
-              {busy ? 'Generating…' : 'Generate preview'}
+              {busy ? 'Generating…' : comparePreviews ? 'Generate preview' : previews.length > 0 ? 'Regenerate' : 'Generate'}
             </button>
             {busy && (
               <button type="button" className={ADMIN_SMALL_BUTTON_CLS} onClick={cancel}>
@@ -405,7 +409,7 @@ export function ScheduleLabView({
         </div>
       </section>
 
-      <section>
+      {comparePreviews && <section>
         <SectionLabel>Compare</SectionLabel>
         {previews.length === 0 ? (
           <EmptyState size="sm" message="No previews yet." />
@@ -449,10 +453,29 @@ export function ScheduleLabView({
             </tbody>
           </StatTable>
         )}
-      </section>
+      </section>}
 
       {shown && planActions && <div className="flex justify-end">{planActions(shown.plan)}</div>}
-      {shown && <PlanSchedule preview={shown} namesById={namesById} period={period} />}
+      {shown && <PlanSchedule preview={shown} namesById={namesById} period={period} title={comparePreviews ? undefined : 'Matchups'} />}
+      {shown && !comparePreviews && (
+        <details>
+          <summary className="cursor-pointer tracked text-[10px] text-[var(--color-text-secondary)]">Details</summary>
+          <div className="mt-3">
+            <StatTable>
+              <tbody>
+                {scoreRows(period).map((row) => (
+                  <Tr key={row.label}>
+                    <Td align="left" muted title={row.title}>
+                      {row.label}
+                    </Td>
+                    <Td align="left">{row.value(shown)}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </StatTable>
+          </div>
+        </details>
+      )}
     </div>
   );
 }
@@ -474,7 +497,18 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
 
 // Memoized: the schedule can run to hundreds of rows, and its inputs don't change when the controls
 // above it do.
-const PlanSchedule = memo(function PlanSchedule({ preview, namesById, period }: { preview: Preview; namesById: Map<number, string>; period: PlanPeriod }) {
+const PlanSchedule = memo(function PlanSchedule({
+  preview,
+  namesById,
+  period,
+  title,
+}: {
+  preview: Preview;
+  namesById: Map<number, string>;
+  period: PlanPeriod;
+  /** The section's label; defaults to naming the preview. */
+  title?: string;
+}) {
   const { plan } = preview;
   const name = (id: number) => namesById.get(id) ?? `#${id}`;
   const multiDivision = plan.settings.divisions > 1;
@@ -482,7 +516,7 @@ const PlanSchedule = memo(function PlanSchedule({ preview, namesById, period }: 
   return (
     <section className="flex flex-col gap-8">
       <div>
-        <SectionLabel>Preview {previewLetter(preview)} schedule</SectionLabel>
+        <SectionLabel>{title ?? `Preview ${previewLetter(preview)} schedule`}</SectionLabel>
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview, period)}</div>
       </div>
       {plan.halves.map((half) => (
