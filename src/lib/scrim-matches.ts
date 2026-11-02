@@ -75,11 +75,12 @@ export async function applyScrimSideChoice(db: SupabaseClient, matchId: number, 
   await db.from('matches').update({ skins_starting_side: resolveScrimSide(choice, rand) }).eq('id', matchId).throwOnError();
 }
 
-/** Thrown by `createScrimMatch()` when the night already has a match without a score. */
-export class UnplayedScrimMatchError extends Error {
-  constructor() {
-    super('Finish or discard the current match before making the next one.');
-    this.name = 'UnplayedScrimMatchError';
+/** Thrown by `queueScrimMatches()` when the night can't take new matches yet: it already has a match
+ *  without a score, or there is no map to start one on. */
+export class ScrimMatchConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScrimMatchConflictError';
   }
 }
 
@@ -89,53 +90,39 @@ export interface ScrimMap {
   workshopId: string;
 }
 
-/** A random map from `maps` (every map the server can load), the map an ad-hoc or pre-matched scrim
- *  match starts on until its lobby changes it. */
-export function randomScrimMap(maps: { name: string; workshopId: string }[], rand: () => number = Math.random): ScrimMap {
-  const pick = maps[Math.floor(rand() * maps.length)];
-  return { name: pick.name, workshopId: pick.workshopId };
-}
-
 /** The map for workshop item `workshopId`: a known map keeps its name; any other item is named after
  *  its Steam title (`fetchWorkshopItem()`), falling back to its id when Steam can't say. Nothing is
  *  added to `maps` — a scrim map stays on its match. */
-export async function resolveScrimMap(
-  workshopId: string,
-  knownMaps: { name: string; workshopId: string }[],
-  lookup: typeof fetchWorkshopItem = fetchWorkshopItem,
-): Promise<ScrimMap> {
+export async function resolveScrimMap(workshopId: string, knownMaps: ScrimMap[], lookup: typeof fetchWorkshopItem = fetchWorkshopItem): Promise<ScrimMap> {
   const known = knownMaps.find((m) => m.workshopId === workshopId);
-  if (known) return { name: known.name, workshopId };
+  if (known) return known;
   const title = (await lookup(workshopId))?.title;
   return { name: title ?? `Workshop ${workshopId}`, workshopId };
 }
 
-/** Creates the night's next match on `map` with `teams` (`create_scrim_match()`, one transaction).
- *  Returns the new match id. */
-export async function createScrimMatch(db: SupabaseClient, nightId: number, map: ScrimMap, teams: ScrimTeams): Promise<number> {
-  const { data, error } = await db.rpc('create_scrim_match', {
-    p_night_id: nightId,
-    p_map: map.name,
-    p_workshop_id: map.workshopId,
-    p_shirts: teams.shirts,
-    p_skins: teams.skins,
-  });
-  if (error) {
-    if (error.message.includes('unplayed-scrim-match')) throw new UnplayedScrimMatchError();
-    throw error;
-  }
-  return data as number;
-}
-
-/** Queues `matches` on the night, numbered in order after its others (`queue_scrim_matches()`, one
- *  transaction) — a pre-matched set of rounds. Returns the new match ids in order. */
-export async function queueScrimMatches(db: SupabaseClient, nightId: number, matches: { map: ScrimMap; teams: ScrimTeams }[]): Promise<number[]> {
+/** Queues `lineups` as the night's next matches, numbered in order after its others
+ *  (`queue_scrim_matches()`, one transaction) — one for an ad-hoc match, several for pre-matched
+ *  rounds. Each starts on a random map from `maps` (every map the server can load) until its lobby
+ *  changes it. Returns the new match ids in order. */
+export async function queueScrimMatches(
+  db: SupabaseClient,
+  nightId: number,
+  lineups: ScrimTeams[],
+  maps: ScrimMap[],
+  rand: () => number = Math.random,
+): Promise<number[]> {
+  if (maps.length === 0) throw new ScrimMatchConflictError('No maps with a workshop id to play on.');
   const { data, error } = await db.rpc('queue_scrim_matches', {
     p_night_id: nightId,
-    p_matches: matches.map(({ map, teams }) => ({ map: map.name, workshop_id: map.workshopId, shirts: teams.shirts, skins: teams.skins })),
+    p_matches: lineups.map((teams) => {
+      const map = maps[Math.floor(rand() * maps.length)];
+      return { map: map.name, workshop_id: map.workshopId, shirts: teams.shirts, skins: teams.skins };
+    }),
   });
   if (error) {
-    if (error.message.includes('unplayed-scrim-match')) throw new UnplayedScrimMatchError();
+    if (error.message.includes('unplayed-scrim-match')) {
+      throw new ScrimMatchConflictError('Finish or discard the current match before making the next one.');
+    }
     throw error;
   }
   return data as number[];

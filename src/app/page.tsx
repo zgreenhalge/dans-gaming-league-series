@@ -137,7 +137,7 @@ export default async function Home() {
         )}
 
         {scrims[0] && (
-          <NextScrimCard night={scrims[0].night} started={scrims[0].started} signups={scrims[0].signups} currentPlayerId={currentPlayerId} />
+          <NextScrimCard upcoming={scrims[0]} currentPlayerId={currentPlayerId} />
         )}
 
         {/* One grid, so My Stats is a single element: first on a phone (above the games and

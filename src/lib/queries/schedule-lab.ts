@@ -32,13 +32,16 @@ export interface ScheduleLabData {
  *  players with the rating state `buildFormatPlan()` balances on, and each regular season's
  *  participants (`getSeasonParticipants()` — rostered or played) as a starting roster, with the
  *  season's records (`player_season_leaderboard`) — and their career sum — for a win-rate division
- *  draft. */
-export async function getScheduleLabData(): Promise<ScheduleLabData> {
-  const [playersById, seasons, leaderboardRows] = await Promise.all([getPlayersById(), getSeasons(), getRawSeasonLeaderboardRows()]);
+ *  draft. With `fixedRoster` (the players a fixed-roster lab plans for, e.g. a scrim night's checked
+ *  in), only those players are rated and seasons carry their records alone (`playerIds` empty), since
+ *  such a lab never loads a season's roster. */
+export async function getScheduleLabData(fixedRoster?: number[]): Promise<ScheduleLabData> {
+  const [allPlayers, seasons, leaderboardRows] = await Promise.all([getPlayersById(), getSeasons(), getRawSeasonLeaderboardRows()]);
+  const playersById = fixedRoster ? new Map(fixedRoster.flatMap((id) => (allPlayers.has(id) ? [[id, allPlayers.get(id)!] as const] : []))) : allPlayers;
   const regular = seasons.filter((s) => !s.is_gauntlet).sort((a, b) => b.id - a.id);
   const [players, participants] = await Promise.all([
     getRatedPlayers(playersById),
-    Promise.all(regular.map((s) => getSeasonParticipants(s.id, playersById))),
+    fixedRoster ? regular.map(() => []) : Promise.all(regular.map((s) => getSeasonParticipants(s.id, allPlayers))),
   ]);
 
   const recordsBySeason = new Map<number, Record<number, FormatRecord>>();

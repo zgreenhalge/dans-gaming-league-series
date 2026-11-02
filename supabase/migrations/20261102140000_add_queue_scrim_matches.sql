@@ -1,8 +1,8 @@
--- Queues a run of scrim matches on a night in one transaction — a pre-matched set of rounds, played
--- in order on the night's one server. `p_matches` is a JSON array of
+-- Queues scrim matches on a night in one transaction — one for an ad-hoc match, several for a
+-- pre-matched set of rounds — played in order on the night's one server. `p_matches` is a JSON array of
 -- `{ map, workshop_id, shirts: [a, b], skins: [c, d] }`, numbered after the night's other matches in
--- array order, each with a knife round as its starting-side choice. Row-locks the night and refuses
--- while it already has a match without a score, as `create_scrim_match()` does. Returns the new match
+-- array order, each with a knife round as its starting-side choice. Row-locks the night so concurrent
+-- queues serialize, and refuses while it already has a match without a score. Returns the new match
 -- ids in order. Called from src/lib/scrim-matches.ts.
 create or replace function public.queue_scrim_matches(
   p_night_id integer,

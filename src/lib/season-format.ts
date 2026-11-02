@@ -265,10 +265,15 @@ function halfLengths(settings: SeasonFormatSettings): number[] {
   return [Math.ceil(settings.weeks / 2), Math.floor(settings.weeks / 2)];
 }
 
-/** Whether the divisions re-draft at halfway: asked for, with more than one division and at least
- * two weeks to split into halves. */
+/** Whether a plan can re-draft its divisions at halfway: more than one division, and at least two
+ * weeks to split into halves. */
+export function canReshuffle(settings: Pick<SeasonFormatSettings, 'divisions' | 'weeks'>): boolean {
+  return settings.divisions > 1 && settings.weeks >= 2;
+}
+
+/** Whether the divisions re-draft at halfway: asked for, and possible (`canReshuffle()`). */
 export function reshuffles(settings: Pick<SeasonFormatSettings, 'halfwayShuffle' | 'divisions' | 'weeks'>): boolean {
-  return settings.halfwayShuffle && settings.divisions > 1 && settings.weeks >= 2;
+  return settings.halfwayShuffle && canReshuffle(settings);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1807,10 +1807,6 @@ export type Database = {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
       }
-      create_scrim_match: {
-        Args: { p_map: string; p_night_id: number; p_shirts: number[]; p_skins: number[]; p_workshop_id: string }
-        Returns: number
-      }
       delete_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: Json

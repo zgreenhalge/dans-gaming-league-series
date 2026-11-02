@@ -67,12 +67,11 @@ export interface UpcomingScrimNight {
 export async function getUpcomingScrimNights(now: Date): Promise<UpcomingScrimNight[]> {
   const nights = upcomingScrimNights(await getScrimNightRows(), now);
   const signups = await Promise.all(nights.map((n) => getScrimSignups(n.id)));
-  return nights.map((night, i) => ({
-    night,
-    started: hasScrimNightStarted(night, now),
-    checkInOpen: isScrimCheckInOpen(night, now),
-    signups: signups[i],
-  }));
+  return nights.map((night, i) => toUpcomingScrimNight(night, signups[i], now));
+}
+
+function toUpcomingScrimNight(night: ScrimNight, signups: ScrimSignupEntry[], now: Date): UpcomingScrimNight {
+  return { night, started: hasScrimNightStarted(night, now), checkInOpen: isScrimCheckInOpen(night, now), signups };
 }
 
 /** One player's line in a scrim match — zeroed until the match is scored. */
@@ -198,18 +197,19 @@ export interface ScrimNightView extends UpcomingScrimNight {
   leaderboard: ScrimLeaderboardRow[];
 }
 
+/** The night with id `nightId`, or `null`. */
+export async function getScrimNightById(nightId: number): Promise<ScrimNight | null> {
+  return (await getScrimNightRows()).find((n) => n.id === nightId) ?? null;
+}
+
 /** Everything a night's page shows, or `null` for an id with no night. */
 export async function getScrimNight(nightId: number, now: Date): Promise<ScrimNightView | null> {
-  const [rows, playersById] = await Promise.all([getScrimNightRows(), getPlayersById()]);
-  const night = rows.find((r) => r.id === nightId);
+  const [night, playersById] = await Promise.all([getScrimNightById(nightId), getPlayersById()]);
   if (!night) return null;
   const [signups, matches] = await Promise.all([getScrimSignups(night.id), getScrimNightMatches(night.id)]);
   return {
-    night,
+    ...toUpcomingScrimNight(night, signups, now),
     current: !hasScrimNightEnded(night, now),
-    started: hasScrimNightStarted(night, now),
-    checkInOpen: isScrimCheckInOpen(night, now),
-    signups,
     matches,
     leaderboard: buildScrimNightLeaderboard(matches, playersById),
   };

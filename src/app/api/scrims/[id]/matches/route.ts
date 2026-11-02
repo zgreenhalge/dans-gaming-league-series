@@ -9,7 +9,7 @@ import { accessDenied } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from '@/lib/queries';
 import { pickNextScrimMatch, SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
-import { createScrimMatch, randomScrimMap, UnplayedScrimMatchError } from '@/lib/scrim-matches';
+import { queueScrimMatches, ScrimMatchConflictError } from '@/lib/scrim-matches';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireScrimNightMatchAccess((await params).id);
@@ -21,16 +21,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     getScrimNightMatches(night.id),
     getMapsForWorkshopPicker(),
   ]);
-  if (maps.length === 0) return NextResponse.json({ error: 'No maps with a workshop id to play on' }, { status: 409 });
 
   const plan = pickNextScrimMatch(ratings, history);
   if (!plan) return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
 
   try {
-    const matchId = await createScrimMatch(getAdminClient(), night.id, randomScrimMap(maps), plan);
+    const [matchId] = await queueScrimMatches(getAdminClient(), night.id, [plan], maps);
     return NextResponse.json({ ok: true, matchId }, { status: 201 });
   } catch (err) {
-    if (err instanceof UnplayedScrimMatchError) return NextResponse.json({ error: err.message }, { status: 409 });
+    if (err instanceof ScrimMatchConflictError) return NextResponse.json({ error: err.message }, { status: 409 });
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Making the match failed' }, { status: 500 });
   }
 }

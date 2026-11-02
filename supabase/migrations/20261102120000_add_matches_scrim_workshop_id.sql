@@ -5,7 +5,7 @@ alter table public.matches
   add column scrim_workshop_id text check (scrim_workshop_id ~ '^\d+$'),
   add constraint matches_scrim_workshop_id check (scrim_night_id is not null or scrim_workshop_id is null);
 
--- `create_scrim_match()` now takes the map's workshop id alongside its name.
+-- `create_scrim_match()` takes the map's workshop id alongside its name.
 drop function public.create_scrim_match(integer, text, integer[], integer[]);
 
 -- Creates a scrim night's next match (numbered after its others) on the map `p_map` / `p_workshop_id`,

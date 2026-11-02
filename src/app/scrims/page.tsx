@@ -45,10 +45,7 @@ export default async function ScrimsPage() {
             {upcoming.map((u) => (
               <ScrimNightPanel
                 key={u.night.id}
-                night={u.night}
-                started={u.started}
-                checkInOpen={u.checkInOpen}
-                signups={u.signups}
+                upcoming={u}
                 currentPlayerId={currentPlayerId}
                 isAdmin={isAdmin}
                 allPlayers={allPlayers}

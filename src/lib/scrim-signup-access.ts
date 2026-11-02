@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { requireSession } from './session';
-import { isPlayerAdmin, getScrimNightRows } from './queries';
+import { isPlayerAdmin, getScrimNightById } from './queries';
 import { hasScrimNightEnded, type ScrimNight } from './scrim-schedule';
 import { selfOrAdminTarget, type AccessResult } from './access-control';
 import { parseRouteId } from './util';
@@ -15,7 +15,7 @@ import { parseRouteId } from './util';
 export async function findCurrentScrimNight(id: string, now: Date): Promise<AccessResult<{ night: ScrimNight }>> {
   const nightId = parseRouteId(id);
   if (nightId === null) return { ok: false, status: 400, error: 'Invalid scrim night id' };
-  const night = (await getScrimNightRows()).find((n) => n.id === nightId);
+  const night = await getScrimNightById(nightId);
   if (!night) return { ok: false, status: 404, error: 'Scrim night not found' };
   if (hasScrimNightEnded(night, now)) return { ok: false, status: 409, error: 'That scrim night is over' };
   return { ok: true, night };

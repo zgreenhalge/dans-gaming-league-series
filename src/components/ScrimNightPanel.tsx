@@ -12,15 +12,12 @@ import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { StatusPill } from './StatusPill';
-import type { ScrimSignupEntry } from '@/lib/queries';
+import type { UpcomingScrimNight } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
-import { SCRIM_COMMITMENTS, type ScrimCommitment, type ScrimNight } from '@/lib/scrim-schedule';
+import { SCRIM_COMMITMENTS, type ScrimCommitment } from '@/lib/scrim-schedule';
 
 interface Props {
-  night: ScrimNight;
-  started: boolean;
-  checkInOpen: boolean;
-  signups: ScrimSignupEntry[];
+  upcoming: UpcomingScrimNight;
   currentPlayerId: number | null;
   isAdmin: boolean;
   allPlayers: { id: number; name: string }[];
@@ -49,7 +46,8 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
  *  to sign up, switch between definite and maybe, or drop out — and, once check-in opens, to check in
  *  or out (matchmaking only draws from checked-in players). Admins can do all of it for any player.
  *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. */
-export function ScrimNightPanel({ night, started, checkInOpen, signups, currentPlayerId, isAdmin, allPlayers, showNightLink }: Props) {
+export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers, showNightLink }: Props) {
+  const { night, started, checkInOpen, signups } = upcoming;
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
   // The player whose signup is being changed, so only their controls show as pending.

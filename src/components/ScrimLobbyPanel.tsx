@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { scrimMatchHref } from '@/lib/crumbs';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
@@ -10,12 +9,12 @@ import MatchServerPanel from './MatchServerPanel';
 import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
 import { SELECT_CLS } from './formStyles';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
-import { sendJsonRequest } from './sendJsonRequest';
-import { useAsyncAction } from './useAsyncAction';
+import { useRefreshingAction } from './useRefreshingAction';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
 import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
@@ -49,23 +48,11 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 
 type Lineup = [number, number, number, number];
 
-/** A lobby mutation: send it, then refresh the page so it shows the result. */
-function useLobbyAction() {
-  const router = useRouter();
-  const { busy, error, run } = useAsyncAction();
-  const [, startTransition] = useTransition();
-  const act = (method: 'POST' | 'PATCH' | 'DELETE', url: string, body: unknown = {}) =>
-    run(async () => {
-      await sendJsonRequest(method, url, body);
-      startTransition(() => router.refresh());
-    });
-  return { busy, error, act };
-}
 
 /** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
  *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
 export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage }: Props) {
-  const { busy, error, act } = useLobbyAction();
+  const { busy, error, act } = useRefreshingAction();
   if (match) {
     return (
       <div className="flex flex-col gap-3">
@@ -79,11 +66,11 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
       <div>
         <div className={LABEL_CLS}>Lobby</div>
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-          {pool.length} checked in{pool.length < 4 && ' — a match needs 4'}
+          {pool.length} checked in{pool.length < SCRIM_MATCH_SIZE && ` — a match needs ${SCRIM_MATCH_SIZE}`}
         </div>
       </div>
       {canMake && (
-        <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || pool.length < 4} className={GO_BTN_CLS}>
+        <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || pool.length < SCRIM_MATCH_SIZE} className={GO_BTN_CLS}>
           {busy ? '…' : 'Make next match'}
         </button>
       )}
@@ -100,7 +87,7 @@ function LobbyMatch({
   maps,
   canManage,
 }: Pick<Props, 'pool' | 'names' | 'maps' | 'canManage'> & { match: ScrimMatch }) {
-  const { busy, error, act } = useLobbyAction();
+  const { busy, error, act } = useRefreshingAction();
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
   const knownMap = maps.some((m) => m.workshopId === match.workshop_id);
@@ -232,7 +219,7 @@ function LobbyMatch({
 /** The pre-matched matches waiting behind the lobby's, each with a Discard for its players or an
  *  admin. Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
 function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
-  const { busy, error, act } = useLobbyAction();
+  const { busy, error, act } = useRefreshingAction();
   const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">

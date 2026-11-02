@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { ScheduleLabView, type PlanPeriod } from './ScheduleLabView';
 import ErrorText from './ErrorText';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
-import { sendJsonRequest } from './sendJsonRequest';
-import { useAsyncAction } from './useAsyncAction';
+import { useRefreshingAction } from './useRefreshingAction';
 import type { ScheduleLabPlayer, ScheduleLabRoster } from '@/lib/queries';
 import type { FormatPlan, FormatRecord } from '@/lib/season-format';
 
@@ -33,16 +31,8 @@ export function ScrimPreMatchPanel({
   rosters: ScheduleLabRoster[];
   careerRecords: Record<number, FormatRecord>;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { busy, error, run } = useAsyncAction();
-  const [, startTransition] = useTransition();
-
-  const queue = (plan: FormatPlan) =>
-    run(async () => {
-      await sendJsonRequest('POST', `/api/scrims/${nightId}/rounds`, { games: planGames(plan) });
-      startTransition(() => router.refresh());
-    });
+  const { busy, error, act } = useRefreshingAction();
 
   if (!open) {
     return (
@@ -66,14 +56,22 @@ export function ScrimPreMatchPanel({
         period={ROUND}
         fixedRoster
         defaultWeeks={2}
-        planActions={(plan) => (
-          <div className="flex flex-col items-end gap-1">
-            <button type="button" onClick={() => queue(plan)} disabled={busy} className={`${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}>
-              {busy ? '…' : `Queue these ${planGames(plan).length} matches`}
-            </button>
-            <ErrorText error={error} size={12} />
-          </div>
-        )}
+        planActions={(plan) => {
+          const games = planGames(plan);
+          return (
+            <div className="flex flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={() => act('POST', `/api/scrims/${nightId}/rounds`, { games })}
+                disabled={busy}
+                className={`${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
+              >
+                {busy ? '…' : `Queue these ${games.length} matches`}
+              </button>
+              <ErrorText error={error} size={12} />
+            </div>
+          );
+        }}
       />
     </div>
   );

@@ -8,17 +8,18 @@ import { ScrimPreMatchPanel } from '@/components/ScrimPreMatchPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight, getScrimNightById } from '@/lib/queries';
 import { formatNightDate } from '@/lib/scrim-schedule';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const nightId = parseRouteId((await params).id);
-  const night = nightId === null ? null : await getScrimNight(nightId, new Date());
-  return { title: night ? `Scrims · ${formatNightDate(night.night.startsAt)}` : 'Scrims' };
+  const night = nightId === null ? null : await getScrimNightById(nightId);
+  return { title: night ? `Scrims · ${formatNightDate(night.startsAt)}` : 'Scrims' };
 }
 
 const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
@@ -46,8 +47,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const inLobbyMatch = !!lobbyMatch && inMatch(lobbyMatch);
   const canMake = isAdmin || viewerCheckedIn;
   // Pre-matching rounds is offered where making the next match is: no match waiting, four checked in.
-  const preMatch = night.checkInOpen && canMake && !lobbyMatch && pool.length >= 4 ? await getScheduleLabData() : null;
-  const poolIds = new Set(pool.map((p) => p.id));
+  const preMatch = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
 
   return (
     <div className="min-h-screen">
@@ -72,10 +72,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
         <div className="flex flex-col gap-8">
           {night.current && (
             <ScrimNightPanel
-              night={night.night}
-              started={night.started}
-              checkInOpen={night.checkInOpen}
-              signups={night.signups}
+              upcoming={night}
               currentPlayerId={currentPlayerId}
               isAdmin={isAdmin}
               allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
@@ -99,7 +96,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                 <div className="mt-3 flex flex-col">
                   <ScrimPreMatchPanel
                     nightId={night.night.id}
-                    players={preMatch.players.filter((p) => poolIds.has(p.playerId))}
+                    players={preMatch.players}
                     rosters={preMatch.rosters}
                     careerRecords={preMatch.careerRecords}
                   />

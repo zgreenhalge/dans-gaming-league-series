@@ -1,6 +1,6 @@
 -- Scrim nights by start time. A night is a `scrim_nights` row with its start instant, created by its
 -- first signup (`start_scrim_night()`) and removed when its last player drops out while it has no
--- matches (`leave_scrim_night()`). There is no recurring schedule. Called from src/lib/scrim-nights.ts.
+-- matches (`leave_scrim_night()`). Called from src/lib/scrim-nights.ts.
 
 drop table public.scrim_schedule;
 

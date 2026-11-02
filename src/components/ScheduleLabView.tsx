@@ -9,6 +9,7 @@ import {
   FORMAT_MIN_DIVISION_SIZE,
   FORMAT_MIN_WEEKS,
   LOPSIDED_MARGIN,
+  canReshuffle,
   reshuffles,
   type DraftBasis,
   type DraftOrder,
@@ -169,7 +170,7 @@ export function ScheduleLabView({
   /** Rendered beside the shown preview's schedule, e.g. a button that acts on its plan. */
   planActions?: (plan: FormatPlan) => ReactNode;
 }) {
-  const [picked, setSelected] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
+  const [picked, setPicked] = useState<Set<number>>(() => new Set(rosters[0]?.playerIds ?? []));
   const allIds = useMemo(() => new Set(players.map((p) => p.playerId)), [players]);
   const selected = fixedRoster ? allIds : picked;
   const [chosen, setSettings] = useState<Settings>({
@@ -218,7 +219,7 @@ export function ScheduleLabView({
 
   const update = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }));
   const togglePlayer = (id: number) =>
-    setSelected((s) => {
+    setPicked((s) => {
       const next = new Set(s);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -286,7 +287,7 @@ export function ScheduleLabView({
             value=""
             onChange={(e) => {
               const roster = rosters.find((r) => r.seasonId === Number(e.target.value));
-              if (roster) setSelected(new Set(roster.playerIds));
+              if (roster) setPicked(new Set(roster.playerIds));
             }}
           >
             <option value="" disabled>
@@ -298,7 +299,7 @@ export function ScheduleLabView({
               </option>
             ))}
           </select>
-          <button type="button" className={`${ADMIN_SMALL_BUTTON_CLS} mb-2`} onClick={() => setSelected(new Set())}>
+          <button type="button" className={`${ADMIN_SMALL_BUTTON_CLS} mb-2`} onClick={() => setPicked(new Set())}>
             Clear
           </button>
         </div>
@@ -375,8 +376,8 @@ export function ScheduleLabView({
         )}
         <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
           <div className="flex flex-col gap-2 font-mono text-[12px]">
-            <label className={`flex items-center gap-2 ${settings.divisions === 1 || settings.weeks < 2 ? 'opacity-40' : ''}`}>
-              <input type="checkbox" checked={settings.halfwayShuffle} disabled={settings.divisions === 1 || settings.weeks < 2} onChange={(e) => update({ halfwayShuffle: e.target.checked })} />
+            <label className={`flex items-center gap-2 ${canReshuffle(settings) ? '' : 'opacity-40'}`}>
+              <input type="checkbox" checked={settings.halfwayShuffle} disabled={!canReshuffle(settings)} onChange={(e) => update({ halfwayShuffle: e.target.checked })} />
               Re-draft divisions at halfway
             </label>
             <label className="flex items-center gap-2">
@@ -450,7 +451,8 @@ export function ScheduleLabView({
         )}
       </section>
 
-      {shown && <PlanSchedule preview={shown} namesById={namesById} period={period} actions={planActions?.(shown.plan)} />}
+      {shown && planActions && <div className="flex justify-end">{planActions(shown.plan)}</div>}
+      {shown && <PlanSchedule preview={shown} namesById={namesById} period={period} />}
     </div>
   );
 }
@@ -472,29 +474,16 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
 
 // Memoized: the schedule can run to hundreds of rows, and its inputs don't change when the controls
 // above it do.
-const PlanSchedule = memo(function PlanSchedule({
-  preview,
-  namesById,
-  period,
-  actions,
-}: {
-  preview: Preview;
-  namesById: Map<number, string>;
-  period: PlanPeriod;
-  actions?: ReactNode;
-}) {
+const PlanSchedule = memo(function PlanSchedule({ preview, namesById, period }: { preview: Preview; namesById: Map<number, string>; period: PlanPeriod }) {
   const { plan } = preview;
   const name = (id: number) => namesById.get(id) ?? `#${id}`;
   const multiDivision = plan.settings.divisions > 1;
 
   return (
     <section className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <SectionLabel>Preview {previewLetter(preview)} schedule</SectionLabel>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview, period)}</div>
-        </div>
-        {actions}
+      <div>
+        <SectionLabel>Preview {previewLetter(preview)} schedule</SectionLabel>
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview, period)}</div>
       </div>
       {plan.halves.map((half) => (
         <div key={half.half} className="flex flex-col gap-4">

@@ -21,7 +21,7 @@ export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
 
 /** The timezone server-rendered night labels (titles, breadcrumbs) use — the league's, as in
  *  `seo/og.ts`. In-page times render in the viewer's own timezone (`LocalTime`). */
-export const SCRIM_LABEL_TIMEZONE = 'America/New_York';
+const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
 /** Whether `night` is over. */
 export function hasScrimNightEnded(night: ScrimNight, now: Date): boolean {
