@@ -4,10 +4,11 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
 import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
+import { ScrimPreMatchPanel } from '@/components/ScrimPreMatchPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, getScrimNight } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight } from '@/lib/queries';
 import { formatNightDate } from '@/lib/scrim-schedule';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 
@@ -38,9 +39,15 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
-  const lobbyMatch = night.matches.find((m) => !isPlayedScore(m.final_score)) ?? null;
+  // Matches play in order: the first without a score is the lobby's, the rest wait behind it.
+  const [lobbyMatch = null, ...queuedMatches] = night.matches.filter((m) => !isPlayedScore(m.final_score));
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
-  const inLobbyMatch = currentPlayerId != null && !!lobbyMatch && [...lobbyMatch.shirts, ...lobbyMatch.skins].includes(currentPlayerId);
+  const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
+  const inLobbyMatch = !!lobbyMatch && inMatch(lobbyMatch);
+  const canMake = isAdmin || viewerCheckedIn;
+  // Pre-matching rounds is offered where making the next match is: no match waiting, four checked in.
+  const preMatch = night.checkInOpen && canMake && !lobbyMatch && pool.length >= 4 ? await getScheduleLabData() : null;
+  const poolIds = new Set(pool.map((p) => p.id));
 
   return (
     <div className="min-h-screen">
@@ -81,12 +88,23 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                 key={lobbyMatch ? `${lobbyMatch.id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
                 nightId={night.night.id}
                 match={lobbyMatch}
+                queued={queuedMatches.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) }))}
                 pool={pool}
                 names={names}
                 maps={maps}
-                canMake={isAdmin || viewerCheckedIn}
+                canMake={canMake}
                 canManage={isAdmin || inLobbyMatch}
               />
+              {preMatch && (
+                <div className="mt-3 flex flex-col">
+                  <ScrimPreMatchPanel
+                    nightId={night.night.id}
+                    players={preMatch.players.filter((p) => poolIds.has(p.playerId))}
+                    rosters={preMatch.rosters}
+                    careerRecords={preMatch.careerRecords}
+                  />
+                </div>
+              )}
               {!viewerCheckedIn && currentPlayerId != null && (
                 <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">Check in above to be matched.</div>
               )}

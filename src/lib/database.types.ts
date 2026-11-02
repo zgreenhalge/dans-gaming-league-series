@@ -1827,6 +1827,10 @@ export type Database = {
         Args: { p_season_id: number }
         Returns: boolean
       }
+      queue_scrim_matches: {
+        Args: { p_matches: Json; p_night_id: number }
+        Returns: number[]
+      }
       reconcile_gauntlet_draft: {
         Args: {
           p_delete_pod_ids: number[]

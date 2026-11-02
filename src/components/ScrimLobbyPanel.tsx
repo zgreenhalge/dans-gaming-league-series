@@ -20,8 +20,10 @@ import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
   nightId: number;
-  /** The night's match without a score, if any — the lobby. */
+  /** The night's first match without a score, if any — the lobby. */
   match: ScrimMatch | null;
+  /** The pre-matched matches after it, in play order, and whether the viewer may discard each. */
+  queued: { match: ScrimMatch; canDiscard: boolean }[];
   /** Checked-in players, the pool a match draws from. */
   pool: { id: number; name: string }[];
   /** Every player's name, for lineup slots holding someone no longer checked in. */
@@ -62,9 +64,16 @@ function useLobbyAction() {
 
 /** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
  *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
-export function ScrimLobbyPanel({ nightId, match, pool, names, maps, canMake, canManage }: Props) {
+export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage }: Props) {
   const { busy, error, act } = useLobbyAction();
-  if (match) return <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />;
+  if (match) {
+    return (
+      <div className="flex flex-col gap-3">
+        <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />
+        {queued.length > 0 && <UpNext queued={queued} names={names} />}
+      </div>
+    );
+  }
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-wrap items-center justify-between gap-3">
       <div>
@@ -216,6 +225,32 @@ function LobbyMatch({
           <MatchServerPanel matchId={match.id} canManage={canManage} initialState={(match.server_state ?? 'idle') as ServerState} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The pre-matched matches waiting behind the lobby's, each with a Discard for its players or an
+ *  admin. Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
+function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
+  const { busy, error, act } = useLobbyAction();
+  const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
+  return (
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+      <div className={`px-4 py-2 border-b border-[var(--color-border-tertiary)] ${LABEL_CLS}`}>Up next · {queued.length}</div>
+      {queued.map(({ match, canDiscard }) => (
+        <div key={match.id} className="px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 flex items-center justify-between gap-3 font-mono text-[12px]">
+          <span className="min-w-0">
+            <span className="text-[var(--color-text-secondary)]">{match.match_number} · {match.map ? toSentenceCase(match.map) : '—'} · </span>
+            {team(match.shirts)} <span className="text-[var(--color-text-secondary)]">vs</span> {team(match.skins)}
+          </span>
+          {canDiscard && (
+            <button type="button" onClick={() => act('DELETE', `/api/scrims/matches/${match.id}`)} disabled={busy} className={BTN_CLS}>
+              Discard
+            </button>
+          )}
+        </div>
+      ))}
+      <ErrorText error={error} size={12} className="px-4 pb-3" />
     </div>
   );
 }

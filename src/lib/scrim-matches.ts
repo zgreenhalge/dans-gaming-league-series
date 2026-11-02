@@ -89,6 +89,13 @@ export interface ScrimMap {
   workshopId: string;
 }
 
+/** A random map from `maps` (every map the server can load), the map an ad-hoc or pre-matched scrim
+ *  match starts on until its lobby changes it. */
+export function randomScrimMap(maps: { name: string; workshopId: string }[], rand: () => number = Math.random): ScrimMap {
+  const pick = maps[Math.floor(rand() * maps.length)];
+  return { name: pick.name, workshopId: pick.workshopId };
+}
+
 /** The map for workshop item `workshopId`: a known map keeps its name; any other item is named after
  *  its Steam title (`fetchWorkshopItem()`), falling back to its id when Steam can't say. Nothing is
  *  added to `maps` — a scrim map stays on its match. */
@@ -118,6 +125,20 @@ export async function createScrimMatch(db: SupabaseClient, nightId: number, map:
     throw error;
   }
   return data as number;
+}
+
+/** Queues `matches` on the night, numbered in order after its others (`queue_scrim_matches()`, one
+ *  transaction) — a pre-matched set of rounds. Returns the new match ids in order. */
+export async function queueScrimMatches(db: SupabaseClient, nightId: number, matches: { map: ScrimMap; teams: ScrimTeams }[]): Promise<number[]> {
+  const { data, error } = await db.rpc('queue_scrim_matches', {
+    p_night_id: nightId,
+    p_matches: matches.map(({ map, teams }) => ({ map: map.name, workshop_id: map.workshopId, shirts: teams.shirts, skins: teams.skins })),
+  });
+  if (error) {
+    if (error.message.includes('unplayed-scrim-match')) throw new UnplayedScrimMatchError();
+    throw error;
+  }
+  return data as number[];
 }
 
 /** Replaces a scrim match's lineup (`set_scrim_match_lineup()`, one transaction). */

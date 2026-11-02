@@ -1,6 +1,7 @@
 /**
- * Route-handler tests for scrim night matches: POST /api/scrims/[id]/matches (make the next match)
- * and PATCH/DELETE /api/scrims/matches/[id] (change the map or lineup, or discard). Covers who may
+ * Route-handler tests for scrim night matches: POST /api/scrims/[id]/matches (make the next match),
+ * POST /api/scrims/[id]/rounds (queue pre-matched rounds) and PATCH/DELETE /api/scrims/matches/[id]
+ * (change the map or lineup, or discard). Covers who may
  * act, the four-player minimum, one unplayed match at a time, lineups drawn only from checked-in
  * players, and the lock once a match has started.
  *
@@ -16,6 +17,7 @@ import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
 import { POST as CREATE } from '../../[id]/matches/route';
+import { POST as QUEUE } from '../../[id]/rounds/route';
 import { PATCH, DELETE } from './route';
 
 const ADMIN_ID = 1;
@@ -53,6 +55,8 @@ function installFixture(checkedIn: number[], extra: Partial<FakeDb> = {}): { db:
 
 const create = (id: string) =>
   CREATE(jsonRequest(`http://localhost/api/scrims/${id}/matches`, 'POST', {}), { params: Promise.resolve({ id }) });
+const queue = (id: string, body: unknown) =>
+  QUEUE(jsonRequest(`http://localhost/api/scrims/${id}/rounds`, 'POST', body), { params: Promise.resolve({ id }) });
 const patch = (id: number, body: unknown) =>
   PATCH(jsonRequest(`http://localhost/api/scrims/matches/${id}`, 'PATCH', body), { params: Promise.resolve({ id: String(id) }) });
 const discard = (id: number) =>
@@ -204,6 +208,37 @@ async function main() {
     });
     __setTestSession(sessionFor(ADMIN_ID));
     assert.equal((await patch(50, { workshop: '3070000222' })).status, 404);
+  });
+
+  await test('rounds: queues the games in order, each on a known map; the first becomes the lobby match', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5, 6]);
+    __setTestSession(sessionFor(2));
+    const games = [
+      { shirts: [2, 3], skins: [4, 5] },
+      { shirts: [2, 6], skins: [3, 4] },
+      { shirts: [5, 6], skins: [2, 4] },
+    ];
+    const res = await queue(date, { games });
+    assert.equal(res.status, 201);
+    const { matchIds } = (await res.json()) as { matchIds: number[] };
+    assert.deepEqual(db.matches.map((m) => [m.id, m.match_number, m.scrim_side_choice]), matchIds.map((id, i) => [id, i + 1, 'knife']));
+    assert.ok(db.matches.every((m) => ['Foroglio', 'Cobblestone'].includes(m.shirts_pick as string)));
+    assert.deepEqual(lineupOf(db, matchIds[1]), [2, 3, 4, 6]);
+    // The night now has unplayed matches: neither another queue nor an ad-hoc match until they're played.
+    assert.equal((await queue(date, { games })).status, 409);
+    assert.equal((await create(date)).status, 409);
+  });
+
+  await test('rounds: 400 for a player not checked in or a malformed game; 403 for a player not checked in', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5]);
+    __setTestSession(sessionFor(2));
+    assert.equal((await queue(date, { games: [{ shirts: [2, 3], skins: [4, 7] }] })).status, 400);
+    assert.equal((await queue(date, { games: [{ shirts: [2, 2], skins: [4, 5] }] })).status, 400);
+    assert.equal((await queue(date, { games: [] })).status, 400);
+    assert.equal((await queue(date, {})).status, 400);
+    __setTestSession(sessionFor(OUTSIDER_ID));
+    assert.equal((await queue(date, { games: [{ shirts: [2, 3], skins: [4, 5] }] })).status, 403);
+    assert.equal(db.matches.length, 0);
   });
 
   report();

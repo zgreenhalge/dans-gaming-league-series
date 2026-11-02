@@ -9,7 +9,7 @@ import { accessDenied } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from '@/lib/queries';
 import { pickNextScrimMatch, SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
-import { createScrimMatch, UnplayedScrimMatchError } from '@/lib/scrim-matches';
+import { createScrimMatch, randomScrimMap, UnplayedScrimMatchError } from '@/lib/scrim-matches';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireScrimNightMatchAccess((await params).id);
@@ -25,11 +25,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const plan = pickNextScrimMatch(ratings, history);
   if (!plan) return NextResponse.json({ error: `A match needs ${SCRIM_MATCH_SIZE} checked-in players` }, { status: 409 });
-  const pick = maps[Math.floor(Math.random() * maps.length)];
-  const map = { name: pick.name, workshopId: pick.workshopId };
 
   try {
-    const matchId = await createScrimMatch(getAdminClient(), night.id, map, plan);
+    const matchId = await createScrimMatch(getAdminClient(), night.id, randomScrimMap(maps), plan);
     return NextResponse.json({ ok: true, matchId }, { status: 201 });
   } catch (err) {
     if (err instanceof UnplayedScrimMatchError) return NextResponse.json({ error: err.message }, { status: 409 });
