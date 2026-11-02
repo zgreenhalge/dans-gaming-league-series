@@ -70,6 +70,13 @@ export async function getUpcomingScrimNights(now: Date): Promise<UpcomingScrimNi
   return nights.map((night, i) => toUpcomingScrimNight(night, signups[i], now));
 }
 
+/** The soonest night that hasn't ended, with its signups — the home page's Next Scrims card — or
+ *  `null` when none is planned. Reads only that night's signups. */
+export async function getNextScrimNight(now: Date): Promise<UpcomingScrimNight | null> {
+  const [night] = upcomingScrimNights(await getScrimNightRows(), now);
+  return night ? toUpcomingScrimNight(night, await getScrimSignups(night.id), now) : null;
+}
+
 function toUpcomingScrimNight(night: ScrimNight, signups: ScrimSignupEntry[], now: Date): UpcomingScrimNight {
   return { night, started: hasScrimNightStarted(night, now), checkInOpen: isScrimCheckInOpen(night, now), signups };
 }

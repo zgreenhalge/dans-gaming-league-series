@@ -13,7 +13,7 @@ import {
   getOpenFeedbackSeasonIds,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
-  getUpcomingScrimNights,
+  getNextScrimNight,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { gauntletHref, seasonHref } from '@/lib/crumbs';
@@ -69,13 +69,13 @@ function UpcomingSeasonRow({
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
-  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds, scrims] = await Promise.all([
+  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds, nextScrims] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
     getCareerH2HDataCached(),
     currentPlayerId != null ? getOpenFeedbackSeasonIds().then((ids) => new Set(ids)) : new Set<number>(),
-    getUpcomingScrimNights(new Date()),
+    getNextScrimNight(new Date()),
   ]);
 
   const upcoming = seasons
@@ -136,8 +136,8 @@ export default async function Home() {
           </div>
         )}
 
-        {scrims[0] && (
-          <NextScrimCard upcoming={scrims[0]} currentPlayerId={currentPlayerId} />
+        {nextScrims && (
+          <NextScrimCard upcoming={nextScrims} currentPlayerId={currentPlayerId} />
         )}
 
         {/* One grid, so My Stats is a single element: first on a phone (above the games and
