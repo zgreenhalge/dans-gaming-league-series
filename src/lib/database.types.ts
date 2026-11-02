@@ -1267,43 +1267,16 @@ export type Database = {
       }
       scrim_nights: {
         Row: {
-          cancelled: boolean
           id: number
-          night_date: string
+          starts_at: string
         }
         Insert: {
-          cancelled?: boolean
           id?: number
-          night_date: string
+          starts_at: string
         }
         Update: {
-          cancelled?: boolean
           id?: number
-          night_date?: string
-        }
-        Relationships: []
-      }
-      scrim_schedule: {
-        Row: {
-          enabled: boolean
-          id: number
-          start_time: string
-          timezone: string
-          weekday: number
-        }
-        Insert: {
-          enabled?: boolean
-          id?: number
-          start_time: string
-          timezone: string
-          weekday: number
-        }
-        Update: {
-          enabled?: boolean
-          id?: number
-          start_time?: string
-          timezone?: string
-          weekday?: number
+          starts_at?: string
         }
         Relationships: []
       }
@@ -1846,6 +1819,10 @@ export type Database = {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
       }
+      leave_scrim_night: {
+        Args: { p_night_id: number; p_player_id: number }
+        Returns: boolean
+      }
       lock_and_check_season_materialized: {
         Args: { p_season_id: number }
         Returns: boolean
@@ -1903,6 +1880,10 @@ export type Database = {
       set_season_buy_in: {
         Args: { p_amount: number | null; p_season_id: number }
         Returns: Json
+      }
+      start_scrim_night: {
+        Args: { p_commitment: string; p_night_minutes: number; p_player_id: number; p_starts_at: string }
+        Returns: number
       }
     }
     Enums: {

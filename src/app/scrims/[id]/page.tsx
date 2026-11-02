@@ -1,32 +1,33 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
 import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
+import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, getScrimNight } from '@/lib/queries';
-import { formatNightDate, isNightDate } from '@/lib/scrim-schedule';
-import { isPlayedScore } from '@/lib/util';
+import { formatNightDate } from '@/lib/scrim-schedule';
+import { isPlayedScore, parseRouteId } from '@/lib/util';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: Promise<{ date: string }> }): Promise<Metadata> {
-  const { date } = await params;
-  return { title: isNightDate(date) ? `Scrims · ${formatNightDate(date)}` : 'Scrims' };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const nightId = parseRouteId((await params).id);
+  const night = nightId === null ? null : await getScrimNight(nightId, new Date());
+  return { title: night ? `Scrims · ${formatNightDate(night.night.startsAt)}` : 'Scrims' };
 }
 
 const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
 
-export default async function ScrimNightPage({ params }: { params: Promise<{ date: string }> }) {
-  const { date } = await params;
-  if (!isNightDate(date)) notFound();
+export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
+  const nightId = parseRouteId((await params).id);
+  if (nightId === null) notFound();
   const [night, session, playersById, maps] = await Promise.all([
-    getScrimNight(date, new Date()),
+    getScrimNight(nightId, new Date()),
     getSession(),
     getPlayersById(),
     getMapsForWorkshopPicker(),
@@ -43,18 +44,16 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
 
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: formatNightDate(date) }]} />
+      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: formatNightDate(night.night.startsAt) }]} />
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-16">
         <div className="mt-8 mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-[28px] font-semibold leading-tight">Scrim night</h1>
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-              {night.startsAt ? <LocalTime iso={night.startsAt} opts={START_FORMAT} /> : formatNightDate(date)}
+              <LocalTime iso={night.night.startsAt} opts={START_FORMAT} />
             </div>
           </div>
-          {night.cancelled ? (
-            <StatusPill variant="neutral">Cancelled</StatusPill>
-          ) : night.started ? (
+          {night.started && night.current ? (
             <StatusPill variant="live">Happening now</StatusPill>
           ) : night.current ? (
             <StatusPill variant="accent">Upcoming</StatusPill>
@@ -64,13 +63,23 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
         </div>
 
         <div className="flex flex-col gap-8">
-          {/* Check-in is only open for a current night that isn't cancelled (`isScrimCheckInOpen()`). */}
+          {night.current && (
+            <ScrimNightPanel
+              night={night.night}
+              started={night.started}
+              checkInOpen={night.checkInOpen}
+              signups={night.signups}
+              currentPlayerId={currentPlayerId}
+              isAdmin={isAdmin}
+              allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
+            />
+          )}
           {night.checkInOpen && (
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
               <ScrimLobbyPanel
                 key={lobbyMatch ? `${lobbyMatch.id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
-                date={date}
+                nightId={night.night.id}
                 match={lobbyMatch}
                 pool={pool}
                 names={names}
@@ -79,16 +88,12 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ dat
                 canManage={isAdmin || inLobbyMatch}
               />
               {!viewerCheckedIn && currentPlayerId != null && (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-                  <Link href="/scrims" className="underline hover:text-[var(--color-text-primary)]">Check in</Link> to be matched.
-                </div>
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">Check in above to be matched.</div>
               )}
             </section>
           )}
-          {night.current && !night.checkInOpen && !night.cancelled && (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              The lobby opens when check-in does. <Link href="/scrims" className="underline hover:text-[var(--color-text-primary)]">Sign up</Link> in the meantime.
-            </div>
+          {night.current && !night.checkInOpen && (
+            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">The lobby opens when check-in does.</div>
           )}
 
           <section>

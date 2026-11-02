@@ -1,16 +1,12 @@
 import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import {
-  normalizeStartTime,
-  scrimNightSlots,
-  nextScrimNight,
+  hasScrimNightEnded,
   hasScrimNightStarted,
   isScrimCheckInOpen,
-  zonedTimeToUtc,
+  upcomingScrimNights,
   type ScrimCommitment,
-  type ScrimNightRow,
-  type ScrimNightSlot,
-  type ScrimSchedule,
+  type ScrimNight,
 } from '../scrim-schedule';
 import { persistentQuery } from './_persistentCache';
 import { asPage, fetchAllPages } from './_shared';
@@ -31,24 +27,11 @@ export interface ScrimSignupEntry {
   checked_in_at: string | null;
 }
 
-/** The weekly scrim slot, or `null` before an admin has set one. */
-export const getScrimSchedule = persistentQuery('getScrimSchedule', async (): Promise<ScrimSchedule | null> => {
-  const { data, error } = await getAdminClient()
-    .from('scrim_schedule')
-    .select('weekday, start_time, timezone, enabled')
-    .eq('id', 1)
-    .maybeSingle();
+/** Every scrim night, in no particular order. */
+export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): Promise<ScrimNight[]> => {
+  const { data, error } = await getAdminClient().from('scrim_nights').select('id, starts_at');
   if (error) throw error;
-  if (!data) return null;
-  const row = data as { weekday: number; start_time: string; timezone: string; enabled: boolean };
-  return { weekday: row.weekday, startTime: normalizeStartTime(row.start_time), timezone: row.timezone, enabled: row.enabled };
-});
-
-/** Every `scrim_nights` row — one per date anyone has signed up for or an admin has cancelled. */
-export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): Promise<ScrimNightRow[]> => {
-  const { data, error } = await getAdminClient().from('scrim_nights').select('id, night_date, cancelled');
-  if (error) throw error;
-  return (data ?? []) as ScrimNightRow[];
+  return ((data ?? []) as { id: number; starts_at: string }[]).map((r) => ({ id: r.id, startsAt: new Date(r.starts_at).toISOString() }));
 });
 
 /** A night's signups: definite before maybe, then in signup order. A signup whose player row is
@@ -70,39 +53,26 @@ export const getScrimSignups = persistentQuery('getScrimSignups', async (nightId
   return entries.sort((a, b) => rank(a.commitment) - rank(b.commitment) || a.signed_up_at.localeCompare(b.signed_up_at));
 });
 
-/** The schedule and the nights that haven't ended yet (`scrimNightSlots()`) as of `now`. */
-export async function getScrimNights(now: Date): Promise<{ schedule: ScrimSchedule | null; slots: ScrimNightSlot[] }> {
-  const [schedule, rows] = await Promise.all([getScrimSchedule(), getScrimNightRows()]);
-  return { schedule, slots: scrimNightSlots(schedule, rows, now) };
-}
-
-export interface ScrimOverview {
-  schedule: ScrimSchedule | null;
-  /** Nights that haven't ended yet, cancelled ones included. */
-  slots: ScrimNightSlot[];
-  /** The next night that isn't cancelled. */
-  next: ScrimNightSlot | null;
-  /** Whether `next` has started. */
+/** A night that hasn't ended, with what its signup panel shows. */
+export interface UpcomingScrimNight {
+  night: ScrimNight;
   started: boolean;
-  /** Whether players can check in to `next` (`isScrimCheckInOpen()`). */
+  /** Whether players can check in (`isScrimCheckInOpen()`). */
   checkInOpen: boolean;
-  /** `next`'s signups (empty while it has no `scrim_nights` row). */
   signups: ScrimSignupEntry[];
 }
 
-/** Everything the scrims page and the home page's Next Scrims card show, as of `now`. */
-export async function getScrimOverview(now: Date): Promise<ScrimOverview> {
-  const { schedule, slots } = await getScrimNights(now);
-  const next = nextScrimNight(slots);
-  const signups = next?.nightId != null ? await getScrimSignups(next.nightId) : [];
-  return {
-    schedule,
-    slots,
-    next,
-    started: next != null && hasScrimNightStarted(next, now),
-    checkInOpen: next != null && isScrimCheckInOpen(next, now),
-    signups,
-  };
+/** The nights that haven't ended as of `now`, soonest first, with their signups — what the scrims
+ *  page lists and the home page's Next Scrims card shows the first of. */
+export async function getUpcomingScrimNights(now: Date): Promise<UpcomingScrimNight[]> {
+  const nights = upcomingScrimNights(await getScrimNightRows(), now);
+  const signups = await Promise.all(nights.map((n) => getScrimSignups(n.id)));
+  return nights.map((night, i) => ({
+    night,
+    started: hasScrimNightStarted(night, now),
+    checkInOpen: isScrimCheckInOpen(night, now),
+    signups: signups[i],
+  }));
 }
 
 /** One player's line in a scrim match — zeroed until the match is scored. */
@@ -221,50 +191,31 @@ export function buildScrimNightLeaderboard(matches: ScrimMatch[], playersById: M
   return out.sort(canonicalSortValues);
 }
 
-export interface ScrimNightView {
-  date: string;
-  /** When the night starts, from the schedule — `null` if no schedule is set. */
-  startsAt: string | null;
-  nightId: number | null;
-  cancelled: boolean;
-  /** Still listed by `scrimNightSlots()`: upcoming or running, as opposed to over. */
+export interface ScrimNightView extends UpcomingScrimNight {
+  /** Not yet ended: upcoming or running, as opposed to over. */
   current: boolean;
-  started: boolean;
-  checkInOpen: boolean;
-  signups: ScrimSignupEntry[];
   matches: ScrimMatch[];
   leaderboard: ScrimLeaderboardRow[];
 }
 
-/** Everything a night's page shows, or `null` for a date that is neither an upcoming night nor one
- *  with a `scrim_nights` row. */
-export async function getScrimNight(date: string, now: Date): Promise<ScrimNightView | null> {
-  const [{ schedule, slots }, rows, playersById] = await Promise.all([getScrimNights(now), getScrimNightRows(), getPlayersById()]);
-  const slot = slots.find((s) => s.date === date);
-  const row = rows.find((r) => r.night_date === date);
-  if (!slot && !row) return null;
-
-  const nightId = slot?.nightId ?? row?.id ?? null;
-  const [signups, matches] = nightId != null
-    ? await Promise.all([getScrimSignups(nightId), getScrimNightMatches(nightId)])
-    : [[], []];
-  const startsAt = slot?.startsAt ?? (schedule ? zonedTimeToUtc(date, schedule.startTime, schedule.timezone).toISOString() : null);
+/** Everything a night's page shows, or `null` for an id with no night. */
+export async function getScrimNight(nightId: number, now: Date): Promise<ScrimNightView | null> {
+  const [rows, playersById] = await Promise.all([getScrimNightRows(), getPlayersById()]);
+  const night = rows.find((r) => r.id === nightId);
+  if (!night) return null;
+  const [signups, matches] = await Promise.all([getScrimSignups(night.id), getScrimNightMatches(night.id)]);
   return {
-    date,
-    startsAt,
-    nightId,
-    cancelled: slot?.cancelled ?? row?.cancelled ?? false,
-    current: slot != null,
-    started: slot != null && hasScrimNightStarted(slot, now),
-    checkInOpen: slot != null && isScrimCheckInOpen(slot, now),
+    night,
+    current: !hasScrimNightEnded(night, now),
+    started: hasScrimNightStarted(night, now),
+    checkInOpen: isScrimCheckInOpen(night, now),
     signups,
     matches,
     leaderboard: buildScrimNightLeaderboard(matches, playersById),
   };
 }
 
-export interface PastScrimNight {
-  date: string;
+export interface PastScrimNight extends ScrimNight {
   /** Scored matches. */
   matches: number;
   /** Distinct players across those matches. */
@@ -274,14 +225,12 @@ export interface PastScrimNight {
 /** Nights that are over and had at least one scored match, newest first. */
 export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
   type MatchRow = { scrim_night_id: number; final_score: string | null; player_match_stats: { player_id: number }[] | null };
-  const [{ slots }, rows, data] = await Promise.all([
-    getScrimNights(now),
+  const [rows, data] = await Promise.all([
     getScrimNightRows(),
     fetchAllPages<MatchRow>((from, to) =>
       asPage(getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null).range(from, to)),
     ),
   ]);
-  const listed = new Set(slots.map((s) => s.date));
   const byNight = new Map<number, { matches: number; players: Set<number> }>();
   for (const m of data) {
     if (!isPlayedScore(m.final_score)) continue;
@@ -291,15 +240,17 @@ export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
     byNight.set(m.scrim_night_id, entry);
   }
   return rows
-    .filter((r) => !listed.has(r.night_date) && byNight.has(r.id))
-    .map((r) => ({ date: r.night_date, matches: byNight.get(r.id)!.matches, players: byNight.get(r.id)!.players.size }))
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .filter((r) => hasScrimNightEnded(r, now) && byNight.has(r.id))
+    .map((r) => ({ ...r, matches: byNight.get(r.id)!.matches, players: byNight.get(r.id)!.players.size }))
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 }
 
 export interface ScrimMatchDetail {
   id: number;
   match_number: number;
-  night_date: string;
+  night_id: number;
+  /** When the match's night starts. */
+  night_starts_at: string;
   final_score: string | null;
   shirts_pick: string | null;
   skins_pick: string | null;
@@ -315,7 +266,7 @@ export const getScrimMatchDetail = cache(async (matchId: number): Promise<ScrimM
   const [{ data, error }, playersById] = await Promise.all([
     getAdminClient()
       .from('matches')
-      .select('id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, recording_url, scrim_nights(night_date), player_match_stats(*)')
+      .select('id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, recording_url, scrim_night_id, scrim_nights(starts_at), player_match_stats(*)')
       .eq('id', matchId)
       .not('scrim_night_id', 'is', null)
       .maybeSingle(),
@@ -323,14 +274,16 @@ export const getScrimMatchDetail = cache(async (matchId: number): Promise<ScrimM
   ]);
   if (error) throw error;
   if (!data) return null;
-  const row = data as unknown as Omit<ScrimMatchDetail, 'night_date' | 'stats'> & {
-    scrim_nights: { night_date: string } | null;
+  const row = data as unknown as Omit<ScrimMatchDetail, 'night_id' | 'night_starts_at' | 'stats'> & {
+    scrim_night_id: number;
+    scrim_nights: { starts_at: string } | null;
     player_match_stats: PlayerMatchStat[] | null;
   };
-  const { scrim_nights, player_match_stats, ...match } = row;
+  const { scrim_night_id, scrim_nights, player_match_stats, ...match } = row;
   return {
     ...match,
-    night_date: scrim_nights?.night_date ?? '',
+    night_id: scrim_night_id,
+    night_starts_at: scrim_nights ? new Date(scrim_nights.starts_at).toISOString() : '',
     stats: toMatchStatRows(player_match_stats ?? [], playersById),
   };
 });

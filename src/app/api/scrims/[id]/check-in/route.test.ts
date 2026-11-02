@@ -1,8 +1,8 @@
 /**
- * Route-handler tests for POST/DELETE /api/scrims/[date]/check-in: the check-in window, a walk-up
+ * Route-handler tests for POST/DELETE /api/scrims/[id]/check-in: the check-in window, a walk-up
  * check-in creating a definite signup, a maybe becoming definite, checking out, and admin-or-self.
  *
- * Run:  npx vitest run src/app/api/scrims/[date]/check-in/route.test.ts
+ * Run:  npx vitest run src/app/api/scrims/[id]/check-in/route.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -11,35 +11,35 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
-import { scrimScheduleStartingIn } from '@/lib/test-support/scrimFixtures';
+import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
 import { POST, DELETE } from './route';
 
 const ADMIN_ID = 1;
 const PLAYER_ID = 2;
 const OTHER_PLAYER_ID = 3;
 
+const NIGHT = '5';
+
 function installFixture(offsetMs: number, extra: Partial<FakeDb> = {}): { db: FakeDb; date: string } {
-  const { row, date } = scrimScheduleStartingIn(offsetMs);
   const db: FakeDb = {
     players: [
       { id: ADMIN_ID, name: 'Admin', is_admin: true },
       { id: PLAYER_ID, name: 'Player', is_admin: false },
       { id: OTHER_PLAYER_ID, name: 'Other', is_admin: false },
     ],
-    scrim_schedule: [row],
-    scrim_nights: [],
+    scrim_nights: [scrimNightStartingIn(offsetMs, Number(NIGHT))],
     scrim_signups: [],
     ...extra,
   };
   __setTestAdminClient(createFakeSupabaseClient(db));
-  return { db, date };
+  return { db, date: NIGHT };
 }
 
 const SOON = 10 * 60 * 1000;
 const LATER = 3 * 60 * 60 * 1000;
 
-function call(handler: typeof POST, method: 'POST' | 'DELETE', date: string, body: Record<string, unknown>) {
-  return handler(jsonRequest(`http://localhost/api/scrims/${date}/check-in`, method, body), { params: Promise.resolve({ date }) });
+function call(handler: typeof POST, method: 'POST' | 'DELETE', id: string, body: Record<string, unknown>) {
+  return handler(jsonRequest(`http://localhost/api/scrims/${id}/check-in`, method, body), { params: Promise.resolve({ id }) });
 }
 
 async function main() {
@@ -60,9 +60,7 @@ async function main() {
   });
 
   await test('POST: a maybe who checks in becomes definite', async () => {
-    const { date } = scrimScheduleStartingIn(SOON);
-    const { db } = installFixture(SOON, {
-      scrim_nights: [{ id: 5, night_date: date, cancelled: false }],
+    const { db, date } = installFixture(SOON, {
       scrim_signups: [{ id: 1, night_id: 5, player_id: PLAYER_ID, commitment: 'maybe', checked_in_at: null }],
     });
     __setTestSession(sessionFor(PLAYER_ID));
@@ -72,9 +70,7 @@ async function main() {
   });
 
   await test('DELETE: checking out keeps the signup', async () => {
-    const { date } = scrimScheduleStartingIn(SOON);
-    const { db } = installFixture(SOON, {
-      scrim_nights: [{ id: 5, night_date: date, cancelled: false }],
+    const { db, date } = installFixture(SOON, {
       scrim_signups: [{ id: 1, night_id: 5, player_id: PLAYER_ID, commitment: 'definite', checked_in_at: '2026-01-01T00:00:00Z' }],
     });
     __setTestSession(sessionFor(PLAYER_ID));
@@ -92,9 +88,8 @@ async function main() {
     assert.equal(db.scrim_signups[0].player_id, OTHER_PLAYER_ID);
   });
 
-  await test('POST: 409 for a cancelled night', async () => {
-    const { date } = scrimScheduleStartingIn(SOON);
-    installFixture(SOON, { scrim_nights: [{ id: 5, night_date: date, cancelled: true }] });
+  await test('POST: 409 once the night is over', async () => {
+    const { date } = installFixture(-5 * 60 * 60 * 1000);
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await call(POST, 'POST', date, { player_id: PLAYER_ID })).status, 409);
   });

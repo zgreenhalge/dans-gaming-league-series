@@ -19,7 +19,7 @@ import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
-  date: string;
+  nightId: number;
   /** The night's match without a score, if any — the lobby. */
   match: ScrimMatch | null;
   /** Checked-in players, the pool a match draws from. */
@@ -62,7 +62,7 @@ function useLobbyAction() {
 
 /** The scrim night lobby: make the next match, then — for the players in it or an admin — set its map,
  *  starting side and lineup (from the checked-in pool), start it on the server, or discard it. */
-export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canManage }: Props) {
+export function ScrimLobbyPanel({ nightId, match, pool, names, maps, canMake, canManage }: Props) {
   const { busy, error, act } = useLobbyAction();
   if (match) return <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />;
   return (
@@ -74,7 +74,7 @@ export function ScrimLobbyPanel({ date, match, pool, names, maps, canMake, canMa
         </div>
       </div>
       {canMake && (
-        <button type="button" onClick={() => act('POST', `/api/scrims/${date}/matches`)} disabled={busy || pool.length < 4} className={GO_BTN_CLS}>
+        <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || pool.length < 4} className={GO_BTN_CLS}>
           {busy ? '…' : 'Make next match'}
         </button>
       )}

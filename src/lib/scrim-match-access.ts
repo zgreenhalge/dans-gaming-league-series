@@ -6,8 +6,8 @@
 import { requireSession } from './session';
 import { requireMatchAccess } from './match-access';
 import { isPlayerAdmin, getScrimSignups, getScrimMatch, type ScrimMatch } from './queries';
-import { isScrimCheckInOpen, type ScrimNightSlot } from './scrim-schedule';
-import { findUpcomingScrimNight } from './scrim-signup-access';
+import { isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
+import { findCurrentScrimNight } from './scrim-signup-access';
 import type { AccessResult } from './access-control';
 
 /** Players checked in to a night — the pool matchmaking and lineup changes draw from. */
@@ -15,25 +15,25 @@ export async function checkedInPlayerIds(nightId: number): Promise<number[]> {
   return (await getScrimSignups(nightId)).filter((s) => s.checked_in_at).map((s) => s.player_id);
 }
 
-export type ScrimNightMatchAccess = AccessResult<{ slot: ScrimNightSlot & { nightId: number }; checkedIn: number[] }>;
+export type ScrimNightMatchAccess = AccessResult<{ night: ScrimNight; checkedIn: number[] }>;
 
 /** Gate for creating a night's next match: check-in open, and the requester checked in or an admin. */
-export async function requireScrimNightMatchAccess(date: string, now: Date = new Date()): Promise<ScrimNightMatchAccess> {
+export async function requireScrimNightMatchAccess(id: string, now: Date = new Date()): Promise<ScrimNightMatchAccess> {
   const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) return { ok: false, status: 401, error: 'Unauthorized' };
 
-  const [night, admin] = await Promise.all([findUpcomingScrimNight(date, now), isPlayerAdmin(playerId)]);
-  if (!night.ok) return night;
-  const { slot } = night;
-  if (!isScrimCheckInOpen(slot, now) || slot.nightId === null) {
+  const [found, admin] = await Promise.all([findCurrentScrimNight(id, now), isPlayerAdmin(playerId)]);
+  if (!found.ok) return found;
+  const { night } = found;
+  if (!isScrimCheckInOpen(night, now)) {
     return { ok: false, status: 409, error: 'Matches can only be made once check-in is open' };
   }
-  const checkedIn = await checkedInPlayerIds(slot.nightId);
+  const checkedIn = await checkedInPlayerIds(night.id);
   if (!admin && !checkedIn.includes(playerId)) {
     return { ok: false, status: 403, error: 'Check in to make matches' };
   }
-  return { ok: true, slot: { ...slot, nightId: slot.nightId }, checkedIn };
+  return { ok: true, night, checkedIn };
 }
 
 export type ScrimMatchAccess = AccessResult<{ playerId: number; isAdmin: boolean; match: ScrimMatch }>;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
@@ -12,16 +13,19 @@ import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { StatusPill } from './StatusPill';
 import type { ScrimSignupEntry } from '@/lib/queries';
-import { SCRIM_COMMITMENTS, type ScrimCommitment, type ScrimNightSlot } from '@/lib/scrim-schedule';
+import { scrimNightHref } from '@/lib/crumbs';
+import { SCRIM_COMMITMENTS, type ScrimCommitment, type ScrimNight } from '@/lib/scrim-schedule';
 
 interface Props {
-  night: ScrimNightSlot;
+  night: ScrimNight;
   started: boolean;
   checkInOpen: boolean;
   signups: ScrimSignupEntry[];
   currentPlayerId: number | null;
   isAdmin: boolean;
   allPlayers: { id: number; name: string }[];
+  /** Link to the night's page (off on the night page itself). */
+  showNightLink?: boolean;
 }
 
 const COMMITMENT_LABEL: Record<ScrimCommitment, string> = { definite: 'Definite', maybe: 'Maybe' };
@@ -41,10 +45,11 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
   timeZoneName: 'short',
 };
 
-/** The next scrim night: when it is, who's coming (definite, then maybe), and the controls to sign up,
- *  switch between definite and maybe, or drop out — and, once check-in opens, to check in or out
- *  (matchmaking only draws from checked-in players). Admins can do all of it for any player. */
-export function ScrimNightPanel({ night, started, checkInOpen, signups, currentPlayerId, isAdmin, allPlayers }: Props) {
+/** A scrim night that hasn't ended: when it is, who's coming (definite, then maybe), and the controls
+ *  to sign up, switch between definite and maybe, or drop out — and, once check-in opens, to check in
+ *  or out (matchmaking only draws from checked-in players). Admins can do all of it for any player.
+ *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. */
+export function ScrimNightPanel({ night, started, checkInOpen, signups, currentPlayerId, isAdmin, allPlayers, showNightLink }: Props) {
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
   // The player whose signup is being changed, so only their controls show as pending.
@@ -60,8 +65,8 @@ export function ScrimNightPanel({ night, started, checkInOpen, signups, currentP
   function send(playerId: number, method: 'POST' | 'DELETE', path: 'signups' | 'check-in', body: Record<string, unknown> = {}) {
     setTarget(playerId);
     return run(async () => {
-      await sendJsonRequest(method, `/api/scrims/${night.date}/${path}`, { player_id: playerId, ...body });
-      startTransition(() => router.refresh());
+      const res = await sendJsonRequest<{ nightRemoved?: boolean } | null>(method, `/api/scrims/${night.id}/${path}`, { player_id: playerId, ...body });
+      startTransition(() => (res?.nightRemoved ? router.push('/scrims') : router.refresh()));
     });
   }
 
@@ -133,7 +138,7 @@ export function ScrimNightPanel({ night, started, checkInOpen, signups, currentP
       >
         <div className="min-w-0">
           <div className="tracked text-[10px] mb-1" style={{ color: 'var(--color-site-accent)' }}>
-            {started ? 'Happening now' : 'Next scrims'}
+            {started ? 'Happening now' : 'Upcoming'}
           </div>
           <div className="font-display text-[22px] font-semibold leading-tight">
             <LocalTime iso={night.startsAt} opts={START_FORMAT} />
@@ -141,6 +146,11 @@ export function ScrimNightPanel({ night, started, checkInOpen, signups, currentP
           {!started && <CountdownTimer iso={night.startsAt} className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1" />}
           {checkInOpen && (
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">{checkedInCount} checked in</div>
+          )}
+          {showNightLink && (
+            <Link href={scrimNightHref(night.id)} className="inline-block mt-1 font-mono text-[12px] text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)]">
+              {checkInOpen ? 'Open the lobby →' : 'Night page →'}
+            </Link>
           )}
         </div>
 

@@ -1,5 +1,5 @@
 /**
- * Route-handler tests for scrim night matches: POST /api/scrims/[date]/matches (make the next match)
+ * Route-handler tests for scrim night matches: POST /api/scrims/[id]/matches (make the next match)
  * and PATCH/DELETE /api/scrims/matches/[id] (change the map or lineup, or discard). Covers who may
  * act, the four-player minimum, one unplayed match at a time, lineups drawn only from checked-in
  * players, and the lock once a match has started.
@@ -14,8 +14,8 @@ import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSu
 import { scrimMatchRpcs } from '@/lib/test-support/scrimMatchRpcs';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
-import { scrimScheduleStartingIn } from '@/lib/test-support/scrimFixtures';
-import { POST as CREATE } from '../../[date]/matches/route';
+import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
+import { POST as CREATE } from '../../[id]/matches/route';
 import { PATCH, DELETE } from './route';
 
 const ADMIN_ID = 1;
@@ -24,13 +24,12 @@ const NIGHT_ID = 5;
 
 /** Players 1 (admin) and 2–7, with `checkedIn` of them checked in to the night. */
 function installFixture(checkedIn: number[], extra: Partial<FakeDb> = {}): { db: FakeDb; date: string } {
-  // Starts in 10 minutes, so check-in is open on the real clock.
-  const { row, date } = scrimScheduleStartingIn(10 * 60 * 1000);
+  const date = String(NIGHT_ID);
   const db: FakeDb = {
     players: [1, 2, 3, 4, 5, 6, 7, OUTSIDER_ID].map((id) => ({ id, name: `P${id}`, is_admin: id === ADMIN_ID, seed_ehog: null })),
     player_rating_history: [],
-    scrim_schedule: [row],
-    scrim_nights: [{ id: NIGHT_ID, night_date: date, cancelled: false }],
+    // Starts in 10 minutes, so check-in is open on the real clock.
+    scrim_nights: [scrimNightStartingIn(10 * 60 * 1000, NIGHT_ID)],
     scrim_signups: checkedIn.map((player_id, i) => ({
       id: i + 1,
       night_id: NIGHT_ID,
@@ -52,8 +51,8 @@ function installFixture(checkedIn: number[], extra: Partial<FakeDb> = {}): { db:
   return { db, date };
 }
 
-const create = (date: string) =>
-  CREATE(jsonRequest(`http://localhost/api/scrims/${date}/matches`, 'POST', {}), { params: Promise.resolve({ date }) });
+const create = (id: string) =>
+  CREATE(jsonRequest(`http://localhost/api/scrims/${id}/matches`, 'POST', {}), { params: Promise.resolve({ id }) });
 const patch = (id: number, body: unknown) =>
   PATCH(jsonRequest(`http://localhost/api/scrims/matches/${id}`, 'PATCH', body), { params: Promise.resolve({ id: String(id) }) });
 const discard = (id: number) =>

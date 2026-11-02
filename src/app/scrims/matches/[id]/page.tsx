@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const matchId = parseRouteId((await params).id);
   const match = matchId === null ? null : await getScrimMatchDetail(matchId);
-  return { title: match ? `Scrim · ${formatNightDate(match.night_date)} · Match ${match.match_number}` : 'Scrim match' };
+  return { title: match ? `Scrim · ${formatNightDate(match.night_starts_at)} · Match ${match.match_number}` : 'Scrim match' };
 }
 
 /** A scrim match's page: the same score header, server panel, demo review and stat tabs as a league
@@ -69,7 +69,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
         crumbs={[
           { label: 'DGLS', href: '/' },
           { label: 'Scrims', href: '/scrims' },
-          { label: formatNightDate(match.night_date), href: scrimNightHref(match.night_date) },
+          { label: formatNightDate(match.night_starts_at), href: scrimNightHref(match.night_id) },
           { label: `Match ${match.match_number}` },
         ]}
       />

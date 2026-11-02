@@ -16,7 +16,7 @@ function installWithLive(matchId: number, scrim: boolean) {
   const db = buildFakeDb();
   if (scrim) {
     const source = db.matches.find((m) => m.id === 100)!;
-    db.scrim_nights = [{ id: 1, night_date: '2026-11-05', cancelled: false }];
+    db.scrim_nights = [{ id: 1, starts_at: '2026-11-06T01:00:00Z' }];
     db.matches = [...db.matches, { ...source, id: matchId, week_id: null, scrim_night_id: 1 }];
     db.player_match_stats = [
       ...db.player_match_stats,

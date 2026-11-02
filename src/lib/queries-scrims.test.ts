@@ -1,6 +1,6 @@
 /**
  * Scrim night reads: a night's leaderboard (scored matches only, ranked Wins → RWR% → ADR), the night
- * view for a current and a past night, and the past-nights list.
+ * view for a current and a past night, the upcoming-nights list, and the past-nights list.
  *
  * Run:  npx vitest run src/lib/queries-scrims.test.ts
  */
@@ -9,14 +9,12 @@ import assert from 'node:assert/strict';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightLeaderboard, getMatch, getPastScrimNights, getScrimMatchDetail, getScrimNight, type ScrimMatch, type ScrimMatchPlayer } from './queries';
-import { scrimNightSlots, type ScrimSchedule } from './scrim-schedule';
+import { buildScrimNightLeaderboard, getMatch, getPastScrimNights, getScrimMatchDetail, getScrimNight, getUpcomingScrimNights, type ScrimMatch, type ScrimMatchPlayer } from './queries';
 
-const SCHEDULE: ScrimSchedule = { weekday: 4, startTime: '20:00', timezone: 'America/New_York', enabled: true };
-const NOW = new Date('2026-11-02T12:00:00Z'); // Monday; the next night is Thu 2026-11-05
-const [UPCOMING] = scrimNightSlots(SCHEDULE, [], NOW, 1).map((s) => s.date);
-const PAST = '2026-10-29';
-const PAST_EMPTY = '2026-10-22';
+const NOW = new Date('2026-11-02T12:00:00Z');
+const UPCOMING = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
+const PAST = '2026-10-30T00:00:00.000Z';
+const PAST_EMPTY = '2026-10-23T00:00:00.000Z';
 
 function line(player_id: number, faction: 'SHIRTS' | 'SKINS', won: boolean, kills: number, damage: number, roundsWon: number): ScrimMatchPlayer {
   return { player_id, faction, kills, assists: 0, deaths: 10, damage, adr: Math.round(damage / 20), rounds_played: 20, rounds_won: roundsWon, is_win: won };
@@ -59,11 +57,10 @@ function db(): FakeDb {
   });
   return {
     players: playerRows,
-    scrim_schedule: [{ id: 1, weekday: 4, start_time: '20:00:00', timezone: SCHEDULE.timezone, enabled: true }],
     scrim_nights: [
-      { id: 1, night_date: PAST, cancelled: false },
-      { id: 2, night_date: PAST_EMPTY, cancelled: false },
-      { id: 3, night_date: UPCOMING, cancelled: false },
+      { id: 1, starts_at: PAST },
+      { id: 2, starts_at: PAST_EMPTY },
+      { id: 3, starts_at: UPCOMING },
     ],
     scrim_signups: [{ id: 1, night_id: 3, player_id: 1, commitment: 'definite', signed_up_at: '2026-11-01T00:00:00Z', checked_in_at: null }],
     matches: [
@@ -83,21 +80,21 @@ __setTestAdminClient(createFakeSupabaseClient(db()));
 
 async function main() {
   await test('getPastScrimNights: over and with a scored match, newest first', async () => {
-    assert.deepEqual(await getPastScrimNights(NOW), [{ date: PAST, matches: 1, players: 4 }]);
+    assert.deepEqual(await getPastScrimNights(NOW), [{ id: 1, startsAt: PAST, matches: 1, players: 4 }]);
   });
 
   await test('getScrimNight: a past night carries its matches and leaderboard', async () => {
-    const night = await getScrimNight(PAST, NOW);
+    const night = await getScrimNight(1, NOW);
     assert.ok(night);
     assert.equal(night.current, false);
-    assert.equal(night.startsAt, '2026-10-30T00:00:00.000Z'); // 8pm EDT
+    assert.equal(night.night.startsAt, PAST);
     assert.equal(night.matches.length, 1);
     assert.deepEqual(night.matches[0].shirts.sort(), [1, 2]);
     assert.deepEqual(night.leaderboard.slice(0, 2).map((r) => r.wins), [1, 1]);
   });
 
   await test('getScrimNight: the upcoming night is current, with its signups', async () => {
-    const night = await getScrimNight(UPCOMING, NOW);
+    const night = await getScrimNight(3, NOW);
     assert.ok(night);
     assert.equal(night.current, true);
     assert.equal(night.checkInOpen, false);
@@ -107,7 +104,7 @@ async function main() {
   await test('getScrimMatchDetail: a scrim match with its night date and named stat rows; null for a league match', async () => {
     const detail = await getScrimMatchDetail(900);
     assert.ok(detail);
-    assert.equal(detail.night_date, PAST);
+    assert.deepEqual([detail.night_id, detail.night_starts_at], [1, PAST]);
     assert.equal(detail.final_score, '13-7');
     assert.deepEqual(detail.stats.map((r) => r.player_name).sort(), ['P1', 'P2', 'P3', 'P4']);
     assert.equal(await getScrimMatchDetail(12345), null);
@@ -117,8 +114,13 @@ async function main() {
     assert.equal(await getMatch(900), null);
   });
 
-  await test('getScrimNight: null for a date with no night', async () => {
-    assert.equal(await getScrimNight('2026-10-15', NOW), null);
+  await test('getUpcomingScrimNights: nights not yet ended, soonest first, with signups', async () => {
+    const upcoming = await getUpcomingScrimNights(NOW);
+    assert.deepEqual(upcoming.map((u) => [u.night.id, u.started, u.checkInOpen, u.signups.length]), [[3, false, false, 1]]);
+  });
+
+  await test('getScrimNight: null for an id with no night', async () => {
+    assert.equal(await getScrimNight(99, NOW), null);
   });
 
   report();

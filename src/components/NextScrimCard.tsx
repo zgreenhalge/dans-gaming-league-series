@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { StatusPill } from './StatusPill';
 import type { ScrimSignupEntry } from '@/lib/queries';
-import type { ScrimNightSlot } from '@/lib/scrim-schedule';
+import { scrimNightHref } from '@/lib/crumbs';
+import type { ScrimNight } from '@/lib/scrim-schedule';
 
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
 
@@ -13,7 +14,7 @@ export function NextScrimCard({
   signups,
   currentPlayerId,
 }: {
-  night: ScrimNightSlot;
+  night: ScrimNight;
   started: boolean;
   signups: ScrimSignupEntry[];
   currentPlayerId: number | null;
@@ -24,7 +25,7 @@ export function NextScrimCard({
 
   return (
     <Link
-      href="/scrims"
+      href={scrimNightHref(night.id)}
       className="lift-row mb-8 flex items-center justify-between gap-6 px-5 py-4 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
     >
       <div className="min-w-0">

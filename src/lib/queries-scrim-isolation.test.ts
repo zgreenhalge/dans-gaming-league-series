@@ -58,7 +58,7 @@ function withScrimMatch(): FakeDb {
   const db = buildFakeDb();
   const source = db.matches.find((m) => m.id === SOURCE_MATCH_ID);
   assert.ok(source, 'fixture match 100 exists');
-  db.scrim_nights = [{ id: 1, night_date: '2026-01-08', cancelled: false }];
+  db.scrim_nights = [{ id: 1, starts_at: '2026-01-09T01:00:00Z' }];
   db.matches = [...db.matches, { ...source, id: SCRIM_MATCH_ID, week_id: null, scrim_night_id: 1, is_feature_match: false }];
 
   const pmsIds = new Map<number, number>();

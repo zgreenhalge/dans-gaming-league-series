@@ -13,7 +13,7 @@ import {
   getOpenFeedbackSeasonIds,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
-  getScrimOverview,
+  getUpcomingScrimNights,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { gauntletHref, seasonHref } from '@/lib/crumbs';
@@ -75,7 +75,7 @@ export default async function Home() {
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
     getCareerH2HDataCached(),
     currentPlayerId != null ? getOpenFeedbackSeasonIds().then((ids) => new Set(ids)) : new Set<number>(),
-    getScrimOverview(new Date()),
+    getUpcomingScrimNights(new Date()),
   ]);
 
   const upcoming = seasons
@@ -136,8 +136,8 @@ export default async function Home() {
           </div>
         )}
 
-        {scrims.next && (
-          <NextScrimCard night={scrims.next} started={scrims.started} signups={scrims.signups} currentPlayerId={currentPlayerId} />
+        {scrims[0] && (
+          <NextScrimCard night={scrims[0].night} started={scrims[0].started} signups={scrims[0].signups} currentPlayerId={currentPlayerId} />
         )}
 
         {/* One grid, so My Stats is a single element: first on a phone (above the games and
