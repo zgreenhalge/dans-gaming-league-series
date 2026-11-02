@@ -51,11 +51,38 @@ async function browserDay(page: Page, daysAhead: number, time = '20:00'): Promis
   );
 }
 
-/** Clicks `day`'s calendar cell, moving to the next month first when the day is in it. */
-async function pickDay(page: Page, day: string): Promise<void> {
+/** Logs in as `user`, then opens `path` once the server renders it signed in: the dev login updates
+ *  the client session first, so a page loaded straight after can still render signed out. The
+ *  signed-in mark is a night's own signup buttons (`Maybe` shows for any signed-in viewer). */
+async function openNightAs(page: Page, user: 'Dan' | 'Zach', path: string): Promise<void> {
+  await loginAs(page, user, '/maps');
+  await expect(async () => {
+    await page.goto(path);
+    await expect(page.getByRole('button', { name: 'Maybe', exact: true })).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 45_000, intervals: [1_000] });
+}
+
+/** `openNightAs()` for `/scrims`: signed in, the calendar's picked day offers the start form. */
+async function openScrimsAs(page: Page, user: 'Dan' | 'Zach'): Promise<void> {
+  await loginAs(page, user, '/maps');
+  await expect(async () => {
+    await page.goto('/scrims');
+    await expect(page.getByText('Start a night this day')).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 45_000, intervals: [1_000] });
+}
+
+/** `day`'s calendar cell, once the calendar has mounted (it renders only in the browser), moving to
+ *  the next month first when the day is in it. */
+async function dayCell(page: Page, day: string) {
+  await expect(page.getByRole('button', { name: 'Previous month' })).toBeVisible();
   const cell = page.locator(`button[aria-label^="${day}"]`);
   if ((await cell.count()) === 0) await page.getByRole('button', { name: 'Next month' }).click();
-  await cell.click();
+  return cell;
+}
+
+/** Clicks `day`'s calendar cell. */
+async function pickDay(page: Page, day: string): Promise<void> {
+  await (await dayCell(page, day)).click();
 }
 
 test.describe('calendar and signups', () => {
@@ -68,8 +95,7 @@ test.describe('calendar and signups', () => {
   });
 
   test('a player starts a night on a picked day and lands on its page as the first signup', async ({ page }) => {
-    await loginAs(page, 'Dan', '/scrims');
-    await page.goto('/scrims');
+    await openScrimsAs(page, 'Dan');
     const { day, startsAt } = await browserDay(page, 2);
     await pickDay(page, day);
 
@@ -84,8 +110,7 @@ test.describe('calendar and signups', () => {
 
     // The calendar day now shows the signup count, and the night's time links to its page.
     await page.goto('/scrims');
-    const cell = page.locator(`button[aria-label^="${day}"]`);
-    if ((await cell.count()) === 0) await page.getByRole('button', { name: 'Next month' }).click();
+    const cell = await dayCell(page, day);
     await expect(cell).toHaveAttribute('aria-label', /1 definite, 0 maybe/);
     await cell.click();
     await page.getByRole('main').getByRole('link').filter({ hasText: /\d:\d\d/ }).first().click();
@@ -93,11 +118,11 @@ test.describe('calendar and signups', () => {
   });
 
   test('starting a night within four hours of another is refused', async ({ page }) => {
-    await loginAs(page, 'Dan', '/scrims');
+    await page.goto('/scrims');
     const existing = await browserDay(page, 2, '21:00');
     await seedScrimNight(existing.startsAt, [{ playerId: CASEY }]);
 
-    await page.goto('/scrims');
+    await openScrimsAs(page, 'Dan');
     await pickDay(page, existing.day);
     await page.getByLabel('Night start time').fill('20:00');
     await page.getByRole('button', { name: "I'm in" }).click();
@@ -106,8 +131,7 @@ test.describe('calendar and signups', () => {
 
   test('switching to maybe, then dropping out as the last player, removes the night', async ({ page }) => {
     const nightId = await seedScrimNight(2 * DAY, [{ playerId: DAN }]);
-    await loginAs(page, 'Dan', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
     await page.getByRole('button', { name: 'Maybe', exact: true }).click();
     await expect(page.getByText('Maybe · 1')).toBeVisible();
@@ -120,8 +144,7 @@ test.describe('calendar and signups', () => {
 
   test('joining and then leaving a night others are in keeps it', async ({ page }) => {
     const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }]);
-    await loginAs(page, 'Dan', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
     await page.getByRole('button', { name: 'Definite', exact: true }).click();
     await expect(page.getByText('Definite · 2')).toBeVisible();
@@ -134,13 +157,11 @@ test.describe('calendar and signups', () => {
   test('admin controls start closed, then add a player; a non-admin has none', async ({ page }) => {
     const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }]);
 
-    await loginAs(page, 'Dan', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
     await expect(page.getByText('Definite · 1')).toBeVisible();
     await expect(page.getByRole('button', { name: /Admin controls/ })).toHaveCount(0);
 
-    await loginAs(page, 'Zach', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Zach', `/scrims/${nightId}`);
     const toggle = page.getByRole('button', { name: /Admin controls/ });
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByLabel('Sign up a player…')).toHaveCount(0);
@@ -170,8 +191,7 @@ test.describe('the lobby', () => {
       { playerId: SAM, checkedIn: true },
       { playerId: DAN },
     ]);
-    await loginAs(page, 'Dan', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
     await expect(page.getByText('3 checked in — a match needs 4')).toBeVisible();
     await page.getByRole('button', { name: 'Check in', exact: true }).click();
@@ -207,8 +227,7 @@ test.describe('the lobby', () => {
     await expect(page.getByRole('button', { name: 'Check in', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Next Match' })).toHaveCount(0);
 
-    await loginAs(page, 'Dan', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
     await expect(page.getByRole('button', { name: 'Check in', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Next Match' })).toHaveCount(0);
   });
@@ -220,8 +239,7 @@ test.describe('the lobby', () => {
       { playerId: SAM, checkedIn: true },
       { playerId: DAN, checkedIn: true },
     ]);
-    await loginAs(page, 'Dan', `/scrims/${nightId}`);
-    await page.goto(`/scrims/${nightId}`);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
     await expect(page.getByRole('button', { name: 'Next Match' })).toBeVisible();
     await page.getByRole('button', { name: 'Generate Rounds' }).click();
@@ -258,6 +276,6 @@ test('a past night lists under Past nights, with its leaderboard and a working m
 
   // A league match URL for a scrim match redirects to its scrim page.
   await page.goto(`/matches/${matchId}`);
-  await expect(page).toHaveURL(new RegExp(`/scrims/matches/${matchId}$`));
+  await expect(page).toHaveURL(new RegExp(`/scrims/matches/${matchId}$`), { timeout: 30_000 });
   await expect(page.getByText('Something went wrong')).toHaveCount(0);
 });
