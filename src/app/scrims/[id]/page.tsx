@@ -9,7 +9,8 @@ import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNi
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight, getScrimNightById } from '@/lib/queries';
-import { formatNightDate } from '@/lib/scrim-schedule';
+import { formatNightDate, NIGHT_DATE_FORMAT } from '@/lib/scrim-schedule';
+import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
 
@@ -52,6 +53,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: formatNightDate(night.night.startsAt), localDate: night.night.startsAt }]} />
+      <LocalDateInTitle iso={night.night.startsAt} serverLabel={formatNightDate(night.night.startsAt)} opts={NIGHT_DATE_FORMAT} />
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-16">
         <div className="mt-8 mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>

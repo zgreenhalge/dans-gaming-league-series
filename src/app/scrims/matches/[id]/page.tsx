@@ -13,7 +13,8 @@ import { getSession } from '@/lib/session';
 import { getMapLookup, getMatchServerState, getPlayersById, getScrimMatchDetail } from '@/lib/queries';
 import { loadMatchPageFacts, matchMvpPlayerId, shirtsFaction } from '@/lib/match-page-data';
 import { scrimNightHref } from '@/lib/crumbs';
-import { formatNightDate } from '@/lib/scrim-schedule';
+import { formatNightDate, NIGHT_DATE_FORMAT } from '@/lib/scrim-schedule';
+import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
@@ -65,6 +66,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="min-h-screen">
+      <LocalDateInTitle iso={match.night_starts_at} serverLabel={formatNightDate(match.night_starts_at)} opts={NIGHT_DATE_FORMAT} />
       <TopbarShell
         crumbs={[
           { label: 'DGLS', href: '/' },

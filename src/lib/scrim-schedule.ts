@@ -19,9 +19,9 @@ export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
 export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
 
-/** The timezone server-rendered night labels use — the league's, as in `seo/og.ts`: page titles, and
- *  breadcrumbs until they hydrate into the viewer's own timezone (`Crumb.localDate`). In-page times
- *  render in the viewer's timezone (`LocalTime`). */
+/** The timezone server-rendered night labels use — the league's, as in `seo/og.ts` — until the page
+ *  hydrates and they switch to the viewer's own timezone: breadcrumbs through `Crumb.localDate`, the
+ *  tab title through `LocalDateInTitle`. In-page times render in the viewer's timezone (`LocalTime`). */
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
 /** Whether `night` is over. */
@@ -45,9 +45,12 @@ export function upcomingScrimNights(nights: ScrimNight[], now: Date): ScrimNight
   return nights.filter((n) => !hasScrimNightEnded(n, now)).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
 
-/** A night's date for a server-rendered label, e.g. `Thu, Nov 5`, in `SCRIM_LABEL_TIMEZONE`. */
+/** How a night's date reads in a label, e.g. `Thu, Nov 5`. */
+export const NIGHT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+
+/** A night's date for a server-rendered label (`NIGHT_DATE_FORMAT`), in `SCRIM_LABEL_TIMEZONE`. */
 export function formatNightDate(startsAt: string): string {
-  return new Date(startsAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: SCRIM_LABEL_TIMEZONE });
+  return new Date(startsAt).toLocaleDateString('en-US', { ...NIGHT_DATE_FORMAT, timeZone: SCRIM_LABEL_TIMEZONE });
 }
 
 /** Parses a new night's start from a request body value (an ISO 8601 instant), or returns why it's

@@ -9,7 +9,7 @@ import { useNav } from './NavContext';
 import { playerHref, type Crumb } from '@/lib/crumbs';
 import { LocalTime } from './LocalTime';
 
-/** A dated crumb's format — the same shape as `formatNightDate()`'s server label, e.g. `Thu, Nov 5`. */
+/** A dated crumb's format, e.g. `Thu, Nov 5` — the same shape as `formatNightDate()`'s server label. */
 const CRUMB_DATE: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
 
 const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
