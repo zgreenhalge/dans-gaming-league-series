@@ -62,7 +62,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
 
   const mine = signups.find((s) => s.player_id === currentPlayerId) ?? null;
 
-
   function send(playerId: number, method: 'POST' | 'DELETE', path: 'signups' | 'check-in', body: Record<string, unknown> = {}) {
     setTarget(playerId);
     return run(async () => {

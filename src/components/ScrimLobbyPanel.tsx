@@ -55,7 +55,6 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 
 type Lineup = [number, number, number, number];
 
-
 /** The scrim night lobby: checking in first, then the next match — Next Match makes one, Generate
  *  Rounds queues several — and, for the players in the lobby's match or an admin, its map, starting
  *  side and lineup (from the checked-in pool), starting it on the server, or discarding it. */
@@ -65,21 +64,7 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
   const enough = pool.length >= SCRIM_MATCH_SIZE;
   return (
     <div className="flex flex-col gap-3">
-      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-          {pool.length} checked in{!enough && ` — a match needs ${SCRIM_MATCH_SIZE}`}
-        </div>
-        {viewer && (
-          <button
-            type="button"
-            onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
-            disabled={busy}
-            className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
-          >
-            {viewer.checkedIn ? 'Check out' : 'Check in'}
-          </button>
-        )}
-      </div>
+      <CheckInBar nightId={nightId} checkedInCount={pool.length} viewer={viewer} />
 
       {match ? (
         <>
@@ -104,6 +89,29 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
       {generating && rounds && !match && (
         <ScrimRoundsGenerator nightId={nightId} {...rounds} onClose={() => setGenerating(false)} />
       )}
+    </div>
+  );
+}
+
+/** The lobby's first row: how many are checked in, and the viewer's own Check in / Check out. */
+function CheckInBar({ nightId, checkedInCount, viewer }: { nightId: number; checkedInCount: number; viewer: Props['viewer'] }) {
+  const { busy, error, act } = useRefreshingAction();
+  return (
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+        {checkedInCount} checked in{checkedInCount < SCRIM_MATCH_SIZE && ` — a match needs ${SCRIM_MATCH_SIZE}`}
+      </div>
+      {viewer && (
+        <button
+          type="button"
+          onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
+          disabled={busy}
+          className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
+        >
+          {busy ? '…' : viewer.checkedIn ? 'Check out' : 'Check in'}
+        </button>
+      )}
+      <ErrorText error={error} size={12} className="w-full" />
     </div>
   );
 }
