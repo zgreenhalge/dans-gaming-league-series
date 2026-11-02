@@ -350,4 +350,13 @@ test('the same players, settings and seed produce the same plan', () => {
   assert.deepEqual(a, b);
 });
 
+test('a one-week plan: every player plays the same count, and a halfway shuffle has no second half', () => {
+  const p = plan(6, { weeks: 1, divisions: 1 });
+  assert.equal(p.weeks.length, 1);
+  const counts = [...weeklyGames(p).values()].map((w) => w[0]);
+  assert.equal(new Set(counts).size, 1);
+  const shuffled = plan(8, { weeks: 1, divisions: 2, halfwayShuffle: true });
+  assert.equal(shuffled.halves.length, 1);
+});
+
 report();

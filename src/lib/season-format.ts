@@ -18,7 +18,7 @@
  *   (1-2-2-1, even skill spread), straight (1-2-1-2) or tiered (top players together — skill
  *   divisions, sized by `tierSizes`), or searched into the split whose division averages are
  *   closest (`balanced`, `balanceDivisions()`).
- * - `halfwayShuffle` / `halfwayRedraft` — with more than one division, the second half re-drafts
+ * - `halfwayShuffle` / `halfwayRedraft` — with more than one division and two or more weeks, the second half re-drafts
  *   the divisions. `'win-rate'` re-drafts by first-half win rate in the same order (with `tiered`,
  *   promotion and relegation); a plan is built before any game is played, so it simulates the
  *   first half — each game's winner drawn from its predicted win probability with the plan's seed
@@ -84,7 +84,7 @@ export interface FormatPlayer extends PlayerRating {
   record?: FormatRecord | null;
 }
 
-export const FORMAT_MIN_WEEKS = 2;
+export const FORMAT_MIN_WEEKS = 1;
 export const FORMAT_MAX_WEEKS = 16;
 const FORMAT_MIN_PLAYERS = 4;
 const FORMAT_MAX_PLAYERS = 24;
@@ -265,8 +265,10 @@ function halfLengths(settings: SeasonFormatSettings): number[] {
   return [Math.ceil(settings.weeks / 2), Math.floor(settings.weeks / 2)];
 }
 
-function reshuffles(settings: SeasonFormatSettings): boolean {
-  return settings.halfwayShuffle && settings.divisions > 1;
+/** Whether the divisions re-draft at halfway: asked for, with more than one division and at least
+ * two weeks to split into halves. */
+export function reshuffles(settings: Pick<SeasonFormatSettings, 'halfwayShuffle' | 'divisions' | 'weeks'>): boolean {
+  return settings.halfwayShuffle && settings.divisions > 1 && settings.weeks >= 2;
 }
 
 // ---------------------------------------------------------------------------------------------
