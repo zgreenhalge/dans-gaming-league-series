@@ -21,9 +21,9 @@ export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
 export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
 
-/** The timezone server-rendered night labels use — the league's, as in `seo/og.ts` — until the page
- *  hydrates and they switch to the viewer's own timezone: breadcrumbs through `Crumb.localDate`, the
- *  tab title through `LocalDateInTitle`. In-page times render in the viewer's timezone (`LocalTime`). */
+/** The timezone server-rendered night labels use — the league's, as in `seo/og.ts`: the page title
+ *  (until `LocalDateInTitle` swaps in the viewer's own date) and link previews. Breadcrumbs and in-page
+ *  times render in the viewer's timezone (`Crumb.localDate`, `LocalTime`). */
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
 /** Whether `night` is over. */
@@ -53,13 +53,20 @@ export function formatNightDate(startsAt: string): string {
   return new Date(startsAt).toLocaleDateString('en-US', { ...SHORT_DATE_FORMAT, timeZone: SCRIM_LABEL_TIMEZONE });
 }
 
+/** How far ahead a night can be started. */
+export const SCRIM_MAX_DAYS_AHEAD = 60;
+
 /** Parses a new night's start from a request body value (an ISO 8601 instant), or returns why it's
- *  invalid. A night that would already be over can't be started. */
+ *  invalid. A night that would already be over, or that starts more than `SCRIM_MAX_DAYS_AHEAD` days
+ *  out, can't be started. */
 export function parseNightStart(value: unknown, now: Date): { ok: true; startsAt: string } | { ok: false; error: string } {
   const ms = typeof value === 'string' ? Date.parse(value) : NaN;
   if (Number.isNaN(ms)) return { ok: false, error: 'startsAt must be a date and time' };
   const startsAt = new Date(ms).toISOString();
   if (hasScrimNightEnded({ id: 0, startsAt }, now)) return { ok: false, error: 'That night would already be over' };
+  if (ms > now.getTime() + SCRIM_MAX_DAYS_AHEAD * 24 * 60 * 60 * 1000) {
+    return { ok: false, error: `A night can start at most ${SCRIM_MAX_DAYS_AHEAD} days ahead` };
+  }
   return { ok: true, startsAt };
 }
 

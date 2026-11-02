@@ -245,6 +245,10 @@ user's browser — React will either warn or silently show the wrong value until
 
 - `<LocalTime>` — uses `useSyncExternalStore` to return `null` on the server and format on the
   client only.
+- A breadcrumb that names a date — `Crumb.localDate` (`src/lib/crumbs.ts`), rendered by
+  `TopbarShell` through `<LocalTime>`.
+- `<LocalDateInTitle>` — the page title is server metadata, so it can't wait for the client: it
+  carries the date in a fixed zone, and this component swaps in the viewer's date after hydration.
 - `<CountdownTimer>` — initializes state to `null` and computes in `useEffect`.
 - `useCountdown()` in `MatchHeaderSection` — initializes to `''`, populates via `useEffect`.
 - Server components (e.g. `page.tsx`) using `toLocaleDateString` with `timeZone: 'UTC'` — safe

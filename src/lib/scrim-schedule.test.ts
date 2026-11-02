@@ -16,6 +16,7 @@ import {
   parseNightStart,
   upcomingScrimNights,
   SCRIM_CHECK_IN_LEAD_MS,
+  SCRIM_MAX_DAYS_AHEAD,
   SCRIM_NIGHT_LENGTH_MS,
 } from './scrim-schedule';
 
@@ -50,11 +51,14 @@ test('formatNightDate: the date in the league timezone, not UTC', () => {
   assert.equal(formatNightDate(START), 'Thu, Nov 5');
 });
 
-test('parseNightStart: an instant that has not already ended', () => {
+test('parseNightStart: an instant that has not already ended, within SCRIM_MAX_DAYS_AHEAD', () => {
   const now = at(0);
   assert.deepEqual(parseNightStart('2026-11-06T02:30:00Z', now), { ok: true, startsAt: '2026-11-06T02:30:00.000Z' });
   assert.equal(parseNightStart(new Date(now.getTime() - SCRIM_NIGHT_LENGTH_MS + 60_000).toISOString(), now).ok, true);
   assert.equal(parseNightStart(new Date(now.getTime() - SCRIM_NIGHT_LENGTH_MS).toISOString(), now).ok, false);
+  const day = 24 * 60 * 60 * 1000;
+  assert.equal(parseNightStart(new Date(now.getTime() + SCRIM_MAX_DAYS_AHEAD * day).toISOString(), now).ok, true);
+  assert.equal(parseNightStart(new Date(now.getTime() + SCRIM_MAX_DAYS_AHEAD * day + 60_000).toISOString(), now).ok, false);
   assert.equal(parseNightStart('next thursday', now).ok, false);
   assert.equal(parseNightStart(12, now).ok, false);
 });

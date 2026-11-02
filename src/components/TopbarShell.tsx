@@ -129,7 +129,7 @@ export function TopbarShell({
                         : 'tracked text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors'
                     }
                   >
-                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={SHORT_DATE_FORMAT} fallback={crumb.label} /> : crumb.label}
+                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={SHORT_DATE_FORMAT} /> : crumb.label}
                   </Link>
                 ) : (
                   <span
@@ -142,7 +142,7 @@ export function TopbarShell({
                     }
                     aria-current={isLast ? 'page' : undefined}
                   >
-                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={SHORT_DATE_FORMAT} fallback={crumb.label} /> : crumb.label}
+                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={SHORT_DATE_FORMAT} /> : crumb.label}
                   </span>
                 )}
               </span>

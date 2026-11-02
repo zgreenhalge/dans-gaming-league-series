@@ -222,15 +222,12 @@ export interface PastScrimNight extends ScrimNight {
   players: number;
 }
 
-/** Nights that are over and had at least one scored match, newest first. */
-export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
+/** Each night with a scored match: how many, and how many distinct players played them. */
+const getScrimNightPlayCounts = persistentQuery('getScrimNightPlayCounts', async (): Promise<{ nightId: number; matches: number; players: number }[]> => {
   type MatchRow = { scrim_night_id: number; final_score: string | null; player_match_stats: { player_id: number }[] | null };
-  const [rows, data] = await Promise.all([
-    getScrimNightRows(),
-    fetchAllPages<MatchRow>((from, to) =>
-      asPage(getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null).range(from, to)),
-    ),
-  ]);
+  const data = await fetchAllPages<MatchRow>((from, to) =>
+    asPage(getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null).range(from, to)),
+  );
   const byNight = new Map<number, { matches: number; players: Set<number> }>();
   for (const m of data) {
     if (!isPlayedScore(m.final_score)) continue;
@@ -239,9 +236,16 @@ export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
     for (const p of m.player_match_stats ?? []) entry.players.add(p.player_id);
     byNight.set(m.scrim_night_id, entry);
   }
+  return [...byNight].map(([nightId, e]) => ({ nightId, matches: e.matches, players: e.players.size }));
+});
+
+/** Nights that are over and had at least one scored match, newest first. */
+export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
+  const [rows, counts] = await Promise.all([getScrimNightRows(), getScrimNightPlayCounts()]);
+  const byNight = new Map(counts.map((c) => [c.nightId, c]));
   return rows
     .filter((r) => hasScrimNightEnded(r, now) && byNight.has(r.id))
-    .map((r) => ({ ...r, matches: byNight.get(r.id)!.matches, players: byNight.get(r.id)!.players.size }))
+    .map((r) => ({ ...r, matches: byNight.get(r.id)!.matches, players: byNight.get(r.id)!.players }))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 }
 

@@ -214,7 +214,8 @@ export async function resolveMapWorkshopId(
     .from('matches')
     .select('shirts_pick, skins_pick, scrim_workshop_id')
     .eq('id', matchId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   const row = match as { shirts_pick: string | null; skins_pick: string | null; scrim_workshop_id: string | null } | null;
   // A scrim match can be on any workshop map, so it carries its own id rather than one from `maps`.
   if (row?.scrim_workshop_id) return row.scrim_workshop_id;
@@ -224,7 +225,8 @@ export async function resolveMapWorkshopId(
     .from('maps')
     .select('workshop_url')
     .eq('slug', mapSlug(mapName))
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   return workshopIdFromUrl((mapRow as { workshop_url: string | null } | null)?.workshop_url);
 }
 
