@@ -3,7 +3,7 @@
 `e2e/` holds Playwright coverage for DGLS's highest-risk multi-stage flows — sequences that span
 more than one request/response and can't be locked down by a `queries-*.test.ts`-style unit test
 alone (`season-schedule.spec.ts`), and the home page composed end to end — signed out, signed in,
-and between seasons (`home.spec.ts`) — plus one deliberately shallow smoke spec
+and between seasons (`home.spec.ts`) — scrim nights from the calendar through the lobby (`scrims.spec.ts`) — plus one deliberately shallow smoke spec
 (`page-smoke.spec.ts`) that visits every top-level page type, clicks through each page's tabs, and
 asserts the app never falls back to the route error boundary. The smoke spec exists for a
 different failure mode than the flow specs: a page that forgot to wrap a client component in a
@@ -66,6 +66,11 @@ upstream regression, [supabase/cli#4211](https://github.com/supabase/cli/issues/
 they're fully determined by the pinned secret there's nothing to look up anyway — they'll be
 identical every time you `supabase start` this repo. Run `supabase stop` when done.
 
+After a fresh `supabase start`, delete `.next/` before running the suite again. The persistent read
+cache (`persistentQuery()`) keys its entries on `data_version`, which a new local database starts
+from the beginning again, so entries left in `.next/` from an earlier database can match the new
+version numbers and serve its rows — a night the test just seeded then reads as missing.
+
 In a Claude Code web session, `.claude/hooks/session-start.sh` does the `supabase start` +
 `source supabase/local.env` sequence above automatically whenever no real `.env.local` is present —
 see "Claude Code sessions" below.
@@ -90,13 +95,32 @@ touched (`matches`/`weeks` if the test got as far as confirming, the draft table
 the roster and the season row) when it's done — belt-and-suspenders on top of the fact that the whole
 database itself is disposable.
 
+`scrims.spec.ts` starts every test from no scrim nights (`teardownScrims()` deletes them all; their
+signups and matches cascade) and seeds its own with `seedScrimNight()` — a start in milliseconds from
+now or an ISO instant, written straight to the table so a test can place a night ten minutes out
+with check-in open, which the app's quarter-hour rule wouldn't let the UI create.
+`seedScoredScrimMatch()` gives a night results. The lobby tests give the seeded maps Workshop links
+(`setMapWorkshopUrls()`, undone by `clearMapWorkshopUrls()`), since a scrim match only starts on a
+map the server can load. Days on the calendar are the browser's, so the spec reads them in the page
+(`browserDay()`) rather than in Node.
+
 `home.spec.ts` seeds `seedPlayedMatchWithSabremetrics()` (`status: 'ACTIVE'` for a running season,
 `'ARCHIVED'` for the between-seasons state, where the home page shows the latest finished season's
-standings and no Upcoming Games). The home page reads the whole league and is server-rendered, so the
+standings and no Upcoming panel). The home page reads the whole league and is server-rendered, so the
 signed-in test logs in on another page and then loads `/` fresh: the dev login only updates the
 client session. Its Top duos / Hottest Rivalries data comes from `getCareerH2HDataCached()`, a
 60-second `unstable_cache`, so a home visit made before any match exists can hide those panels for
 up to a minute; the signed-in test reloads until they appear.
+
+## Locators: assert on what the page shows
+
+`getByText` matches hidden nodes too. Just after a load, React can hold a second, hidden copy of a
+streamed page section in `<div hidden id="S:…">`: its reveal script (`$RC`) queues the swap for up to
+300 ms, or until 2.3 s after navigation when it lands just before then, and if the client has
+already rendered that section in place, the hidden copy sits beside it until the queued reveal
+removes it. A `getByText` assertion that runs in that window sees both and fails strict mode.
+Scope text assertions to the visible page — `page.getByRole('main').getByText(…)` (`getByRole`
+skips hidden elements) — or use a role locator outright.
 
 ## CI placement
 

@@ -40,6 +40,8 @@ export interface RoundHistoryEntry {
   condition: RoundCondition;  // how the round was won (drives icon)
 }
 
+/** A league match. A scrim match (`matches.scrim_night_id` set, no week) never comes through the league
+ *  reads that return this type — see `onlyLeagueMatches()` (`queries/_shared.ts`). */
 export interface Match {
   id: number;
   week_id: number;

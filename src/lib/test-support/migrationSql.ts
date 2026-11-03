@@ -19,6 +19,10 @@ export const CREATE_TABLE = new RegExp(
   String.raw`\bcreate\s+(?:unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?(?:${IDENT}\s*\.\s*)?${IDENT}`,
   'gi',
 );
+export const DROP_TABLE = new RegExp(
+  String.raw`\bdrop\s+table\s+(?:if\s+exists\s+)?(?:${IDENT}\s*\.\s*)?${IDENT}`,
+  'gi',
+);
 export const ENABLE_RLS = new RegExp(
   String.raw`\balter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:${IDENT}\s*\.\s*)?${IDENT}\s+enable\s+row\s+level\s+security`,
   'gi',

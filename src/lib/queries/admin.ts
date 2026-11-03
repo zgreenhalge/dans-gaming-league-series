@@ -3,6 +3,7 @@ import type { Match, Player } from '../types';
 import { matchLabel, extractSeasonNumber, compareMatchRefDesc, weekWindow } from '../util';
 import { podGames } from '../gauntlet-pod';
 import { getLinkedRegularSeason } from './seasons';
+import { onlyLeagueMatches } from './_shared';
 
 
 /** One row of the admin match-management console (#144) — a full match plus the context its editors
@@ -38,7 +39,7 @@ export interface AdminMatchRow {
  */
 export async function getAdminMatches(): Promise<AdminMatchRow[]> {
   const [{ data, error }, { data: podRows }] = await Promise.all([
-    getAdminClient().from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'),
+    onlyLeagueMatches(getAdminClient().from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))')),
     getAdminClient().from('gauntlet_pods').select('match1_id, match2_id'),
   ]);
   if (error || !data) return [];

@@ -2,7 +2,7 @@
  * E2E coverage for issue #696: the home page (`src/app/page.tsx`) composed end to end — signed out
  * (Login placeholder, no feedback banners), signed in (My Stats, Top duos / Hottest Rivalries
  * linking to the career H2H view) and between seasons (the latest finished season's standings, no
- * Upcoming Games). The home page reads the whole league, so each test seeds its own played season
+ * Upcoming panel). The home page reads the whole league, so each test seeds its own played season
  * and the suite runs on one worker; see docs/e2e.md.
  */
 
@@ -47,8 +47,11 @@ test.describe('with a running season', () => {
       await expect(page.getByRole('link', { name: 'Top duos', exact: true })).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 90_000, intervals: [3_000] });
 
-    await expect(page.getByText('My Stats', { exact: true })).toBeVisible();
-    await expect(page.getByText('Match history', { exact: true })).toBeVisible();
+    // Scoped to the page's visible <main>: `getByText` also matches hidden nodes, and React can still
+    // hold a streamed copy of the page in a hidden `<div hidden id="S:…">` just after a reload.
+    const main = page.getByRole('main');
+    await expect(main.getByText('My Stats', { exact: true })).toBeVisible();
+    await expect(main.getByText('Match history', { exact: true })).toBeVisible();
 
     for (const title of ['Top duos', 'Hottest Rivalries']) {
       const link = page.getByRole('link', { name: title, exact: true });
@@ -78,13 +81,13 @@ test.describe('between seasons', () => {
     fixture = await seedPlayedMatchWithSabremetrics({ status: 'ARCHIVED' });
   });
 
-  test("shows the latest finished season's standings and no Upcoming Games", async ({ page }) => {
+  test("shows the latest finished season's standings and no Upcoming panel", async ({ page }) => {
     await page.goto('/');
 
     await expect(page.getByText('Final', { exact: true })).toBeVisible();
     await expect(page.getByText('Live', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'View all →' })).toHaveAttribute('href', `/seasons/${fixture!.seasonId}`);
-    await expect(page.getByText('Upcoming Games')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Upcoming', exact: true })).toHaveCount(0);
     await expect(page.getByText('To Be Scheduled')).toHaveCount(0);
   });
 });

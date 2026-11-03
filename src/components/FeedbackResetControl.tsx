@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
+import { sendJsonRequest } from './sendJsonRequest';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 
 export function FeedbackResetControl({
@@ -29,7 +29,7 @@ export function FeedbackResetControl({
       onCancel={() => setArmed(false)}
       onConfirm={() =>
         run(async () => {
-          await sendFeedbackRequest('DELETE', url);
+          await sendJsonRequest('DELETE', url);
           setArmed(false);
           router.refresh();
         })

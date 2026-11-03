@@ -3,7 +3,8 @@
 import { useMemo } from 'react';
 import EmptyState from './EmptyState';
 import { CollapsibleSection } from './CollapsibleSection';
-import { MatchCard, matchCardRight } from './MatchCard';
+import { MatchCard } from './MatchCard';
+import { matchCardRight } from '@/lib/match-card';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, GAUNTLET_POD_STAKES_LABEL, roundAnchorId, weekLabel } from '@/lib/util';
 import { aggregatePlayerRecords } from '@/lib/group-scorecard';

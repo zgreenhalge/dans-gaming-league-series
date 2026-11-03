@@ -9,7 +9,7 @@ import { workshopIdFromUrl } from '../workshop';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
 import { getSeasons } from './seasons';
-import { fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
+import { fetchAllPages, asPage, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup, onlyLeagueMatches } from './_shared';
 import { effectivePickedMap } from '../veto';
 import { persistentQuery } from './_persistentCache';
 
@@ -171,7 +171,7 @@ const fetchMapRawData = persistentQuery('fetchMapRawData', async (): Promise<{
   const [matches, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
-        asPage(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side').range(from, to)),
+        asPage(onlyLeagueMatches(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side')).range(from, to)),
       ),
       getWeekLookup(),
       getAdminClient().from('seasons').select('id, name, is_gauntlet, map_pool'),
@@ -747,7 +747,7 @@ export const getMatchIdsForMap = persistentQuery('getMatchIdsForMap', async (map
   if (!nameLower) return [];
   type Row = { id: number; shirts_pick: string | null; skins_pick: string | null; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    db.from('matches').select('id, shirts_pick, skins_pick, final_score').range(from, to),
+    onlyLeagueMatches(db.from('matches').select('id, shirts_pick, skins_pick, final_score')).range(from, to),
   );
   return rows
     .filter(
@@ -758,11 +758,11 @@ export const getMatchIdsForMap = persistentQuery('getMatchIdsForMap', async (map
     .map((m) => m.id);
 });
 
-/** Ids of every played match — for the sitemap. */
+/** Ids of every played league match — for the sitemap. */
 export async function getAllPlayedMatchIds(): Promise<number[]> {
   type Row = { id: number; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    getAdminClient().from('matches').select('id, final_score').range(from, to),
+    onlyLeagueMatches(getAdminClient().from('matches').select('id, final_score')).range(from, to),
   );
   return rows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
 }

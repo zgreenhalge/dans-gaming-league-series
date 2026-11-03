@@ -4,7 +4,8 @@
 // session-gated `PATCH /api/matches/[id]/score` route (human confirm) and the demo-ingest Action's
 // trusted auto-commit (#138), so the write — and every hook it fires — behaves identically regardless
 // of who triggers it. This is the only place any of those hooks fire from; a caller never fires them
-// itself, so a future caller can't forget to.
+// itself, so a future caller can't forget to. A scrim match (no week, so no season) is outside the
+// league and gets only the steam-id-learning hook.
 //
 // The Discord hooks fire unconditionally on every write, not just a match's first score — an admin
 // correcting an already-played match's score or stats has genuinely changed what the announcement
@@ -169,7 +170,8 @@ export interface WriteMatchScoreOptions {
    *  scratch. Omit to have this function fetch both itself (the demo-ingest Action, which has
    *  neither in hand). */
   matchContext?: {
-    seasonId: number;
+    /** `null` for a scrim match, which has no season. */
+    seasonId: number | null;
     isGauntlet: boolean;
     statsByPlayerId: Map<number, { player_id: number; faction: string }>;
   };
@@ -253,7 +255,7 @@ export async function writeMatchScore(
     return { ok: false, error: 'player_stats must be a non-empty array', status: 400 };
   }
 
-  let seasonId: number;
+  let seasonId: number | null;
   let isGauntlet: boolean;
   let statsByPlayerId: Map<number, { player_id: number; faction: string }>;
   if (opts.matchContext) {
@@ -273,8 +275,9 @@ export async function writeMatchScore(
         .eq('match_id', matchId),
     ]);
     if (!matchRow) return { ok: false, error: 'Match not found', status: 404 };
-    const m = matchRow as unknown as { weeks: { season_id: number; seasons: { is_gauntlet: boolean } } };
-    seasonId = m.weeks.season_id;
+    // A scrim match has no week, so no season.
+    const m = matchRow as unknown as { weeks: { season_id: number; seasons: { is_gauntlet: boolean } } | null };
+    seasonId = m.weeks?.season_id ?? null;
     isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
     statsByPlayerId = toStatsByPlayerId((matchStats ?? []) as { player_id: number; faction: string }[]);
   }
@@ -510,11 +513,18 @@ export async function writeMatchScore(
   // score-announcement + thread-close hooks fire unconditionally on every write — see this file's
   // header for why that's correct rather than spammy.
   const runHooks = async (): Promise<void> => {
+    // A scrim match (no season) is outside the league: no rating, season or bracket to update, and no
+    // Discord match thread or score announcement. Only steam-id learning applies.
+    if (seasonId === null) {
+      await runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings);
+      return;
+    }
+    const leagueSeasonId = seasonId;
     await Promise.all([
       triggerRatingRecompute(supabaseAdmin, { jobKey: matchJobKey(matchId) }),
       isGauntlet
-        ? runGauntletCompletionPipeline(supabaseAdmin, matchId, seasonId)
-        : runSeasonCompletionCheck(supabaseAdmin, seasonId),
+        ? runGauntletCompletionPipeline(supabaseAdmin, matchId, leagueSeasonId)
+        : runSeasonCompletionCheck(supabaseAdmin, leagueSeasonId),
       runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
       notifyMatchScoreReported(supabaseAdmin, matchId),
       // A gauntlet pod's thread coordinates both of its games — closing it after only one is scored

@@ -27,6 +27,15 @@ export function isVetoComplete(m: VetoFields, isGauntlet: boolean): boolean {
 }
 
 /**
+ * Whether a match can be played and scored: a league match once its pick/ban is resolved
+ * (`isVetoComplete()`), a scrim match — which has no pick/ban — once its lobby has set the map
+ * (`shirts_pick`).
+ */
+export function isReadyToPlay(m: VetoFields & { scrim_night_id: number | null }, isGauntlet: boolean): boolean {
+  return m.scrim_night_id != null ? !!m.shirts_pick : isVetoComplete(m, isGauntlet);
+}
+
+/**
  * The map a match is played on. The two pick columns are mutually exclusive: `shirts_pick` holds the
  * map when SHIRTS picked (and the gauntlet auto-pick, always), `skins_pick` holds it only when SKINS
  * picked in the regular veto flow — so neither alone is "the picked map". See docs/glossary.md's Veto

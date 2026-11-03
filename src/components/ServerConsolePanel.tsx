@@ -663,7 +663,7 @@ export function ServerConsolePanel({
         )}
         <ErrorText error={teardownError} className="mt-3" />
 
-        {/* Connected roster — shared with the scrim panel (`ConnectedRoster`), amber-tinted when
+        {/* Connected roster (`ConnectedRoster`), amber-tinted when
             someone's on the box outside a DGLS match ("casual use") instead of a separate bare-count
             line. */}
         {server && isServerLive(server) && (

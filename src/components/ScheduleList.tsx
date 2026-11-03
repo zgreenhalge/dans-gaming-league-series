@@ -2,7 +2,8 @@
 
 import EmptyState from './EmptyState';
 import { CollapsibleSection } from './CollapsibleSection';
-import { MatchCard, matchCardRight } from './MatchCard';
+import { MatchCard } from './MatchCard';
+import { matchCardRight } from '@/lib/match-card';
 import { PlayerName } from './PlayerName';
 import { fmtWindowDate, weekLabel, weekWindow, weekAnchorId } from '@/lib/util';
 import { weekHref } from '@/lib/crumbs';

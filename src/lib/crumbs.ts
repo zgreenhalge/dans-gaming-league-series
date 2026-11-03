@@ -4,6 +4,10 @@ import { seasonTitle, weekLabel } from './util';
 export interface Crumb {
   label: string;
   href?: string;
+  /** An instant (ISO 8601) the crumb names by its date, shown in the viewer's timezone once the page
+   *  hydrates (`LocalTime`, nothing before). `label` is the same date in the league timezone, for
+   *  anything reading the trail as text. */
+  localDate?: string;
 }
 
 // Every public URL for a season's sub-pages is assembled here, so a link and the breadcrumb that
@@ -18,6 +22,16 @@ export function playerHref(playerId: number): string {
   // The one place the URL shape is written; everything else calls this.
   // eslint-disable-next-line no-restricted-syntax
   return `/players/${playerId}`;
+}
+
+/** The path to a scrim night's page. */
+export function scrimNightHref(nightId: number): string {
+  return `/scrims/${nightId}`;
+}
+
+/** The path to a scrim match's page. */
+export function scrimMatchHref(matchId: number): string {
+  return `/scrims/matches/${matchId}`;
 }
 
 export function seasonHref(hubSeasonId: number): string {

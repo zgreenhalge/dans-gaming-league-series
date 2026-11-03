@@ -8,7 +8,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
+import { sendJsonRequest } from './sendJsonRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import SectionLabel from './SectionLabel';
@@ -75,7 +75,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
 
   async function submit(openAfter: boolean) {
     await run(async () => {
-      await sendFeedbackRequest(existing ? 'PUT' : 'POST', url, { questions: drafts, open: openAfter });
+      await sendJsonRequest(existing ? 'PUT' : 'POST', url, { questions: drafts, open: openAfter });
       router.refresh();
     });
   }

@@ -1,7 +1,7 @@
 'use client';
 
 // The unified admin console (issue #262): a standalone Server panel (always visible — one shared
-// server for every match and scrim isn't "an event" or "a thing to search for"), an Activity feed
+// server for every match isn't "an event" or "a thing to search for"), an Activity feed
 // (background jobs + ops errors, tiered Errored/In Progress/Completed), and Manage (Match/Player/
 // Season). Activity and Manage are top-level tabs rather than one crowded view — see
 // docs/visual-conventions.md's "Console & admin-surface shapes" for the reasoning. Initial section is

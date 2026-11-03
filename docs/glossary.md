@@ -2,12 +2,15 @@
 
 A vocabulary and orientation reference for DGLS — for new contributors and AI agents alike.
 The README documents *what* the system does; this doc explains the *terms* and *where things live*
-so you don't have to reverse-engineer them from scratch each time.
+so you don't have to reverse-engineer them from scratch each time. For how a season runs end to end,
+see [`season-lifecycle.md`](./season-lifecycle.md).
 
 ## League format & domain terms
 
-- **Individual Rotating Mixer** — the league format. Teammates change every week (randomly drawn),
-  so match outcomes are partly a function of your draw, not just your skill. RWR% and ADR are
+- **Individual Rotating Mixer** — the league format. Teammates change every week (the round-robin
+  schedule pairs every two players as teammates exactly once — `buildSeasonSchedule()`,
+  `src/lib/season-schedule.ts`), so match outcomes are partly a function of your draw, not just your
+  skill. RWR% and ADR are
   rate-normalized stats that help correct for that when breaking ties in the canonical leaderboard
   sort.
 - **ADR (Average Damage per Round)** — the platform's primary individual skill metric; the
@@ -31,7 +34,7 @@ so you don't have to reverse-engineer them from scratch each time.
   (win/loss + margin of victory), not individual-stat-based. Updated via full chronological recompute
   after every score submission. See [`ehog.md`](./ehog.md) for the full engine docs.
   Not to be confused with the aspirational *Player Rating* sabremetric composite in
-  [`calculations.md`](./calculations.md#player-rating-aspirational--requires-demo-data).
+  [`calculations.md`](./calculations.md#player-rating).
 - **Seed EHOG** — an admin-configured starting EHOG rating (`players.seed_ehog`) for a known new
   player, used in place of the global new-player default until their first rated match. Set from the
   admin console's Manage → Player view; see [`ehog.md`](./ehog.md#seeding-a-known-players-starting-rating).
@@ -44,6 +47,17 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,
   `skins_ban2`, `shirts_pick`, `skins_pick`, `skins_starting_side` on `Match`). Rendered by
   `VetoSequence.tsx`. Gauntlet seasons use a *different* veto flow — see below.
+  - **Regular-season order** — `PATCH /api/matches/[id]/veto` walks `REGULAR_STEPS`: SHIRTS bans
+    one map (`shirts_ban`), SKINS bans two (`skins_ban1`, `skins_ban2`), SHIRTS picks one of the two
+    maps left (`shirts_pick`), and SKINS chooses its starting side (`skins_starting_side`, `CT` or
+    `T`). The route has no SKINS pick step and doesn't use `shirts_ban2`, a gauntlet slot. A new
+    entry must fill the next empty step; either player on that step's faction fills it, and may later
+    overwrite their faction's filled step. A map must be in the season's `map_pool` and not already
+    used in this veto.
+  - **Veto window** — a player can veto only once the match has a `scheduled_at`, and only from 10
+    minutes before it; an admin can act at any time and is the only one who can clear a step. No
+    step changes once the match has a played score. Completing the veto provisions the match server
+    ([`hosting.md`](./hosting.md)).
   - **Effective played map** is `shirts_pick ?? skins_pick`, not `skins_pick` alone. When shirts
     made the pick, `shirts_pick` is set and `skins_pick` is `null`; when skins made the pick,
     `shirts_pick` is `null` and `skins_pick` is set. Always resolve with `effectivePickedMap()`
@@ -199,11 +213,19 @@ so you don't have to reverse-engineer them from scratch each time.
     with no advancement attached.
 - **Tools** — the `/tools` section: open sandbox pages anyone can use, with no sign-in and no side
   effects (each only reads league data and computes in the browser), listed in `TOOLS`
-  (`src/lib/tools.ts`). Operational pages that act on real systems, like Scrim, stay outside it.
+  (`src/lib/tools.ts`). Operational pages that act on real systems stay outside it.
 - **Gauntlet Preview** — the `/tools/gauntlet-preview` tool: pick a qualifier count (optionally a
   regular season's standings for named seeds) and see the bracket and per-seed outcome (bye, plays in,
   won't qualify) before any season gets there. A thin layer over `buildGauntletBracket()` and
   `projectGauntletSeeding()` — see [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
+- **Scrim night** — a practice night outside league competition, at whatever date and time a player
+  picks. A night exists once someone signs up for it — the first signup starts it — and is removed
+  when everyone drops out before it has any matches. Players sign up as **definite** or **maybe**, so
+  everyone can judge attendance ahead of time, and can switch or drop out right up until it ends.
+  See `/scrims` and [`architecture.md`](./architecture.md) (Database, `scrim_nights`). A **scrim
+  match** is a `matches` row tied to a scrim night instead of a week; its stats never count toward
+  league figures (see `matches` in architecture.md). Each night has its own page (`/scrims/[id]`)
+  with its signups, the lobby, the night's matches and its leaderboard.
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
@@ -247,7 +269,8 @@ so you don't have to reverse-engineer them from scratch each time.
 | Gauntlet Preview tool | `src/lib/gauntlet-preview.ts`, `src/lib/queries/gauntlet-preview.ts`, `src/components/GauntletPreviewView.tsx`, `src/app/tools/gauntlet-preview/` |
 | Tools section (open sandbox pages) | `src/lib/tools.ts` (`TOOLS` registry, links, breadcrumbs), `src/app/tools/` |
 | Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
-| Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts` (survey questions, validation, summary), `src/lib/superlatives.ts` (superlatives validation, tally), `src/lib/feedback-rules.ts` (`isFeedbackLocked()`, `Validated`), `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/lib/feedback-lifecycle.ts` (shared open/close, reset and answer-save handlers; the lock rule is `isFeedbackLocked()` in `feedback-rules.ts`), `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/survey/[id]/`, `src/app/admin/seasons/superlatives/[id]/` (via `resolveFeedbackAdminSeason()`, `src/lib/feedback-page.ts`), `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `Feedback*.tsx` (banner, player editor, admin controls, form frame, reset control) / `feedbackRequest.ts` / `RemoveXButton.tsx` |
+| Post-season survey + superlatives vote (core questions, validation, tallying; reads; access gate; player pages; admin page) | `src/lib/survey.ts` (survey questions, validation, summary), `src/lib/superlatives.ts` (superlatives validation, tally), `src/lib/feedback-rules.ts` (`isFeedbackLocked()`, `Validated`), `src/lib/queries/feedback.ts` (+ `getSeasonPlayedPlayers()` in `queries/seasons.ts`), `src/lib/feedback-access.ts`, `src/lib/feedback-lifecycle.ts` (shared open/close, reset and answer-save handlers; the lock rule is `isFeedbackLocked()` in `feedback-rules.ts`), `src/app/api/seasons/[id]/survey/`, `src/app/api/seasons/[id]/superlatives/`, `src/app/admin/seasons/survey/[id]/`, `src/app/admin/seasons/superlatives/[id]/` (via `resolveFeedbackAdminSeason()`, `src/lib/feedback-page.ts`), `src/components/feedbackTabs.tsx` (season-page tab bodies), `src/components/Survey*.tsx` / `Superlative*.tsx` / `SeasonFeedbackTabs.tsx` / `Feedback*.tsx` (banner, player editor, admin controls, form frame, reset control) / `RemoveXButton.tsx` |
+| Scrim nights (timing, reads, writes, access gate, page) | `src/lib/scrim-schedule.ts` (pure: start/end/check-in timing, input parsing), `src/lib/queries/scrims.ts` (`getUpcomingScrimNights()`, `getScrimNight()`), `src/lib/scrim-nights.ts` (writes), `src/lib/scrim-signup-access.ts`, `src/app/api/scrims/`, `src/lib/scrim-matchmaking.ts` (`pickNextScrimMatch()`), `src/lib/scrim-matches.ts` (lobby rules + match writes), `src/lib/scrim-match-access.ts`, `src/app/scrims/page.tsx`, `src/app/scrims/[id]/page.tsx` (a night, with `src/components/ScrimRoundsGenerator.tsx` reusing `ScheduleLabView` to generate rounds), `src/app/scrims/matches/[id]/page.tsx` (a scrim match, with `src/lib/match-page-data.ts` and `src/components/MatchBackdrop.tsx` shared with the league match page), `src/components/ScrimNightPanel.tsx` / `ScrimLobbyPanel.tsx` / `ScrimNightResults.tsx` / `ScrimPastNights.tsx` / `ScrimCalendar.tsx` (with `src/lib/calendar-month.ts`) / `ScrimSeats.tsx` (seats shared with the home page's Upcoming panel and its `UpcomingWeekStrip.tsx`) / `StartScrimNightForm.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
 | Pages (routes) | `src/app/**` — see the route table in [`architecture.md`](./architecture.md) |
 | Historical CSV ingestion (Python, not deployed) | `ingestion/` |
