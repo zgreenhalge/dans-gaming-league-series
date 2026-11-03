@@ -5,7 +5,7 @@ import { useSortState } from './useSortState';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, SCORE_CATEGORY_INFO, type ScoreCategory, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
-import { tabCls } from '@/lib/util';
+import { formatDiff, tabCls } from '@/lib/util';
 import { playerHref } from '@/lib/crumbs';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
@@ -24,12 +24,6 @@ interface RowWithStats {
 function fmtNum(v: number, decimals: number = 0): string {
   if (!Number.isFinite(v)) return '—';
   return v.toFixed(decimals);
-}
-
-function fmtDiff(v: number, decimals: number = 0): string {
-  if (!Number.isFinite(v)) return '—';
-  const s = v.toFixed(decimals);
-  return v > 0 ? `+${s}` : s;
 }
 
 function BasicStatsTable({ data }: { data: RowWithStats[] }) {
@@ -75,7 +69,7 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
               <Td>{row.total_kills}</Td>
               <Td>{row.total_assists}</Td>
               <Td>{row.total_deaths}</Td>
-              <Td>{fmtDiff(stats.killDiff)}</Td>
+              <Td>{formatDiff(stats.killDiff)}</Td>
               <Td>{row.total_damage.toLocaleString()}</Td>
               <Td>{fmtNum(row.overall_adr, 2)}</Td>
             </Tr>
@@ -219,7 +213,7 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
               <Td>{fmtNum(row.win_rate_percentage, 1)}</Td>
               <Td>{row.total_rounds_played}</Td>
               <Td>{row.total_rounds_won}–{stats.roundsLost}</Td>
-              <Td>{fmtDiff(stats.roundDiff)}</Td>
+              <Td>{formatDiff(stats.roundDiff)}</Td>
               <Td>{fmtNum(row.rwr_percentage, 1)}</Td>
             </Tr>
           ))}
@@ -276,10 +270,10 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
             <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
               <Td>{fmtNum(stats.rPerGame, 1)}</Td>
-              <Td>{fmtDiff(stats.rdPerGame, 2)}</Td>
+              <Td>{formatDiff(stats.rdPerGame, 2)}</Td>
               <Td>{fmtNum(stats.rwPerGame, 2)}</Td>
               <Td>{fmtNum(stats.rlPerGame, 2)}</Td>
-              <Td>{fmtDiff(stats.kdPerGame, 2)}</Td>
+              <Td>{formatDiff(stats.kdPerGame, 2)}</Td>
               <Td>{fmtNum(stats.dmgPerGame, 1)}</Td>
               <Td>{fmtNum(stats.kPerGame, 2)}</Td>
               <Td>{fmtNum(stats.aPerGame, 2)}</Td>

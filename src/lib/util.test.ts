@@ -50,6 +50,7 @@ import {
   ordinal,
   mergeLeaderboardRows,
   formatSigned,
+  formatDiff,
   roundTo,
   signedColor,
 } from './util';
@@ -541,6 +542,16 @@ test('formatSigned: explicit plus when positive, rounded first so a zero never s
   assert.equal(formatSigned(0, 1), '0.0');
   assert.equal(formatSigned(-0.04, 1), '0.0');
   assert.equal(formatSigned(4.4, 0), '+4');
+});
+
+test('formatDiff: signed at the shown precision, a dash when the value is not finite', () => {
+  assert.equal(formatDiff(3), '+3');
+  assert.equal(formatDiff(-2), '-2');
+  assert.equal(formatDiff(0.004, 2), '0.00');
+  assert.equal(formatDiff(-0.004, 2), '0.00');
+  assert.equal(formatDiff(0.256, 2), '+0.26');
+  assert.equal(formatDiff(NaN, 2), '—');
+  assert.equal(formatDiff(Infinity), '—');
 });
 
 test('signedColor: green above zero, red below, none at zero, judged at the displayed precision', () => {

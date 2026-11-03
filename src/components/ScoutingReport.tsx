@@ -7,7 +7,7 @@ import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer, ratingPoints } from '@/lib/h2h-ratings';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { avgOf, factionColor, tabCls } from '@/lib/util';
+import { avgOf, factionColor, roundTo, tabCls } from '@/lib/util';
 import { playerHref } from '@/lib/crumbs';
 import { findDuo, findRival } from '@/lib/h2h';
 import Link from 'next/link';
@@ -54,8 +54,10 @@ function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
   };
 }
 
-function heatTitle(val: number, baseline: number, unit: string, decimals: number): string {
-  const d = val - baseline;
+/** Tooltip for a map stat's gap to the player's career average, judged at the shown precision so a
+ *  gap that rounds to zero reads "At career average". */
+export function heatTitle(val: number, baseline: number, unit: string, decimals: number): string {
+  const d = roundTo(val - baseline, decimals);
   const abs = Math.abs(d).toFixed(decimals);
   if (d > 0) return `+${abs}${unit} above career average`;
   if (d < 0) return `${abs}${unit} below career average`;

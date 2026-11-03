@@ -45,7 +45,7 @@ import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
 import { sortRows } from '@/lib/sort-rows';
-import { tabCls, factionClass, fmtPct as pct } from '@/lib/util';
+import { tabCls, factionClass, fmtPct as pct, formatDiff, roundTo } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 import { WeaponIcon } from './icons/WeaponIcon';
@@ -85,14 +85,10 @@ function fmtNum(v: number, d: number = 0): string {
   return v.toFixed(d);
 }
 
-function fmtDiff(v: number, d: number = 0): string {
-  if (!Number.isFinite(v)) return '—';
-  const s = v.toFixed(d);
-  return v > 0 ? `+${s}` : s;
-}
-
+/** Green above league average, red below, deepening with the gap — judged on the value as shown
+ *  (2 decimals), so a figure that reads `1.00` takes no tint. */
 function plusStyle(val: number): React.CSSProperties {
-  const delta = Math.max(-1, Math.min(1, val - 1));
+  const delta = Math.max(-1, Math.min(1, roundTo(val, 2) - 1));
   const pct = Math.round(Math.abs(delta) * 100);
   if (pct === 0) return {};
   const accent = delta > 0 ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)';
@@ -1059,7 +1055,7 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
               <Td>{r.kills}</Td>
               <Td>{r.assists}</Td>
               <Td>{r.deaths}</Td>
-              <Td>{fmtDiff(r.killDiff)}</Td>
+              <Td>{formatDiff(r.killDiff)}</Td>
               <Td>{r.damage.toLocaleString()}</Td>
               <Td>{fmtNum(r.adr, 2)}</Td>
               <Td>{r.roundsWon}–{r.roundsLost}</Td>
