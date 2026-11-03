@@ -27,6 +27,7 @@ test('generating a schedule, then confirming it, materializes real weeks and mat
   await loginAs(page, 'Zach'); // the seeded admin
 
   await page.goto(`/admin/seasons/schedule/${season.seasonId}`);
+  const main = page.getByRole('main');
   // .first(): same reasoning as the `Match 1` locator below — CI's cold-start `next dev` compile
   // of this not-yet-visited route can paint the empty-state text twice before settling, same
   // symptom class Playwright strict mode would otherwise fail on.
@@ -34,11 +35,11 @@ test('generating a schedule, then confirming it, materializes real weeks and mat
 
   await page.getByRole('button', { name: 'Generate Schedule' }).click();
   // Regenerates the page's server data via router.refresh() — wait for the draft's weeks to render.
-  await expect(page.getByRole('main').getByText(/^Week 1$/)).toBeVisible();
+  await expect(main.getByText(/^Week 1$/)).toBeVisible();
 
   // A 7-player round-robin draft is complete by construction (season-schedule-engine.ts guarantees
   // every pair teams and opposes at least once) — no hand-editing needed before confirming.
-  await expect(page.getByRole('main').getByText(/Every pair plays together and against each other/i)).toBeVisible();
+  await expect(main.getByText(/Every pair plays together and against each other/i)).toBeVisible();
 
   const confirmButton = page.getByRole('button', { name: 'Confirm Schedule' });
   await expect(confirmButton).toBeEnabled();
