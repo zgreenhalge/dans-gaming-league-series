@@ -437,8 +437,14 @@ export function formatSigned(n: number, decimals: number): string {
   return `${rounded > 0 ? '+' : ''}${rounded.toFixed(decimals)}`;
 }
 
+/** A stat-table figure at `decimals` places, or `—` when the value isn't a finite number (a ratio
+ *  over zero games). */
+export function formatStat(n: number, decimals: number = 0): string {
+  return Number.isFinite(n) ? n.toFixed(decimals) : '—';
+}
+
 /** A stat-table difference (kill diff, round diff per game): `formatSigned()`, or `—` when the
- *  value isn't a finite number (a ratio over zero games). */
+ *  value isn't a finite number, as `formatStat()`. */
 export function formatDiff(n: number, decimals: number = 0): string {
   return Number.isFinite(n) ? formatSigned(n, decimals) : '—';
 }

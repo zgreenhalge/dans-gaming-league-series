@@ -5,7 +5,7 @@ import { useSortState } from './useSortState';
 import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, SCORE_CATEGORY_INFO, type ScoreCategory, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
-import { formatDiff, tabCls } from '@/lib/util';
+import { formatDiff, formatStat, tabCls } from '@/lib/util';
 import { playerHref } from '@/lib/crumbs';
 import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
@@ -19,11 +19,6 @@ import { CONDITION_LABEL } from './icons/ConditionIcons';
 interface RowWithStats {
   row: LeaderboardRowWithId;
   stats: AdvancedStats;
-}
-
-function fmtNum(v: number, decimals: number = 0): string {
-  if (!Number.isFinite(v)) return '—';
-  return v.toFixed(decimals);
 }
 
 function BasicStatsTable({ data }: { data: RowWithStats[] }) {
@@ -71,7 +66,7 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
               <Td>{row.total_deaths}</Td>
               <Td>{formatDiff(stats.killDiff)}</Td>
               <Td>{row.total_damage.toLocaleString()}</Td>
-              <Td>{fmtNum(row.overall_adr, 2)}</Td>
+              <Td>{formatStat(row.overall_adr, 2)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -126,15 +121,15 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
           {sorted.map(({ row, stats }) => (
             <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
-              <Td>{fmtNum(row.kd_ratio, 2)}</Td>
-              <Td>{fmtNum(stats.dmgPerKill, 1)}</Td>
-              <Td>{fmtNum(stats.kPerRound, 2)}</Td>
-              <Td>{fmtNum(stats.aPerRound, 2)}</Td>
-              <Td>{fmtNum(stats.dPerRound, 2)}</Td>
-              <Td>{fmtNum(stats.kPerWin, 1)}</Td>
-              <Td>{fmtNum(stats.dPerWin, 1)}</Td>
-              <Td>{fmtNum(stats.kPerLoss, 1)}</Td>
-              <Td>{fmtNum(stats.dPerLoss, 1)}</Td>
+              <Td>{formatStat(row.kd_ratio, 2)}</Td>
+              <Td>{formatStat(stats.dmgPerKill, 1)}</Td>
+              <Td>{formatStat(stats.kPerRound, 2)}</Td>
+              <Td>{formatStat(stats.aPerRound, 2)}</Td>
+              <Td>{formatStat(stats.dPerRound, 2)}</Td>
+              <Td>{formatStat(stats.kPerWin, 1)}</Td>
+              <Td>{formatStat(stats.dPerWin, 1)}</Td>
+              <Td>{formatStat(stats.kPerLoss, 1)}</Td>
+              <Td>{formatStat(stats.dPerLoss, 1)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -210,11 +205,11 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
               <PlayerCell id={row.player_id} name={row.player_name} />
               <Td>{row.matches_played}</Td>
               <Td>{row.matches_won}–{row.matches_lost}</Td>
-              <Td>{fmtNum(row.win_rate_percentage, 1)}</Td>
+              <Td>{formatStat(row.win_rate_percentage, 1)}</Td>
               <Td>{row.total_rounds_played}</Td>
               <Td>{row.total_rounds_won}–{stats.roundsLost}</Td>
               <Td>{formatDiff(stats.roundDiff)}</Td>
-              <Td>{fmtNum(row.rwr_percentage, 1)}</Td>
+              <Td>{formatStat(row.rwr_percentage, 1)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -269,15 +264,15 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
           {sorted.map(({ row, stats }) => (
             <Tr key={row.player_id} href={playerHref(row.player_id)}>
               <PlayerCell id={row.player_id} name={row.player_name} />
-              <Td>{fmtNum(stats.rPerGame, 1)}</Td>
+              <Td>{formatStat(stats.rPerGame, 1)}</Td>
               <Td>{formatDiff(stats.rdPerGame, 2)}</Td>
-              <Td>{fmtNum(stats.rwPerGame, 2)}</Td>
-              <Td>{fmtNum(stats.rlPerGame, 2)}</Td>
+              <Td>{formatStat(stats.rwPerGame, 2)}</Td>
+              <Td>{formatStat(stats.rlPerGame, 2)}</Td>
               <Td>{formatDiff(stats.kdPerGame, 2)}</Td>
-              <Td>{fmtNum(stats.dmgPerGame, 1)}</Td>
-              <Td>{fmtNum(stats.kPerGame, 2)}</Td>
-              <Td>{fmtNum(stats.aPerGame, 2)}</Td>
-              <Td>{fmtNum(stats.dPerGame, 2)}</Td>
+              <Td>{formatStat(stats.dmgPerGame, 1)}</Td>
+              <Td>{formatStat(stats.kPerGame, 2)}</Td>
+              <Td>{formatStat(stats.aPerGame, 2)}</Td>
+              <Td>{formatStat(stats.dPerGame, 2)}</Td>
             </Tr>
           ))}
         </tbody>

@@ -51,6 +51,7 @@ import {
   mergeLeaderboardRows,
   formatSigned,
   formatDiff,
+  formatStat,
   roundTo,
   signedColor,
 } from './util';
@@ -542,6 +543,12 @@ test('formatSigned: explicit plus when positive, rounded first so a zero never s
   assert.equal(formatSigned(0, 1), '0.0');
   assert.equal(formatSigned(-0.04, 1), '0.0');
   assert.equal(formatSigned(4.4, 0), '+4');
+});
+
+test('formatStat: fixed decimals, a dash when the value is not finite', () => {
+  assert.equal(formatStat(98.704, 2), '98.70');
+  assert.equal(formatStat(3), '3');
+  assert.equal(formatStat(NaN, 1), '—');
 });
 
 test('formatDiff: signed at the shown precision, a dash when the value is not finite', () => {
