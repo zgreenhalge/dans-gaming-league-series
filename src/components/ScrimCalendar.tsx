@@ -10,6 +10,7 @@ import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { useHasMounted } from './useHasMounted';
 import { addMonths, localDayKey, monthGrid } from '@/lib/calendar-month';
 import { SCRIM_MAX_DAYS_AHEAD } from '@/lib/scrim-schedule';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
 import type { PastScrimNight, UpcomingScrimNight } from '@/lib/queries';
 
 interface Props {
@@ -25,7 +26,8 @@ const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The scrims calendar: a month grid in the viewer's own timezone where each day shows its nights —
- *  upcoming ones as a little person per signup (filled definite, hollow maybe), past ones marked played — and,
+ *  upcoming ones as four seats filled by their signups (filled definite, hollow maybe), the day green
+ *  once a night is full and dashed amber when its maybes could fill it, past ones marked played — and,
  *  under it, the picked day's nights: an upcoming night's signup panel (`ScrimNightPanel`), a past
  *  night's results link, and the form to start a night that day. Opens on the soonest upcoming
  *  night's day, or today. Renders only in the browser, since its days depend on the viewer's timezone. */
@@ -111,31 +113,40 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
   );
 }
 
-/** How many people a day cell draws before the rest fold into a `+N`. */
-const MAX_PEOPLE = 6;
-
-/** Who's coming as little people: a filled one per definite signup, then a hollow outline per maybe,
- *  up to `MAX_PEOPLE` (wrapping to a second row) with the rest as `+N`. Decorative — the cell's label
- *  carries the counts. */
-function SignupPeople({ definite, maybe }: { definite: number; maybe: number }) {
-  const kinds = [...Array<boolean>(definite).fill(true), ...Array<boolean>(maybe).fill(false)];
-  const shown = kinds.slice(0, MAX_PEOPLE);
-  const rest = kinds.length - shown.length;
+/** A night's seats: the four a match needs (`SCRIM_MATCH_SIZE`), filled in signup order — a filled
+ *  person per definite, a hollow one per maybe — with the seats still open drawn dotted and anyone
+ *  past the fourth as `+N`. Decorative — the cell's label carries the counts. */
+function Seats({ definite, maybe }: { definite: number; maybe: number }) {
+  const kinds: SeatKind[] = [...Array<SeatKind>(definite).fill('definite'), ...Array<SeatKind>(maybe).fill('maybe')];
+  const seats = kinds.slice(0, SCRIM_MATCH_SIZE);
+  while (seats.length < SCRIM_MATCH_SIZE) seats.push('open');
+  const rest = kinds.length - SCRIM_MATCH_SIZE;
   return (
-    <span aria-hidden className="flex flex-wrap justify-center items-center gap-x-px max-w-[40px] text-[var(--color-site-accent)]">
-      {shown.map((definite, i) => (
-        <PersonIcon key={i} filled={definite} />
-      ))}
+    <span aria-hidden className="flex flex-col items-center gap-0.5">
+      <span className="grid grid-cols-2 gap-px text-[var(--color-site-accent)]">
+        {seats.map((kind, i) => (
+          <PersonIcon key={i} kind={kind} />
+        ))}
+      </span>
       {rest > 0 && <span className="font-mono text-[10px] leading-none text-[var(--color-text-secondary)]">+{rest}</span>}
     </span>
   );
 }
 
-/** A generic person — head and shoulders: filled for a definite signup, a hollow outline for a maybe. */
-function PersonIcon({ filled }: { filled: boolean }) {
+type SeatKind = 'definite' | 'maybe' | 'open';
+
+/** A generic person — head and shoulders: filled for a definite signup, a hollow outline for a maybe,
+ *  a faint dotted outline for an open seat. */
+function PersonIcon({ kind }: { kind: SeatKind }) {
+  const open = kind === 'open';
   return (
-    <svg viewBox="0 0 12 12" width="12" height="12">
-      <g fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={filled ? 0 : 1.3}>
+    <svg viewBox="0 0 12 12" width="12" height="12" className={open ? 'text-[var(--color-text-secondary)] opacity-60' : undefined}>
+      <g
+        fill={kind === 'definite' ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={kind === 'definite' ? 0 : 1.2}
+        strokeDasharray={open ? '1.2 1.1' : undefined}
+      >
         <circle cx="6" cy="3.6" r="2.4" />
         <path d="M1.6 11.2a4.4 4.1 0 0 1 8.8 0Z" strokeLinejoin="round" />
       </g>
@@ -143,8 +154,23 @@ function PersonIcon({ filled }: { filled: boolean }) {
   );
 }
 
-/** One day of the grid: its date, a person per player coming to its upcoming nights (`SignupPeople`), or a
- *  played mark for a past one. */
+/** How full a night is: `full` once `SCRIM_MATCH_SIZE` players are definite, `could-fill` when its
+ *  maybes would get it there, otherwise `short`. */
+function nightFill(definite: number, maybe: number): 'full' | 'could-fill' | 'short' {
+  if (definite >= SCRIM_MATCH_SIZE) return 'full';
+  return definite + maybe >= SCRIM_MATCH_SIZE ? 'could-fill' : 'short';
+}
+
+const FILL_CLS = {
+  full: 'bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]',
+  'could-fill': 'border-dashed border-[var(--color-accent-amber-border)]',
+  short: 'border-[var(--color-border-tertiary)]',
+} as const;
+
+/** One day of the grid: its date and, for a day with an upcoming night, that night's seats (`Seats`) —
+ *  the whole day tinted green once they're all definite, or bordered in amber dashes when its maybes
+ *  could fill them — or a played mark for a past night. On a day with two nights, the one with the
+ *  most definite signups speaks for the day. */
 function DayCell({
   day,
   nights,
@@ -158,13 +184,20 @@ function DayCell({
   selected: boolean;
   onPick: (day: string) => void;
 }) {
-  const signups = nights?.upcoming.flatMap((u) => u.signups) ?? [];
-  const definite = signups.filter((s) => s.commitment === 'definite').length;
-  const maybe = signups.length - definite;
-  const hasUpcoming = (nights?.upcoming.length ?? 0) > 0;
+  const counts = (nights?.upcoming ?? []).map((u) => {
+    const definite = u.signups.filter((s) => s.commitment === 'definite').length;
+    return { definite, maybe: u.signups.length - definite };
+  });
+  const lead = counts.reduce<{ definite: number; maybe: number } | null>(
+    (best, c) => (best === null || c.definite > best.definite || (c.definite === best.definite && c.maybe > best.maybe) ? c : best),
+    null,
+  );
+  const definite = counts.reduce((sum, c) => sum + c.definite, 0);
+  const maybe = counts.reduce((sum, c) => sum + c.maybe, 0);
   const hasPast = (nights?.past.length ?? 0) > 0;
+  const fill = lead ? nightFill(lead.definite, lead.maybe) : 'short';
   const title = [
-    hasUpcoming && `${nights!.upcoming.length} upcoming · ${definite} definite, ${maybe} maybe`,
+    lead && `${counts.length} upcoming · ${definite} definite, ${maybe} maybe${fill === 'full' ? ' · full' : ''}`,
     hasPast && `${nights!.past.length} played`,
   ]
     .filter(Boolean)
@@ -177,15 +210,13 @@ function DayCell({
       aria-pressed={selected}
       aria-label={`${day}${title ? ` — ${title}` : ''}`}
       title={title || undefined}
-      className={`relative flex flex-col items-center justify-start gap-0.5 min-h-[56px] sm:min-h-[64px] pt-1 border transition-colors ${
-        selected
-          ? 'border-[var(--color-site-accent)] bg-[var(--color-bg-secondary)]'
-          : 'border-[var(--color-border-tertiary)] hover:bg-[var(--color-bg-secondary)]'
+      className={`relative flex flex-col items-center justify-start gap-0.5 min-h-[56px] sm:min-h-[64px] pt-1 border transition-colors ${FILL_CLS[fill]} ${
+        selected ? 'outline outline-2 -outline-offset-2 outline-[var(--color-site-accent)]' : fill === 'full' ? 'hover:brightness-105' : 'hover:bg-[var(--color-bg-secondary)]'
       } ${day < today && !hasPast ? 'text-[var(--color-text-secondary)] opacity-60' : ''}`}
     >
       <span className={`font-mono text-[12px] ${day === today ? 'font-bold text-[var(--color-site-accent)]' : ''}`}>{Number(day.slice(8))}</span>
-      {hasUpcoming && <SignupPeople definite={definite} maybe={maybe} />}
-      {!hasUpcoming && hasPast && <span className="font-mono text-[10px] leading-none text-[var(--color-text-secondary)]">played</span>}
+      {lead && <Seats definite={lead.definite} maybe={lead.maybe} />}
+      {!lead && hasPast && <span className="font-mono text-[10px] leading-none text-[var(--color-text-secondary)]">played</span>}
     </button>
   );
 }
