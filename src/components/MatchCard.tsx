@@ -5,7 +5,7 @@ import { LocalTime } from './LocalTime';
 import { PlayerName } from './PlayerName';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { fmtWindowDate, formatEhogDelta, signedColor } from '@/lib/util';
+import { ehogDeltaColor, fmtWindowDate, formatEhogDelta } from '@/lib/util';
 import type { MatchCardRight } from '@/lib/match-card';
 import { CountdownTimer } from './CountdownTimer';
 import { FeatureMatchIcon } from './FeatureMatch';
@@ -96,7 +96,7 @@ function TeamStatBlock({
               return (
                 <span
                   className={`${statCls} ${highlight ? 'text-[12px] font-semibold' : 'text-[11px]'} w-14 pr-2 hidden min-[480px]:block`}
-                  style={{ color: signedColor(delta ?? 0, 1) ?? 'var(--color-text-secondary)' }}
+                  style={{ color: ehogDeltaColor(delta ?? 0) ?? 'var(--color-text-secondary)' }}
                 >
                   {delta != null ? formatEhogDelta(delta) : ''}
                 </span>
