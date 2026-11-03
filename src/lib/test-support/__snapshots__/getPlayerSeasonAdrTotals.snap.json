@@ -1,0 +1,86 @@
+[
+  {
+    "player_id": 1,
+    "season_id": 1,
+    "is_gauntlet": false,
+    "games": 1,
+    "adr_sum": 85.5
+  },
+  {
+    "player_id": 1,
+    "season_id": 2,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 88
+  },
+  {
+    "player_id": 2,
+    "season_id": 1,
+    "is_gauntlet": false,
+    "games": 1,
+    "adr_sum": 78.18
+  },
+  {
+    "player_id": 2,
+    "season_id": 2,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 80
+  },
+  {
+    "player_id": 3,
+    "season_id": 1,
+    "is_gauntlet": false,
+    "games": 1,
+    "adr_sum": 65
+  },
+  {
+    "player_id": 3,
+    "season_id": 4,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 95
+  },
+  {
+    "player_id": 4,
+    "season_id": 1,
+    "is_gauntlet": false,
+    "games": 1,
+    "adr_sum": 60.09
+  },
+  {
+    "player_id": 4,
+    "season_id": 4,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 88
+  },
+  {
+    "player_id": 5,
+    "season_id": 2,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 70
+  },
+  {
+    "player_id": 6,
+    "season_id": 2,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 65
+  },
+  {
+    "player_id": 7,
+    "season_id": 4,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 45
+  },
+  {
+    "player_id": 8,
+    "season_id": 4,
+    "is_gauntlet": true,
+    "games": 1,
+    "adr_sum": 40
+  }
+]

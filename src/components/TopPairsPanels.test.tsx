@@ -92,7 +92,7 @@ describe('HottestRivalriesPanel', () => {
     expect(screen.queryByText('Rounds')).toBeNull();
   });
 
-  test('renders nothing without a rivalry', () => {
+  test('renders nothing without a rated rivalry', () => {
     const { container } = render(<HottestRivalriesPanel data={{ ...DATA, rivals: [] }} />);
     expect(container).toBeEmptyDOMElement();
   });

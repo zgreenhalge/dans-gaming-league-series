@@ -1,6 +1,7 @@
 import { getAdminClient } from '../supabase-admin';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore } from '../util';
+import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore, mergeLeaderboardRows } from '../util';
+import { getGauntletStats } from './gauntlet';
 import { getPlayersById } from './player';
 import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 import { persistentQuery } from './_persistentCache';
@@ -422,6 +423,17 @@ export const getCareerLeaderboard = persistentQuery('getCareerLeaderboard', asyn
     });
   }
   return out.sort(canonicalSort);
+});
+
+/**
+ * The career leaderboard with the gauntlet career merged in (`mergeLeaderboardRows()`) — the
+ * Statistics page's default view and the figures the My Stats panel and the player hover card
+ * show. Unsorted; rank with `canonicalSort()`. `persistentQuery()`-wrapped so the merge is one
+ * stored read per data version, shared by every caller.
+ */
+export const getMergedCareerLeaderboard = persistentQuery('getMergedCareerLeaderboard', async (): Promise<LeaderboardRowWithId[]> => {
+  const [regular, gauntlet] = await Promise.all([getCareerLeaderboard(), getGauntletStats()]);
+  return mergeLeaderboardRows(regular, gauntlet.career);
 });
 
 /** Returns leaderboards for every season, keyed by season_id. */

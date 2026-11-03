@@ -3,7 +3,10 @@
 `e2e/` holds Playwright coverage for DGLS's highest-risk multi-stage flows — sequences that span
 more than one request/response and can't be locked down by a `queries-*.test.ts`-style unit test
 alone (`season-schedule.spec.ts`), and the home page composed end to end — signed out, signed in,
-and between seasons (`home.spec.ts`) — scrim nights from the calendar through the lobby (`scrims.spec.ts`) — plus one deliberately shallow smoke spec
+and between seasons (`home.spec.ts`), the week, round and group pages against a seeded gauntlet —
+the walk between them, collapsible group sections, canonical-URL redirects, 404s, Open Graph
+metadata and images, and the phone-width layout (`gauntlet-stages.spec.ts`), and scrim nights from the calendar
+through the lobby (`scrims.spec.ts`) — plus one deliberately shallow smoke spec
 (`page-smoke.spec.ts`) that visits every top-level page type, clicks through each page's tabs, and
 asserts the app never falls back to the route error boundary. The smoke spec exists for a
 different failure mode than the flow specs: a page that forgot to wrap a client component in a
@@ -108,9 +111,18 @@ map the server can load. Days on the calendar are the browser's, so the spec rea
 `'ARCHIVED'` for the between-seasons state, where the home page shows the latest finished season's
 standings and no Upcoming panel). The home page reads the whole league and is server-rendered, so the
 signed-in test logs in on another page and then loads `/` fresh: the dev login only updates the
-client session. Its Top duos / Hottest Rivalries data comes from `getCareerH2HDataCached()`, a
-60-second `unstable_cache`, so a home visit made before any match exists can hide those panels for
-up to a minute; the signed-in test reloads until they appear.
+client session. Its Top duos data comes from `getCareerH2HDataCached()`, a
+60-second `unstable_cache`, so a home visit made before any match exists can hide that panel for
+up to a minute; the signed-in test reloads until it appears. The seeded match gives every pair a
+single meeting, which rates 0, so Hottest Rivalries is asserted absent.
+
+`gauntlet-stages.spec.ts` seeds `seedGauntletWithPods()`: a regular season (one played week) paired by
+season number with a gauntlet whose round 1 has two played groups — an elimination pod and a wildcard
+pod, two games each — and whose round 2 is an unscheduled final fed by both groups. The bracket needs
+eight players, one more than `seed.sql` provides, so the fixture adds one `E2E ` player and
+`teardownGauntlet()` removes it. The spec's browser tests run at desktop width except the phone-width
+block (375px), which checks the page never scrolls horizontally and that the breadcrumb drops its
+middle levels below `sm`.
 
 ## Locators: assert on what the page shows
 

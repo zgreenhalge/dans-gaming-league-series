@@ -26,6 +26,7 @@ async function main() {
     assert.equal(typeof body.playerName, 'string');
     assert.ok(Array.isArray(body.recent));
     assert.ok(body.recent.length <= 5);
+    assert.equal(res.headers.get('Cache-Control'), 'public, s-maxage=60, stale-while-revalidate=300');
   });
 
   await test('GET — an unknown player is a 404', async () => {

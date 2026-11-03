@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, isPlayedHistoryRow, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats } from '@/lib/queries';
+import { getPlayer, isPlayedHistoryRow, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats, getPlayerSeasonAdrTotals } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
 import { parseRouteId } from '@/lib/util';
 import { playerHref } from '@/lib/crumbs';
@@ -61,7 +61,7 @@ export default async function PlayerPage({
   // `players`/`player_match_stats`/`matches`/`weeks` independently, but are each wrapped in React's
   // `cache()` (#507), so calling them plainly here still collapses to one read per table across
   // this whole render pass rather than one per caller.
-  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills, matchWeaponClassStats, economyStats] = await Promise.all([
+  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills, matchWeaponClassStats, economyStats, adrTotals] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
@@ -76,6 +76,8 @@ export default async function PlayerPage({
     getAllMatchKills(),
     getAllWeaponClassStats(),
     getAllEconomyStats(),
+    // League-wide ADR sums: the baseline for a partner's ADR lift on the Matchups tab.
+    getPlayerSeasonAdrTotals(),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
@@ -185,6 +187,7 @@ export default async function PlayerPage({
               matchKills={matchKills}
               matchWeaponClassStats={matchWeaponClassStats}
               economyStats={economyStats}
+              adrTotals={adrTotals}
             />
           </UrlStateProvider>
         </Suspense>

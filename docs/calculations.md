@@ -730,7 +730,7 @@ Two ideas run through both:
 
 - `games` = 25 * games / maxGames
 - `winRate` = 15 * settled * (winRate / maxWinRate), where `winRate` = games won / games played
-- `rwr` = 15 * settled * (rwr / maxRwr), where `rwr` = rounds won / rounds played
+- `rwr` = 15 * settled * (rwr / maxRwr), where `rwr` = rounds won / rounds played, unrounded
 - `settled` = confidence(games) / confidence(maxGames)
 - `odds` = 30 * min(1, max(0, winsAboveExpected / (games + K)) / 0.15)
 - `lift` = 15 * min(1, max(0, adrLift * confidence(games)) / 0.10)
@@ -740,8 +740,18 @@ Two ideas run through both:
 their games of (1 if they won, else 0) minus their team's pre-match win probability, the frozen
 `matches.pre_match_win_prob` ([`ehog.md`](./ehog.md)). A game with no stored prediction adds 0.
 `adrLift` is the mean of the two players' ADR in the games they played together over their own ADR
-in every other game of the selection, minus 1 (a player with no other games counts 0). A negative
-`odds` or `lift` earns 0 rather than subtracting.
+in every other game under the page's season selection, minus 1 (a player with no other games counts
+0). A negative `odds` or `lift` earns 0 rather than subtracting.
+
+The "other games" are each player's baseline, a games count and a per-match ADR sum (`computeH2H()`'s
+optional `adrBaseline`). A page that holds the whole league's matches (Statistics, a map page,
+`getH2HData()`) omits it and the baseline is summed from those matches. The player page holds only
+the viewed player's matches, where every game of a partner is a game with the viewed player, so it
+passes the league-wide baseline instead: `getPlayerSeasonAdrTotals()` (`src/lib/queries/player.ts`)
+returns every player's played games and ADR sum per season, and `adrBaselineFor()`
+(`src/lib/h2h.ts`) sums the rows the page's season filter includes. A partner's lift there is their
+ADR with the viewed player over their ADR in all their other games. Ratings on the player page are
+still normalised against that player's own duos (the best of them reads 100).
 
 `H2HSection`'s Best Friends rows show a **KDA** column for context (`duoAvgKda()`,
 `src/lib/h2h.ts`): the mean of the two players' own KDA, (kills + assists) / deaths via
@@ -775,7 +785,10 @@ The home page's **Top duos** and **Hottest Rivalries** list the three highest-ra
 `H2HSection`'s "Best Friends" / "Closest Rivals" cards the top five: both rank through `rankDuos()` /
 `rankRivals()` (`src/lib/h2h-ratings.ts`) on the Friends Rating and Rival Rating above, each shown
 as the 0–100 rating rounded down (`ratingPoints()`), so only the best pair reads 100 and two close
-pairs never share a number by rounding up. Only pairs that have played together (duos) or met (rivals) are ranked.
+pairs never share a number by rounding up. Only pairs that have played together (duos) are ranked;
+rivals are ranked only when their rating is above 0, so a pair with one meeting or a sweep never
+appears and a league where every pair is in that state ranks no rivals (the lists show an empty
+state). Equal ratings keep input order.
 
 A player's own two matchups on the home page's **My Stats** are computed from the same data:
 
@@ -800,14 +813,15 @@ player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 **My Stats** — career figures for the signed-in player. **EHOG** is the current rating
 (`getCurrentEhogRating()`, [`ehog.md`](./ehog.md)), colored by its tier like the leaderboard's EHOG
 column. **W-L**, **KDA** and **ADR** come from the player's row of the combined regular and gauntlet
-career leaderboard (`mergeLeaderboardRows()` of `getCareerLeaderboard()` and
-`getGauntletStats().career`, the Statistics page's default view). **KDA** is (kills + assists) per
+career leaderboard (`getMergedCareerLeaderboard()`: `mergeLeaderboardRows()` of
+`getCareerLeaderboard()` and `getGauntletStats().career`, the Statistics page's default view). **KDA** is (kills + assists) per
 death, or kills + assists when there are no deaths (`deriveKda()` in `src/lib/util.ts`); the KDA
 tile also shows the kills-only [K/D](#kill-stats) beneath it, the figure the stat tables use.
 **Match history** lists the last five played matches (`lastPlayed()`,
 `src/lib/queries/player.ts`) with the stored `final_score`, shirts first, as every match card shows
-it. The matches come from `getPlayerRecent()`, which loads rosters for just those five and the next
-upcoming match rather than the player's whole history. `buildMyStats()` in
+it. The matches come from `getPlayerRecent()`, which places each of the player's matches by its
+score, week and season alone, then reads the full stat rows, match rows and rosters for just those five
+and the next upcoming match rather than the player's whole history. `buildMyStats()` in
 `src/lib/queries/myStats.ts`.
 
 **Standings season** — the first active regular season; with none active, the latest finished one

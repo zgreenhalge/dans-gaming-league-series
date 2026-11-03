@@ -71,6 +71,13 @@ test('duoBlendedScorer: results and odds decide a 4-0 duo over a 3-1 duo whose e
   assert.ok(score(fourNil) > score(threeOne));
 });
 
+test('duoBlendedScorer: duos a fraction of a percent apart on round win rate score differently', () => {
+  const ahead = duo(10, 5, { roundsWon: 262, roundsPlayed: 500 }); // 52.4%
+  const behind = duo(10, 5, { roundsWon: 258, roundsPlayed: 500 }); // 51.6%
+  const score = duoBlendedScorer([ahead, behind]);
+  assert.ok(score(ahead) > score(behind));
+});
+
 test('duoBlendedScorer: negative odds and lift earn nothing rather than subtracting', () => {
   const league = duo(8, 6);
   const underperformed = duo(4, 3, { winsAboveExpected: -1, adrLift: -0.2 });

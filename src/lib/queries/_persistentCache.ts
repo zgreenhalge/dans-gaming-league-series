@@ -7,7 +7,11 @@ import { getAdminClient } from '../supabase-admin';
 // supabase/migrations/20261021120000_add_data_version.sql): every content write bumps that counter,
 // so a write — from any writer — leaves the old entries unreachable and the next read recomputes.
 // The TTL below only lets unreferenced entries expire. Each entry is capped by the data cache's item
-// size limit (about 2 MB); a larger result is simply not stored and is recomputed on every read.
+// size limit; a result over it is not stored and the read is recomputed on every call. Next runs a persistent read called from inside
+// another one's computation uncached, so only the outermost read of a computation is stored; the
+// inner ones are shared within the render by `cache()` as usual. A wrapped read depends only on
+// tables that bump `data_version` and on no clock (`queries-persistent-cache.test.ts` checks the
+// tables); anything time-dependent or live stays unwrapped.
 
 const CACHE_TTL_SECONDS = 24 * 60 * 60;
 

@@ -76,10 +76,14 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 
 - **`<PlayerLink playerId>`** (`PlayerLink.tsx`) — the link to a player's page, with a hover card:
   a `PlayerPreviewCard` (a player's `PlayerSummary` — EHOG badge, W-L, KDA, ADR and a Form row of
-  their last five results) opens beside the link the moment the mouse is on it, as a skeleton of the
-  same layout (`PlayerSummaryBlockSkeleton`) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute),
-  and stays open while the mouse is over the link or the card. Mouse-only (touch just navigates)
-  and rendered in a portal so a scrolling table can't clip it. Use it instead of a hand-written
+  their last five results) opens beside the link as a skeleton of the
+  same layout (`PlayerSummaryBlockSkeleton`) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute).
+  It opens on mouse hover (and stays open while the mouse is over the link or the card), on keyboard
+  focus (closes on blur or Escape), and on a touch long-press (a tap still navigates; a press
+  elsewhere closes it). The card is `role="tooltip"` and the link carries `aria-describedby` while
+  it is open. It is rendered in a portal so a scrolling table can't clip it, placed from its
+  measured size (`placeCard()`), and follows its link through scroll and resize, closing only when
+  the link leaves the viewport. Use it instead of a hand-written
   `<Link href={`/players/${id}`}>` for any player name or avatar; where a plain `href` is needed (a
   `Tr` row target), use `playerHref(id)` (`src/lib/crumbs.ts`); ESLint rejects a hand-written `/players/${id}`
   template. `PlayerSummaryBlock`
@@ -245,6 +249,11 @@ tooltip, when its record is uneven (`unevenRivalryNote()`, `src/lib/h2h.ts`, pas
 `dimmedReason`); the same dimming applies wherever a rivalry rating shows (`RivalDetail`, the player page's
 Matchups table). `DuoDetail` adds **vs Odds**, **ADR lift** and **KDA** cells and `RivalDetail` adds **Upsets**
 (each side's meetings won as the pre-match underdog) and **Evenness**.
+
+**Rivalry empty state.** `rankRivals()` returns only pairs rated above 0 (a single meeting or a sweep
+rates 0). While it returns nothing, `H2HSection`'s Closest Rivals card keeps its title and shows an
+`EmptyState` line ("No established rivalries yet.") instead of the header and rows, and the home page's
+Hottest Rivalries panel is omitted. The `H2HMatrix` has no empty state; its rival colouring stays as is.
 
 **Home page panels.** Each home panel (`UpcomingGamesPanel`, `HomeStandingsPanel`, `TopPairsPanels`,
 `MyStatsPanel`) is a bordered block under a titled header whose title is a link to the thing it

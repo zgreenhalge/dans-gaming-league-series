@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
+import { adrBaselineFor, type PlayerSeasonAdrTotal } from '@/lib/h2h';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
@@ -102,6 +103,7 @@ export default function PlayerView({
   matchKills = [],
   matchWeaponClassStats = [],
   economyStats = [],
+  adrTotals,
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -129,6 +131,9 @@ export default function PlayerView({
   /** League-wide per-economy-tier breakdown rows — filtered down to this player's own (season-
    *  filtered) matches the same way `matchKills` is, and feeds the Economy sub-tab. */
   economyStats?: EconomyMatchRow[];
+  /** League-wide played games and summed ADR per player per season — the Matchups tab's ADR lift
+   *  baseline, summed under the active season filter. */
+  adrTotals: PlayerSeasonAdrTotal[];
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -171,20 +176,16 @@ export default function PlayerView({
     else { setMapSort(c); setMapAsc(c === 'map'); }
   }
 
-  const filtered = useMemo(() => {
-    const base = selectedSeason === 'all'
-      ? history
-      : (() => {
-          const pairedGntId = regularToGauntlet.get(selectedSeason);
-          return history.filter((r) =>
-            r.season_id === selectedSeason ||
-            (pairedGntId != null && r.season_id === pairedGntId),
-          );
-        })();
-    return base.filter((r) =>
-      r.is_gauntlet ? includeGauntlet : includeRegular,
-    );
-  }, [selectedSeason, history, includeRegular, includeGauntlet, regularToGauntlet]);
+  // The season selection as a predicate, shared by the player's own rows and the league-wide ADR
+  // baseline so both cover the same seasons.
+  const inSeasonSelection = useMemo(() => {
+    const pairedGntId = selectedSeason === 'all' ? undefined : regularToGauntlet.get(selectedSeason);
+    return (r: { season_id: number; is_gauntlet: boolean }) =>
+      (selectedSeason === 'all' || r.season_id === selectedSeason || (pairedGntId != null && r.season_id === pairedGntId))
+      && (r.is_gauntlet ? includeGauntlet : includeRegular);
+  }, [selectedSeason, includeRegular, includeGauntlet, regularToGauntlet]);
+
+  const filtered = useMemo(() => history.filter(inSeasonSelection), [history, inSeasonSelection]);
 
   const last5 = useMemo(() => lastPlayed(filtered, 5), [filtered]);
 
@@ -236,7 +237,10 @@ export default function PlayerView({
   const upcomingHistory = filtered.filter((r) => !isPlayedHistoryRow(r)).reverse();
   const nextMatch = upcomingHistory[0] ?? null;
 
-  const h2hData = useLiveH2HData(playedHistory, players);
+  // `playedHistory` holds only this player's games, so a partner's "ADR in every other game" comes
+  // from the league-wide totals under the same season selection.
+  const adrBaseline = useMemo(() => adrBaselineFor(adrTotals, inSeasonSelection), [adrTotals, inSeasonSelection]);
+  const h2hData = useLiveH2HData(playedHistory, players, adrBaseline);
   // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the
   // current season filter (e.g. an old link, or the filter just changed) — a derived read, not a
   // written-back correction, so toggling the filter back and forth doesn't lose an explicit
