@@ -101,7 +101,7 @@ map the server can load. Days on the calendar are the browser's, so the spec rea
 
 `home.spec.ts` seeds `seedPlayedMatchWithSabremetrics()` (`status: 'ACTIVE'` for a running season,
 `'ARCHIVED'` for the between-seasons state, where the home page shows the latest finished season's
-standings and no Upcoming Games). The home page reads the whole league and is server-rendered, so the
+standings and no Upcoming panel). The home page reads the whole league and is server-rendered, so the
 signed-in test logs in on another page and then loads `/` fresh: the dev login only updates the
 client session. Its Top duos / Hottest Rivalries data comes from `getCareerH2HDataCached()`, a
 60-second `unstable_cache`, so a home visit made before any match exists can hide those panels for

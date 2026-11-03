@@ -3,7 +3,7 @@
  * UI: the calendar signed out and signed in, starting a night on a picked day, the overlap refusal,
  * signing up / switching / dropping out (the last player out removes the night), the admin controls
  * toggle, the lobby's check-in, Next Match (make, change the side, discard), Generate Rounds (preview,
- * Details, queue), a night on the home page's Upcoming Games, and a past night's results and match
+ * Details, queue), a night on the home page's Upcoming panel, and a past night's results and match
  * page. Each test starts from no scrim nights
  * and seeds its own (`e2e/support/db.ts`); see docs/e2e.md.
  */
@@ -264,7 +264,7 @@ test.describe('the lobby', () => {
   });
 });
 
-test("an upcoming night joins the home page's Upcoming Games, linking to its night page", async ({ page }) => {
+test("an upcoming night joins the home page's Upcoming panel, linking to its night page", async ({ page }) => {
   const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }, { playerId: DREW, commitment: 'maybe' }]);
   await page.goto('/');
   const row = page.getByRole('main').locator(`a[href="/scrims/${nightId}"]`);

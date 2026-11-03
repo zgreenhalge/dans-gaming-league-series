@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `UpcomingGamesPanel.tsx`: the Upcoming Games block (title links to the
+ * Component tests for `UpcomingGamesPanel.tsx`: the Upcoming block (title links to the
  * current week / round, rows show the day-of-week + day beside the time and a countdown) and the
  * To Be Scheduled block (title and an "All games →" link both go to the Schedule tab; its rows carry
  * no status text of their own). Either block is omitted when empty. Scrim nights join the Upcoming
@@ -61,9 +61,9 @@ function renderPanel(props: Partial<React.ComponentProps<typeof UpcomingGamesPan
 }
 
 describe('UpcomingGamesPanel', () => {
-  test('the Upcoming Games title links to the heading target and has no "All games" link', () => {
+  test('the Upcoming title links to the heading target and has no "All games" link', () => {
     renderPanel();
-    expect(screen.getByRole('link', { name: 'Upcoming Games' })).toHaveAttribute('href', HEADING_HREF);
+    expect(screen.getByRole('link', { name: /^Upcoming$/ })).toHaveAttribute('href', HEADING_HREF);
     // Only the To Be Scheduled block carries one.
     expect(screen.getAllByRole('link', { name: 'All games →' })).toHaveLength(1);
   });
@@ -106,7 +106,7 @@ describe('UpcomingGamesPanel', () => {
   test('an empty block is omitted; with both empty nothing renders', () => {
     const { container, rerender } = renderPanel({ unscheduled: [] });
     expect(screen.queryByRole('link', { name: 'To Be Scheduled' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Upcoming Games' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Upcoming$/ })).toBeInTheDocument();
 
     rerender(
       <UpcomingGamesPanel
@@ -117,7 +117,7 @@ describe('UpcomingGamesPanel', () => {
         currentPlayerId={null}
       />,
     );
-    expect(screen.queryByRole('link', { name: 'Upcoming Games' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^Upcoming$/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'To Be Scheduled' })).toBeInTheDocument();
 
     rerender(
@@ -126,7 +126,7 @@ describe('UpcomingGamesPanel', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  test('scrim nights join Upcoming Games in time order, linking to their night pages', () => {
+  test('scrim nights join Upcoming in time order, linking to their night pages', () => {
     renderPanel({
       scrims: [
         scrim(7, '2099-10-23T00:00:00Z', [[1, 'definite'], [2, 'definite'], [3, 'definite'], [4, 'definite']]),
@@ -161,7 +161,7 @@ describe('UpcomingGamesPanel', () => {
     render(
       <UpcomingGamesPanel scheduled={[]} unscheduled={[]} scrims={[scrim(7, '2099-10-23T00:00:00Z', [[1, 'definite']])]} headingHref="/scrims" scheduleHref="/scrims" currentPlayerId={null} />,
     );
-    expect(screen.getByRole('link', { name: 'Upcoming Games' })).toHaveAttribute('href', '/scrims');
+    expect(screen.getByRole('link', { name: /^Upcoming$/ })).toHaveAttribute('href', '/scrims');
     expect(screen.queryByRole('link', { name: 'To Be Scheduled' })).toBeNull();
   });
 });

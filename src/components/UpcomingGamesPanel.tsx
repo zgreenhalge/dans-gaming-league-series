@@ -163,12 +163,12 @@ function GameBlock({
   );
 }
 
-/** Home page panels: an "Upcoming Games" block for every scheduled-but-unplayed game and every scrim
+/** Home page panels: an "Upcoming" block for every scheduled-but-unplayed game and every scrim
  *  night that hasn't ended (`ScrimNightRow`), soonest first, and a "To Be Scheduled" block for every
  *  unplayed game still missing a time — the one "what's coming up" surface for a regular season, a
  *  gauntlet and scrims. Either block is omitted when its own list is empty, and the whole thing
  *  renders nothing when both are — the caller doesn't need its own emptiness check to decide whether
- *  to show it. The Upcoming Games title links to `headingHref` (the current week's or round's page,
+ *  to show it. The Upcoming title links to `headingHref` (the current week's or round's page,
  *  or the scrims page when no season is running); the To Be Scheduled title and its "All games →"
  *  link go to `scheduleHref` (the season's Schedule tab). `scheduled`/`unscheduled` are pre-derived
  *  by the caller — see `getHomeGames()` (`src/lib/queries/home.ts`); `scrims` is
@@ -199,7 +199,7 @@ export function UpcomingGamesPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <GameBlock title="Upcoming Games" titleHref={headingHref} rows={upcoming} />
+      <GameBlock title="Upcoming" titleHref={headingHref} rows={upcoming} />
       <GameBlock
         title="To Be Scheduled"
         titleHref={scheduleHref}

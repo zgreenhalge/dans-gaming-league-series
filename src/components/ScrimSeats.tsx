@@ -1,5 +1,5 @@
 // A scrim night's seats — the four a match needs, filled by its signups — and how full that makes it.
-// The scrims calendar and the home page's Upcoming Games draw nights with these, so a night reads the
+// The scrims calendar and the home page's Upcoming panel draw nights with these, so a night reads the
 // same everywhere. Plain components, usable from server and client components alike.
 
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
