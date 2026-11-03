@@ -549,6 +549,8 @@ test('formatStat: fixed decimals, a dash when the value is not finite', () => {
   assert.equal(formatStat(98.704, 2), '98.70');
   assert.equal(formatStat(3), '3');
   assert.equal(formatStat(NaN, 1), '—');
+  assert.equal(formatStat(Infinity, 2), '—');
+  assert.equal(formatStat(-Infinity), '—');
 });
 
 test('formatDiff: signed at the shown precision, a dash when the value is not finite', () => {
@@ -559,6 +561,7 @@ test('formatDiff: signed at the shown precision, a dash when the value is not fi
   assert.equal(formatDiff(0.256, 2), '+0.26');
   assert.equal(formatDiff(NaN, 2), '—');
   assert.equal(formatDiff(Infinity), '—');
+  assert.equal(formatDiff(-Infinity, 2), '—');
 });
 
 test('signedColor: green above zero, red below, none at zero, judged at the displayed precision', () => {
