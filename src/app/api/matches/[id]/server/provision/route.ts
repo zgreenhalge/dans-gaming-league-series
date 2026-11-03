@@ -51,20 +51,20 @@ export async function POST(
     );
   }
 
-  // A scrim night plays its matches in order: a queued match waits for the ones ahead of it.
-  const playsAfter = await scrimMatchPlaysAfter(getAdminClient(), matchId);
-  if (playsAfter !== null) {
-    return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
-  }
-  // A scrim never bumps anything: a league match always gets the server, so no scrim match starts
-  // within half an hour of one, and none starts while anyone is on the server — a DGLS match or
-  // players outside one (`getServerOccupancy()`, the admin server console's own gate).
+  // A scrim match waits its turn and never bumps anything: a night plays its matches in order, a
+  // league match always gets the server (no scrim match starts within half an hour of one), and none
+  // starts while anyone is on the server — a DGLS match or players outside one
+  // (`getServerOccupancy()`, the admin server console's own gate).
   if (await isScrimMatch(getAdminClient(), matchId)) {
     const serverId = process.env.DATHOST_SERVER_ID;
-    const [scheduled, server] = await Promise.all([
+    const [playsAfter, scheduled, server] = await Promise.all([
+      scrimMatchPlaysAfter(getAdminClient(), matchId),
       getScheduledUnplayedMatches(),
       serverId ? getServer(serverId).catch(() => null) : Promise.resolve(null),
     ]);
+    if (playsAfter !== null) {
+      return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
+    }
     const league = leagueMatchBlockingScrim(scheduled, new Date());
     if (league) {
       return NextResponse.json({ error: `${league.label} is scheduled within 30 minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
