@@ -443,6 +443,12 @@ export function formatStat(n: number, decimals: number = 0): string {
   return Number.isFinite(n) ? n.toFixed(decimals) : '—';
 }
 
+/** `num / den` at `decimals` places, or `—` when the denominator is zero — the per-event rate
+ *  counterpart of `fmtPct()`, so a player with no reloads or no flashes reads as no data, not 0. */
+export function formatRatio(num: number, den: number, decimals: number = 0): string {
+  return den > 0 ? formatStat(num / den, decimals) : '—';
+}
+
 /** A stat-table difference (kill diff, round diff per game): `formatSigned()`, or `—` when the
  *  value isn't a finite number, as `formatStat()`. */
 export function formatDiff(n: number, decimals: number = 0): string {

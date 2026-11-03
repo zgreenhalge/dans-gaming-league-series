@@ -194,7 +194,10 @@ class per column) for a fixed layout that shrinks to those widths. `CompactTd` t
 `CompactNameTd` is the truncating, linked name cell.
 
 **Shared formatting helpers** (`src/lib/util.ts`) — use these instead of a local copy: `fmtPct(num, den)`
-for whole-number percentages (`—` on a zero denominator), `factionClass(side)` for the `faction-ct` /
+for whole-number percentages (`—` on a zero denominator), `formatRatio(num, den, decimals)` for a
+per-event rate (`—` on a zero denominator), `formatStat(n, decimals)` for a stat-table figure (`—` when
+not finite), `formatDiff(n, decimals)` / `formatSigned(n, decimals)` for signed differences (no sign
+when the value rounds to zero), `factionClass(side)` for the `faction-ct` /
 `faction-t` tint class (the class counterpart of `sideColor()`), `formatCountdownClock(ms)` and
 `formatCountdownRelative(iso)` for countdowns, and `fmtWindowDate(date)` / `fmtWindowDay('YYYY-MM-DD')` for
 a week-window date.

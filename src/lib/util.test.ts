@@ -52,6 +52,7 @@ import {
   formatSigned,
   formatDiff,
   formatStat,
+  formatRatio,
   roundTo,
   signedColor,
 } from './util';
@@ -551,6 +552,13 @@ test('formatStat: fixed decimals, a dash when the value is not finite', () => {
   assert.equal(formatStat(NaN, 1), '—');
   assert.equal(formatStat(Infinity, 2), '—');
   assert.equal(formatStat(-Infinity), '—');
+});
+
+test('formatRatio: num / den at fixed decimals, a dash when the denominator is zero', () => {
+  assert.equal(formatRatio(7, 4, 2), '1.75');
+  assert.equal(formatRatio(0, 5, 1), '0.0');
+  assert.equal(formatRatio(0, 0, 2), '—');
+  assert.equal(formatRatio(3, 0), '—');
 });
 
 test('formatDiff: signed at the shown precision, a dash when the value is not finite', () => {
