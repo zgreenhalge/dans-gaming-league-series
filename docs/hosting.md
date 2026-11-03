@@ -54,8 +54,8 @@ stateDiagram-v2
     live --> done : DatHost reports the server stopped (getReconciledServerState)
 ```
 
-A provision refused with `ServerBusyError` (another match, a scrim or a console launch holds the
-server) leaves the row unchanged — see the concurrency guard below.
+A provision refused with `ServerBusyError` (another match, or a roster-less admin-console launch, holds
+the server) leaves the row unchanged — see the concurrency guard below.
 
 The in-match `MatchServerPanel` starts from the `server_state` the match page reads with
 `getMatchServerState()` (passed as `initialState`, for every viewer) and then follows the row over

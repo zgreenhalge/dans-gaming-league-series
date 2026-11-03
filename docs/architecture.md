@@ -191,7 +191,8 @@ Shared, user-independent reads are cached across requests by `persistentQuery()`
 
 How the core league tables relate, by foreign key. There is no team table: a team is the two
 `player_match_stats` rows of one match that share a `faction`. A regular season and its gauntlet are
-paired by name (`findPairedSeason()`), not by a key, so they appear here as one `seasons` entity. The
+paired by name (`findPairedSeason()`), not by a key, so they appear here as one `seasons` entity. A
+match belongs to a week (a league match) or a scrim night (a scrim match), never both. The
 demo-derived fact tables (`match_kills`, `match_rounds`, `match_damage_events`, …) and the per-match
 operational tables (`match_server_state`, `match_discord_state`, `live_match_score`) hang off `matches`
 and `player_match_stats`; see the table list below.
@@ -202,7 +203,8 @@ erDiagram
     players ||--o{ season_players : "signs up"
     seasons ||--o{ weeks : "has"
     players |o--o{ weeks : "bye player"
-    weeks ||--o{ matches : "holds"
+    weeks |o--o{ matches : "league match"
+    scrim_nights |o--o{ matches : "scrim match"
     matches ||--o{ player_match_stats : "four participants"
     players ||--o{ player_match_stats : "plays as"
     player_match_stats ||--o| player_match_sabremetrics : "demo stats"
