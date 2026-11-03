@@ -1,8 +1,6 @@
 'use client';
 
-// Shared map-select + custom-workshop-ID input — the picker both `ScrimPanel` and
-// `ServerConsolePanel` use to choose a workshop map, so the two surfaces can't drift on this piece
-// the way they did before it was extracted (#315).
+// Map-select + custom-workshop-ID input — how `LaunchOptionsPicker` chooses a workshop map.
 
 import { toSentenceCase } from '@/lib/maps';
 import type { WorkshopMapOption } from '@/lib/queries';

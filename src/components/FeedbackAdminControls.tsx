@@ -7,7 +7,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
-import { sendFeedbackRequest } from './feedbackRequest';
+import { sendJsonRequest } from './sendJsonRequest';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackResetControl } from './FeedbackResetControl';
 import ErrorText from '@/components/ErrorText';
@@ -41,7 +41,7 @@ export function FeedbackAdminControls({
 
   function toggleOpen() {
     return run(async () => {
-      await sendFeedbackRequest('PATCH', openUrl, { open: !isOpen });
+      await sendJsonRequest('PATCH', openUrl, { open: !isOpen });
       router.refresh();
     });
   }

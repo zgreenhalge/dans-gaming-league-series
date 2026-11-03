@@ -12,3 +12,12 @@ export const ADMIN_PRIMARY_BUTTON_CLS =
  * at the call site when the action can be busy. */
 export const ADMIN_SMALL_BUTTON_CLS =
   'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors';
+
+/** `ADMIN_SMALL_BUTTON_CLS` in green — a selected or confirming small button (a scrim signup's
+ * "Definite", "Add"). */
+export const ADMIN_SMALL_GREEN_BUTTON_CLS =
+  'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all';
+
+/** `ADMIN_SMALL_BUTTON_CLS` in amber — a selected tentative choice (a scrim signup's "Maybe"). */
+export const ADMIN_SMALL_AMBER_BUTTON_CLS =
+  'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] hover:brightness-110 transition-all';

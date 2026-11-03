@@ -487,3 +487,114 @@ export async function teardownGauntlet(fixture: TestGauntlet): Promise<void> {
   const { error: playerErr } = await supabase.from('players').delete().eq('id', fixture.extraPlayerId);
   if (playerErr) throw playerErr;
 }
+
+export interface ScrimSignupSeed {
+  playerId: number;
+  commitment?: 'definite' | 'maybe';
+  checkedIn?: boolean;
+}
+
+/** A scrim night starting `start` — milliseconds from now (negative for one already running or
+ *  over), or an ISO instant — with `signups`, written straight to `scrim_nights`/`scrim_signups` — bypassing the app's quarter-hour
+ *  and overlap rules, so a test can place a night exactly where it needs one (e.g. ten minutes out,
+ *  with check-in open). Returns the night id. */
+export async function seedScrimNight(start: number | string, signups: ScrimSignupSeed[] = []): Promise<number> {
+  const supabase = adminClient();
+  const { data: night, error: nightErr } = await supabase
+    .from('scrim_nights')
+    .insert({ starts_at: typeof start === 'string' ? start : new Date(Date.now() + start).toISOString() })
+    .select('id')
+    .single();
+  if (nightErr) throw nightErr;
+  const nightId = (night as { id: number }).id;
+  if (signups.length > 0) {
+    const { error } = await supabase.from('scrim_signups').insert(
+      signups.map((s) => ({
+        night_id: nightId,
+        player_id: s.playerId,
+        commitment: s.commitment ?? 'definite',
+        checked_in_at: s.checkedIn ? new Date().toISOString() : null,
+      })),
+    );
+    if (error) throw error;
+  }
+  return nightId;
+}
+
+/** A played scrim match on `nightId` — 13-7, `playerIds` shirts first (2) then skins (2) — so the
+ *  night has results (Past nights, the leaderboard). */
+export async function seedScoredScrimMatch(nightId: number, playerIds: number[], map = 'foroglio'): Promise<number> {
+  const supabase = adminClient();
+  const { data: match, error: matchErr } = await supabase
+    .from('matches')
+    .insert({ scrim_night_id: nightId, match_number: 1, shirts_pick: map, scrim_side_choice: 'knife', final_score: '13-7' })
+    .select('id')
+    .single();
+  if (matchErr) throw matchErr;
+  const matchId = (match as { id: number }).id;
+  const line = (playerId: number, faction: 'SHIRTS' | 'SKINS') => {
+    const won = faction === 'SHIRTS';
+    return { match_id: matchId, player_id: playerId, faction, kills: won ? 18 : 10, assists: 2, deaths: won ? 10 : 18, adr: won ? 90 : 60, damage: won ? 1800 : 1200, rounds_played: 20, rounds_won: won ? 13 : 7, is_win: won };
+  };
+  const [a, b, c, d] = playerIds;
+  const { error } = await supabase.from('player_match_stats').insert([line(a, 'SHIRTS'), line(b, 'SHIRTS'), line(c, 'SKINS'), line(d, 'SKINS')]);
+  if (error) throw error;
+  return matchId;
+}
+
+/** The scrim nights starting at `startsAt` exactly — how a test finds a night the UI just created. */
+export async function scrimNightIdsStartingAt(startsAt: string): Promise<number[]> {
+  const { data, error } = await adminClient().from('scrim_nights').select('id').eq('starts_at', startsAt);
+  if (error) throw error;
+  return (data ?? []).map((n) => (n as { id: number }).id);
+}
+
+/** The scrim matches of `nightId` in play order, with their lineups' player ids. */
+export async function scrimMatchesOf(nightId: number): Promise<{ id: number; match_number: number; scrim_side_choice: string; players: number[] }[]> {
+  const { data, error } = await adminClient()
+    .from('matches')
+    .select('id, match_number, scrim_side_choice, player_match_stats(player_id)')
+    .eq('scrim_night_id', nightId)
+    .order('match_number');
+  if (error) throw error;
+  return ((data ?? []) as { id: number; match_number: number; scrim_side_choice: string; player_match_stats: { player_id: number }[] }[]).map((m) => ({
+    id: m.id,
+    match_number: m.match_number,
+    scrim_side_choice: m.scrim_side_choice,
+    players: m.player_match_stats.map((p) => p.player_id),
+  }));
+}
+
+/** Whether night `nightId` still exists. */
+export async function scrimNightExists(nightId: number): Promise<boolean> {
+  const { data, error } = await adminClient().from('scrim_nights').select('id').eq('id', nightId).maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+/** Gives the seeded `maps` rows Workshop links, so a scrim match has maps to start on
+ *  (`getMapsForWorkshopPicker()` lists only maps with one). Undone by `clearMapWorkshopUrls()`. */
+export async function setMapWorkshopUrls(): Promise<void> {
+  const supabase = adminClient();
+  const { data, error } = await supabase.from('maps').select('id').order('id');
+  if (error) throw error;
+  for (const [i, m] of ((data ?? []) as { id: number }[]).entries()) {
+    const { error: updateErr } = await supabase
+      .from('maps')
+      .update({ workshop_url: `https://steamcommunity.com/sharedfiles/filedetails/?id=${3070000000 + i}` })
+      .eq('id', m.id);
+    if (updateErr) throw updateErr;
+  }
+}
+
+export async function clearMapWorkshopUrls(): Promise<void> {
+  const { error } = await adminClient().from('maps').update({ workshop_url: null }).not('id', 'is', null);
+  if (error) throw error;
+}
+
+/** Deletes every scrim night — their signups and matches go with them (`on delete cascade`). The
+ *  local database holds only test data, so scrim specs start each test from no nights at all. */
+export async function teardownScrims(): Promise<void> {
+  const { error } = await adminClient().from('scrim_nights').delete().not('id', 'is', null);
+  if (error) throw error;
+}

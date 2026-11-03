@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { migrationFiles, publicTables, CREATE_TABLE, OPERATIONAL_TABLES, readMigration, stripComments } from './test-support/migrationSql';
+import { migrationFiles, publicTables, CREATE_TABLE, DROP_TABLE, OPERATIONAL_TABLES, readMigration, stripComments } from './test-support/migrationSql';
 
 // Every `public` table bumps `data_version` on write (supabase/migrations/20261021120000_add_data_version.sql,
 // deferred to commit by 20261021130000_defer_data_version_bump.sql), which is what retires the
@@ -7,7 +7,8 @@ import { migrationFiles, publicTables, CREATE_TABLE, OPERATIONAL_TABLES, readMig
 // A table whose writes don't bump it leaves cached reads stale, so this scans `supabase/migrations/`:
 // a migration after the baseline that creates a `public` table must attach `bump_data_version()` to
 // it in the same file — or the table must be in OPERATIONAL_TABLES, whose rows no cached read
-// depends on. The exclusion list in each migration that wires the triggers must match OPERATIONAL_TABLES.
+// depends on. The exclusion list in each migration that wires the triggers must match OPERATIONAL_TABLES,
+// ignoring tables a later migration drops.
 
 const BASELINE_MIGRATION = '20261021120000_add_data_version.sql';
 const TRIGGER_MIGRATIONS = [BASELINE_MIGRATION, '20261021130000_defer_data_version_bump.sql'];
@@ -46,12 +47,13 @@ describe('tablesMissingBump', () => {
 
 describe('supabase/migrations', () => {
   const files = migrationFiles();
+  const dropped = new Set(files.flatMap((f) => [...publicTables(readMigration(f), DROP_TABLE)]));
 
   it.each(TRIGGER_MIGRATIONS)('%s exists, with an exclusion list matching OPERATIONAL_TABLES', (file) => {
     expect(files).toContain(file);
     const sql = stripComments(readMigration(file));
     const list = sql.match(/tablename not in \(([^)]*)\)/i)?.[1] ?? '';
-    const excluded = new Set([...list.matchAll(/'(\w+)'/g)].map((m) => m[1]));
+    const excluded = new Set([...list.matchAll(/'(\w+)'/g)].map((m) => m[1]).filter((t) => !dropped.has(t)));
     expect(excluded).toEqual(OPERATIONAL_TABLES);
   });
 

@@ -5,8 +5,9 @@
 replay, CSS, …) to its owning doc; treat that table as authoritative rather than any list here, since
 it's the one place new docs get added. Read [`docs/glossary.md`](./docs/glossary.md) first: it
 defines DGLS-specific domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files
-that implement them. For cross-cutting conventions every change should follow, see
-[`docs/patterns.md`](./docs/patterns.md).
+that implement them. [`docs/season-lifecycle.md`](./docs/season-lifecycle.md) then walks a season
+end to end — each stage, who acts, what gates it, and the route or function behind it. For
+cross-cutting conventions every change should follow, see [`docs/patterns.md`](./docs/patterns.md).
 
 When citing code in docs, comments, or commits, reference it by **symbol name** (e.g.
 `getGauntletStats()` in `src/lib/queries/gauntlet.ts`), never by line number — line numbers rot. See
@@ -48,6 +49,7 @@ Full schema is in [`docs/architecture.md`](./docs/architecture.md) and `src/lib/
 - `total_assists` and `total_rounds_won` are absent from the view. `getSeasonBaseData()` in `src/lib/queries/leaderboard.ts` augments them by reading `player_match_stats` directly.
 - **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` (`src/lib/queries/gauntlet.ts`) for gauntlet data.
 - **RLS is on** for every `public` table; `anon` can only `select` the four tables the browser's Realtime subscriptions watch, and all server reads and writes use the service-role client `getAdminClient()` (`src/lib/supabase-admin.ts`). **A new table must `enable row level security` in the same migration that creates it** (AGENTS.md, "New tables must enable row level security"). Full model, and what a new subscription needs: [`docs/architecture.md`](./docs/architecture.md) (Database). The service-role key bypasses RLS, so a Supabase credential or MCP tool is not "safe by default" — see the live-approval rule above.
+- **Scrim matches are not league matches.** A `matches` row has either a `week_id` (league) or a `scrim_night_id` (scrim), never both. League stats must never include scrims: scope reads through `weeks` (`getWeekLookup()` / `resolveAllMatches()`), or wrap a direct `matches` read in `onlyLeagueMatches()` (`src/lib/queries/_shared.ts`). Add any new league-facing read to `src/lib/queries-scrim-isolation.test.ts`.
 - **Season ↔ gauntlet pairing is name-based.** Use `extractSeasonNumber()` from `src/lib/util.ts` — don't assume paired seasons have adjacent IDs.
 - **Numeric precision is a storage-vs-display split.** Per-match `adr` in `player_match_stats` is stored as a whole number; aggregate ADR is *recomputed* from `total_damage / total_rounds_played` (see `overall_adr` in `src/lib/queries/leaderboard.ts`) and is a true float — display layers show it at 2 decimals (`overall_adr.toFixed(2)`). Don't "fix" a decimal aggregate ADR to look like an integer, and don't massage match-card numbers — show them as stored.
 

@@ -32,6 +32,19 @@ export interface MatchDetail {
   stats: MatchStatRow[];
 }
 
+/** A match's `player_match_stats` rows with each player's name and avatar; a missing player row reads
+ *  as `#id`. Shared by `getMatch()` and `getScrimMatchDetail()`. */
+export function toMatchStatRows(
+  stats: PlayerMatchStat[],
+  players: Map<number, { name: string; steam_avatar_url: string | null }>,
+): MatchStatRow[] {
+  return stats.map((s) => ({
+    ...s,
+    player_name: players.get(s.player_id)?.name ?? `#${s.player_id}`,
+    steam_avatar_url: players.get(s.player_id)?.steam_avatar_url ?? null,
+  }));
+}
+
 export const getMatch = persistentQuery('getMatch', async (matchId: number): Promise<MatchDetail | null> => {
   const { data: match, error } = await getAdminClient()
     .from('matches')
@@ -41,6 +54,8 @@ export const getMatch = persistentQuery('getMatch', async (matchId: number): Pro
   if (error) throw error;
   if (!match) return null;
   const m = match as Match;
+  // A scrim match has no week (`week_id` null) and has its own page.
+  if (m.week_id == null) return null;
 
   // Week and season resolve in one embedded query — the DB does the join instead of two
   // sequential hand-rolled round trips (#332).
@@ -68,15 +83,7 @@ export const getMatch = persistentQuery('getMatch', async (matchId: number): Pro
     ? { ...rawSeason, map_pool: (await getLinkedRegularSeason(rawSeason.name))?.map_pool ?? null }
     : rawSeason;
 
-  const statRows: MatchStatRow[] = ((stats ?? []) as PlayerMatchStat[]).map(
-    (s) => ({
-      ...s,
-      player_name: players.get(s.player_id)?.name ?? `#${s.player_id}`,
-      steam_avatar_url: players.get(s.player_id)?.steam_avatar_url ?? null,
-    }),
-  );
-
-  return { match: m, week: weekRow as Week, season, stats: statRows };
+  return { match: m, week: weekRow as Week, season, stats: toMatchStatRows((stats ?? []) as PlayerMatchStat[], players) };
 });
 
 /** A rostered player's name plus their personal Discord name-color role
@@ -241,7 +248,8 @@ export interface LiveTickerMatch extends MatchTeamNames {
 /** The site-wide live-match ticker's data — whichever match is currently live (there's at most one,
  *  since the league runs one shared match server), or `null` when nothing's live. Backs both the
  *  root layout's initial server render and `GET /api/live-match`, which `LiveMatchTicker` calls to
- *  refresh itself off Realtime changes on `live_match_score`. */
+ *  refresh itself off Realtime changes on `live_match_score`. A live scrim match has no week, so
+ *  `getMatchTeamNames()` returns `null` for it and the ticker shows nothing. */
 export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
   const live = await getCurrentLiveMatch();
   if (!live) return null;
@@ -286,19 +294,16 @@ export async function getMatchServerState(matchId: number): Promise<ServerState>
 }
 
 /**
- * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
- * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
- * Played matches are excluded (their scheduled time is moot). A gauntlet match's own pod sibling is
- * meant to be scheduled close by for one session — callers that need that excluded (the match page,
- * the admin console) already have the pod resolved and filter it out of the result themselves,
- * rather than this general-purpose query re-resolving `gauntlet_pods` on every call, gauntlet or not.
+ * Every unplayed match with a scheduled time — league matches only, since a scrim match is never
+ * scheduled. Used to warn (and link) when a match is scheduled close to another, and to keep scrim
+ * matches off the server near one, since they'd contend for the single shared DatHost server (#134).
+ * Played matches are excluded (their scheduled time is moot).
  */
-export const getOtherScheduledMatches = persistentQuery('getOtherScheduledMatches', async (matchId: number): Promise<ScheduledMatchRef[]> => {
+export const getScheduledUnplayedMatches = persistentQuery('getScheduledUnplayedMatches', async (): Promise<ScheduledMatchRef[]> => {
   const { data } = await getAdminClient()
     .from('matches')
     .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
-    .not('scheduled_at', 'is', null)
-    .neq('id', matchId);
+    .not('scheduled_at', 'is', null);
   type Row = {
     id: number;
     match_number: number | null;
@@ -322,6 +327,17 @@ export const getOtherScheduledMatches = persistentQuery('getOtherScheduledMatche
       }),
     }));
 });
+
+/**
+ * The scheduled unplayed matches other than `matchId` (`getScheduledUnplayedMatches()`). A gauntlet
+ * match's own pod sibling is meant to be scheduled close by for one session — callers that need that
+ * excluded (the match page, the admin console) already have the pod resolved and filter it out of the
+ * result themselves, rather than this general-purpose query re-resolving `gauntlet_pods` on every
+ * call, gauntlet or not.
+ */
+export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
+  return (await getScheduledUnplayedMatches()).filter((m) => m.id !== matchId);
+}
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSabFields {
   player_id: number;

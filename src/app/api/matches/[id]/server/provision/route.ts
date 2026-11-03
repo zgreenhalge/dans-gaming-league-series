@@ -10,11 +10,16 @@ import {
   matchzyConfigContext,
   findServerOccupant,
   provisionErrorHandler,
+  getServerOccupancy,
+  occupancyMessage,
 } from '@/lib/dathost-lifecycle';
+import { getServer } from '@/lib/dathost';
 import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
+import { applyScrimSideChoice, isScrimMatch, leagueMatchBlockingScrim, scrimMatchPlaysAfter } from '@/lib/scrim-matches';
+import { getScheduledUnplayedMatches } from '@/lib/queries';
 
 export async function POST(
   req: NextRequest,
@@ -44,6 +49,38 @@ export async function POST(
       { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
       { status: 409 },
     );
+  }
+
+  // A scrim match waits its turn and never bumps anything: a night plays its matches in order, a
+  // league match always gets the server (no scrim match starts within half an hour of one), and none
+  // starts while anyone is on the server — a DGLS match or players outside one
+  // (`getServerOccupancy()`, the admin server console's own gate).
+  if (await isScrimMatch(getAdminClient(), matchId)) {
+    const serverId = process.env.DATHOST_SERVER_ID;
+    const [playsAfter, scheduled, server] = await Promise.all([
+      scrimMatchPlaysAfter(getAdminClient(), matchId),
+      getScheduledUnplayedMatches(),
+      serverId ? getServer(serverId).catch(() => null) : Promise.resolve(null),
+    ]);
+    if (playsAfter !== null) {
+      return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
+    }
+    const league = leagueMatchBlockingScrim(scheduled, new Date());
+    if (league) {
+      return NextResponse.json({ error: `${league.label} is scheduled within 30 minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
+    }
+    const occupancy = await getServerOccupancy(getAdminClient(), server);
+    if (occupancy.occupied && occupancy.active?.matchId !== matchId) {
+      return NextResponse.json({ error: occupancyMessage(occupancy), code: 'server_occupied' }, { status: 409 });
+    }
+  }
+
+  // A scrim match's lobby side choice becomes its starting side now, before the server boots and loads
+  // its config — so a random side is only flipped as the match starts.
+  try {
+    await applyScrimSideChoice(getAdminClient(), matchId);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Setting the starting side failed' }, { status: 500 });
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.

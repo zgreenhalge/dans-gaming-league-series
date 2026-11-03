@@ -146,6 +146,10 @@ export function parseRouteId(id: string): number | null {
   return n > 0 && n <= MAX_INT4 ? n : null;
 }
 
+/** A short date label, e.g. `Thu, Nov 5` — the format of a date crumb (`Crumb.localDate`) and of
+ *  dates swapped into a page title (`LocalDateInTitle`). */
+export const SHORT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+
 export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }

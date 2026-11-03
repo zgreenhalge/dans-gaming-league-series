@@ -7,6 +7,8 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
 import { useNav } from './NavContext';
 import { playerHref, type Crumb } from '@/lib/crumbs';
+import { LocalTime } from './LocalTime';
+import { SHORT_DATE_FORMAT } from '@/lib/util';
 
 const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
   { label: 'Anonymous', playerId: null, providerId: null },
@@ -127,7 +129,7 @@ export function TopbarShell({
                         : 'tracked text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors'
                     }
                   >
-                    {crumb.label}
+                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={SHORT_DATE_FORMAT} /> : crumb.label}
                   </Link>
                 ) : (
                   <span
@@ -140,7 +142,7 @@ export function TopbarShell({
                     }
                     aria-current={isLast ? 'page' : undefined}
                   >
-                    {crumb.label}
+                    {crumb.localDate ? <LocalTime iso={crumb.localDate} opts={SHORT_DATE_FORMAT} /> : crumb.label}
                   </span>
                 )}
               </span>
