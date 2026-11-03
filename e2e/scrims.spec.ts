@@ -3,7 +3,8 @@
  * UI: the calendar signed out and signed in, starting a night on a picked day, the overlap refusal,
  * signing up / switching / dropping out (the last player out removes the night), the admin controls
  * toggle, the lobby's check-in, Next Match (make, change the side, discard), Generate Rounds (preview,
- * Details, queue), and a past night's results and match page. Each test starts from no scrim nights
+ * Details, queue), a night on the home page's Upcoming Games, and a past night's results and match
+ * page. Each test starts from no scrim nights
  * and seeds its own (`e2e/support/db.ts`); see docs/e2e.md.
  */
 
@@ -261,6 +262,17 @@ test.describe('the lobby', () => {
     const matches = await scrimMatchesOf(nightId);
     expect(matches.map((m) => m.match_number)).toEqual(Array.from({ length: count }, (_, i) => i + 1));
   });
+});
+
+test("an upcoming night joins the home page's Upcoming Games, linking to its night page", async ({ page }) => {
+  const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }, { playerId: DREW, commitment: 'maybe' }]);
+  await page.goto('/');
+  const row = page.getByRole('main').locator(`a[href="/scrims/${nightId}"]`);
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('Scrim night');
+  await expect(row).toContainText('1 in · 1 maybe');
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`/scrims/${nightId}$`), { timeout: 30_000 });
 });
 
 test('a past night lists under Past nights, with its leaderboard and a working match page', async ({ page }) => {

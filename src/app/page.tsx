@@ -13,6 +13,7 @@ import {
   getOpenFeedbackSeasonIds,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
+  getUpcomingScrimNights,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { gauntletHref, seasonHref } from '@/lib/crumbs';
@@ -67,12 +68,13 @@ function UpcomingSeasonRow({
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
-  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds] = await Promise.all([
+  const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds, scrims] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
     getCareerH2HDataCached(),
     currentPlayerId != null ? getOpenFeedbackSeasonIds().then((ids) => new Set(ids)) : new Set<number>(),
+    getUpcomingScrimNights(new Date()),
   ]);
 
   const upcoming = seasons
@@ -142,12 +144,13 @@ export default async function Home() {
             {myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />}
           </div>
           <div className="min-w-0 flex flex-col gap-6 lg:col-start-1 lg:row-start-1 lg:row-span-2">
-            {games && (
+            {(games || scrims.length > 0) && (
               <UpcomingGamesPanel
-                scheduled={games.scheduled}
-                unscheduled={games.unscheduled}
-                headingHref={games.headingHref}
-                scheduleHref={games.scheduleHref}
+                scheduled={games?.scheduled ?? []}
+                unscheduled={games?.unscheduled ?? []}
+                scrims={scrims}
+                headingHref={games?.headingHref ?? '/scrims'}
+                scheduleHref={games?.scheduleHref ?? '/scrims'}
                 currentPlayerId={currentPlayerId}
               />
             )}
