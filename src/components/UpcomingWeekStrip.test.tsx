@@ -54,4 +54,11 @@ describe('UpcomingWeekStrip', () => {
     render(<UpcomingWeekStrip gameTimes={[noon(9)]} scrims={[scrim(1, noon(8), 4, 0)]} />);
     for (const day of screen.getAllByRole('img')) expect(day.getAttribute('aria-label')).not.toMatch(/league|scrim/);
   });
+
+  test('a league game takes precedence: its day leads with the game and the scrim night does not colour it', () => {
+    render(<UpcomingWeekStrip gameTimes={[noon(1)]} scrims={[scrim(1, noon(1), 4, 0)]} />);
+    const day = screen.getAllByRole('img')[1];
+    expect(day).toHaveAccessibleName(/1 league game · scrim night: 4 definite, 0 maybe, full/);
+    expect(day.className).not.toMatch(/green/);
+  });
 });

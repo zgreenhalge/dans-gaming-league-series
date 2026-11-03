@@ -1,6 +1,7 @@
 // A scrim night's seats — the four a match needs, filled by its signups — and how full that makes it.
 // The scrims calendar and the home page's Upcoming panel draw nights with these, so a night reads the
-// same everywhere. Plain components, usable from server and client components alike.
+// same everywhere, beside `LeagueGameMark` for a league game. Plain components, usable from server
+// and client components alike.
 
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
 import type { ScrimCommitment } from '@/lib/scrim-schedule';
@@ -75,3 +76,9 @@ export const DAY_FILL_CLS = {
   'could-fill': 'border-dashed border-[var(--color-accent-amber-border)]',
   short: 'border-[var(--color-border-tertiary)]',
 } as const;
+
+/** A league game's mark — a small diamond — wherever scrim nights and league games share a view,
+ *  so the two read apart at a glance. */
+export function LeagueGameMark() {
+  return <span aria-hidden className="block w-[5px] h-[5px] rotate-45 bg-[var(--color-text-primary)] opacity-75" />;
+}
