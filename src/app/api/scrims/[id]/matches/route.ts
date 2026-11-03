@@ -8,7 +8,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { accessDenied } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from '@/lib/queries';
-import { pickNextScrimMatch, SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { pickNextScrimMatch } from '@/lib/scrim-matchmaking';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { queueScrimMatches, ScrimMatchConflictError } from '@/lib/scrim-matches';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

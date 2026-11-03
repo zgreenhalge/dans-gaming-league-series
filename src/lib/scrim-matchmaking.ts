@@ -13,6 +13,7 @@
 //      opponent pairs.
 //   3. Sides: whichever orientation leaves the four players' shirts/skins counts most even.
 
+import { SCRIM_MATCH_SIZE } from './scrim-schedule';
 import type { PlayerRating } from './ehog';
 import { pairKey, chooseSides } from './season-schedule';
 import { rankSplits, lopsidedness } from './win-probability';
@@ -28,8 +29,6 @@ export interface ScrimMatchPlan extends ScrimTeams {
   pShirtsWin: number;
 }
 
-/** Players a match needs. */
-export const SCRIM_MATCH_SIZE = 4;
 
 /** The four players who should play next: fewest matches tonight, then longest since their last
  *  one (never played counts as longest), with `rand` breaking remaining ties. */

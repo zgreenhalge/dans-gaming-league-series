@@ -12,7 +12,7 @@ import { scrimNightHref } from '@/lib/crumbs';
 import { formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
-import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';

@@ -9,6 +9,10 @@ export type ScrimCommitment = 'definite' | 'maybe';
 
 export const SCRIM_COMMITMENTS: readonly ScrimCommitment[] = ['definite', 'maybe'];
 
+/** Players a scrim match needs. Here rather than in `scrim-matchmaking.ts` so the seats drawn on
+ *  the calendar and the home page don't pull the matchmaker into the browser. */
+export const SCRIM_MATCH_SIZE = 4;
+
 /** A scrim night: its `scrim_nights` id and start instant (ISO 8601). */
 export interface ScrimNight {
   id: number;

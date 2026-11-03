@@ -3,7 +3,7 @@
 // same everywhere, beside `LeagueGameMark` for a league game. Plain components, usable from server
 // and client components alike.
 
-import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import type { ScrimCommitment } from '@/lib/scrim-schedule';
 
 /** A night's definite and maybe signup counts. */

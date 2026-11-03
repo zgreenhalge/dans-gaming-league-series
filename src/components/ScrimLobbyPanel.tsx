@@ -18,7 +18,7 @@ import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOptio
 import type { FormatRecord } from '@/lib/season-format';
 import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
-import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
