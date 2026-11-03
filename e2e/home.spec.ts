@@ -25,12 +25,12 @@ test.describe('with a running season', () => {
   test('signed out shows the Login placeholder and no feedback banners', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByText('Login to see your stats')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Login to see your stats')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Login', exact: true })).toHaveAttribute('href', '/api/auth/steam');
     await expect(page.getByText('Post-season survey')).toHaveCount(0);
     await expect(page.getByText(/superlatives/i)).toHaveCount(0);
     // The standings are public.
-    await expect(page.getByText('Live', { exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByText('Live', { exact: true })).toBeVisible();
   });
 
   test('signed in shows My Stats, and Top duos opens the career H2H view; Hottest Rivalries is hidden until a rivalry rates', async ({ page }) => {
@@ -79,7 +79,7 @@ test.describe('between seasons', () => {
   test("shows the latest finished season's standings and no Upcoming panel", async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByText('Final', { exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByText('Final', { exact: true })).toBeVisible();
     await expect(page.getByText('Live', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'View all →' })).toHaveAttribute('href', `/seasons/${fixture!.seasonId}`);
     await expect(page.getByRole('link', { name: 'Upcoming', exact: true })).toHaveCount(0);

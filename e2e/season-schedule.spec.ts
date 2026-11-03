@@ -34,11 +34,11 @@ test('generating a schedule, then confirming it, materializes real weeks and mat
 
   await page.getByRole('button', { name: 'Generate Schedule' }).click();
   // Regenerates the page's server data via router.refresh() — wait for the draft's weeks to render.
-  await expect(page.getByText(/^Week 1$/)).toBeVisible();
+  await expect(page.getByRole('main').getByText(/^Week 1$/)).toBeVisible();
 
   // A 7-player round-robin draft is complete by construction (season-schedule-engine.ts guarantees
   // every pair teams and opposes at least once) — no hand-editing needed before confirming.
-  await expect(page.getByText(/Every pair plays together and against each other/i)).toBeVisible();
+  await expect(page.getByRole('main').getByText(/Every pair plays together and against each other/i)).toBeVisible();
 
   const confirmButton = page.getByRole('button', { name: 'Confirm Schedule' });
   await expect(confirmButton).toBeEnabled();
@@ -54,7 +54,7 @@ test('the confirm button stays disabled until the draft is complete', async ({ p
 
   await page.goto(`/admin/seasons/schedule/${season.seasonId}`);
   await page.getByRole('button', { name: 'Generate Schedule' }).click();
-  await expect(page.getByText(/^Week 1$/)).toBeVisible();
+  await expect(page.getByRole('main').getByText(/^Week 1$/)).toBeVisible();
 
   // Reroute every Match 1 shirts-slot-0 dropdown to the same player as its shirts-slot-1 —
   // creates a self-paired match, which validateDraftIntegrity() flags and confirm gates on.
