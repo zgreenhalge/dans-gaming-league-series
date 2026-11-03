@@ -4,7 +4,7 @@ import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import { matchCardRight } from '@/lib/match-card';
 import { playerHref, scrimMatchHref } from '@/lib/crumbs';
-import { isPlayedScore } from '@/lib/util';
+import { formatStat, isPlayedScore } from '@/lib/util';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';
 
 /** A scrim night's standings: every player who played a scored match, ranked Wins → RWR% → ADR
@@ -28,9 +28,9 @@ export function ScrimNightLeaderboard({ rows }: { rows: ScrimLeaderboardRow[] })
           <Tr key={r.player_id} href={playerHref(r.player_id)}>
             <PlayerCell id={r.player_id} name={r.player_name} avatarUrl={r.steam_avatar_url} />
             <Td>{r.wins}-{r.losses}</Td>
-            <Td>{r.rwr.toFixed(1)}</Td>
-            <Td>{r.adr.toFixed(2)}</Td>
-            <Td>{r.kd.toFixed(2)}</Td>
+            <Td>{formatStat(r.rwr, 1)}</Td>
+            <Td>{formatStat(r.adr, 2)}</Td>
+            <Td>{formatStat(r.kd, 2)}</Td>
             <Td>{r.kills}</Td>
           </Tr>
         ))}
