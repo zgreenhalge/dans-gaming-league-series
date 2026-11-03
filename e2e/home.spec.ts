@@ -28,8 +28,8 @@ test.describe('with a running season', () => {
 
     await expect(main.getByText('Login to see your stats')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Login', exact: true })).toHaveAttribute('href', '/api/auth/steam');
-    await expect(main.getByText('Post-season survey')).toHaveCount(0);
-    await expect(main.getByText(/superlatives/i)).toHaveCount(0);
+    await expect(page.getByText('Post-season survey')).toHaveCount(0);
+    await expect(page.getByText(/superlatives/i)).toHaveCount(0);
     // The standings are public.
     await expect(main.getByText('Live', { exact: true })).toBeVisible();
   });
@@ -82,9 +82,9 @@ test.describe('between seasons', () => {
     const main = page.getByRole('main');
 
     await expect(main.getByText('Final', { exact: true })).toBeVisible();
-    await expect(main.getByText('Live', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Live', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'View all →' })).toHaveAttribute('href', `/seasons/${fixture!.seasonId}`);
     await expect(page.getByRole('link', { name: 'Upcoming', exact: true })).toHaveCount(0);
-    await expect(main.getByText('To Be Scheduled')).toHaveCount(0);
+    await expect(page.getByText('To Be Scheduled')).toHaveCount(0);
   });
 });
