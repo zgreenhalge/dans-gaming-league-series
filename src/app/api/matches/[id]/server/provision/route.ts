@@ -10,7 +10,10 @@ import {
   matchzyConfigContext,
   findServerOccupant,
   provisionErrorHandler,
+  getServerOccupancy,
+  occupancyMessage,
 } from '@/lib/dathost-lifecycle';
+import { getServer } from '@/lib/dathost';
 import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
@@ -53,11 +56,22 @@ export async function POST(
   if (playsAfter !== null) {
     return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
   }
-  // A league match always gets the server: no scrim match starts within half an hour of one.
+  // A scrim never bumps anything: a league match always gets the server, so no scrim match starts
+  // within half an hour of one, and none starts while anyone is on the server — a DGLS match or
+  // players outside one (`getServerOccupancy()`, the admin server console's own gate).
   if (await isScrimMatch(getAdminClient(), matchId)) {
-    const league = leagueMatchBlockingScrim(await getScheduledUnplayedMatches(), new Date());
+    const serverId = process.env.DATHOST_SERVER_ID;
+    const [scheduled, server] = await Promise.all([
+      getScheduledUnplayedMatches(),
+      serverId ? getServer(serverId).catch(() => null) : Promise.resolve(null),
+    ]);
+    const league = leagueMatchBlockingScrim(scheduled, new Date());
     if (league) {
       return NextResponse.json({ error: `${league.label} is scheduled within 30 minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
+    }
+    const occupancy = await getServerOccupancy(getAdminClient(), server);
+    if (occupancy.occupied && occupancy.active?.matchId !== matchId) {
+      return NextResponse.json({ error: occupancyMessage(occupancy), code: 'server_occupied' }, { status: 409 });
     }
   }
 
