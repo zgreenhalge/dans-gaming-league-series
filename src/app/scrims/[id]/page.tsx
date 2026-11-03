@@ -7,9 +7,9 @@ import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
-import { formatNightDate, formatNightStart, hasScrimNightEnded } from '@/lib/scrim-schedule';
+import { formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
@@ -42,11 +42,12 @@ const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'shor
 export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
   const nightId = parseRouteId((await params).id);
   if (nightId === null) notFound();
-  const [night, session, playersById, maps] = await Promise.all([
+  const [night, session, playersById, maps, scheduled] = await Promise.all([
     getScrimNight(nightId, new Date()),
     getSession(),
     getPlayersById(),
     getMapsForWorkshopPicker(),
+    getScheduledUnplayedMatches(),
   ]);
   if (!night) notFound();
 
@@ -115,6 +116,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                 canManage={isAdmin || inLobbyMatch}
                 viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
                 rounds={rounds}
+                leagueMatches={leagueMatchesDuring(night.night, scheduled)}
               />
             </section>
           )}

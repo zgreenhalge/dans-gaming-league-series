@@ -3,6 +3,7 @@
 // takes `now` and the rows as arguments, so the clock and the database stay at the edges.
 
 import { SHORT_DATE_FORMAT } from './util';
+import type { ScheduledMatchRef } from './server-schedule-collision';
 
 export type ScrimCommitment = 'definite' | 'maybe';
 
@@ -40,6 +41,23 @@ export function hasScrimNightStarted(night: ScrimNight, now: Date): boolean {
  *  ends. */
 export function isScrimCheckInOpen(night: ScrimNight, now: Date): boolean {
   return Date.parse(night.startsAt) - SCRIM_CHECK_IN_LEAD_MS <= now.getTime() && !hasScrimNightEnded(night, now);
+}
+
+/** How far from a scheduled league match a scrim match can't start: a DGLS wingman game runs about
+ *  20 minutes, and a league match always gets the one shared server. */
+export const SCRIM_LEAGUE_CLEARANCE_MS = 30 * 60 * 1000;
+
+/** The scheduled league matches that fall in `night` — from `SCRIM_LEAGUE_CLEARANCE_MS` before it
+ *  starts until it ends — soonest first: the server breaks the lobby shows. */
+export function leagueMatchesDuring(night: ScrimNight, matches: ScheduledMatchRef[]): ScheduledMatchRef[] {
+  const start = Date.parse(night.startsAt) - SCRIM_LEAGUE_CLEARANCE_MS;
+  const end = Date.parse(night.startsAt) + SCRIM_NIGHT_LENGTH_MS;
+  return matches
+    .filter((m) => {
+      const t = Date.parse(m.scheduledAt);
+      return t >= start && t < end;
+    })
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 }
 
 /** The nights that haven't ended, soonest first. */

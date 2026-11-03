@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { applyScrimSideChoice, isScrimMatchDiscardable, isScrimMatchEditable, parseScrimTeams, resolveScrimMap, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
+import { applyScrimSideChoice, isScrimMatchDiscardable, isScrimMatchEditable, leagueMatchBlockingScrim, parseScrimTeams, resolveScrimMap, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
@@ -78,6 +78,16 @@ test('parseScrimTeams: two distinct positive ids per side', () => {
   assert.equal(parseScrimTeams({ shirts: [1, 2], skins: [3] }), null);
   assert.equal(parseScrimTeams({ shirts: [1, 2], skins: [3, 0] }), null);
   assert.equal(parseScrimTeams(null), null);
+});
+
+test('leagueMatchBlockingScrim: a league match within 30 minutes either side holds the server; one further off does not', () => {
+  const now = new Date('2026-11-05T20:00:00Z');
+  const at = (minutes: number) => ({ id: minutes, label: `League ${minutes}`, scheduledAt: new Date(now.getTime() + minutes * 60_000).toISOString() });
+  assert.equal(leagueMatchBlockingScrim([at(20)], now)?.id, 20);
+  assert.equal(leagueMatchBlockingScrim([at(-20)], now)?.id, -20, 'one that started a moment ago is still being played');
+  assert.equal(leagueMatchBlockingScrim([at(30)], now), null, 'exactly 30 minutes out is clear');
+  assert.equal(leagueMatchBlockingScrim([at(45), at(-40)], now), null);
+  assert.equal(leagueMatchBlockingScrim([at(25), at(10)], now)?.id, 10, 'the nearest one');
 });
 
 report();

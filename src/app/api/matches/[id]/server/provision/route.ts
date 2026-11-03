@@ -15,7 +15,8 @@ import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
-import { applyScrimSideChoice, scrimMatchPlaysAfter } from '@/lib/scrim-matches';
+import { applyScrimSideChoice, isScrimMatch, leagueMatchBlockingScrim, scrimMatchPlaysAfter } from '@/lib/scrim-matches';
+import { getScheduledUnplayedMatches } from '@/lib/queries';
 
 export async function POST(
   req: NextRequest,
@@ -51,6 +52,13 @@ export async function POST(
   const playsAfter = await scrimMatchPlaysAfter(getAdminClient(), matchId);
   if (playsAfter !== null) {
     return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
+  }
+  // A league match always gets the server: no scrim match starts within half an hour of one.
+  if (await isScrimMatch(getAdminClient(), matchId)) {
+    const league = leagueMatchBlockingScrim(await getScheduledUnplayedMatches(), new Date());
+    if (league) {
+      return NextResponse.json({ error: `${league.label} is scheduled within 30 minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
+    }
   }
 
   // A scrim match's lobby side choice becomes its starting side now, before the server boots and loads
