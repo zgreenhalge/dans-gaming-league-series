@@ -2,16 +2,17 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
-import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
+import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScrimNight, getScrimNightById } from '@/lib/queries';
-import { formatNightDate } from '@/lib/scrim-schedule';
+import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
+import { scrimNightHref } from '@/lib/crumbs';
+import { formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
-import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,20 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const nightId = parseRouteId((await params).id);
   const night = nightId === null ? null : await getScrimNightById(nightId);
-  return { title: night ? `Scrims · ${formatNightDate(night.startsAt)}` : 'Scrims' };
+  if (!night) return { title: 'Scrims' };
+  // A link preview is read wherever it's shared, so it names the start in the league timezone.
+  const signups = await getScrimSignups(night.id);
+  const definite = signups.filter((s) => s.commitment === 'definite').length;
+  const status = hasScrimNightEnded(night, new Date()) ? 'final' : `${definite} definite, ${signups.length - definite} maybe`;
+  const title = `Scrims · ${formatNightDate(night.startsAt)}`;
+  const description = `Scrim night · ${formatNightStart(night.startsAt)} · ${status} — sign up, check in and see the night's results on DGLS.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: scrimNightHref(night.id) },
+    openGraph: { title: `DGLS · ${title}`, description },
+    twitter: { card: 'summary', title: `DGLS · ${title}`, description },
+  };
 }
 
 const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
@@ -28,11 +42,12 @@ const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'shor
 export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
   const nightId = parseRouteId((await params).id);
   if (nightId === null) notFound();
-  const [night, session, playersById, maps] = await Promise.all([
+  const [night, session, playersById, maps, scheduled] = await Promise.all([
     getScrimNight(nightId, new Date()),
     getSession(),
     getPlayersById(),
     getMapsForWorkshopPicker(),
+    getScheduledUnplayedMatches(),
   ]);
   if (!night) notFound();
 
@@ -80,7 +95,13 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
               allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
             />
           )}
-          {night.checkInOpen && (
+          {/* Before anyone has checked in there's no lobby yet, only the viewer's own Check in. */}
+          {night.checkInOpen && pool.length === 0 && !lobbyMatch && currentPlayerId != null && (
+            <div>
+              <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
+            </div>
+          )}
+          {night.checkInOpen && (pool.length > 0 || lobbyMatch) && (
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
               <ScrimLobbyPanel
@@ -95,6 +116,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                 canManage={isAdmin || inLobbyMatch}
                 viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
                 rounds={rounds}
+                leagueMatches={leagueMatchesDuring(night.night, scheduled)}
               />
             </section>
           )}

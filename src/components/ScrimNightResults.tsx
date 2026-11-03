@@ -1,7 +1,8 @@
 import { StatTable, Tr, Td, PlayerCell } from './StatTable';
 import Th from './Th';
 import EmptyState from './EmptyState';
-import { MatchCard, matchCardRight } from './MatchCard';
+import { MatchCard } from './MatchCard';
+import { matchCardRight } from '@/lib/match-card';
 import { playerHref, scrimMatchHref } from '@/lib/crumbs';
 import { isPlayedScore } from '@/lib/util';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';

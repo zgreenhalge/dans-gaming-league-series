@@ -144,6 +144,27 @@ async function main() {
     __setTestAfterMode(false);
   });
 
+  await test('POST — 409 for a scrim match within 30 minutes of a scheduled league match; the league match gets the server', async () => {
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    const soon = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    db.seasons = [{ id: 4, name: 'Season 4' }];
+    db.weeks = [{ id: 40, season_id: 4, week_number: 3 }];
+    db.matches = [
+      { id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'knife', skins_starting_side: null, scheduled_at: null },
+      { id: 500, scrim_night_id: null, week_id: 40, match_number: 2, final_score: null, scheduled_at: soon },
+    ];
+    const res = await call(MATCH_ID, IN_MATCH_ID);
+    assert.equal(res.status, 409);
+    assert.equal(((await res.json()) as { code: string }).code, 'league_match_due');
+    db.matches[1].scheduled_at = new Date(Date.now() + 90 * 60 * 1000).toISOString();
+    __setTestAfterMode(true);
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+    await __flushTestAfter();
+    delete process.env.MATCHZY_CONFIG_SECRET;
+    __setTestAfterMode(false);
+  });
+
   __setTestSession(undefined);
   __setTestAdminClient(undefined);
   report();

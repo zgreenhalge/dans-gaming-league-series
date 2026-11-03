@@ -294,19 +294,16 @@ export async function getMatchServerState(matchId: number): Promise<ServerState>
 }
 
 /**
- * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
- * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
- * Played matches are excluded (their scheduled time is moot). A gauntlet match's own pod sibling is
- * meant to be scheduled close by for one session — callers that need that excluded (the match page,
- * the admin console) already have the pod resolved and filter it out of the result themselves,
- * rather than this general-purpose query re-resolving `gauntlet_pods` on every call, gauntlet or not.
+ * Every unplayed match with a scheduled time — league matches only, since a scrim match is never
+ * scheduled. Used to warn (and link) when a match is scheduled close to another, and to keep scrim
+ * matches off the server near one, since they'd contend for the single shared DatHost server (#134).
+ * Played matches are excluded (their scheduled time is moot).
  */
-export const getOtherScheduledMatches = persistentQuery('getOtherScheduledMatches', async (matchId: number): Promise<ScheduledMatchRef[]> => {
+export const getScheduledUnplayedMatches = persistentQuery('getScheduledUnplayedMatches', async (): Promise<ScheduledMatchRef[]> => {
   const { data } = await getAdminClient()
     .from('matches')
     .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
-    .not('scheduled_at', 'is', null)
-    .neq('id', matchId);
+    .not('scheduled_at', 'is', null);
   type Row = {
     id: number;
     match_number: number | null;
@@ -330,6 +327,17 @@ export const getOtherScheduledMatches = persistentQuery('getOtherScheduledMatche
       }),
     }));
 });
+
+/**
+ * The scheduled unplayed matches other than `matchId` (`getScheduledUnplayedMatches()`). A gauntlet
+ * match's own pod sibling is meant to be scheduled close by for one session — callers that need that
+ * excluded (the match page, the admin console) already have the pod resolved and filter it out of the
+ * result themselves, rather than this general-purpose query re-resolving `gauntlet_pods` on every
+ * call, gauntlet or not.
+ */
+export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
+  return (await getScheduledUnplayedMatches()).filter((m) => m.id !== matchId);
+}
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSabFields {
   player_id: number;

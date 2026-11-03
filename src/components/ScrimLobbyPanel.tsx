@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { scrimMatchHref } from '@/lib/crumbs';
-import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
 import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
@@ -11,12 +10,15 @@ import { SELECT_CLS } from './formStyles';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
 import { ScrimRoundsGenerator } from './ScrimRoundsGenerator';
+import { LocalTime } from './LocalTime';
+import { LeagueGameMark } from './ScrimSeats';
+import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import type { FormatRecord } from '@/lib/season-format';
 import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
-import { SCRIM_MATCH_SIZE } from '@/lib/scrim-matchmaking';
+import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
@@ -40,6 +42,9 @@ interface Props {
   /** What Generate Rounds plans over — the checked-in players' ratings and season records — when the
    *  viewer may make matches and none is waiting; `null` otherwise. */
   rounds: { players: ScheduleLabPlayer[]; rosters: ScheduleLabRoster[]; careerRecords: Record<number, FormatRecord> } | null;
+  /** League matches scheduled during the night (`leagueMatchesDuring()`): each takes the server, so
+   *  no scrim match starts within half an hour of one. */
+  leagueMatches: ScheduledMatchRef[];
 }
 
 const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
@@ -58,13 +63,13 @@ type Lineup = [number, number, number, number];
 /** The scrim night lobby: checking in first, then the next match — Next Match makes one, Generate
  *  Rounds queues several — and, for the players in the lobby's match or an admin, its map, starting
  *  side and lineup (from the checked-in pool), starting it on the server, or discarding it. */
-export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, viewer, rounds }: Props) {
+export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, viewer, rounds, leagueMatches }: Props) {
   const { busy, error, act } = useRefreshingAction();
   const [generating, setGenerating] = useState(false);
   const enough = pool.length >= SCRIM_MATCH_SIZE;
   return (
     <div className="flex flex-col gap-3">
-      <CheckInBar nightId={nightId} checkedInCount={pool.length} viewer={viewer} />
+      <CheckInBar nightId={nightId} checkedInCount={pool.length} viewer={viewer} leagueMatches={leagueMatches} />
 
       {match ? (
         <>
@@ -94,25 +99,54 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
 }
 
 /** The lobby's first row: how many are checked in, and the viewer's own Check in / Check out. */
-function CheckInBar({ nightId, checkedInCount, viewer }: { nightId: number; checkedInCount: number; viewer: Props['viewer'] }) {
-  const { busy, error, act } = useRefreshingAction();
+function CheckInBar({
+  nightId,
+  checkedInCount,
+  viewer,
+  leagueMatches,
+}: {
+  nightId: number;
+  checkedInCount: number;
+  viewer: Props['viewer'];
+  leagueMatches: ScheduledMatchRef[];
+}) {
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        {checkedInCount} checked in{checkedInCount < SCRIM_MATCH_SIZE && ` — a match needs ${SCRIM_MATCH_SIZE}`}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">{checkedInCount} checked in</span>
+        {leagueMatches.map((m) => (
+          <Link
+            key={m.id}
+            href={`/matches/${m.id}`}
+            title={`${m.label} takes the server`}
+            className="inline-flex items-center gap-1.5 font-mono text-[12px] hover:underline"
+          >
+            <LeagueGameMark />
+            <LocalTime iso={m.scheduledAt} opts={{ hour: 'numeric', minute: '2-digit' }} />
+          </Link>
+        ))}
       </div>
-      {viewer && (
-        <button
-          type="button"
-          onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
-          disabled={busy}
-          className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
-        >
-          {busy ? '…' : viewer.checkedIn ? 'Check out' : 'Check in'}
-        </button>
-      )}
-      <ErrorText error={error} size={12} className="w-full" />
+      {viewer && <ScrimCheckInButton nightId={nightId} viewer={viewer} />}
     </div>
+  );
+}
+
+/** The viewer's own Check in / Check out for a night — the lobby's first row, and on its own before
+ *  anyone has checked in, when the night page shows no lobby yet. */
+export function ScrimCheckInButton({ nightId, viewer }: { nightId: number; viewer: NonNullable<Props['viewer']> }) {
+  const { busy, error, act } = useRefreshingAction();
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      <button
+        type="button"
+        onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
+        disabled={busy}
+        className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
+      >
+        {busy ? '…' : viewer.checkedIn ? 'Check out' : 'Check in'}
+      </button>
+      <ErrorText error={error} size={12} />
+    </span>
   );
 }
 
@@ -244,7 +278,6 @@ function LobbyMatch({
       )}
       <ErrorText error={error} size={12} className="px-4 pb-3" />
 
-      {pool.length === 0 && <EmptyState message="Nobody is checked in." className="px-4 pb-3" />}
 
       <div className="px-4 pb-4 flex justify-center">
         <div className="w-full max-w-md">

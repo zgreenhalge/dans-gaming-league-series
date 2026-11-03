@@ -26,6 +26,9 @@ interface Props {
 
 const COMMITMENT_LABEL: Record<ScrimCommitment, string> = { definite: 'Definite', maybe: 'Maybe' };
 
+/** Drop out: red text with no border or fill, so it reads apart from the commitment choices. */
+const DROP_OUT_BTN_CLS =
+  'tracked text-[10px] font-semibold px-2 py-1 text-[var(--color-accent-red-fg,#f87171)] hover:underline transition-colors disabled:opacity-40';
 const IDLE_BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
 const ACTIVE_BTN_CLS: Record<ScrimCommitment, string> = {
   definite: `${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`,
@@ -135,9 +138,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
         style={{ borderTop: '3px solid var(--color-site-accent)' }}
       >
         <div className="min-w-0">
-          <div className="tracked text-[10px] mb-1" style={{ color: 'var(--color-site-accent)' }}>
-            {started ? 'Happening now' : 'Upcoming'}
-          </div>
           <div className="font-display text-[22px] font-semibold leading-tight">
             {showNightLink ? (
               <Link href={scrimNightHref(night.id)} className="hover:underline">
@@ -165,7 +165,7 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
               </button>
             ))}
             {mine && (
-              <button type="button" onClick={() => mutate(currentPlayerId, null)} disabled={pending === currentPlayerId} className={IDLE_BTN_CLS}>
+              <button type="button" onClick={() => mutate(currentPlayerId, null)} disabled={pending === currentPlayerId} className={DROP_OUT_BTN_CLS}>
                 Drop out
               </button>
             )}

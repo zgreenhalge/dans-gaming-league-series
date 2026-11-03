@@ -9,10 +9,13 @@ import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
 import {
   formatNightDate,
+  formatNightStart,
   hasScrimNightEnded,
   hasScrimNightStarted,
   isScrimCheckInOpen,
+  leagueMatchesDuring,
   parseCommitment,
+  SCRIM_LEAGUE_CLEARANCE_MS,
   parseNightStart,
   upcomingScrimNights,
   SCRIM_CHECK_IN_LEAD_MS,
@@ -52,6 +55,10 @@ test('formatNightDate: the date in the league timezone, not UTC', () => {
   assert.equal(formatNightDate(START), 'Thu, Nov 5');
 });
 
+test('formatNightStart: date and time in the league timezone, labelled ET', () => {
+  assert.equal(formatNightStart(START), 'Thu, Nov 5, 8:00 PM ET');
+});
+
 test('parseNightStart: a quarter-hour instant that has not already ended, within SCRIM_MAX_DAYS_AHEAD', () => {
   const now = at(0);
   const quarter = SCRIM_START_STEP_MINUTES * 60_000;
@@ -71,6 +78,18 @@ test('parseCommitment: definite or maybe only', () => {
   assert.equal(parseCommitment('definite'), 'definite');
   assert.equal(parseCommitment('maybe'), 'maybe');
   assert.equal(parseCommitment('yes'), null);
+});
+
+test('leagueMatchesDuring: league matches from the clearance before the start until the night ends, soonest first', () => {
+  const at = (offsetMs: number, id: number) => ({ id, label: `M${id}`, scheduledAt: at0(offsetMs) });
+  const at0 = (offsetMs: number) => new Date(Date.parse(START) + offsetMs).toISOString();
+  const matches = [
+    at(2 * 60 * 60 * 1000, 2),
+    at(-SCRIM_LEAGUE_CLEARANCE_MS, 1),
+    at(-SCRIM_LEAGUE_CLEARANCE_MS - 60_000, 0),
+    at(SCRIM_NIGHT_LENGTH_MS, 3),
+  ];
+  assert.deepEqual(leagueMatchesDuring(NIGHT, matches).map((m) => m.id), [1, 2]);
 });
 
 report();

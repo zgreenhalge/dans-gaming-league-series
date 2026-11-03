@@ -63,7 +63,7 @@ export interface UpcomingScrimNight {
 }
 
 /** The nights that haven't ended as of `now`, soonest first, with their signups — what the scrims
- *  page lists and the home page's Next Scrims card shows the first of. */
+ *  calendar shows. */
 export async function getUpcomingScrimNights(now: Date): Promise<UpcomingScrimNight[]> {
   const nights = upcomingScrimNights(await getScrimNightRows(), now);
   const signups = await Promise.all(nights.map((n) => getScrimSignups(n.id)));

@@ -25,7 +25,6 @@ import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 import { HomeStandingsPanel } from '@/components/HomeStandingsPanel';
 import { MyStatsPanel, MyStatsLockedPanel } from '@/components/MyStatsPanel';
 import { TopDuosPanel, HottestRivalriesPanel } from '@/components/TopPairsPanels';
-import { NextScrimCard } from '@/components/NextScrimCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,9 +135,6 @@ export default async function Home() {
           </div>
         )}
 
-        {scrims[0] && (
-          <NextScrimCard upcoming={scrims[0]} currentPlayerId={currentPlayerId} />
-        )}
 
         {/* One grid, so My Stats is a single element: first on a phone (above the games and
             standings) and top of the right-hand column on a wide screen, where the games and
@@ -148,12 +144,13 @@ export default async function Home() {
             {myStats ? <MyStatsPanel stats={myStats} /> : <MyStatsLockedPanel />}
           </div>
           <div className="min-w-0 flex flex-col gap-6 lg:col-start-1 lg:row-start-1 lg:row-span-2">
-            {games && (
+            {(games || scrims.length > 0) && (
               <UpcomingGamesPanel
-                scheduled={games.scheduled}
-                unscheduled={games.unscheduled}
-                headingHref={games.headingHref}
-                scheduleHref={games.scheduleHref}
+                scheduled={games?.scheduled ?? []}
+                unscheduled={games?.unscheduled ?? []}
+                scrims={scrims}
+                headingHref={games?.headingHref ?? '/scrims'}
+                scheduleHref={games?.scheduleHref ?? '/scrims'}
                 currentPlayerId={currentPlayerId}
               />
             )}
