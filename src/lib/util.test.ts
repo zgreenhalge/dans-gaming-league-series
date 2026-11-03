@@ -39,6 +39,7 @@ import {
   compareMatchRefDesc,
   compareWithinSeasonDesc,
   avgOf,
+  ehogDeltaColor,
   formatEhogDelta,
   fmtUtcShort,
   formatDuration,
@@ -49,6 +50,7 @@ import {
   ordinal,
   mergeLeaderboardRows,
   formatSigned,
+  roundTo,
   signedColor,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
@@ -515,6 +517,22 @@ test('mergeLeaderboardRows: sums a shared player\'s totals and re-derives their 
   assert.equal(p1.overall_adr, 60);
   assert.equal(p1.kd_ratio, 28 / 12);
   assert.deepEqual(merged.find((r) => r.player_id === 2), lbRow(2));
+});
+
+test('roundTo: rounds to the decimals a figure shows, so a sign can be judged at that precision', () => {
+  assert.equal(roundTo(1.25, 1), 1.3);
+  assert.equal(roundTo(-1.25, 1), -1.3);
+  assert.equal(roundTo(-0.004, 2) < 0, false); // a negative that rounds to zero is not negative
+  assert.equal(formatSigned(-0.004, 2), '0.00'); // and so never prints a sign
+  assert.equal(roundTo(2.5, 0), 3);
+});
+
+test('ehogDeltaColor: green or red by the sign of the delta as formatEhogDelta() shows it, none at 0.0', () => {
+  assert.equal(ehogDeltaColor(1.25), 'var(--color-accent-green-fg)');
+  assert.equal(ehogDeltaColor(-1.25), 'var(--color-accent-red-fg)');
+  assert.equal(ehogDeltaColor(0), undefined);
+  assert.equal(ehogDeltaColor(-0.04), undefined);
+  assert.equal(ehogDeltaColor(0.04), undefined);
 });
 
 test('formatSigned: explicit plus when positive, rounded first so a zero never shows a sign', () => {
