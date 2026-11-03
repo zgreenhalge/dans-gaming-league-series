@@ -194,7 +194,7 @@ test.describe('the lobby', () => {
     ]);
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
-    await expect(page.getByText('3 checked in — a match needs 4')).toBeVisible();
+    await expect(page.getByText('3 checked in', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Check in', exact: true }).click();
     await expect(page.getByText('4 checked in', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Check out', exact: true })).toBeVisible();
@@ -213,6 +213,15 @@ test.describe('the lobby', () => {
     await page.getByRole('button', { name: 'Discard' }).click();
     await expect(page.getByRole('button', { name: 'Next Match' })).toBeVisible();
     expect(await scrimMatchesOf(nightId)).toHaveLength(0);
+  });
+
+  test('with nobody checked in there is no lobby, only Check in; checking in opens it', async ({ page }) => {
+    const nightId = await seedScrimNight(10 * MINUTE, [{ playerId: CASEY }]);
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
+    await expect(page.getByRole('main').getByText('Lobby', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Check in', exact: true }).click();
+    await expect(page.getByRole('main').getByText('Lobby', { exact: true })).toBeVisible();
+    await expect(page.getByText('1 checked in', { exact: true })).toBeVisible();
   });
 
   test('a player who has not checked in can check in but not make matches; signed out sees only the count', async ({ page }) => {

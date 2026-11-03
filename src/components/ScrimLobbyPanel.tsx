@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { scrimMatchHref } from '@/lib/crumbs';
-import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
 import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
@@ -95,24 +94,30 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
 
 /** The lobby's first row: how many are checked in, and the viewer's own Check in / Check out. */
 function CheckInBar({ nightId, checkedInCount, viewer }: { nightId: number; checkedInCount: number; viewer: Props['viewer'] }) {
-  const { busy, error, act } = useRefreshingAction();
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        {checkedInCount} checked in{checkedInCount < SCRIM_MATCH_SIZE && ` — a match needs ${SCRIM_MATCH_SIZE}`}
-      </div>
-      {viewer && (
-        <button
-          type="button"
-          onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
-          disabled={busy}
-          className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
-        >
-          {busy ? '…' : viewer.checkedIn ? 'Check out' : 'Check in'}
-        </button>
-      )}
-      <ErrorText error={error} size={12} className="w-full" />
+      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{checkedInCount} checked in</div>
+      {viewer && <ScrimCheckInButton nightId={nightId} viewer={viewer} />}
     </div>
+  );
+}
+
+/** The viewer's own Check in / Check out for a night — the lobby's first row, and on its own before
+ *  anyone has checked in, when the night page shows no lobby yet. */
+export function ScrimCheckInButton({ nightId, viewer }: { nightId: number; viewer: NonNullable<Props['viewer']> }) {
+  const { busy, error, act } = useRefreshingAction();
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      <button
+        type="button"
+        onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
+        disabled={busy}
+        className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
+      >
+        {busy ? '…' : viewer.checkedIn ? 'Check out' : 'Check in'}
+      </button>
+      <ErrorText error={error} size={12} />
+    </span>
   );
 }
 
@@ -244,7 +249,6 @@ function LobbyMatch({
       )}
       <ErrorText error={error} size={12} className="px-4 pb-3" />
 
-      {pool.length === 0 && <EmptyState message="Nobody is checked in." className="px-4 pb-3" />}
 
       <div className="px-4 pb-4 flex justify-center">
         <div className="w-full max-w-md">

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
-import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
+import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
@@ -94,7 +94,13 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
               allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
             />
           )}
-          {night.checkInOpen && (
+          {/* Before anyone has checked in there's no lobby yet, only the viewer's own Check in. */}
+          {night.checkInOpen && pool.length === 0 && !lobbyMatch && currentPlayerId != null && (
+            <div>
+              <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
+            </div>
+          )}
+          {night.checkInOpen && (pool.length > 0 || lobbyMatch) && (
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
               <ScrimLobbyPanel
