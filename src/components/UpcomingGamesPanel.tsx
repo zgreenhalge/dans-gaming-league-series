@@ -12,6 +12,7 @@ import type { UpcomingGameRow, UpcomingScrimNight } from '@/lib/queries';
 import { effectivePickedMap } from '@/lib/veto';
 import { scrimNightHref } from '@/lib/crumbs';
 import { Seats, nightFill, signupCounts } from './ScrimSeats';
+import { UpcomingWeekStrip } from './UpcomingWeekStrip';
 
 function TeamNames({ players, dimmed, currentPlayerId }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean; currentPlayerId?: number | null }) {
   if (players.length === 0) return <span className="opacity-50">TBD</span>;
@@ -141,12 +142,15 @@ function GameBlock({
   title,
   titleHref,
   allGamesHref,
+  top,
   rows,
   className,
 }: {
   title: string;
   titleHref: string;
   allGamesHref?: string;
+  /** Drawn between the title and the rows. */
+  top?: ReactNode;
   rows: ReactNode[];
   className?: string;
 }) {
@@ -158,13 +162,15 @@ function GameBlock({
         titleHref={titleHref}
         right={allGamesHref && <PanelLink href={allGamesHref}>All games →</PanelLink>}
       />
+      {top}
       {rows}
     </div>
   );
 }
 
-/** Home page panels: an "Upcoming" block for every scheduled-but-unplayed game and every scrim
- *  night that hasn't ended (`ScrimNightRow`), soonest first, and a "To Be Scheduled" block for every
+/** Home page panels: an "Upcoming" block — the week ahead at a glance (`UpcomingWeekStrip`), then
+ *  every scheduled-but-unplayed game and every scrim night that hasn't ended (`ScrimNightRow`),
+ *  soonest first — and a "To Be Scheduled" block for every
  *  unplayed game still missing a time — the one "what's coming up" surface for a regular season, a
  *  gauntlet and scrims. Either block is omitted when its own list is empty, and the whole thing
  *  renders nothing when both are — the caller doesn't need its own emptiness check to decide whether
@@ -199,7 +205,12 @@ export function UpcomingGamesPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <GameBlock title="Upcoming" titleHref={headingHref} rows={upcoming} />
+      <GameBlock
+        title="Upcoming"
+        titleHref={headingHref}
+        top={<UpcomingWeekStrip gameTimes={scheduled.map((g) => g.scheduled_at!)} scrims={scrims} />}
+        rows={upcoming}
+      />
       <GameBlock
         title="To Be Scheduled"
         titleHref={scheduleHref}

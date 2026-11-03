@@ -8,7 +8,7 @@ import { StartScrimNightForm } from './StartScrimNightForm';
 import { SkeletonBar } from './Skeleton';
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { useHasMounted } from './useHasMounted';
-import { Seats, nightFill, signupCounts } from './ScrimSeats';
+import { DAY_FILL_CLS, Seats, leadNight, nightFill, signupCounts } from './ScrimSeats';
 import { addMonths, localDayKey, monthGrid } from '@/lib/calendar-month';
 import { SCRIM_MAX_DAYS_AHEAD } from '@/lib/scrim-schedule';
 import type { PastScrimNight, UpcomingScrimNight } from '@/lib/queries';
@@ -113,12 +113,6 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
   );
 }
 
-const FILL_CLS = {
-  full: 'bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]',
-  'could-fill': 'border-dashed border-[var(--color-accent-amber-border)]',
-  short: 'border-[var(--color-border-tertiary)]',
-} as const;
-
 /** One day of the grid: its date and, for a day with an upcoming night, that night's seats (`Seats`) —
  *  the whole day tinted green once they're all definite, or bordered in amber dashes when its maybes
  *  could fill them — or a played mark for a past night. On a day with two nights, the one with the
@@ -137,10 +131,7 @@ function DayCell({
   onPick: (day: string) => void;
 }) {
   const counts = (nights?.upcoming ?? []).map((u) => signupCounts(u.signups));
-  const lead = counts.reduce<{ definite: number; maybe: number } | null>(
-    (best, c) => (best === null || c.definite > best.definite || (c.definite === best.definite && c.maybe > best.maybe) ? c : best),
-    null,
-  );
+  const lead = leadNight(counts);
   const definite = counts.reduce((sum, c) => sum + c.definite, 0);
   const maybe = counts.reduce((sum, c) => sum + c.maybe, 0);
   const hasPast = (nights?.past.length ?? 0) > 0;
@@ -159,7 +150,7 @@ function DayCell({
       aria-pressed={selected}
       aria-label={`${day}${title ? ` — ${title}` : ''}`}
       title={title || undefined}
-      className={`relative flex flex-col items-center justify-start gap-0.5 min-h-[56px] sm:min-h-[64px] pt-1 border transition-colors ${FILL_CLS[fill]} ${
+      className={`relative flex flex-col items-center justify-start gap-0.5 min-h-[56px] sm:min-h-[64px] pt-1 border transition-colors ${DAY_FILL_CLS[fill]} ${
         selected ? 'outline outline-2 -outline-offset-2 outline-[var(--color-site-accent)]' : fill === 'full' ? 'hover:brightness-105' : 'hover:bg-[var(--color-bg-secondary)]'
       } ${day < today && !hasPast ? 'text-[var(--color-text-secondary)] opacity-60' : ''}`}
     >

@@ -58,3 +58,20 @@ export function nightFill(definite: number, maybe: number): 'full' | 'could-fill
   if (definite >= SCRIM_MATCH_SIZE) return 'full';
   return definite + maybe >= SCRIM_MATCH_SIZE ? 'could-fill' : 'short';
 }
+
+/** Of a day's nights' signup counts, the one that speaks for the day: the most definite signups, then
+ *  the most maybes. `null` for a day with no nights. */
+export function leadNight(counts: { definite: number; maybe: number }[]): { definite: number; maybe: number } | null {
+  return counts.reduce<{ definite: number; maybe: number } | null>(
+    (best, c) => (best === null || c.definite > best.definite || (c.definite === best.definite && c.maybe > best.maybe) ? c : best),
+    null,
+  );
+}
+
+/** A day cell's border and fill for its lead night's `nightFill()`: green once full, amber dashes when
+ *  its maybes could fill it, plain otherwise — the scrims calendar's and the home week strip's days. */
+export const DAY_FILL_CLS = {
+  full: 'bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]',
+  'could-fill': 'border-dashed border-[var(--color-accent-amber-border)]',
+  short: 'border-[var(--color-border-tertiary)]',
+} as const;

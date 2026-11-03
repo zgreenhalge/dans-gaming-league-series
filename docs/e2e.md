@@ -66,6 +66,11 @@ upstream regression, [supabase/cli#4211](https://github.com/supabase/cli/issues/
 they're fully determined by the pinned secret there's nothing to look up anyway — they'll be
 identical every time you `supabase start` this repo. Run `supabase stop` when done.
 
+After a fresh `supabase start`, delete `.next/` before running the suite again. The persistent read
+cache (`persistentQuery()`) keys its entries on `data_version`, which a new local database starts
+from the beginning again, so entries left in `.next/` from an earlier database can match the new
+version numbers and serve its rows — a night the test just seeded then reads as missing.
+
 In a Claude Code web session, `.claude/hooks/session-start.sh` does the `supabase start` +
 `source supabase/local.env` sequence above automatically whenever no real `.env.local` is present —
 see "Claude Code sessions" below.
