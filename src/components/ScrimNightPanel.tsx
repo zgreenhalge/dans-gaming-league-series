@@ -138,9 +138,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
         style={{ borderTop: '3px solid var(--color-site-accent)' }}
       >
         <div className="min-w-0">
-          <div className="tracked text-[10px] mb-1" style={{ color: 'var(--color-site-accent)' }}>
-            {started ? 'Happening now' : 'Upcoming'}
-          </div>
           <div className="font-display text-[22px] font-semibold leading-tight">
             {showNightLink ? (
               <Link href={scrimNightHref(night.id)} className="hover:underline">
