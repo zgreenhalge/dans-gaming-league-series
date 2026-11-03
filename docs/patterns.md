@@ -220,6 +220,14 @@ guidance, not scattered elsewhere.
 When a change alters behavior, update the relevant doc in the **same** change, and when you add a
 domain concept add it to [`glossary.md`](./glossary.md). A stale doc is worse than no doc.
 
+## Diagrams are Mermaid, next to the prose they explain
+
+When a flow, a state machine or a set of relationships is easier to see than to read, draw it as a
+` ```mermaid ` code block in the doc that owns the area, never as an image file: GitHub renders it, a
+diff shows exactly what changed, and an agent reads it as text. Label nodes and edges with the same
+symbol names the prose cites (`activateSeason()`, `server_state`), so a grep for the symbol finds the
+diagram too.
+
 ## Client-only values: dates, times, and hydration safety
 
 Server-rendered HTML must match the client's first render pass. Anything that depends on the user's

@@ -5,8 +5,9 @@
 replay, CSS, …) to its owning doc; treat that table as authoritative rather than any list here, since
 it's the one place new docs get added. Read [`docs/glossary.md`](./docs/glossary.md) first: it
 defines DGLS-specific domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files
-that implement them. For cross-cutting conventions every change should follow, see
-[`docs/patterns.md`](./docs/patterns.md).
+that implement them. [`docs/season-lifecycle.md`](./docs/season-lifecycle.md) then walks a season
+end to end — each stage, who acts, what gates it, and the route or function behind it. For
+cross-cutting conventions every change should follow, see [`docs/patterns.md`](./docs/patterns.md).
 
 When citing code in docs, comments, or commits, reference it by **symbol name** (e.g.
 `getGauntletStats()` in `src/lib/queries/gauntlet.ts`), never by line number — line numbers rot. See
