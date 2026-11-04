@@ -88,25 +88,37 @@ export async function seedSchedulableSeason(): Promise<TestSeason> {
 export async function teardownSeason(seasonId: number): Promise<void> {
   const supabase = adminClient();
 
-  const { data: weeks } = await supabase.from('weeks').select('id').eq('season_id', seasonId);
+  const { data: weeks, error: weeksErr } = await supabase.from('weeks').select('id').eq('season_id', seasonId);
+  if (weeksErr) throw weeksErr;
   const weekIds = (weeks ?? []).map((w) => (w as { id: number }).id);
   if (weekIds.length > 0) {
-    await supabase.from('matches').delete().in('week_id', weekIds);
-    await supabase.from('weeks').delete().in('id', weekIds);
+    const { error: matchesErr } = await supabase.from('matches').delete().in('week_id', weekIds);
+    if (matchesErr) throw matchesErr;
+    const { error: weekDeleteErr } = await supabase.from('weeks').delete().in('id', weekIds);
+    if (weekDeleteErr) throw weekDeleteErr;
   }
 
-  const { data: draftWeeks } = await supabase
+  const { data: draftWeeks, error: draftWeeksErr } = await supabase
     .from('season_schedule_draft_weeks')
     .select('id')
     .eq('season_id', seasonId);
+  if (draftWeeksErr) throw draftWeeksErr;
   const draftWeekIds = (draftWeeks ?? []).map((w) => (w as { id: number }).id);
   if (draftWeekIds.length > 0) {
-    await supabase.from('season_schedule_draft_matches').delete().in('draft_week_id', draftWeekIds);
-    await supabase.from('season_schedule_draft_weeks').delete().in('id', draftWeekIds);
+    const { error: draftMatchesErr } = await supabase.from('season_schedule_draft_matches').delete().in('draft_week_id', draftWeekIds);
+    if (draftMatchesErr) throw draftMatchesErr;
+    const { error: draftWeekDeleteErr } = await supabase.from('season_schedule_draft_weeks').delete().in('id', draftWeekIds);
+    if (draftWeekDeleteErr) throw draftWeekDeleteErr;
   }
 
-  await supabase.from('season_players').delete().eq('season_id', seasonId);
-  await supabase.from('seasons').delete().eq('id', seasonId);
+  // The roster can only change while the season is UPCOMING (the `season_players_upcoming_only`
+  // trigger), and confirming a schedule makes it ACTIVE — so move it back before removing the roster.
+  const { error: statusErr } = await supabase.from('seasons').update({ status: 'UPCOMING' }).eq('id', seasonId);
+  if (statusErr) throw statusErr;
+  const { error: rosterErr } = await supabase.from('season_players').delete().eq('season_id', seasonId);
+  if (rosterErr) throw rosterErr;
+  const { error: seasonErr } = await supabase.from('seasons').delete().eq('id', seasonId);
+  if (seasonErr) throw seasonErr;
 }
 
 export interface TestMatch {
