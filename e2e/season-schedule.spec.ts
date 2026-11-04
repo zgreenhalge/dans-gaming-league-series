@@ -45,8 +45,9 @@ test('generating a schedule, then confirming it, materializes real weeks and mat
   await expect(confirmButton).toBeEnabled();
   await confirmButton.click();
 
-  // confirmDraft() router.push()es to the season page on success.
-  await expect(page).toHaveURL(new RegExp(`/seasons/${season.seasonId}$`));
+  // confirmDraft() router.push()es to the season page on success; a cold `next dev` compiles that
+  // page on first visit, which can outlast the default 5 s.
+  await expect(page).toHaveURL(new RegExp(`/seasons/${season.seasonId}$`), { timeout: 30_000 });
   await expect(page.getByText(/Match 1/i).first()).toBeVisible();
 });
 
