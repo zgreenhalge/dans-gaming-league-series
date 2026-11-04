@@ -283,10 +283,7 @@ export async function provisionMatchServer(
   // another table. Not interrupting ongoing play outranks starting a new match on time. An unreachable
   // DatHost can't confirm liveness either way, so it's treated as not-live rather than blocking
   // provisioning on a network hiccup.
-  if (!takeOverLiveServer) {
-    const server = await getServer(serverId).catch(() => null);
-    if (isServerLive(server)) throw new ServerBusyError(null);
-  }
+  if (!takeOverLiveServer && (await liveServerOutsideMatch(serverId))) throw new ServerBusyError(null);
 
   try {
     await setServerState(supabaseAdmin, matchId, {
@@ -572,6 +569,18 @@ export async function getServerOccupancy(
   const playersOnline = server?.players_online ?? null;
   const occupied = active !== null || (playersOnline ?? 0) > 0;
   return { active, playersOnline, occupied };
+}
+
+/**
+ * The server when DatHost reports it live (`isServerLive()`) — called once any DGLS match holding
+ * it has been ruled out (`findServerOccupant()`), so a live server is in use outside the match state
+ * machine (a manual launch, a pug). `null` when it isn't live, or when DatHost can't be reached: an
+ * unconfirmed liveness never blocks a match. Shared by `provisionMatchServer()`'s refusal and the
+ * provision route's up-front warning, so both agree on what "live" means.
+ */
+export async function liveServerOutsideMatch(serverId: string): Promise<DathostServer | null> {
+  const server = await getServer(serverId).catch(() => null);
+  return isServerLive(server) ? server : null;
 }
 
 /** Human-readable reason for a `server_occupied` refusal, for the 409 body / admin console prompt. */

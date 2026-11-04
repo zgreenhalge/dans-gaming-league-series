@@ -199,7 +199,7 @@ async function main() {
       const body = (await res.json()) as { code: string; forceable: boolean; error: string };
       assert.equal(body.code, 'server_occupied');
       assert.equal(body.forceable, true);
-      assert.equal(body.error, '2 player(s) on the server outside a DGLS match. Starting kicks them.');
+      assert.equal(body.error, '2 player(s) are currently on the server outside of a DGLS match. Starting kicks them.');
     });
     await withLiveServer(0, async () => {
       const body = (await (await call(MATCH_ID, IN_MATCH_ID)).json()) as { error: string };

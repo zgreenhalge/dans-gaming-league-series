@@ -15,10 +15,11 @@ import {
   findServerOccupant,
   provisionErrorHandler,
   getServerOccupancy,
+  liveServerOutsideMatch,
   occupancyMessage,
 } from '@/lib/dathost-lifecycle';
 import { getServer } from '@/lib/dathost';
-import { isServerLive, parseRouteId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
@@ -55,13 +56,12 @@ export async function POST(
     );
   }
 
-  let takeOverLiveServer = false;
-
   // A scrim match waits its turn and never bumps anything: a night plays its matches in order, a
   // league match always gets the server (no scrim match starts within half an hour of one), and none
   // starts while anyone is on the server — a DGLS match or players outside one
   // (`getServerOccupancy()`, the admin server console's own gate).
-  if (await isScrimMatch(getAdminClient(), matchId)) {
+  const isScrim = await isScrimMatch(getAdminClient(), matchId);
+  if (isScrim) {
     const serverId = process.env.DATHOST_SERVER_ID;
     const [playsAfter, scheduled, server] = await Promise.all([
       scrimMatchPlaysAfter(getAdminClient(), matchId),
@@ -79,23 +79,22 @@ export async function POST(
     if (occupancy.occupied && occupancy.active?.matchId !== matchId) {
       return NextResponse.json({ error: occupancyMessage(occupancy), code: 'server_occupied' }, { status: 409 });
     }
-  } else {
-    // A league match can take over a server that is live outside any DGLS match, but only once the
-    // person starting it confirms (`force`), since starting restarts it and kicks anyone on it.
-    // Another DGLS match holding the server was already refused above. A failed DatHost lookup
-    // counts as "not live", the same as `provisionMatchServer()`'s own check.
-    const body = (await req.json().catch(() => null)) as { force?: unknown } | null;
-    takeOverLiveServer = body?.force === true;
-    const serverId = process.env.DATHOST_SERVER_ID;
-    if (!takeOverLiveServer && serverId) {
-      const server = await getServer(serverId).catch(() => null);
-      if (isServerLive(server)) {
-        const players = server?.players_online ?? 0;
-        const error = players > 0
-          ? `${players} player(s) on the server outside a DGLS match. Starting kicks them.`
-          : 'The server is running outside a DGLS match. Starting restarts it.';
-        return NextResponse.json({ error, code: 'server_occupied', forceable: true }, { status: 409 });
-      }
+  }
+
+  // A league match can take over a server that is live outside any DGLS match (another DGLS match
+  // holding it was refused above), but only once the person starting it confirms (`force`), since
+  // starting restarts it and kicks anyone on it.
+  const body = isScrim ? null : ((await req.json().catch(() => null)) as { force?: unknown } | null);
+  const takeOverLiveServer = body?.force === true;
+  const serverId = process.env.DATHOST_SERVER_ID;
+  if (!isScrim && !takeOverLiveServer && serverId) {
+    const live = await liveServerOutsideMatch(serverId);
+    if (live) {
+      const playersOnline = live.players_online ?? 0;
+      const error = playersOnline > 0
+        ? `${occupancyMessage({ active: null, playersOnline, occupied: true })} Starting kicks them.`
+        : 'The server is running outside a DGLS match. Starting restarts it.';
+      return NextResponse.json({ error, code: 'server_occupied', forceable: true }, { status: 409 });
     }
   }
 

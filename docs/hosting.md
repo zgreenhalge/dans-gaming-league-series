@@ -128,7 +128,8 @@ outside any DGLS match, the provision route returns a **409** (`code: 'server_oc
 `forceable: true`) saying how many players are on it, and the match panel's button becomes **Start
 anyway**. That click re-sends the request with `{ force: true }`, which passes
 `takeOverLiveServer` to `provisionMatchServer` so it skips the live-server refusal (never the
-`findServerOccupant` one) and restarts the server for the match. The automatic veto-completion
+`findServerOccupant` one) and restarts the server for the match. The route's warning and that
+refusal both read `liveServerOutsideMatch`, so they agree on what counts as live. The automatic veto-completion
 trigger never forces: on a live server it is skipped, and someone starts the match from the panel.
 
 A **soft scheduling warning** (`src/lib/server-schedule-collision.ts`) flags — on the match page and in the admin
