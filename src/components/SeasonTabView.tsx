@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { rankChangesSinceLastWeek } from '@/lib/season-standings';
 import { useTabState, resolveTab } from './useTabState';
 import { useUrlState, useSetUrlParams } from './useUrlState';
 import { useUrlStateContext } from './UrlStateProvider';
@@ -123,6 +124,11 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const hasSab = !!hasAdvancedStats;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
+  // A live regular season's standings show who moved since last week (`rankChangesSinceLastWeek()`).
+  const rankChanges = useMemo(
+    () => (props.kind === 'regular' && seasonStatus === 'ACTIVE' ? rankChangesSinceLastWeek(schedule) : undefined),
+    [props.kind, seasonStatus, schedule],
+  );
   const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
   const bracketShape = props.kind === 'gauntlet' ? props.bracketShape : EMPTY_BRACKET_SHAPE;
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
@@ -516,6 +522,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             gauntletSeeding={gauntletSeeding}
             canonicalRanking={gauntletRanking}
             ehogRatings={ehogRatings}
+            rankChanges={rankChanges}
           />
         </>
       )}

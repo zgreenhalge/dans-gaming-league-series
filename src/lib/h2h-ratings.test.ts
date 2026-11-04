@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { duoStats, rivalStats } from './test-support/h2hFixtures';
 import { test, report } from './test-support/miniTest';
-import { duoBlendedScorer, duoBreakdownScorer, rankDuos, ratingPoints, rivalBlendedScorer, rivalBreakdownScorer } from './h2h-ratings';
+import { bestFriendOf, duoBlendedScorer, duoBreakdownScorer, rankDuos, rankRivals, ratingPoints, rivalBlendedScorer, rivalBreakdownScorer } from './h2h-ratings';
 import type { H2HStats } from './h2h';
 
 /** A duo with `games` games, `wins` of them won, on a 55% round win rate; override the rest. */
@@ -37,6 +37,15 @@ test('rankDuos: each rating is the scorer\'s score rounded down, so a near-best 
   const ranked = rankDuos(duos, 3);
   for (const { duo: d, rating } of ranked) assert.equal(rating, ratingPoints(score(d)));
   assert.equal(ranked.filter((r) => r.rating === 100).length, 1);
+});
+
+test('rankDuos / rankRivals / bestFriendOf: a prebuilt scorer gives the same result as building one', () => {
+  const duos = [duo(8, 6, { winsAboveExpected: 1 }), duo(7, 6, { winsAboveExpected: 1 }), duo(4, 3)];
+  const duoScore = duoBlendedScorer(duos);
+  assert.deepEqual(rankDuos(duos, 3, duoScore), rankDuos(duos, 3));
+  assert.deepEqual(bestFriendOf(duos, duos[0].playerA, duoScore), bestFriendOf(duos, duos[0].playerA));
+  const rivals = [rival([3, 2]), rival([2, 2]), rival([4, 1])];
+  assert.deepEqual(rankRivals(rivals, 3, rivalBlendedScorer(rivals)), rankRivals(rivals, 3));
 });
 
 // ─── Friends ─────────────────────────────────────────────────────────────────

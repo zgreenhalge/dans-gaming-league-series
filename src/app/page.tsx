@@ -5,6 +5,7 @@ import {
   getSeasons,
   getAllLeaderboards,
   getSeasonForm,
+  getSeasonSchedule,
   getHomeGames,
   resolveHomeSeasons,
   getMyStats,
@@ -25,6 +26,7 @@ import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 import { HomeStandingsPanel } from '@/components/HomeStandingsPanel';
 import { MyStatsPanel, MyStatsLockedPanel } from '@/components/MyStatsPanel';
 import { TopDuosPanel, HottestRivalriesPanel } from '@/components/TopPairsPanels';
+import { rankChangesSinceLastWeek } from '@/lib/season-standings';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,10 +94,11 @@ export default async function Home() {
     .filter((s) => !s.is_gauntlet && openFeedbackIds.has(s.id))
     .sort((a, b) => b.id - a.id);
 
-  const [myStats, games, form, feedbackViews] = await Promise.all([
+  const [myStats, games, form, rankChanges, feedbackViews] = await Promise.all([
     currentPlayerId != null ? getMyStats(currentPlayerId, h2h) : null,
     getHomeGames(home),
     standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
+    standings?.live ? getSeasonSchedule(standings.season.id).then(rankChangesSinceLastWeek) : undefined,
     Promise.all(
       feedbackSeasons.map(async (s) => {
         const [survey, superlatives] = await Promise.all([
@@ -162,6 +165,7 @@ export default async function Home() {
                 gauntletHref={standings.gauntlet ? gauntletHref(standings.season.id) : undefined}
                 rows={leaderboards.get(standings.season.id) ?? []}
                 form={form}
+                rankChanges={rankChanges}
                 currentPlayerId={currentPlayerId}
               />
             )}

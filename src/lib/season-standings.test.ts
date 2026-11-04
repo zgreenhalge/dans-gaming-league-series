@@ -3,7 +3,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { rankMovementForWeek, rankPlayersThroughWeek, type StandingsWeek } from './season-standings';
+import { rankChangesSinceLastWeek, rankMovementForWeek, rankPlayersThroughWeek, type StandingsWeek } from './season-standings';
 import type { ScorecardStat } from './group-scorecard';
 import { canonicalSort, deriveAdr, deriveRwr } from './util';
 import { test } from './test-support/miniTest';
@@ -61,6 +61,37 @@ test('rankMovementForWeek: before is null for a first appearance and otherwise t
   const w2 = rankMovementForWeek(weeks, 2);
   assert.equal(w2.get(1)!.before, 1);
   assert.ok(w2.get(3)!.after < w2.get(3)!.before!, 'a player who won week 2 moved up');
+});
+
+test('rankChangesSinceLastWeek: places moved across the latest played week, positive is up', () => {
+  const weeks: StandingsWeek[] = [
+    { week_number: 1, matches: [game('13-9', [2000, 1500, 1400, 1300])] },
+    { week_number: 2, matches: [game('9-13', [1000, 1000, 2000, 2000]), game('9-13', [1000, 1000, 2000, 2000])] },
+    { week_number: 3, matches: [{ final_score: null, shirts_stats: [], skins_stats: [] }] }, // unplayed: not "this week"
+  ];
+  const before = rankPlayersThroughWeek(weeks, 1);
+  const after = rankPlayersThroughWeek(weeks, 2);
+  const changes = rankChangesSinceLastWeek(weeks);
+  assert.ok(changes.size > 0);
+  for (const [id, moved] of changes) assert.equal(moved, before.get(id)! - after.get(id)!);
+  assert.ok(changes.get(3)! > 0, 'a player who won week 2 moved up');
+  assert.ok(changes.get(1)! < 0, 'a player who lost week 2 moved down');
+});
+
+test('rankChangesSinceLastWeek: empty until a second week is played; first appearances and non-movers are left out', () => {
+  assert.equal(rankChangesSinceLastWeek([{ week_number: 1, matches: [game('13-9', [2000, 1500, 1400, 1300])] }]).size, 0);
+  assert.equal(rankChangesSinceLastWeek([]).size, 0);
+  const newcomer: StandingsWeek['matches'][number] = {
+    final_score: '13-9',
+    shirts_stats: [st(5, true, 13, 22, 3000), st(6, true, 13, 22, 3000)],
+    skins_stats: [st(7, false, 9, 22, 500, 'SKINS'), st(8, false, 9, 22, 500, 'SKINS')],
+  };
+  const changes = rankChangesSinceLastWeek([
+    { week_number: 1, matches: [game('13-9', [2000, 1500, 1400, 1300])] },
+    { week_number: 2, matches: [newcomer] },
+  ]);
+  for (const id of [5, 6, 7, 8]) assert.equal(changes.has(id), false, `player ${id} has no earlier rank`);
+  for (const moved of changes.values()) assert.notEqual(moved, 0);
 });
 
 test('rankPlayersThroughWeek: orders on exact damage / rounds played, not the rounded per-match ADR', () => {

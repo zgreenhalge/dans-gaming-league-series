@@ -52,6 +52,7 @@ import {
   formatSigned,
   formatDiff,
   formatStat,
+  parsePlayerName,
   formatRatio,
   roundTo,
   signedColor,
@@ -580,3 +581,15 @@ test('signedColor: green above zero, red below, none at zero, judged at the disp
 });
 
 report();
+
+test('parsePlayerName: the normalized name, or the 400 message for a missing or rule-breaking name', () => {
+  assert.deepEqual(parsePlayerName('  Big   Dan '), { ok: true, name: 'Big Dan' });
+  for (const missing of [undefined, null, 42, '', '   ']) {
+    assert.deepEqual(parsePlayerName(missing), { ok: false, error: 'Name is required' });
+  }
+  for (const bad of ['Dan2', 'xX_Sniper_Xx', 'A', 'a'.repeat(33)]) {
+    const parsed = parsePlayerName(bad);
+    assert.equal(parsed.ok, false);
+    assert.match(parsed.ok ? '' : parsed.error, /^Name must be 2-32 letters/);
+  }
+});

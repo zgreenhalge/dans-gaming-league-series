@@ -13,6 +13,7 @@ import Th from './Th';
 import SortableTh from './SortableTh';
 import { StatTable, Tr, Td, NameTd } from './StatTable';
 import type { SeedPlacement } from '@/lib/gauntlet-bracket';
+import { RankChange } from './RankChange';
 
 type SortCol =
   | 'name'
@@ -90,6 +91,7 @@ export default function LeaderboardTable({
   trophyCounts,
   canonicalRanking,
   ehogRatings,
+  rankChanges,
   onPlayerHover,
 }: {
   rows: LeaderboardRowWithId[];
@@ -106,6 +108,8 @@ export default function LeaderboardTable({
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
   ehogRatings?: Record<number, number>;
+  /** Places each player moved since last week (`rankChangesSinceLastWeek()`), shown beside the rank. */
+  rankChanges?: Map<number, number>;
   onPlayerHover?: (playerId: number | null) => void;
 }) {
   const { data: session } = useSession();
@@ -192,7 +196,7 @@ export default function LeaderboardTable({
     <StatTable>
       <thead>
         <tr>
-          {firstColMode === 'player' && showRank && <Th className="w-6">#</Th>}
+          {firstColMode === 'player' && showRank && <Th className="w-6 whitespace-nowrap">#</Th>}
           <SortableTh label={firstColLabel} sortKey="name" state={sortState} onSort={clickHeader} sticky={stickyNameCol} />
           {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} label={c.label} title={c.title} sortKey={c.key} state={sortState} onSort={clickHeader} align="right" />)}
           {hasEhog && <SortableTh label="EHOG" title="EHOG rating as of most recent match in this view" sortKey="ehog" state={sortState} onSort={clickHeader} align="right" />}
@@ -223,6 +227,7 @@ export default function LeaderboardTable({
               {firstColMode === 'player' && showRank && (
                 <Td align="left" style={{ color: textColor ?? 'var(--color-text-secondary)' }}>
                   {canonicalRankOf.get(p.player_id) ?? '-'}
+                  <RankChange change={rankChanges?.get(p.player_id)} />
                 </Td>
               )}
               <NameTd sticky={stickyNameCol} style={{ color: textColor ?? undefined }}>

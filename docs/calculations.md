@@ -174,6 +174,17 @@ round is already counted once via `defuse`; `ninja` isn't summed a second time).
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 
+**The `+` scale.** Every `+` stat reads "1.00 = league average, higher is better":
+- A higher-is-better stat is `player / league average` (`plusStat()`), uncapped, so a real outlier
+  stays visible in a small league.
+- A lower-is-better stat that stands on its own (`DPR+`, `Choke+`) is inverted to `league average /
+  player` (`invertedPlusStat()`) and capped at 2.00 (twice the league average). The cap exists only
+  because that ratio is unbounded as the player's rate goes to zero; a player rate of zero scores the
+  cap, or 1.00 when the league average is zero too.
+- A lower-is-better term inside a weighted composite (`Teamflash+` in `Utility+`) is inverted
+  linearly as `2 - x`, so a step above average costs the composite exactly what the same step in a
+  higher-is-better term gains.
+
 - `KPR+` = `Player K/R` / `League Avg K/R`
 - `APR+` = `Player A/R` / `League Avg A/R`
 - `DPR+` = `League Avg D/R` / `Player D/R` — inverted (league average over player, not the usual
@@ -809,6 +820,14 @@ first, up to five (`FORM_LENGTH`), as `W` / `L`. Only played regular-season matc
 `isPlayedScore()` gate, no playoff games); "newest" is by week then match number, the order the
 player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 `src/lib/queries/leaderboard.ts`.
+
+**Position change** (beside the rank, on a live season's standings here and on the season hub) —
+places moved since the end of the previous week: `▲n` in green, `▼n` in red, nothing for no move.
+"This week" is the latest week with a played match; the standings through it and through the week
+before are both ranked by `rankPlayersThroughWeek()` (`src/lib/season-standings.ts`), the ranking
+the week pages' movement column uses. A player with no match before this week has no earlier rank
+and shows nothing. Nothing shows until a second week has a played match.
+`rankChangesSinceLastWeek()` computes it from the season schedule; `RankChange` renders it.
 
 **My Stats** — career figures for the signed-in player. **EHOG** is the current rating
 (`getCurrentEhogRating()`, [`ehog.md`](./ehog.md)), colored by its tier like the leaderboard's EHOG

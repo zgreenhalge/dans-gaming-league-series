@@ -8,6 +8,7 @@ import EmptyState from './EmptyState';
 
 import { StatusPill } from './StatusPill';
 import { PanelHeader, PanelLink } from './PanelHeader';
+import { RankChange } from './RankChange';
 
 /** A player's recent results, newest first, as colored `W` / `L` letters — the standings Form column. */
 export function FormCell({ results }: { results: boolean[] }) {
@@ -30,7 +31,9 @@ export function FormCell({ results }: { results: boolean[] }) {
  * The home page's standings: one season's leaderboard (already in `canonicalSort()` order) as a
  * linked title, a Live / Final pill, a "View all" link to the season and a table whose rows open
  * the player. `live` picks the pill; `gauntletHref` adds a "Gauntlet live" pill linking to the
- * season's running gauntlet. `form` maps a player id to their last results (`getSeasonForm()`).
+ * season's running gauntlet. `form` maps a player id to their last results (`getSeasonForm()`);
+ * `rankChanges`, given for a live season, to the places they moved since last week
+ * (`rankChangesSinceLastWeek()`).
  */
 export function HomeStandingsPanel({
   title,
@@ -39,6 +42,7 @@ export function HomeStandingsPanel({
   gauntletHref,
   rows,
   form,
+  rankChanges,
   currentPlayerId,
 }: {
   title: string;
@@ -47,6 +51,7 @@ export function HomeStandingsPanel({
   gauntletHref?: string;
   rows: LeaderboardRowWithId[];
   form: Map<number, boolean[]>;
+  rankChanges?: Map<number, number>;
   currentPlayerId: number | null;
 }) {
   const dash = (played: boolean, v: string) =>
@@ -73,7 +78,7 @@ export function HomeStandingsPanel({
         <StatTable bare>
           <thead>
             <tr>
-              <Th className="w-6" align="left">#</Th>
+              <Th className="w-6 whitespace-nowrap" align="left">#</Th>
               <Th align="left">Player</Th>
               <Th align="right">W-L</Th>
               <Th align="right">RWR%</Th>
@@ -87,7 +92,10 @@ export function HomeStandingsPanel({
               const href = playerHref(p.player_id);
               return (
                 <Tr key={p.player_id} href={href}>
-                  <Td align="left" muted>{i + 1}</Td>
+                  <Td align="left" muted>
+                    {i + 1}
+                    <RankChange change={rankChanges?.get(p.player_id)} />
+                  </Td>
                   <NameTd>
                     <PlayerLink playerId={p.player_id} className="flex items-center w-full h-full">
                       <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />

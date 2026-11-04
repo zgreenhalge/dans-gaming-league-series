@@ -258,13 +258,16 @@ export interface ProvisionResult {
  * MatchZy config, and persist the connect string. Marks `failed` and rethrows on any error.
  *
  * `configUrl` is the authenticated `matchzy_loadmatch_url` target (the `matchzy-config` route);
- * `configAuth` is the shared secret it checks.
+ * `configAuth` is the shared secret it checks. `takeOverLiveServer` skips the refusal of a server
+ * that is live outside any DGLS match (the provision route's confirmed "Start anyway"); it never
+ * overrides another DGLS match holding the server.
  */
 export async function provisionMatchServer(
   supabaseAdmin: SupabaseClient,
   matchId: number,
   configUrl: string,
   configAuth: { headerKey: string; headerValue: string },
+  { takeOverLiveServer = false }: { takeOverLiveServer?: boolean } = {},
 ): Promise<ProvisionResult> {
   const serverId = dathostServerId();
 
@@ -280,8 +283,7 @@ export async function provisionMatchServer(
   // another table. Not interrupting ongoing play outranks starting a new match on time. An unreachable
   // DatHost can't confirm liveness either way, so it's treated as not-live rather than blocking
   // provisioning on a network hiccup.
-  const server = await getServer(serverId).catch(() => null);
-  if (isServerLive(server)) throw new ServerBusyError(null);
+  if (!takeOverLiveServer && (await liveServerOutsideMatch(serverId))) throw new ServerBusyError(null);
 
   try {
     await setServerState(supabaseAdmin, matchId, {
@@ -569,10 +571,28 @@ export async function getServerOccupancy(
   return { active, playersOnline, occupied };
 }
 
+/**
+ * The server when DatHost reports it live (`isServerLive()`) — called once any DGLS match holding
+ * it has been ruled out (`findServerOccupant()`), so a live server is in use outside the match state
+ * machine (a manual launch, a pug). `null` when it isn't live, or when DatHost can't be reached: an
+ * unconfirmed liveness never blocks a match. Shared by `provisionMatchServer()`'s refusal and the
+ * provision route's up-front warning, so both agree on what "live" means.
+ */
+export async function liveServerOutsideMatch(serverId: string): Promise<DathostServer | null> {
+  const server = await getServer(serverId).catch(() => null);
+  return isServerLive(server) ? server : null;
+}
+
 /** Human-readable reason for a `server_occupied` refusal, for the 409 body / admin console prompt. */
 export function occupancyMessage(occupancy: ServerOccupancy): string {
   if (occupancy.active) {
     return `Match ${occupancy.active.label} is currently ${occupancy.active.serverState} on this server.`;
   }
-  return `${occupancy.playersOnline ?? 0} player(s) are currently on the server outside of a DGLS match.`;
+  return playersOutsideMatchMessage(occupancy.playersOnline ?? 0);
+}
+
+/** "N player(s) are on the server outside a DGLS match" — `occupancyMessage()`'s wording, shared with
+ *  the provision route's forceable warning. */
+export function playersOutsideMatchMessage(playersOnline: number): string {
+  return `${playersOnline} player(s) are currently on the server outside of a DGLS match.`;
 }

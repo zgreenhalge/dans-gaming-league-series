@@ -201,20 +201,20 @@ function rankBy<T, R>(items: T[], score: (item: T) => number, limit: number, mak
 /**
  * The `limit` highest-rated duos (the "Best Friends" ranking) — only pairs that have played together,
  * normalised against the full `duos` set so the rating matches the one shown beside any other
- * ranking of the same data. Shared by `H2HSection` and the home page's Top duos panel.
+ * ranking of the same data. Shared by `H2HSection` and the home page's Top duos panel. A caller that
+ * already built `duoBlendedScorer(duos)` passes it as `score` so the league isn't scanned twice.
  */
-export function rankDuos(duos: DuoStats[], limit: number): RankedDuo[] {
-  return rankBy(duos.filter((d) => d.gamesPlayed > 0), duoBlendedScorer(duos), limit, (duo, rating) => ({ duo, rating }));
+export function rankDuos(duos: DuoStats[], limit: number, score: (d: DuoStats) => number = duoBlendedScorer(duos)): RankedDuo[] {
+  return rankBy(duos.filter((d) => d.gamesPlayed > 0), score, limit, (duo, rating) => ({ duo, rating }));
 }
 
 /**
  * The rivalry counterpart of `rankDuos()` — the "Closest Rivals" ranking. Only pairs whose
  * `ratingPoints()` rating is above 0 are ranked: a single meeting or a sweep has no evenness and
  * rates 0, so a league where every pair is in that state returns an empty list (the callers render
- * an empty state).
+ * an empty state). Takes a prebuilt `rivalBlendedScorer(rivals)` as `score`, like `rankDuos()`.
  */
-export function rankRivals(rivals: H2HStats[], limit: number): RankedRival[] {
-  const score = rivalBlendedScorer(rivals);
+export function rankRivals(rivals: H2HStats[], limit: number, score: (r: H2HStats) => number = rivalBlendedScorer(rivals)): RankedRival[] {
   return rankBy(rivals.filter((r) => r.meetings > 0 && ratingPoints(score(r)) > 0), score, limit, (rival, rating) => ({ rival, rating }));
 }
 
@@ -228,10 +228,10 @@ export interface PersonalMatchup {
 /**
  * The partner `playerId` has the highest friendship rating with (`duoBlendedScorer()`, normalised
  * against the full `duos` set), with their record together. `null` when the player has no
- * partnered games. Ties break on more games together, then the lower partner id.
+ * partnered games. Ties break on more games together, then the lower partner id. Takes a prebuilt
+ * `duoBlendedScorer(duos)` as `score`, like `rankDuos()`.
  */
-export function bestFriendOf(duos: DuoStats[], playerId: number): PersonalMatchup | null {
-  const score = duoBlendedScorer(duos);
+export function bestFriendOf(duos: DuoStats[], playerId: number, score: (d: DuoStats) => number = duoBlendedScorer(duos)): PersonalMatchup | null {
   const [best] = duos
     .filter((d) => d.gamesPlayed > 0 && (d.playerA === playerId || d.playerB === playerId))
     .map((d) => ({ otherId: d.playerA === playerId ? d.playerB : d.playerA, wins: d.wins, losses: d.losses, games: d.gamesPlayed, score: score(d) }))

@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/session";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { verifyPlayerClaim } from "@/lib/playerClaim";
+import { parsePlayerName } from "@/lib/util";
 
 function requireUnlinkedSession(session) {
   if (!session?.user?.steamId) return { error: "Not authenticated", status: 401 };
@@ -56,13 +57,14 @@ export async function POST(request) {
     return Response.json({ playerId: player.id, playerName: player.name });
   }
 
-  // Create a new player record
-  const trimmedName = body.name?.trim();
-  if (!trimmedName) return Response.json({ error: "Name is required" }, { status: 400 });
+  // Create a new player record, under the same name rule as a rename.
+  const parsed = parsePlayerName(body.name);
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+  const { name } = parsed;
 
   const { data: player, error } = await supabase
     .from("players")
-    .insert({ name: trimmedName, ...steamFields })
+    .insert({ name, ...steamFields })
     .select("id, name")
     .single();
 

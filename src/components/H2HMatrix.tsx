@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { DuoStats, H2HStats } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer } from '@/lib/h2h-ratings';
 import { firstName } from '@/lib/util';
@@ -65,8 +66,9 @@ export default function H2HMatrix({
     rivalByPair.set(`${r.playerB}:${r.playerA}`, r);
   }
 
-  const duoScore = duoBlendedScorer(duos);
-  const rivalScore = rivalBlendedScorer(rivals);
+  // Memoized: the matrix re-renders on every cell hover, and each scorer scans the whole league.
+  const duoScore = useMemo(() => duoBlendedScorer(duos), [duos]);
+  const rivalScore = useMemo(() => rivalBlendedScorer(rivals), [rivals]);
 
 
   const n = players.length;
