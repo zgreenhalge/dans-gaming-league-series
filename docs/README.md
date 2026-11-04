@@ -19,6 +19,7 @@ follow the link that matches what you're doing. New to the codebase? Read
 | [`cs2-stack-reference.md`](./cs2-stack-reference.md) | DatHost/MatchZy/CounterStrikeSharp best practices, gotchas, and external references (tool-level, not DGLS architecture) |
 | [`replay.md`](./replay.md) | The 2D match replay + core-events pipeline (`replay.json`, GitHub Actions jobs, `background_jobs`) |
 | [`demo-parsing-reference.md`](./demo-parsing-reference.md) | External/community knowledge about the CS2 demo format and the `demoparser2` library (tool-level, shared by demo-ingestion and replay) |
+| [`vercel.md`](./vercel.md) | Vercel deployments and the Hobby plan's Function Storage budget: what fills it, the preview lifecycle (PR-only previews, deleted on close), bundle-size rules, and the cleanup runbook |
 | [`github-actions.md`](./github-actions.md) | When to run work as a GitHub Action vs a Vercel function, and how to build a background-job Action (the dispatch → workflow → `scripts/*` pattern) |
 | [`e2e.md`](./e2e.md) | Playwright end-to-end coverage: local Supabase stack, dev-mode mock auth, self-seeding fixtures, CI placement, and the Claude Code `SessionStart` hook that bootstraps the local stack for agent sessions |
 
