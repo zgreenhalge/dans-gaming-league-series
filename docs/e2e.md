@@ -69,6 +69,19 @@ upstream regression, [supabase/cli#4211](https://github.com/supabase/cli/issues/
 they're fully determined by the pinned secret there's nothing to look up anyway — they'll be
 identical every time you `supabase start` this repo. Run `supabase stop` when done.
 
+The dev server also gets `NEXTAUTH_SECRET` and `NEXTAUTH_URL` from `webServer.env`: the dev-mock
+sign-in needs a fixed secret (a random one stops the session cookie decrypting after a recompile) and
+the test origin as its URL. The defaults are the values `ci.yml`'s `e2e` job sets; a value in the shell
+overrides them. On a machine with a pre-installed Chromium that doesn't match the pinned
+`@playwright/test` (so `npx playwright install` isn't an option), set `PLAYWRIGHT_CHROMIUM_PATH` to that
+binary and the config launches it instead.
+
+`teardownSeason()` and `teardownMatch()` (`e2e/support/db.ts`) throw when a cleanup write fails, so a
+test that leaves rows behind fails loudly rather than leaving a season that changes what the next run
+sees (the home page's standings pick the latest `ACTIVE` season). A confirmed schedule makes its season
+`ACTIVE`, and the roster can only change while a season is `UPCOMING`, so `teardownSeason()` moves the
+season back to `UPCOMING` before removing its roster.
+
 After a fresh `supabase start`, delete `.next/` before running the suite again. The persistent read
 cache (`persistentQuery()`) keys its entries on `data_version`, which a new local database starts
 from the beginning again, so entries left in `.next/` from an earlier database can match the new
