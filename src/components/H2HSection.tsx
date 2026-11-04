@@ -63,10 +63,10 @@ export default function H2HSection({
   // so the top-5 ranking and matrix gradient stay derived from the same formula.
   const duoScore = useMemo(() => duoBlendedScorer(duos), [duos]);
   const duoBreakdown = useMemo(() => duoBreakdownScorer(duos), [duos]);
-  const topDuos = useMemo(() => rankDuos(duos, 5), [duos]);
+  const topDuos = useMemo(() => rankDuos(duos, 5, duoScore), [duos, duoScore]);
   const rivalScore = useMemo(() => rivalBlendedScorer(rivals), [rivals]);
   const rivalBreakdown = useMemo(() => rivalBreakdownScorer(rivals), [rivals]);
-  const topRivals = useMemo(() => rankRivals(rivals, 5), [rivals]);
+  const topRivals = useMemo(() => rankRivals(rivals, 5, rivalScore), [rivals, rivalScore]);
 
   const avgFriendshipRating = useMemo(() => {
     const eligible = duos.filter((d) => d.gamesPlayed > 0);
