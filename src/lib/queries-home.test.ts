@@ -1,6 +1,7 @@
 /**
  * Tests for the home page's data layer: `queries/home.ts` (`getHomeGames`), `queries/seasons.ts` (`resolveHomeSeasons`),
- * `queries/myStats.ts` (`buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` (`queries/leaderboard.ts`),
+ * `queries/myStats.ts` (`buildMyStats` / `getMyStats`), `getSeasonForm` / `buildSeasonForm` and `getSeasonRankChanges` /
+ * `buildRankChanges` (`queries/leaderboard.ts`),
  * `rankDuos` / `rankRivals` / `bestFriendOf` / `worstNightmareOf` (`h2h-ratings.ts`),
  * `findCurrentGauntletRound` (`queries/gauntlet.ts`) and the history-row helpers in
  * `queries/player.ts`. The DB-backed functions run against the shared fixture league; the pure ones
@@ -24,6 +25,7 @@ import {
   buildGauntletHomeGames,
   buildMyStats,
   buildPlayerSummary,
+  buildRankChanges,
   buildRegularHomeGames,
   buildSeasonForm,
   findCurrentGauntletRound,
@@ -31,6 +33,7 @@ import {
   getHomeGames,
   getMyStats,
   getSeasonForm,
+  getSeasonRankChanges,
   getSeasons,
   isPlayedHistoryRow,
   lastPlayed,
@@ -209,6 +212,51 @@ test('getSeasonForm: a season\'s played matches only — unscored and 0-0 placeh
   assert.deepEqual(form.get(1), [true]);
   assert.deepEqual(form.get(3), [false]);
   assert.equal(form.get(5), undefined);
+});
+
+// ─── buildRankChanges / getSeasonRankChanges ─────────────────────────────────
+
+/** One player's line in one match: a win or loss, with 13-of-20 or 7-of-20 rounds and `damage`. */
+const line = (player_id: number, weekNumber: number, is_win: boolean, damage = 1000) => ({
+  player_id,
+  weekNumber,
+  is_win,
+  rounds_won: is_win ? 13 : 7,
+  rounds_played: 20,
+  damage,
+});
+
+test('buildRankChanges: places moved since the end of the previous week, positive is up', () => {
+  const stats = [
+    // Week 1: 10 wins, 11 loses — 10 is first, 11 second.
+    line(10, 1, true), line(11, 1, false),
+    // Week 2: 11 wins twice, 10 loses — 11 passes 10 on wins.
+    line(11, 2, true), line(11, 2, true), line(10, 2, false),
+  ];
+  const changes = buildRankChanges(stats);
+  assert.equal(changes.get(11), 1);
+  assert.equal(changes.get(10), -1);
+});
+
+test('buildRankChanges: a player who did not move is omitted, and a first appearance this week ranks from last', () => {
+  const stats = [
+    line(10, 1, true), line(11, 1, false),
+    line(10, 2, true), line(11, 2, false), line(12, 2, true, 2000),
+  ];
+  const changes = buildRankChanges(stats);
+  assert.equal(changes.has(10), false); // first both times
+  assert.equal(changes.get(12), 1); // last before this week, second now
+  assert.equal(changes.get(11), -1);
+});
+
+test('buildRankChanges: empty with only one week played', () => {
+  assert.equal(buildRankChanges([line(10, 1, true), line(11, 1, false)]).size, 0);
+  assert.equal(buildRankChanges([]).size, 0);
+});
+
+test('getSeasonRankChanges: a season with a single played week has no movement', async () => {
+  assert.deepEqual(await getSeasonRankChanges(1), {});
+  assert.deepEqual(await getSeasonRankChanges(999), {});
 });
 
 test('getSeasonForm: a season with no weeks or no played matches is empty', async () => {

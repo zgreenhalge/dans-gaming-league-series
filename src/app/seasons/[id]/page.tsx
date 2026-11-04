@@ -7,6 +7,7 @@ import { buildCrumbs } from '@/lib/crumbs';
 import {
   getSeason,
   getSeasonLeaderboard,
+  getSeasonRankChanges,
   getSeasonMatchSummaries,
   getSeasonRoster,
   getKnownMapNames,
@@ -238,7 +239,7 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, scheduleGenerated, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, scheduleGenerated, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView, rankChanges] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
@@ -252,6 +253,7 @@ export default async function SeasonPage({
     matchSummariesPromise,
     getSeasonSurveyView(seasonId, currentPlayerId),
     getSeasonSuperlativesView(seasonId, currentPlayerId),
+    season.status === 'ACTIVE' ? getSeasonRankChanges(seasonId) : undefined,
   ]);
 
   // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
@@ -350,6 +352,7 @@ export default async function SeasonPage({
             {showGauntletTab && linkedGauntlet ? (
               <CombinedSeasonTabView
                 leaderboard={leaderboard}
+                rankChanges={rankChanges}
                 seasonStartDate={season.start_date}
                 seasonStatus={season.status}
                 mapPool={season.map_pool}
@@ -371,6 +374,7 @@ export default async function SeasonPage({
                   kind="regular"
                   seasonId={season.id}
                   leaderboard={leaderboard}
+                  rankChanges={rankChanges}
                   schedule={initialLightData.data.schedule}
                   seasonStartDate={season.start_date}
                   seasonStatus={season.status}

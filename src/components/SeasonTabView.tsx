@@ -91,6 +91,8 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   tab?: Tab;
   onTabChange?: (t: Tab) => void;
   ehogRatings?: Record<number, number>;
+  /** Places each player moved since last week, for a live regular season (`getSeasonRankChanges()`). */
+  rankChanges?: Record<number, number>;
   /** This season/kind's own id — used to lazily fetch `SeasonStatsView` (sabremetrics, per-match
    *  rounds/kills/weapon-class/economy breakdowns) itself the first time the Stats or Advanced
    *  Stats sub-tab is opened, via `GET /api/seasons/[id]/stats`. Only meaningful in uncontrolled
@@ -119,7 +121,7 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, seasonId, hasAdvancedStats } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, rankChanges, seasonId, hasAdvancedStats } = props;
   const hasSab = !!hasAdvancedStats;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
@@ -516,6 +518,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             gauntletSeeding={gauntletSeeding}
             canonicalRanking={gauntletRanking}
             ehogRatings={ehogRatings}
+            rankChanges={rankChanges}
           />
         </>
       )}

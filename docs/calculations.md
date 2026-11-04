@@ -821,6 +821,15 @@ first, up to five (`FORM_LENGTH`), as `W` / `L`. Only played regular-season matc
 player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 `src/lib/queries/leaderboard.ts`.
 
+**Position change** (beside the rank, on a live season's standings here and on the season hub) —
+places moved since the end of the previous week: `▲n` in green, `▼n` in red, nothing for no move.
+"This week" is the latest week with a played match. Both snapshots — every played match, and every
+played match before this week — rank the same players (everyone with a played match) by
+`canonicalSort()` over `deriveRates()` totals, so a difference is movement, not a change of method; a
+player whose first match is this week ranks last in the earlier snapshot. Nothing shows until a
+second week has a played match. `buildRankChanges()` / `getSeasonRankChanges()` in
+`src/lib/queries/leaderboard.ts`, rendered by `RankChange`.
+
 **My Stats** — career figures for the signed-in player. **EHOG** is the current rating
 (`getCurrentEhogRating()`, [`ehog.md`](./ehog.md)), colored by its tier like the leaderboard's EHOG
 column. **W-L**, **KDA** and **ADR** come from the player's row of the combined regular and gauntlet
