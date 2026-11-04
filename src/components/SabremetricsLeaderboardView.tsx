@@ -45,7 +45,7 @@ import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
 import { sortRows } from '@/lib/sort-rows';
-import { tabCls, factionClass, fmtPct as pct } from '@/lib/util';
+import { tabCls, factionClass, fmtPct as pct, formatDiff, formatRatio, formatStat, roundTo } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 import { WeaponIcon } from './icons/WeaponIcon';
@@ -80,19 +80,10 @@ const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [] };
 
 // --- Formatting ---
 
-function fmtNum(v: number, d: number = 0): string {
-  if (!Number.isFinite(v)) return '—';
-  return v.toFixed(d);
-}
-
-function fmtDiff(v: number, d: number = 0): string {
-  if (!Number.isFinite(v)) return '—';
-  const s = v.toFixed(d);
-  return v > 0 ? `+${s}` : s;
-}
-
+/** Green above league average, red below, deepening with the gap — judged on the value as shown
+ *  (2 decimals), so a figure that reads `1.00` takes no tint. */
 function plusStyle(val: number): React.CSSProperties {
-  const delta = Math.max(-1, Math.min(1, val - 1));
+  const delta = Math.max(-1, Math.min(1, roundTo(val, 2) - 1));
   const pct = Math.round(Math.abs(delta) * 100);
   if (pct === 0) return {};
   const accent = delta > 0 ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)';
@@ -292,7 +283,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
               <Td>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</Td>
               <Td>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</Td>
               <Td>{pct(a.spray_shots_hit, a.spray_shots_fired)}</Td>
-              <Td>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</Td>
+              <Td>{formatRatio(a.rounds_dropped_on_reload_total, a.reloads_total, 2)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -538,7 +529,7 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
               <Td>{r.accuracy ? r.accuracy.shots_fired : '—'}</Td>
               <Td>{r.accuracy ? pct(r.accuracy.shots_hit, r.accuracy.shots_fired) : '—'}</Td>
               <Td>{r.accuracy ? pct(r.accuracy.headshot_hits, r.accuracy.shots_hit) : '—'}</Td>
-              <Td>{r.accuracy ? fmtNum(r.accuracy.rounds_played > 0 ? r.accuracy.damage_dealt / r.accuracy.rounds_played : 0, 1) : '—'}</Td>
+              <Td>{r.accuracy ? formatRatio(r.accuracy.damage_dealt, r.accuracy.rounds_played, 1) : '—'}</Td>
               <Td>{r.accuracy ? r.accuracy.rounds_played : '—'}</Td>
             </Tr>
           ))}
@@ -700,7 +691,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
               <Td>{r.shots_fired}</Td>
               <Td>{pct(r.shots_hit, r.shots_fired)}</Td>
               <Td>{pct(r.headshot_hits, r.shots_hit)}</Td>
-              <Td>{fmtNum(r.damage_dealt / (r.rounds_played || 1), 1)}</Td>
+              <Td>{formatRatio(r.damage_dealt, r.rounds_played, 1)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -895,19 +886,19 @@ const FLASH_COLUMNS: UtilityColumn[] = [
   { key: 'fa', label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: (a) => a.flash_assists },
   { key: 'fltk', label: 'Flashes → Kill', title: "Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition", value: (a) => a.flashes_leading_to_kill },
   { key: 'ef', label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: (a) => a.enemies_flashed },
-  { key: 'ef_flash', label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: (a) => a.enemies_flashed / (a.flashes_thrown || 1), format: (v) => fmtNum(v, 2) },
-  { key: 'blind_flash', label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: (a) => a.blind_duration_max_sum / (a.effective_flashes || 1), format: (v) => fmtNum(v, 2) },
-  { key: 'bdd', label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: (a) => a.blind_duration_dealt, format: (v) => fmtNum(v, 1) },
-  { key: 'tf', label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: (a) => a.teamflash_duration, format: (v) => fmtNum(v, 1) },
+  { key: 'ef_flash', label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: (a) => a.enemies_flashed / (a.flashes_thrown || 1), cell: (a) => formatRatio(a.enemies_flashed, a.flashes_thrown, 2) },
+  { key: 'blind_flash', label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: (a) => a.blind_duration_max_sum / (a.effective_flashes || 1), cell: (a) => formatRatio(a.blind_duration_max_sum, a.effective_flashes, 2) },
+  { key: 'bdd', label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: (a) => a.blind_duration_dealt, format: (v) => formatStat(v, 1) },
+  { key: 'tf', label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: (a) => a.teamflash_duration, format: (v) => formatStat(v, 1) },
 ];
 
 const GRENADE_COLUMNS: UtilityColumn[] = [
   { key: 'ud', label: 'Utility Damage', title: "Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both", value: (a) => a.utility_damage },
   { key: 'he_thrown', label: 'HE Thrown', title: 'HE grenades thrown', value: (a) => a.he_thrown },
   { key: 'he_dmg', label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: (a) => a.he_damage },
-  { key: 'he_dmg_throw', label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: (a) => a.he_damage / (a.he_thrown || 1), format: (v) => fmtNum(v, 1) },
+  { key: 'he_dmg_throw', label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: (a) => a.he_damage / (a.he_thrown || 1), cell: (a) => formatRatio(a.he_damage, a.he_thrown, 1) },
   { key: 'smoke_block', label: 'CT Smokes Blocking %', title: "CT-side smokes that had an enemy within the cloud's radius at some point during its life, out of all CT smokes thrown", value: (a) => a.smokes_blocking_push / (a.ct_smokes_thrown || 1), cell: (a) => pct(a.smokes_blocking_push, a.ct_smokes_thrown) },
-  { key: 'unused_util', label: 'Unused Util/Death', title: "Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better", value: (a) => a.unused_util_value_on_death_total / (a.deaths || 1), format: (v) => fmtNum(v, 0) },
+  { key: 'unused_util', label: 'Unused Util/Death', title: "Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better", value: (a) => a.unused_util_value_on_death_total / (a.deaths || 1), cell: (a) => formatRatio(a.unused_util_value_on_death_total, a.deaths, 0) },
   { key: 'pl', label: 'Plants', title: 'Bomb plants', value: (a) => a.plants },
   { key: 'df', label: 'Defuses', title: 'Bomb defuses', value: (a) => a.defuses },
 ];
@@ -1059,11 +1050,11 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
               <Td>{r.kills}</Td>
               <Td>{r.assists}</Td>
               <Td>{r.deaths}</Td>
-              <Td>{fmtDiff(r.killDiff)}</Td>
+              <Td>{formatDiff(r.killDiff)}</Td>
               <Td>{r.damage.toLocaleString()}</Td>
-              <Td>{fmtNum(r.adr, 2)}</Td>
+              <Td>{formatStat(r.adr, 2)}</Td>
               <Td>{r.roundsWon}–{r.roundsLost}</Td>
-              <Td>{fmtNum(r.roundWinRate, 1)}</Td>
+              <Td>{formatStat(r.roundWinRate, 1)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -1139,22 +1130,22 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
           {sorted.map(({ agg, plus }) => (
             <Tr key={agg.player_id} clickable>
               <PlayerCell id={agg.player_id} name={agg.player_name} />
-              <Td style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</Td>
-              <Td style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</Td>
-              <Td style={plusStyle(plus.dpr)}>{fmtNum(plus.dpr, 2)}</Td>
-              <Td style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</Td>
-              <Td style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</Td>
-              <Td style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</Td>
-              <Td style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</Td>
-              <Td style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</Td>
-              <Td style={plusStyle(plus.tradedDeath)}>{fmtNum(plus.tradedDeath, 2)}</Td>
-              <Td style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</Td>
-              <Td style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</Td>
-              <Td style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</Td>
-              <Td style={plusStyle(plus.choke)}>{fmtNum(plus.choke, 2)}</Td>
-              <Td style={plusStyle(plus.accuracy)}>{fmtNum(plus.accuracy, 2)}</Td>
-              <Td style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</Td>
-              <Td style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</Td>
+              <Td style={plusStyle(plus.kpr)}>{formatStat(plus.kpr, 2)}</Td>
+              <Td style={plusStyle(plus.apr)}>{formatStat(plus.apr, 2)}</Td>
+              <Td style={plusStyle(plus.dpr)}>{formatStat(plus.dpr, 2)}</Td>
+              <Td style={plusStyle(plus.adr)}>{formatStat(plus.adr, 2)}</Td>
+              <Td style={plusStyle(plus.kdr)}>{formatStat(plus.kdr, 2)}</Td>
+              <Td style={plusStyle(plus.entry)}>{formatStat(plus.entry, 2)}</Td>
+              <Td style={plusStyle(plus.kast)}>{formatStat(plus.kast, 2)}</Td>
+              <Td style={plusStyle(plus.trade)}>{formatStat(plus.trade, 2)}</Td>
+              <Td style={plusStyle(plus.tradedDeath)}>{formatStat(plus.tradedDeath, 2)}</Td>
+              <Td style={plusStyle(plus.objective)}>{formatStat(plus.objective, 2)}</Td>
+              <Td style={plusStyle(plus.utility)}>{formatStat(plus.utility, 2)}</Td>
+              <Td style={plusStyle(plus.clutch)}>{formatStat(plus.clutch, 2)}</Td>
+              <Td style={plusStyle(plus.choke)}>{formatStat(plus.choke, 2)}</Td>
+              <Td style={plusStyle(plus.accuracy)}>{formatStat(plus.accuracy, 2)}</Td>
+              <Td style={plusStyle(plus.aim)}>{formatStat(plus.aim, 2)}</Td>
+              <Td style={plusStyle(plus.spray)}>{formatStat(plus.spray, 2)}</Td>
             </Tr>
           ))}
         </tbody>
@@ -1219,7 +1210,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Head Accuracy', title: 'Hits landing on the head / total hits, excluding AWP shots (matches Leetify\'s Headshot Accuracy)', value: pct(agg.headshot_hits_no_awp, agg.shots_hit_no_awp) },
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
     { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
-    { label: 'Rounds Dropped/Reload', title: 'Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones', value: fmtNum(agg.rounds_dropped_on_reload_total / (agg.reloads_total || 1), 2) },
+    { label: 'Rounds Dropped/Reload', title: 'Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones', value: formatRatio(agg.rounds_dropped_on_reload_total, agg.reloads_total, 2) },
   ];
 
   const trades: StatTile[] = [
@@ -1233,20 +1224,20 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 
   const utility: StatTile[] = [
     { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2\'s own m_iUtilityDamage engine accumulator, which combines both', value: agg.utility_damage },
-    { label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: fmtNum(agg.teamflash_duration, 1) },
+    { label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: formatStat(agg.teamflash_duration, 1) },
     { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
     { label: 'Flashes → Kill', title: 'Enemies killed by anyone (including you) while still blinded by your flash — Leetify\'s flash-effectiveness definition', value: agg.flashes_leading_to_kill },
     { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
-    { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: fmtNum(agg.enemies_flashed / (agg.flashes_thrown || 1), 2) },
-    { label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: fmtNum(agg.blind_duration_max_sum / (agg.effective_flashes || 1), 2) },
-    { label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: fmtNum(agg.blind_duration_dealt, 1) },
+    { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: formatRatio(agg.enemies_flashed, agg.flashes_thrown, 2) },
+    { label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: formatRatio(agg.blind_duration_max_sum, agg.effective_flashes, 2) },
+    { label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: formatStat(agg.blind_duration_dealt, 1) },
     { label: 'Plants', title: 'Bomb plants', value: agg.plants },
     { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
     { label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: agg.he_damage },
-    { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: fmtNum(agg.he_damage / (agg.he_thrown || 1), 1) },
+    { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: formatRatio(agg.he_damage, agg.he_thrown, 1) },
     { label: 'CT Smokes Blocking %', title: 'CT-side smokes that had an enemy within the cloud\'s radius at some point during its life, out of all CT smokes thrown', value: pct(agg.smokes_blocking_push, agg.ct_smokes_thrown) },
-    { label: 'Unused Util/Death', title: 'Buy-menu value of grenades still held at death, averaged across deaths (Leetify\'s Unused Utility on Death) — lower is better', value: fmtNum(agg.unused_util_value_on_death_total / (agg.deaths || 1), 0) },
+    { label: 'Unused Util/Death', title: 'Buy-menu value of grenades still held at death, averaged across deaths (Leetify\'s Unused Utility on Death) — lower is better', value: formatRatio(agg.unused_util_value_on_death_total, agg.deaths, 0) },
   ];
 
   // Plus stats need the league as a baseline; comparing a player to only
@@ -1254,22 +1245,22 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const hasLeagueBaseline = leagueAggregated.length > 1;
   const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
   const plusTiles: StatTile[] = plus ? [
-    { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
-    { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
-    { label: 'Deaths/Round+', title: 'League avg deaths per round vs this player\'s (1.00 = avg, higher = fewer deaths)', value: fmtNum(plus.dpr, 2), valueStyle: plusStyle(plus.dpr) },
-    { label: 'ADR+', title: 'Damage per round vs league avg (1.00 = avg)', value: fmtNum(plus.adr, 2), valueStyle: plusStyle(plus.adr) },
-    { label: 'K/D+', title: 'K/D ratio vs league avg (1.00 = avg)', value: fmtNum(plus.kdr, 2), valueStyle: plusStyle(plus.kdr) },
-    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)', value: fmtNum(plus.entry, 2), valueStyle: plusStyle(plus.entry) },
-    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.kast, 2), valueStyle: plusStyle(plus.kast) },
-    { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
-    { label: 'Traded+', title: 'Traded Death % (traded death successes / attempts) vs league avg (1.00 = avg)', value: fmtNum(plus.tradedDeath, 2), valueStyle: plusStyle(plus.tradedDeath) },
-    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
-    { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
-    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
-    { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round, league avg vs this player (1.00 = avg, higher = fewer/smaller blown advantages)', value: fmtNum(plus.choke, 2), valueStyle: plusStyle(plus.choke) },
-    { label: 'Accuracy+', title: 'Weighted blend of raw Accuracy (35%), Head Accuracy (40%), and Counter-Strafe (25%) vs league avg (1.00 = avg)', value: fmtNum(plus.accuracy, 2), valueStyle: plusStyle(plus.accuracy) },
-    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (65%) and Spray+ (35%) vs league avg (1.00 = avg)', value: fmtNum(plus.aim, 2), valueStyle: plusStyle(plus.aim) },
-    { label: 'Spray+', title: 'Spray Accuracy vs league avg (1.00 = avg)', value: fmtNum(plus.spray, 2), valueStyle: plusStyle(plus.spray) },
+    { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: formatStat(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
+    { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: formatStat(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
+    { label: 'Deaths/Round+', title: 'League avg deaths per round vs this player\'s (1.00 = avg, higher = fewer deaths)', value: formatStat(plus.dpr, 2), valueStyle: plusStyle(plus.dpr) },
+    { label: 'ADR+', title: 'Damage per round vs league avg (1.00 = avg)', value: formatStat(plus.adr, 2), valueStyle: plusStyle(plus.adr) },
+    { label: 'K/D+', title: 'K/D ratio vs league avg (1.00 = avg)', value: formatStat(plus.kdr, 2), valueStyle: plusStyle(plus.kdr) },
+    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)', value: formatStat(plus.entry, 2), valueStyle: plusStyle(plus.entry) },
+    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: formatStat(plus.kast, 2), valueStyle: plusStyle(plus.kast) },
+    { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)', value: formatStat(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
+    { label: 'Traded+', title: 'Traded Death % (traded death successes / attempts) vs league avg (1.00 = avg)', value: formatStat(plus.tradedDeath, 2), valueStyle: plusStyle(plus.tradedDeath) },
+    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: formatStat(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
+    { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)', value: formatStat(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
+    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: formatStat(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
+    { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round, league avg vs this player (1.00 = avg, higher = fewer/smaller blown advantages)', value: formatStat(plus.choke, 2), valueStyle: plusStyle(plus.choke) },
+    { label: 'Accuracy+', title: 'Weighted blend of raw Accuracy (35%), Head Accuracy (40%), and Counter-Strafe (25%) vs league avg (1.00 = avg)', value: formatStat(plus.accuracy, 2), valueStyle: plusStyle(plus.accuracy) },
+    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (65%) and Spray+ (35%) vs league avg (1.00 = avg)', value: formatStat(plus.aim, 2), valueStyle: plusStyle(plus.aim) },
+    { label: 'Spray+', title: 'Spray Accuracy vs league avg (1.00 = avg)', value: formatStat(plus.spray, 2), valueStyle: plusStyle(plus.spray) },
   ] : [];
 
   const weaponStats = aggregateWeaponKillStats(kills, agg.player_id);
@@ -1314,7 +1305,7 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedFilter: WeaponF
       { label: 'Shots Fired', title: `Shots fired with ${titleSuffix}`, value: acc.shots_fired },
       { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, with ${titleSuffix}`, value: pct(acc.shots_hit, acc.shots_fired) },
       { label: 'Head Accuracy', title: `Hits landing on the head / total hits, with ${titleSuffix}`, value: pct(acc.headshot_hits, acc.shots_hit) },
-      { label: 'Damage/Round', title: `Damage dealt with ${titleSuffix} / rounds played with it`, value: fmtNum(acc.rounds_played > 0 ? acc.damage_dealt / acc.rounds_played : 0, 1) },
+      { label: 'Damage/Round', title: `Damage dealt with ${titleSuffix} / rounds played with it`, value: formatRatio(acc.damage_dealt, acc.rounds_played, 1) },
       { label: 'Rounds', title: `Rounds this player used ${titleSuffix} in at least once`, value: acc.rounds_played },
     );
   }
@@ -1332,7 +1323,7 @@ function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string
     { label: 'Shots Fired', title: `Shots fired (guns only) ${phrase}`, value: stat.shots_fired },
     { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, ${phrase}`, value: pct(stat.shots_hit, stat.shots_fired) },
     { label: 'Headshot %', title: `Headshot hits / hits, ${phrase}`, value: pct(stat.headshot_hits, stat.shots_hit) },
-    { label: 'Damage/Round', title: `Damage dealt per round ${phrase}`, value: fmtNum(stat.damage_dealt / (stat.rounds_played || 1), 1) },
+    { label: 'Damage/Round', title: `Damage dealt per round ${phrase}`, value: formatRatio(stat.damage_dealt, stat.rounds_played, 1) },
   ];
 }
 

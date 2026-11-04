@@ -7,7 +7,7 @@ import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { adrBaselineFor, type PlayerSeasonAdrTotal } from '@/lib/h2h';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import DevGate from './DevGate';
@@ -408,14 +408,14 @@ export default function PlayerView({
             tiles={[
               { label: 'Games', value: agg.matches },
               { label: 'W-L', value: `${agg.wins}-${agg.losses}` },
-              { label: 'Win rate', value: `${agg.wr.toFixed(1)}%` },
-              { label: 'RWR%', value: `${agg.rwr.toFixed(1)}%` },
+              { label: 'Win rate', value: `${formatStat(agg.wr, 1)}%` },
+              { label: 'RWR%', value: `${formatStat(agg.rwr, 1)}%` },
               { label: 'Kills', value: agg.kills },
               { label: 'Assists', value: agg.assists },
               { label: 'Deaths', value: agg.deaths },
-              { label: 'K/D', value: agg.kd.toFixed(2) },
-              { label: 'ADR', value: agg.adr.toFixed(2) },
-              ...(peakEhog !== null ? [{ label: 'Peak EHOG', value: peakEhog.toFixed(2) }] : []),
+              { label: 'K/D', value: formatStat(agg.kd, 2) },
+              { label: 'ADR', value: formatStat(agg.adr, 2) },
+              ...(peakEhog !== null ? [{ label: 'Peak EHOG', value: formatStat(peakEhog, 2) }] : []),
             ]}
           />
 
@@ -582,13 +582,13 @@ export default function PlayerView({
                       <MapCell map={m.map} />
                       <Td>{m.wins}-{m.losses}</Td>
                       <Td>
-                        {m.wr.toFixed(1)}%
+                        {formatStat(m.wr, 1)}%
                         <span className="inline-block w-[60px] h-[4px] bg-[var(--color-bg-secondary)] ml-2 align-middle">
                           <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
                         </span>
                       </Td>
-                      <Td>{m.rwr.toFixed(1)}%</Td>
-                      <Td bold>{m.adr.toFixed(2)}</Td>
+                      <Td>{formatStat(m.rwr, 1)}%</Td>
+                      <Td bold>{formatStat(m.adr, 2)}</Td>
                     </Tr>
                   ))}
               </tbody>
@@ -621,9 +621,9 @@ export default function PlayerView({
                 <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">median = midline</span>
               </div>
               <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
-                <PctRow label="ADR" pct={percentiles.adr} value={agg.adr.toFixed(1)} />
-                <PctRow label="K/D" pct={percentiles.kd} value={agg.kd.toFixed(2)} />
-                <PctRow label="Win rate" pct={percentiles.wr} value={`${agg.wr.toFixed(0)}%`} />
+                <PctRow label="ADR" pct={percentiles.adr} value={formatStat(agg.adr, 1)} />
+                <PctRow label="K/D" pct={percentiles.kd} value={formatStat(agg.kd, 2)} />
+                <PctRow label="Win rate" pct={percentiles.wr} value={`${formatStat(agg.wr, 0)}%`} />
               </div>
           </DevGate>
         </>
@@ -761,9 +761,9 @@ export default function PlayerView({
                             <CompactTd bold>{t.stats.kills}</CompactTd>
                             <CompactTd bold>{t.stats.assists}</CompactTd>
                             <CompactTd bold>{t.stats.deaths}</CompactTd>
-                            <CompactTd bold>{t.stats.win_rate_percentage.toFixed(1)}%</CompactTd>
+                            <CompactTd bold>{formatStat(t.stats.win_rate_percentage, 1)}%</CompactTd>
                             <CompactTd bold>{t.stats.rounds_won}-{t.stats.rounds_lost}</CompactTd>
-                            <CompactTd bold>{t.stats.overall_adr.toFixed(2)}</CompactTd>
+                            <CompactTd bold>{formatStat(t.stats.overall_adr, 2)}</CompactTd>
                           </CompactTr>
                         </tbody>
                       </CompactTable>
