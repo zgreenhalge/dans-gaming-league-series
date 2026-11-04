@@ -1,7 +1,8 @@
 /**
  * Route-handler harness for POST /api/matches/[id]/server/provision (#379) — exercises
  * requireMatchAccess()'s admin-or-in-match gate, the hosting-not-configured and server-busy
- * pre-checks, a scrim match's side choice becoming its starting side, and that the deferred
+ * pre-checks, a league match's forceable `server_occupied` check on a live server, a scrim match's side choice
+ * becoming its starting side, and that the deferred
  * provisionMatchServer() call actually fires (and its failure is
  * handled, not left unhandled) via __setTestAfterMode()/__flushTestAfter().
  *
@@ -56,9 +57,32 @@ function installFixture(): FakeDb {
 
 const url = (matchId: number | string) => `http://localhost/api/matches/${matchId}/server/provision`;
 
-function call(matchId: number | string, sessionPlayerId: number | null) {
+function call(matchId: number | string, sessionPlayerId: number | null, body?: unknown) {
   __setTestSession(sessionPlayerId == null ? null : sessionFor(sessionPlayerId));
-  return POST(jsonRequest(url(matchId), 'POST'), { params: Promise.resolve({ id: String(matchId) }) });
+  return POST(jsonRequest(url(matchId), 'POST', body), { params: Promise.resolve({ id: String(matchId) }) });
+}
+
+/** Answers DatHost's `GET /game-servers/<id>` with a live server holding `playersOnline` players
+ *  outside any DGLS match; every other DatHost call fails fast, as with no network. */
+async function withLiveServer<T>(playersOnline: number, fn: () => Promise<T>): Promise<T> {
+  const realFetch = globalThis.fetch;
+  process.env.DATHOST_SERVER_ID = 'srv-1';
+  process.env.DATHOST_EMAIL = 'test@example.com';
+  process.env.DATHOST_PASSWORD = 'test';
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith('/game-servers/srv-1') && (init?.method ?? 'GET') === 'GET') {
+      return new Response(JSON.stringify({ id: 'srv-1', on: true, booting: false, players_online: playersOnline }), { status: 200 });
+    }
+    throw new Error('offline');
+  }) as typeof fetch;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.DATHOST_SERVER_ID;
+    delete process.env.DATHOST_EMAIL;
+    delete process.env.DATHOST_PASSWORD;
+  }
 }
 
 async function main() {
@@ -161,6 +185,42 @@ async function main() {
     __setTestAfterMode(true);
     assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
     await __flushTestAfter();
+    delete process.env.MATCHZY_CONFIG_SECRET;
+    __setTestAfterMode(false);
+  });
+
+  await test('POST — a league match on a server live outside a DGLS match gets a forceable 409', async () => {
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    db.match_server_state = [];
+    await withLiveServer(2, async () => {
+      const res = await call(MATCH_ID, IN_MATCH_ID);
+      assert.equal(res.status, 409);
+      const body = (await res.json()) as { code: string; forceable: boolean; error: string };
+      assert.equal(body.code, 'server_occupied');
+      assert.equal(body.forceable, true);
+      assert.equal(body.error, '2 player(s) on the server outside a DGLS match. Starting kicks them.');
+    });
+    await withLiveServer(0, async () => {
+      const body = (await (await call(MATCH_ID, IN_MATCH_ID)).json()) as { error: string };
+      assert.equal(body.error, 'The server is running outside a DGLS match. Starting restarts it.');
+    });
+    delete process.env.MATCHZY_CONFIG_SECRET;
+  });
+
+  await test('POST — `force` starts the league match anyway: provisioning gets past the live-server guard', async () => {
+    __setTestAfterMode(true);
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    db.match_server_state = [];
+    await withLiveServer(2, async () => {
+      assert.equal((await call(MATCH_ID, IN_MATCH_ID, { force: true })).status, 202);
+      await __flushTestAfter();
+    });
+    // Past the guard, provisioning claimed the server and then failed on the (offline) boot — a
+    // refusal of the live server would have been skipped without claiming or recording anything.
+    assert.ok(db.match_server_state.some((r) => r.match_id === MATCH_ID));
+    assert.ok(db.ops_errors.some((e) => e.entity_id === MATCH_ID && e.operation === 'server_provision'));
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);
   });

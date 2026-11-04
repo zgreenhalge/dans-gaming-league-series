@@ -1,6 +1,10 @@
 // Provision the DatHost match server for a match. Session-gated (admin or in-match). Fired
 // when the 5-stage veto completes. Returns immediately with `provisioning`; the boot + loadmatch
 // (~15–20s) runs in `after()` and the client polls `…/server/status` for the connect string.
+//
+// Body (optional): `{ force: true }` starts a league match on a server that is live outside any DGLS
+// match (a pug, someone warming up) — the confirmation the match panel sends after a forceable
+// `server_occupied` 409. Without it, `provisionMatchServer()` refuses a live server.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
@@ -14,7 +18,7 @@ import {
   occupancyMessage,
 } from '@/lib/dathost-lifecycle';
 import { getServer } from '@/lib/dathost';
-import { parseRouteId } from '@/lib/util';
+import { isServerLive, parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
@@ -51,6 +55,8 @@ export async function POST(
     );
   }
 
+  let takeOverLiveServer = false;
+
   // A scrim match waits its turn and never bumps anything: a night plays its matches in order, a
   // league match always gets the server (no scrim match starts within half an hour of one), and none
   // starts while anyone is on the server — a DGLS match or players outside one
@@ -73,6 +79,24 @@ export async function POST(
     if (occupancy.occupied && occupancy.active?.matchId !== matchId) {
       return NextResponse.json({ error: occupancyMessage(occupancy), code: 'server_occupied' }, { status: 409 });
     }
+  } else {
+    // A league match can take over a server that is live outside any DGLS match, but only once the
+    // person starting it confirms (`force`), since starting restarts it and kicks anyone on it.
+    // Another DGLS match holding the server was already refused above. A failed DatHost lookup
+    // counts as "not live", the same as `provisionMatchServer()`'s own check.
+    const body = (await req.json().catch(() => null)) as { force?: unknown } | null;
+    takeOverLiveServer = body?.force === true;
+    const serverId = process.env.DATHOST_SERVER_ID;
+    if (!takeOverLiveServer && serverId) {
+      const server = await getServer(serverId).catch(() => null);
+      if (isServerLive(server)) {
+        const players = server?.players_online ?? 0;
+        const error = players > 0
+          ? `${players} player(s) on the server outside a DGLS match. Starting kicks them.`
+          : 'The server is running outside a DGLS match. Starting restarts it.';
+        return NextResponse.json({ error, code: 'server_occupied', forceable: true }, { status: 409 });
+      }
+    }
   }
 
   // A scrim match's lobby side choice becomes its starting side now, before the server boots and loads
@@ -87,7 +111,7 @@ export async function POST(
   afterBestEffort(
     `provisionMatchServer(${matchId})`,
     async () => {
-      await provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth);
+      await provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth, { takeOverLiveServer });
       await clearOpsError(getAdminClient(), 'match', matchId, 'server_provision');
     },
     provisionErrorHandler(getAdminClient(), 'provision', matchId),

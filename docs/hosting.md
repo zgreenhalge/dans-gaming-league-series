@@ -121,7 +121,15 @@ launch never claims a row there, so `provisionMatchServer` also asks DatHost its
 whether the server is live (`isServerLive`, `src/lib/util.ts`) rather than cross-referencing another
 table, and refuses with the same `ServerBusyError` (`occupantMatchId: null`) when it's genuinely live.
 Not interrupting ongoing play outranks starting a new match on time, for both the automatic
-veto-completion trigger and a manual "Provision Server" click.
+veto-completion trigger and a manual "Start server" click.
+
+A manual start of a league match checks that ground truth up front too: when the server is live
+outside any DGLS match, the provision route returns a **409** (`code: 'server_occupied'`,
+`forceable: true`) saying how many players are on it, and the match panel's button becomes **Start
+anyway**. That click re-sends the request with `{ force: true }`, which passes
+`takeOverLiveServer` to `provisionMatchServer` so it skips the live-server refusal (never the
+`findServerOccupant` one) and restarts the server for the match. The automatic veto-completion
+trigger never forces: on a live server it is skipped, and someone starts the match from the panel.
 
 A **soft scheduling warning** (`src/lib/server-schedule-collision.ts`) flags — on the match page and in the admin
 match console (both render the shared `ScheduleEditor` over `useScheduleEditor`) — when two matches
@@ -430,7 +438,7 @@ to set its own override (a real match's per-match cvar here, or a pug launch's `
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/matches/[id]/server/status` | session (admin/in-match) | reconciled server state for the panel |
-| POST | `/api/matches/[id]/server/provision` | session | provision (202; boots in `after()`; 409 if busy) |
+| POST | `/api/matches/[id]/server/provision` | session | provision (202; boots in `after()`; 409 if busy; `{ force: true }` takes over a server live outside a DGLS match) |
 | POST | `/api/matches/[id]/server/apply-match-config` | session | re-push the match's loadmatch config (409 if busy) |
 | POST | `/api/matches/[id]/server/teardown` | session | stop the server |
 | GET | `/api/admin/server/config-diff` | admin | read-only config-set drift vs. live (`diffConfigSet`, `?configSet=` defaults to `golden`) |

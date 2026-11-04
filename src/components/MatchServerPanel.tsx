@@ -44,6 +44,8 @@ export default function MatchServerPanel({
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Players are on the server outside a DGLS match: starting kicks them, so it needs a second click.
+  const [canForce, setCanForce] = useState(false);
 
   // Bumped by every status read and Realtime event, so a slow read that resolves after a newer one
   // (or after a Realtime update) is dropped instead of rolling the panel back.
@@ -85,16 +87,22 @@ export default function MatchServerPanel({
     },
   );
 
-  const provision = async () => {
+  const provision = async (force = false) => {
     setBusy(true);
     setError(null);
+    setCanForce(false);
     // Optimistic: show the spinner immediately, before Realtime confirms.
     setState('provisioning');
     try {
-      const res = await fetch(`/api/matches/${matchId}/server/provision`, { method: 'POST' });
+      const res = await fetch(`/api/matches/${matchId}/server/provision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Could not start the server');
+        setCanForce(body.forceable === true);
         // 409 = another match holds the shared server (#134). Not a failure — revert to idle so the
         // manager can retry once it frees up, instead of showing the "failed / Retry" state.
         setState(res.status === 409 ? 'idle' : 'failed');
@@ -126,11 +134,11 @@ export default function MatchServerPanel({
           <span className="text-sm text-[var(--color-text-secondary)]">No server running for this match.</span>
           {canManage && (
             <button
-              onClick={provision}
+              onClick={() => provision(canForce)}
               disabled={busy}
               className="rounded-md border border-green-500 bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
             >
-              {busy ? 'Starting…' : 'Start server'}
+              {busy ? 'Starting…' : canForce ? 'Start anyway' : 'Start server'}
             </button>
           )}
         </div>
@@ -170,7 +178,7 @@ export default function MatchServerPanel({
           <span className="text-sm text-red-300">Server failed to start.</span>
           {canManage && (
             <button
-              onClick={provision}
+              onClick={() => provision()}
               disabled={busy}
               className="rounded-md border border-[var(--color-border-primary)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
             >
