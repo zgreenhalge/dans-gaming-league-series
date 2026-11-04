@@ -88,7 +88,10 @@ export default function MatchScoreHero({
       if (!res.ok) return;
       const data = (await res.json()) as { liveScore: LiveScoreRow | null };
       if (data.liveScore && !guardRef.current(matchId, data.liveScore.updatedAt)) return;
-      setLiveScore(data.liveScore);
+      // An empty read never clears a score: the row can appear between this read and its answer, and
+      // Realtime may already have delivered it. A real removal arrives as a DELETE.
+      const fetched = data.liveScore;
+      setLiveScore((current) => fetched ?? current);
     } catch {
       /* transient — Realtime will still deliver updates */
     }
@@ -107,8 +110,10 @@ export default function MatchScoreHero({
       if (payload.eventType === 'DELETE') {
         // The `match_id=eq.` filter on the primary key should already scope a DELETE to this match
         // (see `src/lib/demo/liveScore.ts`); checking `payload.old.match_id`, the one column a DELETE
-        // carries under RLS, keeps the hero correct if one for another match arrives anyway.
-        if ((payload.old as { match_id?: number }).match_id !== matchId) return;
+        // carries under RLS, keeps the hero correct if one for another match arrives anyway. A DELETE
+        // without it reached this match's filtered subscription, so it still clears.
+        const deletedMatchId = (payload.old as { match_id?: number }).match_id;
+        if (deletedMatchId != null && deletedMatchId !== matchId) return;
         guardRef.current(matchId, 'deleted');
         setLiveScore(null);
         return;
