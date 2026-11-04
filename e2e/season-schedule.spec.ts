@@ -13,20 +13,22 @@ import { test, expect } from '@playwright/test';
 import { loginAs } from './support/auth';
 import { seedSchedulableSeason, teardownSeason, type TestSeason } from './support/db';
 
-let season: TestSeason;
+let season: TestSeason | null = null;
 
 test.beforeEach(async () => {
   season = await seedSchedulableSeason();
 });
 
+// Skipped when seeding failed, so a teardown error doesn't hide the seed error.
 test.afterEach(async () => {
-  await teardownSeason(season.seasonId);
+  if (season) await teardownSeason(season.seasonId);
+  season = null;
 });
 
 test('generating a schedule, then confirming it, materializes real weeks and matches', async ({ page }) => {
   await loginAs(page, 'Zach'); // the seeded admin
 
-  await page.goto(`/admin/seasons/schedule/${season.seasonId}`);
+  await page.goto(`/admin/seasons/schedule/${season!.seasonId}`);
   const main = page.getByRole('main');
   // .first(): same reasoning as the `Match 1` locator below — CI's cold-start `next dev` compile
   // of this not-yet-visited route can paint the empty-state text twice before settling, same
@@ -47,14 +49,14 @@ test('generating a schedule, then confirming it, materializes real weeks and mat
 
   // confirmDraft() router.push()es to the season page on success; a cold `next dev` compiles that
   // page on first visit, which can outlast the default 5 s.
-  await expect(page).toHaveURL(new RegExp(`/seasons/${season.seasonId}$`), { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/seasons/${season!.seasonId}$`), { timeout: 30_000 });
   await expect(page.getByText(/Match 1/i).first()).toBeVisible();
 });
 
 test('the confirm button stays disabled until the draft is complete', async ({ page }) => {
   await loginAs(page, 'Zach');
 
-  await page.goto(`/admin/seasons/schedule/${season.seasonId}`);
+  await page.goto(`/admin/seasons/schedule/${season!.seasonId}`);
   await page.getByRole('button', { name: 'Generate Schedule' }).click();
   await expect(page.getByRole('main').getByText(/^Week 1$/)).toBeVisible();
 

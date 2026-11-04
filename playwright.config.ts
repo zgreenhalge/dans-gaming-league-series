@@ -34,12 +34,11 @@ export default defineConfig({
     // gates the dev-mock auth providers on.
     command: `npm run dev -- --port ${PORT}`,
     url: baseURL,
-    // The dev-mock sign-in needs a fixed NextAuth secret (a random one breaks the session cookie
-    // across recompiles) and NEXTAUTH_URL on the test origin — the values ci.yml's e2e job sets,
-    // used here unless the shell sets its own.
+    // A fixed NextAuth secret and the test origin, for the dev-mock sign-in (why: docs/e2e.md). A
+    // non-empty value in the shell overrides each.
     env: {
-      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? 'e2e-test-secret-do-not-use-in-prod',
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? baseURL,
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'e2e-test-secret-do-not-use-in-prod',
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || baseURL,
     },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

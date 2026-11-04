@@ -69,10 +69,12 @@ upstream regression, [supabase/cli#4211](https://github.com/supabase/cli/issues/
 they're fully determined by the pinned secret there's nothing to look up anyway — they'll be
 identical every time you `supabase start` this repo. Run `supabase stop` when done.
 
-The dev server also gets `NEXTAUTH_SECRET` and `NEXTAUTH_URL` from `webServer.env`: the dev-mock
-sign-in needs a fixed secret (a random one stops the session cookie decrypting after a recompile) and
-the test origin as its URL. The defaults are the values `ci.yml`'s `e2e` job sets; a value in the shell
-overrides them. On a machine with a pre-installed Chromium that doesn't match the pinned
+The dev server also gets `NEXTAUTH_SECRET` and `NEXTAUTH_URL` from `webServer.env`, locally and in
+CI's `e2e` job alike. NextAuth reads its signing secret from `NEXTAUTH_SECRET`; unset, it uses a
+random per-instantiation secret, and `next dev` re-instantiates the auth route on a recompile, so a
+session cookie made before one fails to decrypt after (`JWEDecryptionFailed`), breaking any test that
+signs in with a dev-mock provider and then navigates. `NEXTAUTH_URL` is the test origin (`baseURL`).
+A non-empty value in the shell overrides either. On a machine with a pre-installed Chromium that doesn't match the pinned
 `@playwright/test` (so `npx playwright install` isn't an option), set `PLAYWRIGHT_CHROMIUM_PATH` to that
 binary and the config launches it instead.
 

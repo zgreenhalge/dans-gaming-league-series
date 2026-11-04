@@ -98,14 +98,7 @@ jobs:
     timeout-minutes: 20
     env:
       CI: true
-      # NextAuth reads its signing secret from `NEXTAUTH_SECRET` when `authOptions.js` doesn't pass
-      # one explicitly. Left unset, it falls back to a random per-instantiation secret — `next dev`
-      # re-instantiates the auth route's module on recompiles, so a session cookie encrypted before
-      # a recompile fails to decrypt after ("JWEDecryptionFailed"), breaking any test that logs in
-      # via the dev-mock providers and then navigates. Fixed values, same pattern as the demo JWTs
-      # above; NEXTAUTH_URL matches playwright.config.ts's baseURL (PLAYWRIGHT_PORT, default 3100).
-      NEXTAUTH_SECRET: e2e-test-secret-do-not-use-in-prod
-      NEXTAUTH_URL: http://localhost:3100
+      # NEXTAUTH_SECRET / NEXTAUTH_URL come from playwright.config.ts's webServer.env (see docs/e2e.md).
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
