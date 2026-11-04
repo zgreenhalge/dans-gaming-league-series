@@ -588,5 +588,11 @@ export function occupancyMessage(occupancy: ServerOccupancy): string {
   if (occupancy.active) {
     return `Match ${occupancy.active.label} is currently ${occupancy.active.serverState} on this server.`;
   }
-  return `${occupancy.playersOnline ?? 0} player(s) are currently on the server outside of a DGLS match.`;
+  return playersOutsideMatchMessage(occupancy.playersOnline ?? 0);
+}
+
+/** "N player(s) are on the server outside a DGLS match" — `occupancyMessage()`'s wording, shared with
+ *  the provision route's forceable warning. */
+export function playersOutsideMatchMessage(playersOnline: number): string {
+  return `${playersOnline} player(s) are currently on the server outside of a DGLS match.`;
 }

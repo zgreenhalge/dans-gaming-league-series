@@ -17,6 +17,7 @@ import {
   getServerOccupancy,
   liveServerOutsideMatch,
   occupancyMessage,
+  playersOutsideMatchMessage,
 } from '@/lib/dathost-lifecycle';
 import { getServer } from '@/lib/dathost';
 import { parseRouteId } from '@/lib/util';
@@ -92,7 +93,7 @@ export async function POST(
     if (live) {
       const playersOnline = live.players_online ?? 0;
       const error = playersOnline > 0
-        ? `${occupancyMessage({ active: null, playersOnline, occupied: true })} Starting kicks them.`
+        ? `${playersOutsideMatchMessage(playersOnline)} Starting kicks them.`
         : 'The server is running outside a DGLS match. Starting restarts it.';
       return NextResponse.json({ error, code: 'server_occupied', forceable: true }, { status: 409 });
     }
