@@ -5,7 +5,7 @@ import {
   getSeasons,
   getAllLeaderboards,
   getSeasonForm,
-  getSeasonRankChanges,
+  getSeasonSchedule,
   getHomeGames,
   resolveHomeSeasons,
   getMyStats,
@@ -26,6 +26,7 @@ import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
 import { HomeStandingsPanel } from '@/components/HomeStandingsPanel';
 import { MyStatsPanel, MyStatsLockedPanel } from '@/components/MyStatsPanel';
 import { TopDuosPanel, HottestRivalriesPanel } from '@/components/TopPairsPanels';
+import { rankChangesSinceLastWeek } from '@/lib/season-standings';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,7 +98,7 @@ export default async function Home() {
     currentPlayerId != null ? getMyStats(currentPlayerId, h2h) : null,
     getHomeGames(home),
     standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
-    standings?.live ? getSeasonRankChanges(standings.season.id) : undefined,
+    standings?.live ? getSeasonSchedule(standings.season.id).then(rankChangesSinceLastWeek) : undefined,
     Promise.all(
       feedbackSeasons.map(async (s) => {
         const [survey, superlatives] = await Promise.all([

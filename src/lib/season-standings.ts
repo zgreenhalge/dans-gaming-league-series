@@ -1,4 +1,5 @@
 import { aggregatePlayerRecords, compareRecords, type ScorecardMatch } from './group-scorecard';
+import { isPlayedScore } from './util';
 
 /** The slice of a season's weeks `rankPlayersThroughWeek()` reads — satisfied by `WeekWithMatches`
  *  (queries/schedule.ts). */
@@ -37,4 +38,24 @@ export function rankMovementForWeek(weeks: StandingsWeek[], weekNumber: number):
     movement.set(player_id, { before: before.get(player_id) ?? null, after: rank });
   }
   return movement;
+}
+
+/**
+ * Places each player moved in the live standings since the end of the previous week: player id →
+ * `before - after` (positive is up), for the latest week with a played match. Built on
+ * `rankPlayersThroughWeek()`, the same ranking `rankMovementForWeek()` uses, but over every ranked
+ * player, not just those who played that week. A player with no match before it has no earlier rank
+ * and is left out, as are players who didn't move. Empty until a second week has a played match.
+ */
+export function rankChangesSinceLastWeek(weeks: StandingsWeek[]): Map<number, number> {
+  const playedWeeks = weeks.filter((w) => w.matches.some((m) => isPlayedScore(m.final_score))).map((w) => w.week_number);
+  if (playedWeeks.length < 2) return new Map();
+  const latest = Math.max(...playedWeeks);
+  const before = rankPlayersThroughWeek(weeks, latest - 1);
+  const changes = new Map<number, number>();
+  for (const [player_id, after] of rankPlayersThroughWeek(weeks, latest)) {
+    const prior = before.get(player_id);
+    if (prior !== undefined && prior !== after) changes.set(player_id, prior - after);
+  }
+  return changes;
 }

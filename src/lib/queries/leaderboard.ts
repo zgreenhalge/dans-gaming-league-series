@@ -515,31 +515,25 @@ export function buildSeasonForm(
   return form;
 }
 
-/** One player's line in one played regular-season match, with its match's week and number. */
-interface SeasonStatRow {
-  match_id: number;
-  player_id: number;
-  is_win: boolean;
-  rounds_won: number;
-  rounds_played: number;
-  damage: number;
-  matches: { match_number: number; final_score: string | null; weeks: { week_number: number } };
-}
-
 /**
- * Every player's line in one regular season's played matches (gauntlet and playoff matches are
- * excluded, matching the standings). One paginated `player_match_stats` read with the match and its
- * week embedded: the embedded `weeks.season_id` filter scopes it to the season, so no week or match
- * id list is fetched first. Played-ness (`isPlayedScore()`) is applied after the read since "0-0"
- * placeholders can't be excluded by a column filter. Shared by `getSeasonForm()` and
- * `getSeasonRankChanges()`.
+ * `buildSeasonForm()` for one regular season's played matches (gauntlet and playoff matches are
+ * excluded, matching the standings the column sits in). One paginated `player_match_stats` read
+ * with the match and its week embedded: the embedded `weeks.season_id` filter scopes it to the
+ * season, so no week or match id list is fetched first. Played-ness (`isPlayedScore()`) is applied
+ * after the read since "0-0" placeholders can't be excluded by a column filter.
  */
-async function fetchSeasonPlayedStats(seasonId: number): Promise<SeasonStatRow[]> {
-  const rows = await fetchAllPages<SeasonStatRow>((from, to) =>
-    asPage<SeasonStatRow>(
+export const getSeasonForm = persistentQuery('getSeasonForm', async (seasonId: number): Promise<Map<number, boolean[]>> => {
+  type FormRow = {
+    match_id: number;
+    player_id: number;
+    is_win: boolean;
+    matches: { match_number: number; final_score: string | null; weeks: { week_number: number } };
+  };
+  const rows = await fetchAllPages<FormRow>((from, to) =>
+    asPage<FormRow>(
       getAdminClient()
         .from('player_match_stats')
-        .select('match_id, player_id, is_win, rounds_won, rounds_played, damage, matches!inner(match_number, final_score, is_playoff_game, weeks!inner(season_id, week_number))')
+        .select('match_id, player_id, is_win, matches!inner(match_number, final_score, is_playoff_game, weeks!inner(season_id, week_number))')
         .eq('matches.weeks.season_id', seasonId)
         .eq('matches.is_playoff_game', false)
         .order('match_id')
@@ -547,71 +541,10 @@ async function fetchSeasonPlayedStats(seasonId: number): Promise<SeasonStatRow[]
         .range(from, to),
     ),
   );
-  return rows.filter((r) => isPlayedScore(r.matches.final_score));
-}
-
-/** `buildSeasonForm()` for one regular season's played matches (`fetchSeasonPlayedStats()`). */
-export const getSeasonForm = persistentQuery('getSeasonForm', async (seasonId: number): Promise<Map<number, boolean[]>> => {
-  const played = await fetchSeasonPlayedStats(seasonId);
+  const played = rows.filter((r) => isPlayedScore(r.matches.final_score));
   const matches = new Map<number, { id: number; weekNumber: number; matchNumber: number }>();
   for (const r of played) {
     matches.set(r.match_id, { id: r.match_id, weekNumber: r.matches.weeks.week_number, matchNumber: r.matches.match_number });
   }
   return buildSeasonForm([...matches.values()], played);
-});
-
-/**
- * How many places each player moved since the end of the previous week: positive is up. Pure core of
- * `getSeasonRankChanges()`. `stats` are every player's lines in the season's played matches, each with
- * its `weekNumber`. The latest week with a played match is "this week"; both snapshots (every match,
- * and every match before this week) rank the same set of players — everyone with a played match — by
- * `canonicalSort()` over totals from `deriveRates()`, so a difference is real movement, not a change
- * of method. A player with no match before this week ranks last in the earlier snapshot. Empty when
- * only one week has been played (nothing to compare with). Players who didn't move are omitted.
- */
-export function buildRankChanges(
-  stats: { player_id: number; weekNumber: number; is_win: boolean; rounds_won: number; rounds_played: number; damage: number }[],
-): Map<number, number> {
-  const weeks = new Set(stats.map((s) => s.weekNumber));
-  if (weeks.size < 2) return new Map();
-  const thisWeek = Math.max(...weeks);
-  const players = [...new Set(stats.map((s) => s.player_id))];
-
-  const ranksOf = (lines: typeof stats): Map<number, number> => {
-    const rows = players.map((player_id) => {
-      const own = lines.filter((s) => s.player_id === player_id);
-      const matches_won = own.filter((s) => s.is_win).length;
-      const rates = deriveRates({
-        matches_played: own.length,
-        matches_won,
-        total_kills: 0,
-        total_deaths: 0,
-        total_rounds_played: own.reduce((sum, s) => sum + s.rounds_played, 0),
-        total_rounds_won: own.reduce((sum, s) => sum + s.rounds_won, 0),
-        total_damage: own.reduce((sum, s) => sum + s.damage, 0),
-      });
-      return { player_id, matches_won, rwr_percentage: rates.rwr_percentage, overall_adr: rates.overall_adr };
-    });
-    return new Map(rows.sort(canonicalSort).map((r, i) => [r.player_id, i + 1]));
-  };
-
-  const before = ranksOf(stats.filter((s) => s.weekNumber < thisWeek));
-  const now = ranksOf(stats);
-  const changes = new Map<number, number>();
-  for (const id of players) {
-    const moved = before.get(id)! - now.get(id)!;
-    if (moved !== 0) changes.set(id, moved);
-  }
-  return changes;
-}
-
-/**
- * `buildRankChanges()` for one regular season, as a plain object (player id → places moved, positive
- * is up) so it crosses to client components as is. Read only for an active season: the standings
- * show the movement while the season is live.
- */
-export const getSeasonRankChanges = persistentQuery('getSeasonRankChanges', async (seasonId: number): Promise<Record<number, number>> => {
-  const played = await fetchSeasonPlayedStats(seasonId);
-  const changes = buildRankChanges(played.map((r) => ({ ...r, weekNumber: r.matches.weeks.week_number })));
-  return Object.fromEntries(changes);
 });

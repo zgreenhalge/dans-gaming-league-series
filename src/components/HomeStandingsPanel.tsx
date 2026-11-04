@@ -33,7 +33,7 @@ export function FormCell({ results }: { results: boolean[] }) {
  * the player. `live` picks the pill; `gauntletHref` adds a "Gauntlet live" pill linking to the
  * season's running gauntlet. `form` maps a player id to their last results (`getSeasonForm()`);
  * `rankChanges`, given for a live season, to the places they moved since last week
- * (`getSeasonRankChanges()`).
+ * (`rankChangesSinceLastWeek()`).
  */
 export function HomeStandingsPanel({
   title,
@@ -51,7 +51,7 @@ export function HomeStandingsPanel({
   gauntletHref?: string;
   rows: LeaderboardRowWithId[];
   form: Map<number, boolean[]>;
-  rankChanges?: Record<number, number>;
+  rankChanges?: Map<number, number>;
   currentPlayerId: number | null;
 }) {
   const dash = (played: boolean, v: string) =>
@@ -94,7 +94,7 @@ export function HomeStandingsPanel({
                 <Tr key={p.player_id} href={href}>
                   <Td align="left" muted>
                     {i + 1}
-                    <RankChange change={rankChanges?.[p.player_id]} />
+                    <RankChange change={rankChanges?.get(p.player_id)} />
                   </Td>
                   <NameTd>
                     <PlayerLink playerId={p.player_id} className="flex items-center w-full h-full">

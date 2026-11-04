@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { rankChangesSinceLastWeek } from '@/lib/season-standings';
 import { useTabState, resolveTab } from './useTabState';
 import { useUrlState, useSetUrlParams } from './useUrlState';
 import { useUrlStateContext } from './UrlStateProvider';
@@ -91,8 +92,6 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   tab?: Tab;
   onTabChange?: (t: Tab) => void;
   ehogRatings?: Record<number, number>;
-  /** Places each player moved since last week, for a live regular season (`getSeasonRankChanges()`). */
-  rankChanges?: Record<number, number>;
   /** This season/kind's own id — used to lazily fetch `SeasonStatsView` (sabremetrics, per-match
    *  rounds/kills/weapon-class/economy breakdowns) itself the first time the Stats or Advanced
    *  Stats sub-tab is opened, via `GET /api/seasons/[id]/stats`. Only meaningful in uncontrolled
@@ -121,10 +120,15 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, rankChanges, seasonId, hasAdvancedStats } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, seasonId, hasAdvancedStats } = props;
   const hasSab = !!hasAdvancedStats;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
+  // A live regular season's standings show who moved since last week (`rankChangesSinceLastWeek()`).
+  const rankChanges = useMemo(
+    () => (props.kind === 'regular' && seasonStatus === 'ACTIVE' ? rankChangesSinceLastWeek(schedule) : undefined),
+    [props.kind, seasonStatus, schedule],
+  );
   const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
   const bracketShape = props.kind === 'gauntlet' ? props.bracketShape : EMPTY_BRACKET_SHAPE;
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;

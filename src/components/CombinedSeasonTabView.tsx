@@ -21,7 +21,6 @@ type StatsCache = { regular?: SeasonStatsView; gauntlet?: SeasonStatsView };
 
 export default function CombinedSeasonTabView({
   leaderboard,
-  rankChanges,
   seasonStartDate,
   seasonStatus,
   mapPool,
@@ -38,8 +37,6 @@ export default function CombinedSeasonTabView({
   feedbackTabs = NO_FEEDBACK_TABS,
 }: {
   leaderboard: LeaderboardRowWithId[];
-  /** The regular season's places moved since last week, while it's live (`getSeasonRankChanges()`). */
-  rankChanges?: Record<number, number>;
   seasonStartDate: string | null;
   seasonStatus: string;
   /** The regular season's map pool — feeds the Bans/No-picks columns in the Maps & Sides tab. */
@@ -208,7 +205,6 @@ export default function CombinedSeasonTabView({
             tab={subTab}
             onTabChange={setSubTab}
             ehogRatings={regularData.ehogRatings}
-            rankChanges={rankChanges}
             hasAdvancedStats={regularData.hasAdvancedStats}
             statsData={statsCache.regular}
             statsError={statsLoadError === 'regular'}

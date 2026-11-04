@@ -108,8 +108,8 @@ export default function LeaderboardTable({
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
   ehogRatings?: Record<number, number>;
-  /** Places each player moved since last week (`getSeasonRankChanges()`), shown beside the rank. */
-  rankChanges?: Record<number, number>;
+  /** Places each player moved since last week (`rankChangesSinceLastWeek()`), shown beside the rank. */
+  rankChanges?: Map<number, number>;
   onPlayerHover?: (playerId: number | null) => void;
 }) {
   const { data: session } = useSession();
@@ -227,7 +227,7 @@ export default function LeaderboardTable({
               {firstColMode === 'player' && showRank && (
                 <Td align="left" style={{ color: textColor ?? 'var(--color-text-secondary)' }}>
                   {canonicalRankOf.get(p.player_id) ?? '-'}
-                  <RankChange change={rankChanges?.[p.player_id]} />
+                  <RankChange change={rankChanges?.get(p.player_id)} />
                 </Td>
               )}
               <NameTd sticky={stickyNameCol} style={{ color: textColor ?? undefined }}>

@@ -823,12 +823,11 @@ player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 
 **Position change** (beside the rank, on a live season's standings here and on the season hub) —
 places moved since the end of the previous week: `▲n` in green, `▼n` in red, nothing for no move.
-"This week" is the latest week with a played match. Both snapshots — every played match, and every
-played match before this week — rank the same players (everyone with a played match) by
-`canonicalSort()` over `deriveRates()` totals, so a difference is movement, not a change of method; a
-player whose first match is this week ranks last in the earlier snapshot. Nothing shows until a
-second week has a played match. `buildRankChanges()` / `getSeasonRankChanges()` in
-`src/lib/queries/leaderboard.ts`, rendered by `RankChange`.
+"This week" is the latest week with a played match; the standings through it and through the week
+before are both ranked by `rankPlayersThroughWeek()` (`src/lib/season-standings.ts`), the ranking
+the week pages' movement column uses. A player with no match before this week has no earlier rank
+and shows nothing. Nothing shows until a second week has a played match.
+`rankChangesSinceLastWeek()` computes it from the season schedule; `RankChange` renders it.
 
 **My Stats** — career figures for the signed-in player. **EHOG** is the current rating
 (`getCurrentEhogRating()`, [`ehog.md`](./ehog.md)), colored by its tier like the leaderboard's EHOG
