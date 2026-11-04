@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, renameFields } from '@/lib/player-name-history';
-import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
+import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_RULE } from '@/lib/util';
 import { renameNameRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 
 // Self-service rename (issue #268): a player changes their own display name, in place on their
 // profile page. Distinct from the admin-only `PATCH /api/players/[id]` — that route can rename any
-// player at any time; this one is scoped to the caller's own row, restricted to letters/spaces, and
-// rate-limited to once every RENAME_COOLDOWN_MS.
+// player at any time; this one is scoped to the caller's own row and rate-limited to once every
+// RENAME_COOLDOWN_MS. Both, and registration, apply the same name rule (`isValidPlayerName()`).
 //
 // The cooldown is enforced by a single atomic conditional UPDATE against `players.name_changed_at`
 // (not a separate read-then-write of `player_name_history`): Postgres row-locks the target row for
@@ -40,12 +40,7 @@ export async function PATCH(req: NextRequest) {
 
   const next = normalizePlayerName(body.name);
   if (!isValidPlayerName(next)) {
-    return NextResponse.json(
-      {
-        error: `Name must be ${PLAYER_NAME_MIN_LENGTH}-${PLAYER_NAME_MAX_LENGTH} letters — spaces allowed between words, no numbers or symbols.`,
-      },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: `Name must be ${PLAYER_NAME_RULE}` }, { status: 400 });
   }
 
   const { data: current, error: fetchError } = await supabaseAdmin

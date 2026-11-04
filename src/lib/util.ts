@@ -74,6 +74,8 @@ export function upcomingUnscheduledMatches<T extends { final_score: string | nul
 export const PLAYER_NAME_MIN_LENGTH = 2;
 export const PLAYER_NAME_MAX_LENGTH = 32;
 const PLAYER_NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
+/** The name rule as shown to people: the hint under a name field and the API's 400 message. */
+export const PLAYER_NAME_RULE = `${PLAYER_NAME_MIN_LENGTH}-${PLAYER_NAME_MAX_LENGTH} letters — spaces allowed between words, no numbers or symbols.`;
 
 /** Trims and collapses internal whitespace to single spaces — the shared normalization a rename
  * candidate goes through before length/character validation, so the server route (source of

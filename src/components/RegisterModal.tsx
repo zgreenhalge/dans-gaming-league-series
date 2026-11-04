@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useHasMounted } from "./useHasMounted";
 import Modal from "./Modal";
 import ErrorText from '@/components/ErrorText';
+import { isValidPlayerName, normalizePlayerName, PLAYER_NAME_MAX_LENGTH, PLAYER_NAME_RULE } from "@/lib/util";
 
 const subscribeNever = () => () => {};
 
@@ -47,6 +48,7 @@ export default function RegisterModal() {
   const show = !!session?.user && session.user.playerId == null;
   const claimToken = useClaimToken();
   const claimName = claimToken !== null ? decodeClaimName(claimToken) : null;
+  const nameValid = isValidPlayerName(normalizePlayerName(newName));
 
   if (!show || !mounted) return null;
 
@@ -127,9 +129,12 @@ export default function RegisterModal() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Your league name"
-            maxLength={64}
+            maxLength={PLAYER_NAME_MAX_LENGTH}
             className="w-full px-3 py-2 text-[13px] rounded border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-ct)]"
           />
+          {newName.trim() && !nameValid && (
+            <p className="font-mono text-[11px] text-[var(--color-text-secondary)]">{PLAYER_NAME_RULE}</p>
+          )}
         </div>
 
         <p className="text-[11px] text-[var(--color-text-secondary)]">
@@ -141,7 +146,7 @@ export default function RegisterModal() {
 
         <button
           onClick={() => submit({ name: newName })}
-          disabled={loading || !newName.trim()}
+          disabled={loading || !nameValid}
           className="w-full py-2 text-[13px] font-semibold rounded bg-[var(--color-ct)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
         >
           {loading ? "Saving…" : "Join the Roster"}
