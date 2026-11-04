@@ -71,7 +71,7 @@ export function upcomingUnscheduledMatches<T extends { final_score: string | nul
     .sort((a, b) => a.match_number - b.match_number);
 }
 
-export const PLAYER_NAME_MIN_LENGTH = 2;
+const PLAYER_NAME_MIN_LENGTH = 2;
 export const PLAYER_NAME_MAX_LENGTH = 32;
 const PLAYER_NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
 /** The name rule as shown to people: the hint under a name field and the API's 400 message. */
@@ -92,6 +92,15 @@ export function isValidPlayerName(name: string): boolean {
     name.length <= PLAYER_NAME_MAX_LENGTH &&
     PLAYER_NAME_RE.test(name)
   );
+}
+
+/** A display name from a request body, checked against the name rule every name write follows
+ *  (registration, the self-service rename, the admin rename): the normalized name, or the 400
+ *  message to return. */
+export function parsePlayerName(raw: unknown): { ok: true; name: string } | { ok: false; error: string } {
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: 'Name is required' };
+  const name = normalizePlayerName(raw);
+  return isValidPlayerName(name) ? { ok: true, name } : { ok: false, error: `Name must be ${PLAYER_NAME_RULE}` };
 }
 
 /**

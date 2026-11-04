@@ -6,14 +6,14 @@ import { isDiscordIdTaken } from '@/lib/discord-link';
 import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNameRole, getStoredNameRoleId } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
-import { isValidPlayerName, normalizePlayerName, parseRouteId, PLAYER_NAME_RULE } from '@/lib/util';
+import { parsePlayerName, parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. A new name follows the
-// same rule as registration and the self-service rename (`isValidPlayerName()`). All three edits go
+// same rule as registration and the self-service rename (`parsePlayerName()`). All three edits go
 // through this one route with a whitelisted body — there are no side effects to isolate the way the
 // match /score and /veto routes have, so a single partial-update route is simpler than three.
 
@@ -54,13 +54,9 @@ export async function PATCH(
 
   // Display name
   if ('name' in body) {
-    if (typeof body.name !== 'string' || body.name.trim() === '') {
-      return NextResponse.json({ error: 'Name must be a non-empty string' }, { status: 400 });
-    }
-    const trimmed = normalizePlayerName(body.name);
-    if (!isValidPlayerName(trimmed)) {
-      return NextResponse.json({ error: `Name must be ${PLAYER_NAME_RULE}` }, { status: 400 });
-    }
+    const parsed = parsePlayerName(body.name);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const trimmed = parsed.name;
 
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('players')
