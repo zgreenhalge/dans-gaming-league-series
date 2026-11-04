@@ -174,6 +174,17 @@ round is already counted once via `defuse`; `ninja` isn't summed a second time).
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 
+**The `+` scale.** Every `+` stat reads "1.00 = league average, higher is better":
+- A higher-is-better stat is `player / league average` (`plusStat()`), uncapped, so a real outlier
+  stays visible in a small league.
+- A lower-is-better stat that stands on its own (`DPR+`, `Choke+`) is inverted to `league average /
+  player` (`invertedPlusStat()`) and capped at 2.00 (twice the league average). The cap exists only
+  because that ratio is unbounded as the player's rate goes to zero; a player rate of zero scores the
+  cap, or 1.00 when the league average is zero too.
+- A lower-is-better term inside a weighted composite (`Teamflash+` in `Utility+`) is inverted
+  linearly as `2 - x`, so a step above average costs the composite exactly what the same step in a
+  higher-is-better term gains.
+
 - `KPR+` = `Player K/R` / `League Avg K/R`
 - `APR+` = `Player A/R` / `League Avg A/R`
 - `DPR+` = `League Avg D/R` / `Player D/R` — inverted (league average over player, not the usual
