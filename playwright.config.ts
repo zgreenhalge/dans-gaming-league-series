@@ -25,9 +25,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         // A Chromium binary to use instead of the build the pinned @playwright/test downloads — for a
         // machine whose browser is pre-installed and can't run `npx playwright install`.
-        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
-          ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
-          : {}),
+        launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined },
       },
     },
   ],

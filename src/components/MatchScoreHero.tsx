@@ -105,8 +105,9 @@ export default function MatchScoreHero({
     { event: '*', table: 'live_match_score', filter: `match_id=eq.${matchId}` },
     (payload) => {
       if (payload.eventType === 'DELETE') {
-        // Under RLS a DELETE carries only the primary key (`match_id`) in `payload.old`, and may not
-        // honour the subscription's column filter, so clear only for this hero's own match.
+        // The `match_id=eq.` filter on the primary key should already scope a DELETE to this match
+        // (see `src/lib/demo/liveScore.ts`); checking `payload.old.match_id`, the one column a DELETE
+        // carries under RLS, keeps the hero correct if one for another match arrives anyway.
         if ((payload.old as { match_id?: number }).match_id !== matchId) return;
         guardRef.current(matchId, 'deleted');
         setLiveScore(null);

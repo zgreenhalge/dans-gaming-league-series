@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `MatchScoreHero`'s live score over Realtime: a `live_match_score` DELETE clears
- * the score only for this hero's own match, since under RLS a DELETE carries only the primary key and
- * may not honour the subscription's column filter.
+ * the score only for this hero's own match, even if one for another match reaches its subscription.
  * Run: npx vitest run src/components/MatchScoreHero.test.tsx
  */
 
