@@ -1,0 +1,88 @@
+# vercel-previews
+#
+# Keeps Vercel's stored deployments down to what's in use, since every one of them holds a full copy
+# of the app's function bundles against the Hobby plan's Function Storage allowance (docs/vercel.md).
+#
+# - PR opened / reopened: build a preview for the PR's head commit. The Ignored Build Step
+#   (scripts/vercel-ignore-build.mts) skips previews for pushes made before a PR exists.
+# - PR closed (merged or not): delete every preview built from its branch.
+# - Daily, and on manual dispatch: delete everything planPrune() returns. Manual runs default to a
+#   dry run.
+#
+# Needs the VERCEL_TOKEN repo secret (a Vercel access token for the dans-gaming-league-series team);
+# without it the script logs a notice and does nothing.
+
+name: vercel-previews
+
+on:
+  pull_request:
+    types: [opened, reopened, closed]
+  schedule:
+    - cron: '41 7 * * *' # daily, off the hour
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be deleted without deleting anything
+        type: boolean
+        default: true
+
+concurrency:
+  group: vercel-previews-${{ github.event.pull_request.number || 'prune' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_TEAM_ID: team_glizoie47F9aCgnJ5iba9FLy
+  VERCEL_PROJECT: dans-gaming-league-series
+  VERCEL_PRODUCTION_HOST: dans-gaming-league-series.vercel.app
+
+jobs:
+  pull-request:
+    # Fork PRs get no secrets, and their branches don't deploy to this project.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Build a preview for the PR
+        if: github.event.action != 'closed'
+        run: node scripts/vercel-previews.mts deploy "$BRANCH" "$SHA"
+
+      - name: Delete the PR's previews
+        if: github.event.action == 'closed'
+        run: node scripts/vercel-previews.mts cleanup "$BRANCH"
+
+  prune:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Prune deployments
+        run: node scripts/vercel-previews.mts prune

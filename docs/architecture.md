@@ -770,10 +770,12 @@ Map names in the DB are user-typed strings — always compare case-insensitively
 
 Vercel auto-detects the Next.js project from the repo root. Set all env vars in Vercel project settings (Production + Preview + Development). See the env var table in the root [`README.md`](../README.md).
 
-`vercel.json` carries two non-default pieces of config:
+`vercel.json` carries three non-default pieces of config:
+
+- **Ignored Build Step** — `ignoreCommand` runs `scripts/vercel-ignore-build.mts`, so a preview builds only for a branch with an open pull request; production always builds. Previews are also built on PR open and deleted on PR close by `.github/workflows/vercel-previews.yml`. Why, and the Function Storage budget this protects: [`vercel.md`](./vercel.md).
 
 - **Cron** — `GET /api/cron/refresh-steam` runs daily at `0 4 * * *` (04:00 UTC) to refresh Steam avatars/nicknames. The route is `CRON_SECRET`-bearer-gated and batches players through the Steam `GetPlayerSummaries` API 100 at a time.
-- **Python function** — `api/ehog/recompute.py` is deployed on the `@vercel/python` runtime with `ehog/**` bundled via `includeFiles`. It runs the EHOG full recompute after a score is submitted. See [`ehog.md`](./ehog.md).
+- **Python function** — `api/ehog/recompute.py` is deployed on the `@vercel/python` runtime with `ehog/**` bundled via `includeFiles` and the rest of the repo dropped via `excludeFiles`. It runs the EHOG full recompute after a score is submitted. See [`ehog.md`](./ehog.md).
 
 The 1-hour-out match reminder is scheduled a different way, deliberately not through `vercel.json` —
 both writers of `matches.scheduled_at` (`PATCH /api/matches/[id]/schedule` for a human editing it by

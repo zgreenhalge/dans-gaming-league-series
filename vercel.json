@@ -1,4 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "node scripts/vercel-ignore-build.mts",
   "crons": [
     {
       "path": "/api/cron/refresh-steam",
@@ -8,7 +10,8 @@
   "functions": {
     "api/ehog/recompute.py": {
       "runtime": "@vercel/python@6.45.0",
-      "includeFiles": "ehog/**"
+      "includeFiles": "ehog/**",
+      "excludeFiles": "{src/**,public/**,docs/**,e2e/**,ingestion/**,supabase/**,scripts/**,infra/**,node_modules/**,.next/**}"
     }
   }
 }
