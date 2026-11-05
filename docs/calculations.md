@@ -622,6 +622,14 @@ Implemented by `canonicalSort(rows)` in `src/lib/util.ts`; rows that carry the t
 Use it everywhere regular-season or
 career player rows are ranked — never sort by ADR alone.
 
+Wins are raw counts, not a rate, so the ranking is fair only when everyone plays about the same
+number of matches. The regular-season generator (`buildSeasonSchedule()`,
+`src/lib/season-schedule.ts`) keeps every player's match count within one of everyone else's:
+exactly equal when the season's total appearances divide by the roster size, and one apart
+otherwise (roster size mod 4 = 2, where each week's doubleheader adds two extra appearances). That
+one-match spread is accepted rather than ranking by win rate. Hand-edits in the Schedule Editor can
+still change the counts.
+
 ## Canonical Gauntlet Ranking
 
 The official finish order for a completed gauntlet season. Used by the leaderboard table on

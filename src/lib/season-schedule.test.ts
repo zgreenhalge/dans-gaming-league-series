@@ -3,7 +3,8 @@
  * of seeds must appear as teammates in exactly one round, in the minimum possible number of
  * rounds. buildSeasonSchedule(): every pair must additionally play as opponents at least once,
  * every week has at most one bye, doubleheaderPolicy 'never' throws exactly when a whole team
- * would otherwise be left over, and each seed's shirts/skins split stays within a loose empirical
+ * would otherwise be left over, every seed's match count is within one of every other's (exactly
+ * equal whenever the total divides evenly), and each seed's shirts/skins split stays within a loose empirical
  * bound — for every roster size the league supports (7-19) plus a wider band for confidence.
  * Assertions are plain node:assert, no matcher library — matching gauntlet-bracket.test.ts / util.test.ts.
  *
@@ -11,7 +12,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildTeammateRounds, buildSeasonSchedule, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
+import { buildTeammateRounds, buildSeasonSchedule, gamesPerSeed, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
 import { test, report } from './test-support/miniTest';
 
 function expectedRounds(n: number): number {
@@ -129,6 +130,17 @@ async function main() {
       const expectedPairCount = (n * (n - 1)) / 2;
       assert.equal(teammatePairs.size, expectedPairCount, `n=${n}: every pair should play together at least once (${teammatePairs.size}/${expectedPairCount})`);
       assert.equal(opponentPairs.size, expectedPairCount, `n=${n}: every pair should play against each other at least once (${opponentPairs.size}/${expectedPairCount})`);
+    });
+  }
+
+  for (let n = 7; n <= 19; n++) {
+    await test(`buildSeasonSchedule(${n}) — match counts are as even as the total allows`, () => {
+      const counts = [...gamesPerSeed(buildSeasonSchedule(n), n).values()];
+      const total = counts.reduce((a, b) => a + b, 0);
+      const floor = Math.floor(total / n);
+      // Standings rank raw wins first, so every seed gets floor or floor+1 matches — and exactly
+      // floor when the total divides by n.
+      for (const c of counts) assert.ok(c === floor || c === floor + 1, `n=${n}: a seed plays ${c} matches, expected ${floor}${total % n === 0 ? '' : ` or ${floor + 1}`} (counts ${counts.join(',')})`);
     });
   }
 
