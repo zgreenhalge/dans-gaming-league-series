@@ -204,7 +204,8 @@ function fewestGames<T>(candidates: T[], games: (candidate: T) => number): T[] {
 }
 
 /** Picks the already-matched team to face a leftover team in a bonus (doubleheader) match: among
- * the teams with the fewest combined matches so far, whichever creates the most new opponent pairs.
+ * the teams whose busier player has the fewest matches so far (then the fewest combined), whichever
+ * creates the most new opponent pairs.
  * `matches` is always non-empty whenever this is called — it's only reached when a round had
  * enough teams to form at least one primary match. */
 function pickDonorTeam(
@@ -214,9 +215,11 @@ function pickDonorTeam(
   gamesPlayed: ReadonlyMap<number, number>,
   rand: () => number,
 ): [number, number] {
+  const games = (seed: number) => gamesPlayed.get(seed) ?? 0;
+  const teams = matches.flatMap((m) => [m.shirts, m.skins] as [number, number][]);
   const candidates = fewestGames(
-    matches.flatMap((m) => [m.shirts, m.skins] as [number, number][]),
-    (team) => (gamesPlayed.get(team[0]) ?? 0) + (gamesPlayed.get(team[1]) ?? 0),
+    fewestGames(teams, ([a, b]) => Math.max(games(a), games(b))),
+    ([a, b]) => games(a) + games(b),
   );
   return pickBestByScore(candidates, (candidate) => newOpponentPairCount(leftoverTeam, candidate, seen), rand);
 }
@@ -455,12 +458,11 @@ export function gamesPerSeed(weeks: WeekPlan[]): Map<number, number> {
   return games;
 }
 
-/** Match counts differ by at most one across seeds — the evenest any schedule can be, checked here
- * because the donor picks only steer toward it greedily. Every seed plays every season, so no seed
- * is missing from gamesPerSeed(). */
-function hasEvenGameCounts(weeks: WeekPlan[]): boolean {
+/** Every seed plays, and match counts differ by at most one across seeds — the evenest any
+ * schedule can be, checked here because the donor picks only steer toward it greedily. */
+function hasEvenGameCounts(weeks: WeekPlan[], seedCount: number): boolean {
   const counts = [...gamesPerSeed(weeks).values()];
-  return Math.max(...counts) - Math.min(...counts) <= 1;
+  return counts.length === seedCount && Math.max(...counts) - Math.min(...counts) <= 1;
 }
 
 const MAX_ATTEMPTS = 200;
@@ -497,7 +499,7 @@ export function buildSeasonSchedule(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const rand = mulberry32(seedCount * 100003 + attempt);
     const weeks = attemptSchedule(teammateRounds, policy, rand);
-    if (hasEvenGameCounts(weeks) && hasFullCoverage(weeks, seedCount)) {
+    if (hasEvenGameCounts(weeks, seedCount) && hasFullCoverage(weeks, seedCount)) {
       // Side-balance labeling doesn't affect coverage (see the comment above chooseSides()), so it's
       // only worth optimizing once a schedule has already passed the coverage check — a discarded
       // attempt would otherwise pay for the full local search for nothing.

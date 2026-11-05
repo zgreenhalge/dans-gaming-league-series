@@ -4,10 +4,11 @@
  * own docs, mirroring how `gauntlet-engine.ts`'s `seedBracket()` maps `buildGauntletBracket()`'s
  * seeds to real players. Unlike gauntlet (seeded by competitive standing), a regular season has no
  * standings yet when its schedule is first generated — seed order is simply roster order (the
- * caller's `player_ids` array, e.g. `getSeasonRoster()`'s name-sorted order), which has no bearing
- * on the schedule's fairness properties: every pair's teammate/opponent coverage is symmetric in
- * seed identity, so which player lands on which seed number doesn't change what the schedule
- * guarantees.
+ * caller's `player_ids` array, e.g. `getSeasonRoster()`'s name-sorted order). Teammate/opponent
+ * coverage is symmetric in seed identity, so seed order doesn't change those guarantees. Match
+ * counts are not: when they can't all be equal (roster size mod 4 = 2), the schedule is
+ * deterministic per roster size, so the seeds one match short are the same every time and land on
+ * the same roster positions.
  */
 
 import { buildSeasonSchedule, type DoubleheaderPolicy } from './season-schedule';
