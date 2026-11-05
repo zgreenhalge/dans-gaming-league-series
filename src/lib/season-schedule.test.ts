@@ -135,7 +135,9 @@ async function main() {
 
   for (let n = 7; n <= 19; n++) {
     await test(`buildSeasonSchedule(${n}) — match counts are as even as the total allows`, () => {
-      const counts = [...gamesPerSeed(buildSeasonSchedule(n), n).values()];
+      const games = gamesPerSeed(buildSeasonSchedule(n));
+      assert.equal(games.size, n, `n=${n}: every seed should play at least once`);
+      const counts = [...games.values()];
       const total = counts.reduce((a, b) => a + b, 0);
       const floor = Math.floor(total / n);
       // Standings rank raw wins first, so every seed gets floor or floor+1 matches — and exactly
