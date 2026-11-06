@@ -136,3 +136,25 @@ describe('SabremetricsLeaderboardView — Utility tab in a team view', () => {
     expect(container.querySelectorAll('.faction-tint h3')).toHaveLength(0);
   });
 });
+
+describe('SabremetricsLeaderboardView — Player Rating', () => {
+  test('Stats Plus table has a sortable Rating column', () => {
+    nextNavigationMock.setSearchParams('sub=plus');
+    renderWithUrlState(
+      <SabremetricsLeaderboardView rows={[row(), sabremetricStatRow({ player_id: 2, match_id: 1 })]} />,
+    );
+    expect(screen.getByRole('columnheader', { name: /Rating/ })).toBeInTheDocument();
+  });
+
+  test('single-player Stats Plus grid shows a Rating tile when a league baseline exists', () => {
+    nextNavigationMock.setSearchParams('sub=plus');
+    renderWithUrlState(
+      <SabremetricsLeaderboardView
+        rows={[row()]}
+        singlePlayer
+        leagueRows={[row(), sabremetricStatRow({ player_id: 2, match_id: 1 })]}
+      />,
+    );
+    expect(screen.getByText('Rating')).toBeInTheDocument();
+  });
+});
