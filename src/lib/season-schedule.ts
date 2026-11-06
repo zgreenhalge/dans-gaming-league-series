@@ -217,10 +217,8 @@ function pickDonorTeam(
 ): [number, number] {
   const games = (seed: number) => gamesPlayed.get(seed) ?? 0;
   const teams = matches.flatMap((m) => [m.shirts, m.skins] as [number, number][]);
-  const candidates = fewestGames(
-    fewestGames(teams, ([a, b]) => Math.max(games(a), games(b))),
-    ([a, b]) => games(a) + games(b),
-  );
+  const leastBusy = fewestGames(teams, ([a, b]) => Math.max(games(a), games(b)));
+  const candidates = fewestGames(leastBusy, ([a, b]) => games(a) + games(b));
   return pickBestByScore(candidates, (candidate) => newOpponentPairCount(leftoverTeam, candidate, seen), rand);
 }
 
@@ -386,7 +384,7 @@ export function optimizeSideBalance(matches: MatchPlan[], initialBalance: Map<nu
   });
 }
 
-function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
+function attemptSchedule(seedCount: number, teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
   const seenOpponentPairs = new Set<string>();
   const weeks: WeekPlan[] = [];
 
@@ -400,7 +398,7 @@ function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPo
     const byeSeeds: number[] = [];
 
     if (leftoverTeam && policy === 'auto') {
-      const gamesPlayed = gamesPerSeed(weeks);
+      const gamesPlayed = gamesPerSeed(weeks, seedCount);
       if (individualLeftover != null) {
         const donor = pickDonorPlayer(matches, leftoverTeam, seenOpponentPairs, gamesPlayed, rand);
         matches.push({ shirts: leftoverTeam, skins: [individualLeftover, donor] });
@@ -448,21 +446,22 @@ function hasFullCoverage(weeks: WeekPlan[], seedCount: number): boolean {
   return teammatePairs.size === expected && opponentPairs.size === expected;
 }
 
-/** How many matches each seed plays across `weeks` (a seed with none is absent). The one counting
- * rule behind donor picks, hasEvenGameCounts() and the tests. */
-export function gamesPerSeed(weeks: WeekPlan[]): Map<number, number> {
+/** How many matches each seed 1..seedCount plays across `weeks`, counting a seed with none as 0.
+ * The one counting rule behind donor picks, hasEvenGameCounts() and the tests. */
+export function gamesPerSeed(weeks: WeekPlan[], seedCount: number): Map<number, number> {
   const games = new Map<number, number>();
+  for (let seed = 1; seed <= seedCount; seed++) games.set(seed, 0);
   for (const w of weeks) {
-    for (const m of w.matches) for (const seed of [...m.shirts, ...m.skins]) games.set(seed, (games.get(seed) ?? 0) + 1);
+    for (const m of w.matches) for (const seed of [...m.shirts, ...m.skins]) games.set(seed, games.get(seed)! + 1);
   }
   return games;
 }
 
-/** Every seed plays, and match counts differ by at most one across seeds — the evenest any
- * schedule can be, checked here because the donor picks only steer toward it greedily. */
+/** Match counts differ by at most one across seeds — the evenest any schedule can be, checked here
+ * because the donor picks only steer toward it greedily. */
 function hasEvenGameCounts(weeks: WeekPlan[], seedCount: number): boolean {
-  const counts = [...gamesPerSeed(weeks).values()];
-  return counts.length === seedCount && Math.max(...counts) - Math.min(...counts) <= 1;
+  const counts = [...gamesPerSeed(weeks, seedCount).values()];
+  return Math.max(...counts) - Math.min(...counts) <= 1;
 }
 
 const MAX_ATTEMPTS = 200;
@@ -498,7 +497,7 @@ export function buildSeasonSchedule(
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const rand = mulberry32(seedCount * 100003 + attempt);
-    const weeks = attemptSchedule(teammateRounds, policy, rand);
+    const weeks = attemptSchedule(seedCount, teammateRounds, policy, rand);
     if (hasEvenGameCounts(weeks, seedCount) && hasFullCoverage(weeks, seedCount)) {
       // Side-balance labeling doesn't affect coverage (see the comment above chooseSides()), so it's
       // only worth optimizing once a schedule has already passed the coverage check — a discarded
