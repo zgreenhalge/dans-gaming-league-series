@@ -78,6 +78,10 @@ export function buildTeammateRounds(seedCount: number): TeammateRound[] {
 // match — that donor plays twice this week instead of the leftover team sitting out. `'never'`
 // throws for any seedCount where this would happen, rather than silently dropping the pair.
 //
+// Standings rank raw wins first (`canonicalSort()`), so doubleheaders go to whoever has played
+// least so far, and an attempt is accepted only when match counts differ by at most one
+// (`hasEvenGameCounts()`) — see docs/calculations.md's "Canonical Regular Season Ranking".
+//
 // Picking the best pairing *within* a round greedily doesn't guarantee full opponent coverage
 // *across* the season — an early round's locally-best choice can starve a later one when several
 // pairings tie for that round's best score (common, especially in early rounds where almost
@@ -192,18 +196,45 @@ function pickBestByScore<T>(candidates: T[], score: (candidate: T) => number, ra
   return best;
 }
 
-/** Picks whichever already-matched team creates the most new opponent pairs against a leftover
- * team, to face it in a bonus (doubleheader) match. `matches` is always non-empty whenever this is
- * called — it's only reached when a round had enough teams to form at least one primary match. */
-function pickDonorTeam(matches: MatchPlan[], leftoverTeam: [number, number], seen: ReadonlySet<string>, rand: () => number): [number, number] {
-  const candidates = matches.flatMap((m) => [m.shirts, m.skins] as [number, number][]);
+/** The candidates whose `games` (matches played so far) is lowest — a donor only ever comes from
+ * these, so doubleheaders go to whoever has played least (see the Layer 2 comment). */
+function fewestGames<T>(candidates: T[], games: (candidate: T) => number): T[] {
+  const least = Math.min(...candidates.map(games));
+  return candidates.filter((c) => games(c) === least);
+}
+
+/** Picks the already-matched team to face a leftover team in a bonus (doubleheader) match: among
+ * the teams whose busier player has the fewest matches so far (then the fewest combined), whichever
+ * creates the most new opponent pairs.
+ * `matches` is always non-empty whenever this is called — it's only reached when a round had
+ * enough teams to form at least one primary match. */
+function pickDonorTeam(
+  matches: MatchPlan[],
+  leftoverTeam: [number, number],
+  seen: ReadonlySet<string>,
+  gamesPlayed: ReadonlyMap<number, number>,
+  rand: () => number,
+): [number, number] {
+  const games = (seed: number) => gamesPlayed.get(seed) ?? 0;
+  const teams = matches.flatMap((m) => [m.shirts, m.skins] as [number, number][]);
+  const leastBusy = fewestGames(teams, ([a, b]) => Math.max(games(a), games(b)));
+  const candidates = fewestGames(leastBusy, ([a, b]) => games(a) + games(b));
   return pickBestByScore(candidates, (candidate) => newOpponentPairCount(leftoverTeam, candidate, seen), rand);
 }
 
 /** Same idea as pickDonorTeam, but borrowing a single player (for the 3-leftover case, where the
  * bonus match pairs that donor with the individually-left-over seed). */
-function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], seen: ReadonlySet<string>, rand: () => number): number {
-  const candidates = matches.flatMap((m) => [...m.shirts, ...m.skins]);
+function pickDonorPlayer(
+  matches: MatchPlan[],
+  leftoverTeam: [number, number],
+  seen: ReadonlySet<string>,
+  gamesPlayed: ReadonlyMap<number, number>,
+  rand: () => number,
+): number {
+  const candidates = fewestGames(
+    matches.flatMap((m) => [...m.shirts, ...m.skins]),
+    (player) => gamesPlayed.get(player) ?? 0,
+  );
   return pickBestByScore(
     candidates,
     (player) => (seen.has(pairKey(player, leftoverTeam[0])) ? 0 : 1) + (seen.has(pairKey(player, leftoverTeam[1])) ? 0 : 1),
@@ -353,7 +384,7 @@ export function optimizeSideBalance(matches: MatchPlan[], initialBalance: Map<nu
   });
 }
 
-function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
+function attemptSchedule(seedCount: number, teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
   const seenOpponentPairs = new Set<string>();
   const weeks: WeekPlan[] = [];
 
@@ -367,11 +398,12 @@ function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPo
     const byeSeeds: number[] = [];
 
     if (leftoverTeam && policy === 'auto') {
+      const gamesPlayed = gamesPerSeed(weeks, seedCount);
       if (individualLeftover != null) {
-        const donor = pickDonorPlayer(matches, leftoverTeam, seenOpponentPairs, rand);
+        const donor = pickDonorPlayer(matches, leftoverTeam, seenOpponentPairs, gamesPlayed, rand);
         matches.push({ shirts: leftoverTeam, skins: [individualLeftover, donor] });
       } else {
-        const donorTeam = pickDonorTeam(matches, leftoverTeam, seenOpponentPairs, rand);
+        const donorTeam = pickDonorTeam(matches, leftoverTeam, seenOpponentPairs, gamesPlayed, rand);
         matches.push({ shirts: leftoverTeam, skins: donorTeam });
       }
     } else {
@@ -407,11 +439,29 @@ export function collectCoveragePairs(
 /** Every pair must appear as teammates at least once *and* as opponents at least once — the two
  * hard requirements a generated schedule has to satisfy before it's usable. Teammate coverage is
  * already guaranteed by construction (Layer 1's proof), but checked here too since it's cheap and
- * this is the single place that decides whether an attempt is acceptable. */
+ * this, with hasEvenGameCounts(), is what decides whether an attempt is acceptable. */
 function hasFullCoverage(weeks: WeekPlan[], seedCount: number): boolean {
   const { teammatePairs, opponentPairs } = collectCoveragePairs(weeks.flatMap((w) => w.matches));
   const expected = (seedCount * (seedCount - 1)) / 2;
   return teammatePairs.size === expected && opponentPairs.size === expected;
+}
+
+/** How many matches each seed 1..seedCount plays across `weeks`, counting a seed with none as 0.
+ * The one counting rule behind donor picks, hasEvenGameCounts() and the tests. */
+export function gamesPerSeed(weeks: WeekPlan[], seedCount: number): Map<number, number> {
+  const games = new Map<number, number>();
+  for (let seed = 1; seed <= seedCount; seed++) games.set(seed, 0);
+  for (const w of weeks) {
+    for (const m of w.matches) for (const seed of [...m.shirts, ...m.skins]) games.set(seed, games.get(seed)! + 1);
+  }
+  return games;
+}
+
+/** Match counts differ by at most one across seeds — the evenest any schedule can be, checked here
+ * because the donor picks only steer toward it greedily. */
+function hasEvenGameCounts(weeks: WeekPlan[], seedCount: number): boolean {
+  const counts = [...gamesPerSeed(weeks, seedCount).values()];
+  return Math.max(...counts) - Math.min(...counts) <= 1;
 }
 
 const MAX_ATTEMPTS = 200;
@@ -447,8 +497,8 @@ export function buildSeasonSchedule(
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const rand = mulberry32(seedCount * 100003 + attempt);
-    const weeks = attemptSchedule(teammateRounds, policy, rand);
-    if (hasFullCoverage(weeks, seedCount)) {
+    const weeks = attemptSchedule(seedCount, teammateRounds, policy, rand);
+    if (hasEvenGameCounts(weeks, seedCount) && hasFullCoverage(weeks, seedCount)) {
       // Side-balance labeling doesn't affect coverage (see the comment above chooseSides()), so it's
       // only worth optimizing once a schedule has already passed the coverage check — a discarded
       // attempt would otherwise pay for the full local search for nothing.
@@ -462,6 +512,6 @@ export function buildSeasonSchedule(
   }
 
   throw new Error(
-    `buildSeasonSchedule: couldn't find a schedule covering every pair as both teammates and opponents for seedCount=${seedCount} after ${MAX_ATTEMPTS} attempts`,
+    `buildSeasonSchedule: couldn't find a schedule covering every pair as both teammates and opponents, with match counts at most one apart, for seedCount=${seedCount} after ${MAX_ATTEMPTS} attempts`,
   );
 }
