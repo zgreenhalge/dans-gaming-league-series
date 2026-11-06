@@ -129,8 +129,10 @@ export interface CompletenessResult {
 
 /** Every roster pair must play together at least once *and* against each other at least once —
  * the same two coverage requirements `buildSeasonSchedule()` guarantees for a freshly generated
- * draft, re-checked here because a hand-edit can break either one. Reports every pair still
- * missing each way (not just a yes/no), so the editor can show specifically what's left. */
+ * draft, re-checked here because a hand-edit can break either one. Its third guarantee, match
+ * counts at most one apart, is not re-checked, so a hand-edit can leave counts further apart.
+ * Reports every pair still missing each way (not just a yes/no), so the editor can show
+ * specifically what's left. */
 export function validateDraftCompleteness(weeks: DraftScheduleWeek[], rosterPlayerIds: number[]): CompletenessResult {
   const { teammatePairs, opponentPairs } = collectCoveragePairs(weeks.flatMap((w) => w.matches));
 
