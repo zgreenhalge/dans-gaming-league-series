@@ -22,6 +22,8 @@ interface Props {
   allPlayers: { id: number; name: string }[];
   /** Make the start time a link to the night's page (off on the night page itself). */
   showNightLink?: boolean;
+  /** Offer End night: the viewer is signed up or an admin, and the night has started (night page only). */
+  canEnd?: boolean;
 }
 
 const COMMITMENT_LABEL: Record<ScrimCommitment, string> = { definite: 'Definite', maybe: 'Maybe' };
@@ -48,8 +50,9 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
  *  on whoever has checked in), and the controls to sign up, switch between definite and maybe, or drop
  *  out. Checking in is the lobby's (`ScrimLobbyPanel`). Admins can do all of it for any player, and
  *  check players in or out, from an Admin controls toggle that stays closed until opened.
- *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. */
-export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers, showNightLink }: Props) {
+ *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. On the
+ *  night page, `canEnd` adds an End night button that closes the night before the clock does. */
+export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers, showNightLink, canEnd }: Props) {
   const { night, started, checkInOpen, signups } = upcoming;
   const router = useRouter();
   const { busy, error, run } = useAsyncAction();
@@ -71,6 +74,14 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
     return run(async () => {
       const res = await sendJsonRequest<{ nightRemoved?: boolean } | null>(method, `/api/scrims/${night.id}/${path}`, { player_id: playerId, ...body });
       startTransition(() => (res?.nightRemoved ? router.push('/scrims') : router.refresh()));
+    });
+  }
+
+  function endNight() {
+    if (!window.confirm('End this scrim night for everyone?')) return;
+    return run(async () => {
+      await sendJsonRequest('POST', `/api/scrims/${night.id}/end`, {});
+      startTransition(() => router.refresh());
     });
   }
 
@@ -222,7 +233,20 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
           ))}
         </div>
       )}
-      <ErrorText error={error} size={12} className="px-4 pb-3" />
+      {canEnd && (
+        <div className="px-4 py-3 border-t border-[var(--color-border-tertiary)] flex flex-wrap items-center justify-between gap-3">
+          <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Everyone done? Closes check-in and the lobby.</span>
+          <button
+            type="button"
+            onClick={endNight}
+            disabled={busy}
+            className={DROP_OUT_BTN_CLS}
+          >
+            End night
+          </button>
+        </div>
+      )}
+      <ErrorText error={error} size={12} className="px-4 py-3" />
     </div>
   );
 }

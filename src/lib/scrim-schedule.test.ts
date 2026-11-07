@@ -35,6 +35,13 @@ test('hasScrimNightStarted / hasScrimNightEnded: the night runs SCRIM_NIGHT_LENG
   assert.equal(hasScrimNightEnded(NIGHT, at(SCRIM_NIGHT_LENGTH_MS)), true);
 });
 
+test('hasScrimNightEnded: a night ended by hand is over before the clock, and closes check-in', () => {
+  const ended = { ...NIGHT, endedAt: at(60_000).toISOString() };
+  assert.equal(hasScrimNightEnded(ended, at(60_000)), true);
+  assert.equal(isScrimCheckInOpen(ended, at(60_000)), false);
+  assert.equal(hasScrimNightEnded({ ...NIGHT, endedAt: null }, at(60_000)), false);
+});
+
 test('isScrimCheckInOpen: from SCRIM_CHECK_IN_LEAD_MS before the start until the night ends', () => {
   assert.equal(isScrimCheckInOpen(NIGHT, at(-SCRIM_CHECK_IN_LEAD_MS - 1)), false);
   assert.equal(isScrimCheckInOpen(NIGHT, at(-SCRIM_CHECK_IN_LEAD_MS)), true);

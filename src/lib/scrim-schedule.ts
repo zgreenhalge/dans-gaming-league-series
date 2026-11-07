@@ -13,14 +13,16 @@ export const SCRIM_COMMITMENTS: readonly ScrimCommitment[] = ['definite', 'maybe
  *  the calendar and the home page don't pull the matchmaker into the browser. */
 export const SCRIM_MATCH_SIZE = 4;
 
-/** A scrim night: its `scrim_nights` id and start instant (ISO 8601). */
+/** A scrim night: its `scrim_nights` id, start instant (ISO 8601), and the instant a player or admin
+ *  ended it early, if one did (`endScrimNight()`). */
 export interface ScrimNight {
   id: number;
   startsAt: string;
+  endedAt?: string | null;
 }
 
-/** How long a night runs after it starts: signups and check-in stay open until this has passed, and
- *  no two nights may start closer together than this. */
+/** How long a night runs after it starts unless it's ended sooner: signups and check-in stay open until
+ *  this has passed, and no two nights may start closer together than this. */
 export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
@@ -31,8 +33,9 @@ export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
  *  times render in the viewer's timezone (`Crumb.localDate`, `LocalTime`). */
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
-/** Whether `night` is over. */
+/** Whether `night` is over: ended by hand, or `SCRIM_NIGHT_LENGTH_MS` after it started. */
 export function hasScrimNightEnded(night: ScrimNight, now: Date): boolean {
+  if (night.endedAt) return true;
   return Date.parse(night.startsAt) + SCRIM_NIGHT_LENGTH_MS <= now.getTime();
 }
 

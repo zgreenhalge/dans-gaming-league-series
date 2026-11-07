@@ -89,7 +89,7 @@ __setTestAdminClient(createFakeSupabaseClient(db()));
 
 async function main() {
   await test('getPastScrimNights: over and with a scored match, newest first', async () => {
-    assert.deepEqual(await getPastScrimNights(NOW), [{ id: 1, startsAt: PAST, matches: 1, players: 4 }]);
+    assert.deepEqual(await getPastScrimNights(NOW), [{ id: 1, startsAt: PAST, endedAt: null, matches: 1, players: 4 }]);
   });
 
   await test('getScrimNight: a past night carries its matches and leaderboard', async () => {

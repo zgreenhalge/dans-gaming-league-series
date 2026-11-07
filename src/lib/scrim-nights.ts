@@ -1,5 +1,5 @@
-// Writes for scrim nights: starting one, its signups, check-in, and dropping out (which removes a
-// night nobody is left in). Reads live in `src/lib/queries/scrims.ts`; the timing logic in
+// Writes for scrim nights: starting one, its signups, check-in, dropping out (which removes a night
+// nobody is left in), and ending one early. Reads live in `src/lib/queries/scrims.ts`; the timing logic in
 // `scrim-schedule.ts`. Every write throws on failure so the calling route reports it.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -62,4 +62,15 @@ export async function setScrimCheckIn(db: SupabaseClient, nightId: number, playe
   } else {
     await db.from('scrim_signups').update({ checked_in_at: null }).eq('night_id', nightId).eq('player_id', playerId).throwOnError();
   }
+}
+
+/** Ends a running night now, so its signups, check-in and lobby close ahead of the clock. A night that
+ *  has already ended keeps its original end. */
+export async function endScrimNight(db: SupabaseClient, nightId: number): Promise<void> {
+  await db
+    .from('scrim_nights')
+    .update({ ended_at: new Date().toISOString() })
+    .eq('id', nightId)
+    .is('ended_at', null)
+    .throwOnError();
 }
