@@ -22,7 +22,7 @@ export interface ScrimNight {
 }
 
 /** How long a night runs after it starts unless it's ended sooner: signups and check-in stay open until
- *  this has passed, and no two nights may start closer together than this. */
+ *  this has passed, and a night can't start while another is running. */
 export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
@@ -33,10 +33,19 @@ export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
  *  times render in the viewer's timezone (`Crumb.localDate`, `LocalTime`). */
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
+/** The instant `night` ends, in epoch ms: the earlier of `endedAt` and `SCRIM_NIGHT_LENGTH_MS` after it
+ *  started, never before it started. Its slot on the one shared server runs from `startsAt` to here, and
+ *  `start_scrim_night()` measures the slot the same way. */
+export function scrimNightEnd(night: ScrimNight): number {
+  const start = Date.parse(night.startsAt);
+  const clockEnd = start + SCRIM_NIGHT_LENGTH_MS;
+  return night.endedAt ? Math.max(start, Math.min(Date.parse(night.endedAt), clockEnd)) : clockEnd;
+}
+
 /** Whether `night` is over: ended by hand, or `SCRIM_NIGHT_LENGTH_MS` after it started. */
 export function hasScrimNightEnded(night: ScrimNight, now: Date): boolean {
   if (night.endedAt) return true;
-  return Date.parse(night.startsAt) + SCRIM_NIGHT_LENGTH_MS <= now.getTime();
+  return scrimNightEnd(night) <= now.getTime();
 }
 
 /** Whether `night` has started (it may also have ended). */
@@ -58,7 +67,7 @@ export const SCRIM_LEAGUE_CLEARANCE_MS = 30 * 60 * 1000;
  *  starts until it ends — soonest first: the server breaks the lobby shows. */
 export function leagueMatchesDuring(night: ScrimNight, matches: ScheduledMatchRef[]): ScheduledMatchRef[] {
   const start = Date.parse(night.startsAt) - SCRIM_LEAGUE_CLEARANCE_MS;
-  const end = Date.parse(night.startsAt) + SCRIM_NIGHT_LENGTH_MS;
+  const end = scrimNightEnd(night);
   return matches
     .filter((m) => {
       const t = Date.parse(m.scheduledAt);
