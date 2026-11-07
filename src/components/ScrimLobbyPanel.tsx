@@ -17,7 +17,7 @@ import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import type { FormatRecord } from '@/lib/season-format';
-import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, scrimTeamLabel, type ScrimSideChoice } from '@/lib/scrim-matches';
+import { SCRIM_SIDE_CHOICES, isScrimMatchEditable, scrimTeamLabel, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
@@ -75,16 +75,16 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
 
       {match ? (
         <>
-          {/* An admin's config panel already shows an unstarted match. */}
-          {(!canManage || !isScrimMatchEditable(match)) && <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />}
-          {canManage && <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />}
-          {/* Once the server has started, anyone signed in can join it (an admin's panel has its own). */}
-          {!canManage && !isScrimMatchEditable(match) && (
+          <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />
+          {/* Map, side and lineup can only change before the server starts. */}
+          {canManage && isScrimMatchEditable(match) && <LobbyMatchConfig match={match} pool={pool} names={names} maps={maps} />}
+          {/* An admin runs the server; once it has started, anyone signed in can join it. */}
+          {(canManage || !isScrimMatchEditable(match)) && (
             <MatchServerPanel
               matchId={match.id}
-              canManage={false}
-              canJoin={currentPlayerId != null}
-              signInToJoin={currentPlayerId == null}
+              canManage={canManage}
+              canJoin={canManage || currentPlayerId != null}
+              signInToJoin={!canManage && currentPlayerId == null}
               initialState={(match.server_state ?? 'idle') as ServerState}
             />
           )}
@@ -182,15 +182,16 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
   );
 }
 
-/** The lobby's current match, for admins: map, starting side and lineup pickers, Discard, and the server panel. */
-function LobbyMatch({
+/** The lobby's unstarted match, for admins: a collapsible panel (collapsed by default) holding the map,
+ *  starting side and lineup pickers, with Discard in its header. */
+function LobbyMatchConfig({
   match,
   pool,
   names,
   maps,
-  canManage,
-}: Pick<Props, 'pool' | 'names' | 'maps' | 'canManage'> & { match: ScrimMatch }) {
+}: Pick<Props, 'pool' | 'names' | 'maps'> & { match: ScrimMatch }) {
   const { busy, error, act } = useRefreshingAction();
+  const [open, setOpen] = useState(false);
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
   // The picker shows the saved map; only the custom-id field is local, opened by picking "Custom".
@@ -200,8 +201,6 @@ function LobbyMatch({
   const mapChoice = customOpen ? CUSTOM_MAP_CHOICE : (match.workshop_id ?? '');
   const customId = workshopIdFromInput(customMap);
 
-  const canEdit = canManage && isScrimMatchEditable(match);
-  const canDiscard = canManage && isScrimMatchDiscardable(match);
   const url = `/api/scrims/matches/${match.id}`;
   const lineupChanged = draft.some((id, i) => id !== current[i]);
   const lineupValid = new Set(draft).size === 4;
@@ -213,7 +212,7 @@ function LobbyMatch({
     <select
       key={i}
       value={draft[i]}
-      disabled={!canEdit || busy}
+      disabled={busy}
       onChange={(e) => setDraft(draft.map((id, j) => (j === i ? Number(e.target.value) : id)) as Lineup)}
       aria-label={`${i < 2 ? 'Shirts' : 'Skins'} player ${(i % 2) + 1}`}
       className={`${SELECT_CLS} w-full`}
@@ -226,17 +225,23 @@ function LobbyMatch({
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
-        <Link href={scrimMatchHref(match.id)} className={`${LABEL_CLS} hover:underline`}>
-          Lobby · Match {match.match_number} →
-        </Link>
-        {canDiscard && (
-          <button type="button" onClick={() => act('DELETE', url)} disabled={busy} className={BTN_CLS}>
-            Discard
-          </button>
-        )}
+      <div className={`px-4 py-3 ${open ? 'border-b border-[var(--color-border-tertiary)]' : ''} flex items-center justify-between gap-3`}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className={`${LABEL_CLS} flex items-center gap-2 hover:underline`}
+        >
+          <span aria-hidden>{open ? '▾' : '▸'}</span>
+          Configure · Match {match.match_number}
+        </button>
+        <button type="button" onClick={() => act('DELETE', url)} disabled={busy} className={BTN_CLS}>
+          Discard
+        </button>
       </div>
 
+      {open && (
+      <>
       <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <span className={LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
@@ -250,9 +255,9 @@ function LobbyMatch({
             customValue={customMap}
             onCustomChange={setCustomMap}
             customInvalid={customMap.trim() !== '' && !customId}
-            disabled={!canEdit || busy}
+            disabled={busy}
           />
-          {canEdit && mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
+          {mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
             <button type="button" onClick={() => act('PATCH', url, { workshop: customId })} disabled={busy} className={`${GO_BTN_CLS} self-start`}>
               Use this map
             </button>
@@ -262,7 +267,7 @@ function LobbyMatch({
           <span className={LABEL_CLS}>Starting side</span>
           <select
             value={match.side_choice}
-            disabled={!canEdit || busy}
+            disabled={busy}
             onChange={(e) => act('PATCH', url, { side: e.target.value })}
             className={`${SELECT_CLS} w-full`}
           >
@@ -283,7 +288,7 @@ function LobbyMatch({
         </div>
       </div>
 
-      {canEdit && lineupChanged && (
+      {lineupChanged && (
         <div className="px-4 pb-3 flex items-center gap-2">
           <button
             type="button"
@@ -299,14 +304,9 @@ function LobbyMatch({
           {!lineupValid && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Each player can only take one slot.</span>}
         </div>
       )}
+      </>
+      )}
       <ErrorText error={error} size={12} className="px-4 pb-3" />
-
-
-      <div className="px-4 pb-4 flex justify-center">
-        <div className="w-full max-w-md">
-          <MatchServerPanel matchId={match.id} canManage={canManage} initialState={(match.server_state ?? 'idle') as ServerState} />
-        </div>
-      </div>
     </div>
   );
 }
