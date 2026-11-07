@@ -271,6 +271,7 @@ test('mergeSegmentResults: combines match 120\'s two segments into the true 13-1
     warnings: [],
     inferred_side: 'CT',
     effective_side: 'CT', // stored side used for both segments regardless of each one's own inference
+    ot_rounds_per_half: null,
   };
   // Segment B (121.dem, offset-corrected): SKINS 7 - SHIRTS 12, 19 rounds (engine 5-23).
   const segmentB: ParsedDemoResult = {
@@ -284,6 +285,7 @@ test('mergeSegmentResults: combines match 120\'s two segments into the true 13-1
     warnings: [],
     inferred_side: null, // this segment's own side inference failed (e.g. zero players resolved)
     effective_side: 'CT',
+    ot_rounds_per_half: null,
   };
 
   const merged = mergeSegmentResults([segmentA, segmentB]);
@@ -318,6 +320,7 @@ test('mergeSegmentResults: segments agreeing on inferred side (one null, one res
     warnings: [],
     inferred_side,
     effective_side: 'CT', // a stored side, so both segments use the same value regardless of inference
+    ot_rounds_per_half: null,
   });
   const merged = mergeSegmentResults([seg(1, null), seg(2, 'T')]);
   assert.equal(merged.inferred_side, 'T');
@@ -336,6 +339,7 @@ test('mergeSegmentResults: a raw inferred-side mismatch is only diagnostic when 
     warnings: [],
     inferred_side,
     effective_side: 'CT',
+    ot_rounds_per_half: null,
   });
   const merged = mergeSegmentResults([seg(1, 'CT'), seg(2, 'T')]);
   assert.equal(merged.inferred_side, null); // still surfaced as a diagnostic disagreement
@@ -354,6 +358,7 @@ test('mergeSegmentResults: segments using different effective sides null the sco
     warnings: [],
     inferred_side: side,
     effective_side: side,
+    ot_rounds_per_half: null,
   });
   const merged = mergeSegmentResults([seg(1, 'CT'), seg(2, 'T')]);
   assert.equal(merged.effective_side, null);
@@ -373,6 +378,7 @@ test('mergeSegmentResults: an unresolvable side in any segment makes the combine
     warnings: [],
     inferred_side: 'CT',
     effective_side: 'CT',
+    ot_rounds_per_half: null,
   };
   const unknown: ParsedDemoResult = {
     stats: [playerStat({ player_id: 1, rounds_won: 0, rounds_played: 19 })],
@@ -382,6 +388,7 @@ test('mergeSegmentResults: an unresolvable side in any segment makes the combine
     warnings: ['Starting side unknown — rounds won cannot be determined from the demo. Enter the score manually.'],
     inferred_side: null,
     effective_side: null,
+    ot_rounds_per_half: null,
   };
   const merged = mergeSegmentResults([known, unknown]);
   assert.equal(merged.shirts_score, null);
@@ -399,6 +406,7 @@ test('mergeSegmentResults: duplicate warnings across segments are deduped', () =
     warnings: [w],
     inferred_side: null,
     effective_side: 'CT',
+    ot_rounds_per_half: null,
   });
   const merged = mergeSegmentResults([seg(1), seg(2)]);
   assert.deepEqual(merged.warnings, [w]);
@@ -415,6 +423,7 @@ test('mergeSegmentResults: a gap in the merged round sequence nulls the score ev
     warnings: [],
     inferred_side: 'CT',
     effective_side: 'CT',
+    ot_rounds_per_half: null,
   });
   const merged = mergeSegmentResults([seg(1), seg(3)]); // round 2 missing
   assert.equal(merged.shirts_score, null);
@@ -431,6 +440,7 @@ test('mergeSegmentResults: a genuinely contiguous merge is not flagged', () => {
     warnings: [],
     inferred_side: 'CT',
     effective_side: 'CT',
+    ot_rounds_per_half: null,
   });
   const merged = mergeSegmentResults([seg(1), seg(2)]);
   assert.equal(merged.shirts_score, 2);

@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { decideSkinsSide, resolveEffectiveSide, anchorToRoundOne } from './sideInference';
+import { decideSkinsSide, resolveEffectiveSide, anchorToRoundOne, inferOtRoundsPerHalf } from './sideInference';
 import { sideForRealRound } from './roundSides';
 import { test, report } from '../test-support/miniTest';
 
@@ -58,33 +58,35 @@ test('a SKINS player missing from the tick → decided by the present one', () =
 // schedule `buildRoundSides` uses, given the segment's real starting round number.
 
 test('anchorToRoundOne: a segment starting at real round 1 (the common case) is unchanged', () => {
-  assert.equal(anchorToRoundOne('CT', 1, 13), 'CT');
-  assert.equal(anchorToRoundOne('T', 1, 13), 'T');
+  assert.equal(anchorToRoundOne('CT', 1, 13, 2), 'CT');
+  assert.equal(anchorToRoundOne('T', 1, 13, 2), 'T');
 });
 
 test('anchorToRoundOne: null side passes through unchanged', () => {
-  assert.equal(anchorToRoundOne(null, 13, 13), null);
+  assert.equal(anchorToRoundOne(null, 13, 13, 2), null);
 });
 
 test('anchorToRoundOne: a segment starting just past the halftime swap (real round 13, MR12) inverts', () => {
   // The demo's own team_num read at round 13 shows the post-swap side; the true round-1 anchor
   // for that team is the opposite.
-  assert.equal(anchorToRoundOne('CT', 13, 13), 'T');
-  assert.equal(anchorToRoundOne('T', 13, 13), 'CT');
+  assert.equal(anchorToRoundOne('CT', 13, 13, 2), 'T');
+  assert.equal(anchorToRoundOne('T', 13, 13, 2), 'CT');
 });
 
 test('anchorToRoundOne: round-trips against sideForRealRound for an arbitrary round/side/target', () => {
   // The correction is sideForRealRound's own inverse: whatever side a round-1 anchor of S produces
   // at round R, feeding that result back through anchorToRoundOne at the same R must recover S.
   for (const target of [13, 16]) {
-    for (const round of [1, 5, 12, 13, 20, 25, 27, 28, 29, 31, 35]) {
-      for (const anchor of ['CT', 'T'] as const) {
-        const sideAtRound = sideForRealRound(round, anchor, target);
-        assert.equal(
-          anchorToRoundOne(sideAtRound, round, target),
-          anchor,
-          `round=${round} target=${target} anchor=${anchor}`,
-        );
+    for (const otHalf of [2, 3]) {
+      for (const round of [1, 5, 12, 13, 20, 25, 27, 28, 29, 31, 35]) {
+        for (const anchor of ['CT', 'T'] as const) {
+          const sideAtRound = sideForRealRound(round, anchor, target, otHalf);
+          assert.equal(
+            anchorToRoundOne(sideAtRound, round, target, otHalf),
+            anchor,
+            `round=${round} target=${target} otHalf=${otHalf} anchor=${anchor}`,
+          );
+        }
       }
     }
   }
@@ -109,6 +111,35 @@ test('stored present, demo unknown → stored, no false disagreement', () => {
 
 test('neither stored nor inferred → null', () => {
   assert.deepEqual(resolveEffectiveSide(null, null), { side: null, disagreed: false });
+});
+
+
+// --- inferOtRoundsPerHalf: the half size from one team's side per real round ---
+
+function sidesFor(otHalf: number, rounds: number, start: 'CT' | 'T' = 'CT') {
+  const m = new Map<number, 'CT' | 'T'>();
+  for (let n = 1; n <= rounds; n++) m.set(n, sideForRealRound(n, start, 13, otHalf));
+  return m;
+}
+
+test('inferOtRoundsPerHalf: recovers 2 and 3 from a schedule that reaches the first mid-period swap', () => {
+  for (const half of [2, 3]) {
+    for (const start of ['CT', 'T'] as const) {
+      assert.equal(inferOtRoundsPerHalf(sidesFor(half, 24 + half + 1, start), 13), half);
+      assert.equal(inferOtRoundsPerHalf(sidesFor(half, 24 + half * 4, start), 13), half);
+    }
+  }
+});
+
+test('inferOtRoundsPerHalf: null with no overtime or before the first swap', () => {
+  assert.equal(inferOtRoundsPerHalf(sidesFor(2, 24), 13), null);
+  assert.equal(inferOtRoundsPerHalf(sidesFor(3, 26), 13), null);
+});
+
+test('inferOtRoundsPerHalf: null when the first overtime round was not observed', () => {
+  const m = sidesFor(2, 32);
+  m.delete(25);
+  assert.equal(inferOtRoundsPerHalf(m, 13), null);
 });
 
 report();

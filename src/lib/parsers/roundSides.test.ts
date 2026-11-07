@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildRoundSides, sideForFaction, roundsPlayedBySide, type RoundEndRow } from './roundSides';
+import { buildRoundSides, DEFAULT_OT_ROUNDS_PER_HALF, sideForFaction, sideForRealRound, roundsPlayedBySide, type RoundEndRow } from './roundSides';
 import { test, report } from '../test-support/miniTest';
 
 function round(n: number, winner: 'CT' | 'T' | null = 'CT', warmup = false): RoundEndRow {
@@ -47,7 +47,7 @@ test('buildRoundSides: OT swaps mid-period and not between periods', () => {
   // other (regulation H2) side is 'CT'. Each OT period is 2 + 2 rounds: swap after its first 2
   // rounds, none at the period boundary. Rounds 25-26 CT, 27-30 T, 31-34 CT, 35-38 T.
   const events = Array.from({ length: 38 }, (_, i) => round(i + 1));
-  const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
+  const byNum = new Map(buildRoundSides(events, 'CT', 13, 0, 1, 2).map((s) => [s.roundNumber, s]));
   const expected: Record<number, 'CT' | 'T'> = {
     24: 'CT', 25: 'CT', 26: 'CT', 27: 'T', 28: 'T', 29: 'T', 30: 'T',
     31: 'CT', 32: 'CT', 33: 'CT', 34: 'CT', 35: 'T', 36: 'T', 37: 'T', 38: 'T',
@@ -152,31 +152,76 @@ test('sideForFaction: SHIRTS returns the round shirts side, SKINS returns the op
 });
 
 test('roundsPlayedBySide: null starting side or no rounds played returns zero both sides', () => {
-  assert.deepEqual(roundsPlayedBySide(null, 20, 13), { ct: 0, t: 0 });
-  assert.deepEqual(roundsPlayedBySide('CT', 0, 13), { ct: 0, t: 0 });
+  assert.deepEqual(roundsPlayedBySide(null, 20, 13, 2), { ct: 0, t: 0 });
+  assert.deepEqual(roundsPlayedBySide('CT', 0, 13, 2), { ct: 0, t: 0 });
 });
 
 test('roundsPlayedBySide: a regulation-only match splits evenly at the half boundary', () => {
   // MR12 (targetWinRounds 13): 12 rounds/half. A team starting CT that played all 24
   // rounds spent 12 on CT (first half) and 12 on T (second half, post-swap).
-  assert.deepEqual(roundsPlayedBySide('CT', 24, 13), { ct: 12, t: 12 });
+  assert.deepEqual(roundsPlayedBySide('CT', 24, 13, 2), { ct: 12, t: 12 });
 });
 
 test('roundsPlayedBySide: partway through the first half stays entirely on the starting side', () => {
-  assert.deepEqual(roundsPlayedBySide('T', 5, 13), { ct: 0, t: 5 });
+  assert.deepEqual(roundsPlayedBySide('T', 5, 13, 2), { ct: 0, t: 5 });
 });
 
 test('roundsPlayedBySide: matches buildRoundSides round-by-round for the same schedule', () => {
   // Cross-check against buildRoundSides (event-driven) for a match that runs through two OT periods, to
   // confirm both entry points agree on the same per-round side assignment.
   const events = Array.from({ length: 38 }, (_, i) => round(i + 1));
-  const sides = buildRoundSides(events, 'CT', 13); // skins start CT -> shirts start T
+  const sides = buildRoundSides(events, 'CT', 13, 0, 1, 2); // skins start CT -> shirts start T
   const expected = { ct: 0, t: 0 };
   for (const s of sides) {
     if (s.shirtsSide === 'CT') expected.ct++;
     else expected.t++;
   }
-  assert.deepEqual(roundsPlayedBySide('T', 38, 13), expected);
+  assert.deepEqual(roundsPlayedBySide('T', 38, 13, 2), expected);
+});
+
+// --- 3-round OT halves (mp_overtime_maxrounds 6) ---
+// Same schedule as the 2-round test above with the half size as 3: OT starts at round 25 on the
+// regulation-H2 side, swaps after 3 rounds, not at the period boundary, and swaps again 3 rounds
+// into the next period.
+
+test('buildRoundSides: 3-round OT halves swap after 3 rounds of the period', () => {
+  const events = Array.from({ length: 42 }, (_, i) => round(i + 1));
+  const byNum = new Map(
+    buildRoundSides(events, 'CT', 13, 0, 1, 3).map((s) => [s.roundNumber, s]),
+  );
+  const expected: Record<number, 'CT' | 'T'> = {
+    24: 'CT', 25: 'CT', 26: 'CT', 27: 'CT', 28: 'T', 29: 'T', 30: 'T',
+    31: 'T', 32: 'T', 33: 'T', 34: 'CT', 35: 'CT', 36: 'CT', 37: 'CT', 38: 'CT', 39: 'CT',
+    40: 'T', 41: 'T', 42: 'T',
+  };
+  for (const [n, side] of Object.entries(expected)) {
+    assert.equal(byNum.get(Number(n))!.shirtsSide, side, `round ${n}`);
+  }
+});
+
+test('sideForRealRound: the OT half size changes only rounds past regulation', () => {
+  for (let n = 1; n <= 24; n++) {
+    assert.equal(sideForRealRound(n, 'T', 13, 2), sideForRealRound(n, 'T', 13, 3), `round ${n}`);
+  }
+  assert.notEqual(sideForRealRound(27, 'T', 13, 2), sideForRealRound(27, 'T', 13, 3));
+});
+
+test('roundsPlayedBySide: agrees with buildRoundSides for 3-round OT halves', () => {
+  const events = Array.from({ length: 42 }, (_, i) => round(i + 1));
+  const expected = { ct: 0, t: 0 };
+  for (const s of buildRoundSides(events, 'CT', 13, 0, 1, 3)) {
+    if (s.shirtsSide === 'CT') expected.ct++;
+    else expected.t++;
+  }
+  assert.deepEqual(roundsPlayedBySide('T', 42, 13, 3), expected);
+});
+
+test('buildRoundSides: with no recorded half size, overtime uses DEFAULT_OT_ROUNDS_PER_HALF', () => {
+  const events = Array.from({ length: 30 }, (_, i) => round(i + 1));
+  const implicit = buildRoundSides(events, 'CT', 13);
+  const explicit = buildRoundSides(events, 'CT', 13, 0, 1, DEFAULT_OT_ROUNDS_PER_HALF);
+  assert.deepEqual(implicit, explicit);
+  assert.equal(DEFAULT_OT_ROUNDS_PER_HALF, 3);
 });
 
 report();

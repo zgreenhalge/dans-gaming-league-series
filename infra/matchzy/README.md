@@ -52,7 +52,10 @@ apply.ts`, or DatHost File Manager / FTP as a fallback)
 - `cfg/MatchZy/config.cfg` — main MatchZy server config (ready threshold, demo recording, knife,
   overtime, etc.). **Most important.**
 - `cfg/MatchZy/live_override.cfg` — cvars applied when a match goes live (round/eco/overtime
-  economy, comms); overlaps with `gamemode_competitive2v2_server.cfg`.
+  economy, comms); overlaps with `gamemode_competitive2v2_server.cfg`. `mp_overtime_maxrounds` in
+  both files sets the overtime period (6 = two 3-round halves); the app reads each match's half size
+  from its demo (`matches.ot_rounds_per_half`, see `docs/demo-ingestion.md`), so changing the cvar
+  needs no code change and leaves already-played matches untouched.
 - `cfg/MatchZy/live_wingman_override.cfg` — **this is the file MatchZy actually execs at go-live**,
   not `live_override.cfg` directly: DGLS's engine `game_mode` evaluates to Wingman (2) at match-live,
   so MatchZy's `ExecLiveCFG()` takes the wingman branch (`live_wingman.cfg` →

@@ -712,6 +712,7 @@ export type Database = {
           pre_match_win_prob_formula_version: string | null
           recording_url: string | null
           replay_status: string
+          ot_rounds_per_half: number | null
           round_history: Json | null
           scrim_night_id: number | null
           scrim_side_choice: string | null
@@ -736,6 +737,7 @@ export type Database = {
           pre_match_win_prob_formula_version?: string | null
           recording_url?: string | null
           replay_status?: string
+          ot_rounds_per_half?: number | null
           round_history?: Json | null
           scrim_night_id?: number | null
           scrim_side_choice?: string | null
@@ -760,6 +762,7 @@ export type Database = {
           pre_match_win_prob_formula_version?: string | null
           recording_url?: string | null
           replay_status?: string
+          ot_rounds_per_half?: number | null
           round_history?: Json | null
           scrim_night_id?: number | null
           scrim_side_choice?: string | null

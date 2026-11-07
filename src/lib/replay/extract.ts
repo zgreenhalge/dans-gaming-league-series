@@ -213,7 +213,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   // silently came back with zero rounds ("Starting side unknown" / "No live rounds found").
   const matchStartTick = findMatchStartTick(demoBuffer);
   const liveRoundEnds = filterLiveRoundEnds(roundEndRows, matchStartTick);
-  const { effectiveSide, disagreementWarning } = resolveStartingSide(
+  const { effectiveSide, otRoundsPerHalf, disagreementWarning } = resolveStartingSide(
     demoBuffer, liveRoundEnds, steamToPlayer, skinsSide, targetWinRounds, startingRealRound,
   );
   if (disagreementWarning) warnings.push(disagreementWarning);
@@ -227,6 +227,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     targetWinRounds,
     [],
     startingRealRound,
+    otRoundsPerHalf,
   );
   warnings.push(...context.warnings);
 

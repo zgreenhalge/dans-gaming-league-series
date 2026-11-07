@@ -1,5 +1,5 @@
 import { parseTicks } from '@laihoe/demoparser2';
-import { sideForRealRound } from './roundSides';
+import { DEFAULT_OT_ROUNDS_PER_HALF, sideForRealRound } from './roundSides';
 
 // Infer skins' starting side (the round-1 anchor `buildRoundSides` needs) directly
 // from the demo, instead of relying on a stored `skins_starting_side`. The demo is
@@ -61,9 +61,74 @@ export function anchorToRoundOne(
   sideAtRound: 'CT' | 'T' | null,
   realRoundNumber: number,
   targetWinRounds: number,
+  otRoundsPerHalf: number,
 ): 'CT' | 'T' | null {
   if (sideAtRound === null) return null;
-  return sideForRealRound(realRoundNumber, sideAtRound, targetWinRounds);
+  return sideForRealRound(realRoundNumber, sideAtRound, targetWinRounds, otRoundsPerHalf);
+}
+
+/**
+ * Pure: the overtime half size implied by one team's observed side per real round. OT sides swap
+ * between the two halves of the first period (after `otRoundsPerHalf` rounds) and the first OT
+ * round continues the regulation-H2 side, so the first OT round whose side differs from round
+ * `2 * (targetWinRounds - 1) + 1` is round `2 * (targetWinRounds - 1) + otRoundsPerHalf + 1`.
+ * Returns `null` when the observations don't include that first OT round, or no swap is observed
+ * (no OT, or the match ended before a half completed) — in which case the half size never
+ * affected a round's side.
+ */
+export function inferOtRoundsPerHalf(
+  sideByRealRound: Map<number, 'CT' | 'T'>,
+  targetWinRounds: number,
+): number | null {
+  const otStart = (targetWinRounds - 1) * 2 + 1;
+  const firstOtSide = sideByRealRound.get(otStart);
+  if (firstOtSide === undefined) return null;
+  for (let n = otStart + 1; sideByRealRound.has(n); n++) {
+    if (sideByRealRound.get(n) !== firstOtSide) return n - otStart;
+  }
+  return null;
+}
+
+/**
+ * Reads one resolved player's `team_num` at the end tick of each overtime round and runs
+ * `inferOtRoundsPerHalf()` over it. `liveRoundEnds` are the segment's live `round_end` rows in
+ * order; the first is real round `startingRealRound`. Returns `null` when there's no overtime in
+ * this demo (or segment) to read — a segment that begins after the first OT round can't be
+ * anchored, so it also returns `null`.
+ */
+function inferOtRoundsPerHalfFromDemo(
+  demoBuffer: Buffer,
+  liveRoundEnds: { tick: number }[],
+  steamToPlayer: ResolvedRoster,
+  targetWinRounds: number,
+  startingRealRound: number,
+): number | null {
+  const otStart = (targetWinRounds - 1) * 2 + 1;
+  const otEnds = liveRoundEnds
+    .map((e, i) => ({ tick: e.tick, realRound: startingRealRound + i }))
+    .filter((r) => r.realRound >= otStart);
+  if (otEnds.length === 0 || otEnds[0].realRound !== otStart) return null;
+  const steamId = steamToPlayer.keys().next().value;
+  if (steamId === undefined) return null;
+  const rows = parseTicks(demoBuffer, ['team_num'], otEnds.map((r) => r.tick)) as {
+    steamid: string | bigint;
+    tick: number;
+    team_num?: number;
+  }[];
+  const teamAtTick = new Map<number, number>();
+  for (const r of rows) {
+    if (String(r.steamid ?? '') === steamId && typeof r.team_num === 'number') {
+      teamAtTick.set(r.tick, r.team_num);
+    }
+  }
+  const sideByRealRound = new Map<number, 'CT' | 'T'>();
+  for (const r of otEnds) {
+    const team = teamAtTick.get(r.tick);
+    if (team === CT_TEAM) sideByRealRound.set(r.realRound, 'CT');
+    else if (team === T_TEAM) sideByRealRound.set(r.realRound, 'T');
+    else break;
+  }
+  return inferOtRoundsPerHalf(sideByRealRound, targetWinRounds);
 }
 
 /**
@@ -77,6 +142,7 @@ function inferSkinsStartingSide(
   firstLiveRoundTick: number,
   steamToPlayer: ResolvedRoster,
   targetWinRounds: number,
+  otRoundsPerHalf: number,
   startingRealRound = 1,
 ): 'CT' | 'T' | null {
   const rows = parseTicks(demoBuffer, ['team_num'], [firstLiveRoundTick]) as {
@@ -90,7 +156,7 @@ function inferSkinsStartingSide(
     if (typeof r.team_num === 'number') teamBySteamId.set(sid, r.team_num);
   }
   const sideAtSegmentStart = decideSkinsSide(teamBySteamId, steamToPlayer);
-  return anchorToRoundOne(sideAtSegmentStart, startingRealRound, targetWinRounds);
+  return anchorToRoundOne(sideAtSegmentStart, startingRealRound, targetWinRounds, otRoundsPerHalf);
 }
 
 /**
@@ -120,6 +186,13 @@ export interface StartingSideResolution {
   /** The side to actually use for round attribution — stored wins over `inferredSide`
    *  (see `resolveEffectiveSide()`). */
   effectiveSide: 'CT' | 'T' | null;
+  /** The overtime half size inferred from the demo's own mid-period `team_num` swap, or `null`
+   *  when the demo (segment) shows none — see `inferOtRoundsPerHalf()`. This is the value to
+   *  persist as `matches.ot_rounds_per_half`. */
+  inferredOtRoundsPerHalf: number | null;
+  /** The half size round attribution actually uses: `inferredOtRoundsPerHalf`, else
+   *  `DEFAULT_OT_ROUNDS_PER_HALF` (a demo with no mid-period swap never exercises the value). */
+  otRoundsPerHalf: number;
   /** Set when a stored side is contradicted by the demo; null otherwise. Whether to surface
    *  this (push it onto a caller's own `warnings` array) is the caller's call. */
   disagreementWarning: string | null;
@@ -142,10 +215,15 @@ export function resolveStartingSide(
   targetWinRounds: number,
   startingRealRound = 1,
 ): StartingSideResolution {
+  const inferredOtRoundsPerHalf = inferOtRoundsPerHalfFromDemo(
+    demoBuffer, liveRoundEnds, steamToPlayer, targetWinRounds, startingRealRound,
+  );
+  const otRoundsPerHalf =
+    inferredOtRoundsPerHalf ?? DEFAULT_OT_ROUNDS_PER_HALF;
   const inferredSide =
     liveRoundEnds.length > 0
       ? inferSkinsStartingSide(
-          demoBuffer, liveRoundEnds[0].tick, steamToPlayer, targetWinRounds, startingRealRound,
+          demoBuffer, liveRoundEnds[0].tick, steamToPlayer, targetWinRounds, otRoundsPerHalf, startingRealRound,
         )
       : null;
   const { side: effectiveSide, disagreed } = resolveEffectiveSide(storedSide, inferredSide);
@@ -153,5 +231,5 @@ export function resolveStartingSide(
     disagreed && storedSide !== null && inferredSide !== null
       ? sideDisagreementWarning(storedSide, inferredSide)
       : null;
-  return { inferredSide, effectiveSide, disagreementWarning };
+  return { inferredSide, effectiveSide, inferredOtRoundsPerHalf, otRoundsPerHalf, disagreementWarning };
 }

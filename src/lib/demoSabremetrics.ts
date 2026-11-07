@@ -141,7 +141,7 @@ export function parseDemoSabremetrics(
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
   const sabLiveRounds = filterLiveRoundEnds(roundEndEvents, matchStartTick);
-  const { effectiveSide } = resolveStartingSide(
+  const { effectiveSide, otRoundsPerHalf } = resolveStartingSide(
     demoBuffer, sabLiveRounds, steamToPlayer, skinsSide, targetWinRounds, startingRealRound,
   );
 
@@ -150,6 +150,7 @@ export function parseDemoSabremetrics(
     steamToPlayer, effectiveSide, targetWinRounds,
     officiallyEndedEvents.map((e) => e.tick),
     startingRealRound,
+    otRoundsPerHalf,
   );
 
   if (context.rounds.length === 0) {

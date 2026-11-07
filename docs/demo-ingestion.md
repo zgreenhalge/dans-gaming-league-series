@@ -284,10 +284,27 @@ the score or corrupts the splits.
 ## Side splits (deterministic from the round-1 anchor)
 
 CT/T splits are derived **deterministically** from faction (SHIRTS/SKINS), the starting side, and the
-round number — the regulation half-swap and overtime (2-round halves) logic in `parsers/roundSides.ts` walks the
+round number — the regulation half-swap and overtime (`otRoundsPerHalf`-round halves) logic in `parsers/roundSides.ts` walks the
 sides from that single round-1 anchor, with no per-round `team_num` reads. Per-round deltas come from
 the engine's `ActionTrackingServices` accumulators in `parsers/accumulators.ts`. See
 [`calculations.md`](./calculations.md#side-splits) for the exact rules.
+
+### Overtime half size
+
+`sideForRealRound()` takes the OT half size (`mp_overtime_maxrounds / 2`) as an argument; it varies per
+match. The MatchZy remote-log events the app ingests (`going_live`/`round_end`/`map_result`) carry
+scores, round numbers and player stats but no overtime cvars, so the value comes from the demo:
+`resolveStartingSide()` (`parsers/sideInference.ts`) reads one rostered player's `team_num` at the
+end tick of each overtime round and `inferOtRoundsPerHalf()` finds the first mid-period swap (the
+first OT round whose side differs from round `2 * (target_win_rounds - 1) + 1` is round
+`2 * (target_win_rounds - 1) + otRoundsPerHalf + 1`). That value drives round attribution for the same
+parse and is returned as `ParsedDemoResult.ot_rounds_per_half`, carried on the confirm payload
+(`DemoConfirmPayload`) into `writeMatchScore()`, which stores it as `matches.ot_rounds_per_half`. A
+demo with no overtime shows no swap, so the value is `null` and never affects a round's side; callers
+without a demo (the match scoreboard's `roundsPlayedBySide()`, `RoundHistoryStrip`) read the stored
+column, falling back to `DEFAULT_OT_ROUNDS_PER_HALF` (3, the server's `mp_overtime_maxrounds 6`). A later segment of a restart-interrupted
+match that begins after the first OT round can't observe the swap and falls back to the default; the
+merged result keeps whichever segment inferred it.
 
 ### Starting-side inference
 
@@ -481,7 +498,7 @@ field:
 | Knife round, no stored side | as above, with the starting side inferred from the demo |
 | No `begin_new_match` event | `matchStartTick` falls back to 0; `total_rounds_played` starts at 1 |
 | Multi-segment | a server restart splits the recording; each segment has its own tick space |
-| Overtime | rounds past `2 * (target_win_rounds - 1)`; 2-round OT halves swap sides mid-period and not between periods |
+| Overtime | rounds past `2 * (target_win_rounds - 1)`; OT halves of `otRoundsPerHalf` rounds swap sides mid-period and not between periods |
 
 **Adding a demo.** When a real match exposes a parser bug, add that match to `corpus.json` (its `shape`
 says what it exercises), run `npm run demo-fixtures:fetch`, and confirm the new entry fails before the
