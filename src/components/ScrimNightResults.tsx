@@ -4,7 +4,8 @@ import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import { matchCardRight } from '@/lib/match-card';
 import { playerHref, scrimMatchHref } from '@/lib/crumbs';
-import { formatStat, isPlayedScore } from '@/lib/util';
+import { formatStat } from '@/lib/util';
+import { scrimMatchNeedsServer } from '@/lib/scrim-matches';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';
 
 /** A scrim night's standings: every player who played a scored match, ranked Wins → RWR% → ADR
@@ -40,7 +41,7 @@ export function ScrimNightLeaderboard({ rows }: { rows: ScrimLeaderboardRow[] })
 }
 
 /** A scrim night's scored matches, newest first, as the same `MatchCard` rows every match list uses,
- *  with those whose server has stopped but have no score yet (demo parsing) shown as Pending. */
+ *  with those whose game is over but have no score yet (demo parsing) shown as Pending. */
 export function ScrimNightMatchList({
   matches,
   names,
@@ -50,7 +51,7 @@ export function ScrimNightMatchList({
   names: Record<number, string>;
   currentPlayerId: number | null;
 }) {
-  const played = matches.filter((m) => isPlayedScore(m.final_score) || m.server_state === 'done').reverse();
+  const played = matches.filter((m) => !scrimMatchNeedsServer(m)).reverse();
   if (played.length === 0) return <EmptyState message="No matches played yet." className="py-2" />;
   const statsFor = (m: ScrimMatch, faction: 'SHIRTS' | 'SKINS') =>
     m.players.filter((p) => p.faction === faction).map((p) => ({ ...p, player_name: names[p.player_id] ?? `#${p.player_id}` }));

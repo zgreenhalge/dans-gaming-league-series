@@ -21,11 +21,15 @@ const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down']);
 
 type ScrimMatchState = { final_score: string | null; server_state: string | null };
 
-/** Whether a scrim match still needs the night's server: not scored, and its server hasn't stopped.
- *  Once it has (`done`), its demo is being parsed or awaiting review and the next match can go ahead.
- *  The lobby holds the night's first such match. */
+/** `server_state` values once a match's game is over: the scoreboard grace period before the server
+ *  stops, then stopped. */
+const GAME_OVER_SERVER_STATES = new Set(['tearing_down', 'done']);
+
+/** Whether a scrim match still needs the night's server: not scored, and its game isn't over. Once it
+ *  is, the next match can go ahead (it takes the server over; see the provision route) while the demo
+ *  is parsed or awaits review. The lobby holds the night's first such match. */
 export function scrimMatchNeedsServer(m: ScrimMatchState): boolean {
-  return !isPlayedScore(m.final_score) && m.server_state !== 'done';
+  return !isPlayedScore(m.final_score) && !(m.server_state !== null && GAME_OVER_SERVER_STATES.has(m.server_state));
 }
 
 /** Whether a scrim match's map, side and lineup can still change: not scored and never started — once
@@ -40,6 +44,12 @@ export function isScrimMatchEditable(m: ScrimMatchState): boolean {
  *  its match page). */
 export function isScrimMatchDiscardable(m: ScrimMatchState): boolean {
   return !isPlayedScore(m.final_score) && !(m.server_state !== null && RUNNING_SERVER_STATES.has(m.server_state));
+}
+
+/** The scrim night a match belongs to, or `null` for a league match or an unknown id. */
+export async function scrimNightIdOf(db: SupabaseClient, matchId: number): Promise<number | null> {
+  const { data } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle().throwOnError();
+  return (data as { scrim_night_id: number | null } | null)?.scrim_night_id ?? null;
 }
 
 /** Whether `matchId` is a scrim match (`scrim_night_id` set). */

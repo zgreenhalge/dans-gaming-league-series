@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
 import { RefreshAt } from '@/components/RefreshAt';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
@@ -104,6 +105,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
               <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
             </div>
           )}
+          {/* The lobby match's game ending frees the next match, so the page follows its server state. */}
+          {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
           {night.checkInOpen && (pool.length > 0 || lobbyMatch) && (
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
