@@ -1,10 +1,11 @@
-// Server status for the in-match UI to poll. Session-gated (admin or in-match). Returns the
+// Server status for the in-match UI to poll. Session-gated (admin or in-match; any signed-in player
+// for a scrim match, so spectators can join). Returns the
 // server-state machine + connect string so the client can show "starting…" → join/connect links.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getReconciledServerState } from '@/lib/dathost-lifecycle';
-import { requireMatchAccess } from '@/lib/match-access';
+import { requireServerStatusAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
 
@@ -18,7 +19,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
-  const access = await requireMatchAccess(matchId);
+  const access = await requireServerStatusAccess(matchId);
   if (!access.ok) return accessDenied(access);
 
   // Reconciles a stale `live` against real DatHost state (#135) so the UI never offers a dead server.

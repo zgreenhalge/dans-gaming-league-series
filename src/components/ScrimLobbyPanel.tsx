@@ -17,7 +17,7 @@ import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import type { FormatRecord } from '@/lib/season-format';
-import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
+import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, scrimTeamLabel, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
@@ -78,6 +78,16 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
           {/* An admin's config panel already shows an unstarted match. */}
           {(!canManage || !isScrimMatchEditable(match)) && <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />}
           {canManage && <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />}
+          {/* Once the server has started, anyone signed in can join it (an admin's panel has its own). */}
+          {!canManage && !isScrimMatchEditable(match) && (
+            <MatchServerPanel
+              matchId={match.id}
+              canManage={false}
+              canJoin={currentPlayerId != null}
+              signInToJoin={currentPlayerId == null}
+              initialState={(match.server_state ?? 'idle') as ServerState}
+            />
+          )}
           {queued.length > 0 && <UpNext queued={queued} names={names} />}
         </>
       ) : (
@@ -157,7 +167,6 @@ export function ScrimCheckInButton({ nightId, viewer }: { nightId: number; viewe
 /** The lobby's match, before and after its server starts: the same `MatchCard` every
  *  match list uses, linking to the match page. The starting side isn't on it. */
 function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; names: Props['names']; currentPlayerId: number | null }) {
-  const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <MatchCard
@@ -165,8 +174,8 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
         map={match.map}
         label={{ type: 'match', matchNumber: match.match_number, isFeatureMatch: false }}
         right={isScrimMatchEditable(match) ? { type: 'pending' } : { type: 'live' }}
-        shirtsFallback={team(match.shirts)}
-        skinsFallback={team(match.skins)}
+        shirtsFallback={scrimTeamLabel(match.shirts, names)}
+        skinsFallback={scrimTeamLabel(match.skins, names)}
         currentPlayerId={currentPlayerId}
       />
     </div>
@@ -306,7 +315,6 @@ function LobbyMatch({
  *  admin. Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
 function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
   const { busy, error, act } = useRefreshingAction();
-  const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className={`px-4 py-2 border-b border-[var(--color-border-tertiary)] ${LABEL_CLS}`}>Up next · {queued.length}</div>
@@ -314,7 +322,7 @@ function UpNext({ queued, names }: { queued: Props['queued']; names: Props['name
         <div key={match.id} className="px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 flex items-center justify-between gap-3 font-mono text-[12px]">
           <span className="min-w-0">
             <span className="text-[var(--color-text-secondary)]">{match.match_number} · {match.map ? toSentenceCase(match.map) : '—'} · </span>
-            {team(match.shirts)} <span className="text-[var(--color-text-secondary)]">vs</span> {team(match.skins)}
+            {scrimTeamLabel(match.shirts, names)} <span className="text-[var(--color-text-secondary)]">vs</span> {scrimTeamLabel(match.skins, names)}
           </span>
           {canDiscard && (
             <button type="button" onClick={() => act('DELETE', `/api/scrims/matches/${match.id}`)} disabled={busy} className={BTN_CLS}>

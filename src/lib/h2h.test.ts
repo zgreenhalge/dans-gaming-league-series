@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, adrBaselineFor, findDuo, findRival, duoAvgKda, rivalEvenness, isUnevenRivalry, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
+import { computeH2H, adrBaselineFor, findDuo, findRival, duoAvgKda, rivalEvenness, isUnevenRivalry, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, scrimMatchesToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
@@ -395,6 +395,27 @@ function seasonSourceMatch(overrides: {
     skins_stats: overrides.skins_stats ?? [],
   };
 }
+
+test('scrimMatchesToH2HInput keeps played matches only, with no week, season or veto data', () => {
+  const players4 = [
+    stat({ player_id: 1, faction: 'SHIRTS' }),
+    stat({ player_id: 2, faction: 'SHIRTS' }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: false }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: false }),
+  ];
+  const inputs = scrimMatchesToH2HInput([
+    { id: 20, match_number: 2, map: 'de_test', final_score: '13-9', players: players4 },
+    { id: 21, match_number: 3, map: 'de_test', final_score: '0-0', players: players4 }, // unplayed — dropped
+  ]);
+  assert.equal(inputs.length, 1);
+  assert.deepEqual(
+    { id: inputs[0].matchId, week: inputs[0].weekNumber, season: inputs[0].seasonNumber, map: inputs[0].map, picked: inputs[0].pickedBy },
+    { id: 20, week: 0, season: null, map: 'de_test', picked: null },
+  );
+  const result = computeH2H(inputs, players);
+  assert.equal(result.duos.length, 2, 'each side is a duo');
+  assert.equal(result.rivals.length, 4, 'each cross-side pair is a rivalry');
+});
 
 test('scheduleToH2HInput drops unplayed matches and stamps week/season number, isGauntlet false', () => {
   const roster = [stat({ player_id: 1, faction: 'SHIRTS' }), stat({ player_id: 2, faction: 'SKINS', is_win: false })];
