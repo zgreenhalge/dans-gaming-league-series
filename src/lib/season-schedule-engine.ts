@@ -12,7 +12,8 @@
  * order.
  */
 
-import { buildSeasonSchedule, gamesPerSeed, shortCountPlayerIds, type DoubleheaderPolicy } from './season-schedule';
+import { buildSeasonSchedule, gamesPerSeed, type DoubleheaderPolicy } from './season-schedule';
+import { shortCountPlayerIds } from './util';
 
 export interface PlayerMatchPlan {
   shirts: [number, number];

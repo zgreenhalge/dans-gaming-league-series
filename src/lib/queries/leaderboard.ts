@@ -1,10 +1,9 @@
 import { getAdminClient } from '../supabase-admin';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore, mergeLeaderboardRows } from '../util';
+import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore, mergeLeaderboardRows, shortCountPlayerIds } from '../util';
 import { getGauntletStats } from './gauntlet';
 import { getPlayersById } from './player';
 import { getSeasons } from './seasons';
-import { shortCountPlayerIds } from '../season-schedule';
 import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 import { persistentQuery } from './_persistentCache';
 
@@ -291,16 +290,20 @@ export async function getSideBalance(
 /**
  * How many archived regular seasons each of `playerIds` spent on the short match count — the seasons
  * where match counts weren't all equal and the player sat on the minimum (`shortCountPlayerIds()`).
- * Gauntlet seasons and seasons still in progress don't count. Feeds `buildRosterSchedule()`'s
+ * Gauntlet seasons, seasons still in progress and playoff matches don't count. Feeds `buildRosterSchedule()`'s
  * `shortCountHistory`; players with no such season default to 0.
  */
 export async function getShortCountHistory(playerIds: number[]): Promise<Map<number, number>> {
   const history = new Map<number, number>(playerIds.map((id) => [id, 0]));
   if (playerIds.length === 0) return history;
 
-  const [seasons, matchSeason] = await Promise.all([getSeasons(), resolveMatchSeasons()]);
+  const [seasons, allMatches] = await Promise.all([getSeasons(), resolveAllMatches()]);
   const seasonIds = new Set(seasons.filter((s) => !s.is_gauntlet && s.status === 'ARCHIVED').map((s) => s.id));
-  const matchIds = [...matchSeason].filter(([, sid]) => seasonIds.has(sid)).map(([id]) => id);
+  const matchSeason = new Map<number, number>();
+  for (const m of allMatches) {
+    if (m.played && !m.is_playoff_game && seasonIds.has(m.season_id)) matchSeason.set(m.id, m.season_id);
+  }
+  const matchIds = [...matchSeason.keys()];
   if (matchIds.length === 0) return history;
 
   const stats = await batchedIn<{ player_id: number; match_id: number }>('player_match_stats', 'match_id', matchIds, 'player_id, match_id');

@@ -457,19 +457,6 @@ export function gamesPerSeed(weeks: WeekPlan[], seedCount: number): Map<number, 
   return games;
 }
 
-/**
- * Players who played the short count in a season: when match counts differ at all, everyone on the
- * minimum. Empty when every player has the same count. `appearances` holds one entry per player in
- * the season.
- */
-export function shortCountPlayerIds(appearances: Map<number, number>): number[] {
-  const counts = [...appearances.values()];
-  if (counts.length === 0) return [];
-  const min = Math.min(...counts);
-  if (min === Math.max(...counts)) return [];
-  return [...appearances].filter(([, n]) => n === min).map(([id]) => id);
-}
-
 /** Match counts differ by at most one across seeds — the evenest any schedule can be, checked here
  * because the donor picks only steer toward it greedily. */
 function hasEvenGameCounts(weeks: WeekPlan[], seedCount: number): boolean {

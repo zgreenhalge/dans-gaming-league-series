@@ -30,18 +30,20 @@ __setTestAdminClient(
     matches: [
       { id: 1, week_id: 10, match_number: 1, final_score: '13-9', is_playoff_game: false },
       { id: 2, week_id: 10, match_number: 2, final_score: '13-9', is_playoff_game: false },
+      { id: 6, week_id: 20, match_number: 2, final_score: '13-9', is_playoff_game: true },
       { id: 3, week_id: 20, match_number: 1, final_score: '13-9', is_playoff_game: false },
       { id: 4, week_id: 30, match_number: 1, final_score: '13-9', is_playoff_game: true },
       { id: 5, week_id: 40, match_number: 1, final_score: '13-9', is_playoff_game: false },
     ],
     // Season 1: players 1-3 play twice, player 4 once -> player 4 is short.
-    // Season 2: everyone plays once -> nobody is short. Gauntlet/active seasons: ignored.
+    // Season 2: everyone plays once, plus a playoff match for player 1 -> nobody is short. Gauntlet/active seasons: ignored.
     player_match_stats: [
       stat(1, 1, 1), stat(2, 1, 2), stat(3, 1, 3), stat(4, 1, 4),
       stat(5, 2, 1), stat(6, 2, 2), stat(7, 2, 3),
       stat(8, 3, 1), stat(9, 3, 2), stat(10, 3, 3), stat(11, 3, 4),
       stat(12, 4, 1),
       stat(13, 5, 2),
+      stat(14, 6, 1),
     ],
     players: [],
   }),
