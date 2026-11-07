@@ -41,15 +41,13 @@ interface PerPlayerStats {
 }
 
 /**
- * Aggregates assists and rounds_won from player_match_stats (both are absent
- * from the leaderboard view). Excludes playoff games. Returns a Map keyed by
- * `${season_id}:${player_id}`.
- */
-/**
  * Fetches the three shared tables (weeks, matches, player_match_stats) once
- * and returns both derived outputs, replacing two back-to-back triple-fetches
- * with a single shared fetch. Wrapped in `persistentQuery()` so every
- * caller — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
+ * and returns both derived outputs: `perPlayerStats` and `rosterBySeason`.
+ * `perPlayerStats` holds what the leaderboard view lacks (assists, rounds_won,
+ * kill/death splits by win and loss), keyed by `${season_id}:${player_id}`, over
+ * the matches the view counts: played and not `is_playoff_game`.
+ *
+ * Wrapped in `persistentQuery()` so every caller — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
  * `getAllLeaderboards()` — shares this one full `player_match_stats`/`matches` read
  * rather than each re-scanning both tables independently.
  */
@@ -82,7 +80,7 @@ const getSeasonBaseData = persistentQuery('getSeasonBaseData', async (): Promise
     resolveAllMatches(),
   ]);
 
-  // played non-playoff matches → their season (for perPlayerStats)
+  // played matches the view counts (not is_playoff_game) → their season (for perPlayerStats)
   const playedMatchSeason = new Map<number, number>();
   // unplayed matches → their season (for rosterBySeason)
   const unplayedMatchSeason = new Map<number, number>();
@@ -206,7 +204,7 @@ export const getSeasonLeaderboard = persistentQuery('getSeasonLeaderboard', asyn
 /**
  * The names of a season's players who have played, in standings order — `getSeasonLeaderboard()`'s
  * ranking without its all-seasons stats scan: rounds won are read only for this season's played
- * non-playoff matches, which is all `canonicalSort()` needs beyond the view's own columns. Rostered
+ * matches, which is all `canonicalSort()` needs beyond the view's own columns. Rostered
  * players who haven't played yet aren't listed.
  */
 export const getSeasonStandingNames = persistentQuery('getSeasonStandingNames', async (seasonId: number): Promise<string[]> => {
@@ -215,7 +213,7 @@ export const getSeasonStandingNames = persistentQuery('getSeasonStandingNames', 
     batchedIn<{ player_id: number; rounds_won: number | null }>(
       'player_match_stats',
       'match_id',
-      matches.filter((m) => m.season_id === seasonId && m.played && !m.is_playoff_game).map((m) => m.id),
+      matches.filter((m) => m.season_id === seasonId && m.played).map((m) => m.id),
       'player_id, rounds_won',
     ),
   );
@@ -552,8 +550,8 @@ export function buildSeasonForm(
 }
 
 /**
- * `buildSeasonForm()` for one regular season's played matches (gauntlet and playoff matches are
- * excluded, matching the standings the column sits in). One paginated `player_match_stats` read
+ * `buildSeasonForm()` for one regular season's played matches (the standings the column sits in).
+ * One paginated `player_match_stats` read
  * with the match and its week embedded: the embedded `weeks.season_id` filter scopes it to the
  * season, so no week or match id list is fetched first. Played-ness (`isPlayedScore()`) is applied
  * after the read since "0-0" placeholders can't be excluded by a column filter.
@@ -569,9 +567,8 @@ export const getSeasonForm = persistentQuery('getSeasonForm', async (seasonId: n
     asPage<FormRow>(
       getAdminClient()
         .from('player_match_stats')
-        .select('match_id, player_id, is_win, matches!inner(match_number, final_score, is_playoff_game, weeks!inner(season_id, week_number))')
+        .select('match_id, player_id, is_win, matches!inner(match_number, final_score, weeks!inner(season_id, week_number))')
         .eq('matches.weeks.season_id', seasonId)
-        .eq('matches.is_playoff_game', false)
         .order('match_id')
         .order('player_id')
         .range(from, to),

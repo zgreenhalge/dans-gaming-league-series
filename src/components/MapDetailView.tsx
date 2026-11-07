@@ -134,7 +134,7 @@ export default function MapDetailView({
   const filteredMatches = useMemo<MapMatchRow[]>(() => {
     return detail.matches.filter((m) => {
       if (selectedSeason !== 'all' && m.season_id !== selectedSeason) return false;
-      if (m.is_gauntlet && m.is_playoff_game) return includeGauntlet;
+      if (m.is_gauntlet) return includeGauntlet;
       return includeRegular;
     });
   }, [detail.matches, includeRegular, includeGauntlet, selectedSeason]);

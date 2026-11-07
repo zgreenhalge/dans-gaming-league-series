@@ -3,7 +3,7 @@ import { getAdminClient } from '../supabase-admin';
 import { heatmapKey, mapHeatmapKey } from '../r2';
 import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc, deriveRates } from '../util';
-import { classifyMatchVeto } from '../mapSideStats';
+import { classifyMatchVeto, noPickPool } from '../mapSideStats';
 import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../workshop';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
@@ -36,7 +36,6 @@ export interface MapMatchRow {
   season_number: number | null;
   season_name: string;
   is_gauntlet: boolean;
-  is_playoff_game: boolean;
   final_score: string | null;
   pre_match_win_prob: number | null;
   shirts_stats: MapPlayerStat[];
@@ -123,7 +122,6 @@ export const getAllMatchesWithPickBan = persistentQuery('getAllMatchesWithPickBa
         season_number: extractSeasonNumber(season.name),
         season_name: season.name,
         is_gauntlet: season.is_gauntlet,
-        is_playoff_game: m.is_playoff_game,
         final_score: m.final_score,
         pre_match_win_prob: m.pre_match_win_prob,
         shirts_stats: roster.shirts,
@@ -135,7 +133,7 @@ export const getAllMatchesWithPickBan = persistentQuery('getAllMatchesWithPickBa
         shirts_ban2: m.shirts_ban2,
         skins_ban1: m.skins_ban1,
         skins_ban2: m.skins_ban2,
-        map_pool: season.is_gauntlet ? null : season.map_pool,
+        map_pool: noPickPool(season),
       };
     })
     .filter((r): r is MapMatchRow => r !== null);
@@ -153,7 +151,6 @@ type RawMatch = {
   shirts_ban2: string | null;
   skins_ban1: string | null;
   skins_ban2: string | null;
-  is_playoff_game: boolean;
   skins_starting_side: 'CT' | 'T' | null;
 };
 
@@ -171,7 +168,7 @@ const fetchMapRawData = persistentQuery('fetchMapRawData', async (): Promise<{
   const [matches, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
-        asPage(onlyLeagueMatches(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side')).range(from, to)),
+        asPage(onlyLeagueMatches(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, skins_starting_side')).range(from, to)),
       ),
       getWeekLookup(),
       getAdminClient().from('seasons').select('id, name, is_gauntlet, map_pool'),
@@ -242,8 +239,7 @@ export const getMapIndex = persistentQuery('getMapIndex', async (): Promise<MapI
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      is_playoff_game: m.is_playoff_game,
-      map_pool: season && !season.is_gauntlet ? season.map_pool : null,
+      map_pool: noPickPool(season),
     });
 
     for (const name of picked) {
@@ -401,8 +397,7 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      is_playoff_game: m.is_playoff_game,
-      map_pool: season && !season.is_gauntlet ? season.map_pool : null,
+      map_pool: noPickPool(season),
     });
     if (banned.some((b) => b.toLowerCase() === nameLower)) bans++;
     if (noPicked.some((n) => n.toLowerCase() === nameLower)) noPickCount++;
@@ -480,7 +475,6 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
         season_number: extractSeasonNumber(season.name),
         season_name: season.name,
         is_gauntlet: season.is_gauntlet,
-        is_playoff_game: m.is_playoff_game,
         final_score: m.final_score,
         pre_match_win_prob: m.pre_match_win_prob,
         shirts_stats: roster.shirts,
@@ -492,7 +486,7 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
         shirts_ban2: m.shirts_ban2,
         skins_ban1: m.skins_ban1,
         skins_ban2: m.skins_ban2,
-        map_pool: season.is_gauntlet ? null : season.map_pool,
+        map_pool: noPickPool(season),
       };
     })
     .filter((r): r is MapMatchRow => r !== null)

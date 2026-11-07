@@ -841,8 +841,8 @@ A player's own two matchups on the home page's **My Stats** are computed from th
 Figures that appear only on the home page.
 
 **Form** (the standings column) — a player's most recent results in the standings' season, newest
-first, up to five (`FORM_LENGTH`), as `W` / `L`. Only played regular-season matches count (the
-`isPlayedScore()` gate, no playoff games); "newest" is by week then match number, the order the
+first, up to five (`FORM_LENGTH`), as `W` / `L`. Only the season's played matches count (the
+`isPlayedScore()` gate); "newest" is by week then match number, the order the
 player page's "Last 5" uses. `buildSeasonForm()` / `getSeasonForm()` in
 `src/lib/queries/leaderboard.ts`.
 
