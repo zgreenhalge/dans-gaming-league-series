@@ -14,7 +14,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
-import { sabremetricStatRow, economyMatchRow } from '@/lib/test-support/sabFields';
+import { sabremetricStatRow, economyMatchRow, zeroSabFields } from '@/lib/test-support/sabFields';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -134,5 +134,38 @@ describe('SabremetricsLeaderboardView — Utility tab in a team view', () => {
     // Two sections x two teams, and the titles sit outside the tints.
     expect(container.querySelectorAll('.faction-tint')).toHaveLength(4);
     expect(container.querySelectorAll('.faction-tint h3')).toHaveLength(0);
+  });
+});
+
+describe('SabremetricsLeaderboardView — Player Rating', () => {
+  test('Stats Plus table has a Rating column, sorted descending by default', () => {
+    nextNavigationMock.setSearchParams('sub=plus');
+    renderWithUrlState(
+      <SabremetricsLeaderboardView
+        rows={[
+          row(),
+          sabremetricStatRow({ player_id: 2, match_id: 1, rounds_played: 24, sab: zeroSabFields({ kills_ct: 20, damage_ct: 2000, kast_rounds: 14 }) }),
+        ]}
+      />,
+    );
+    const header = screen.getByRole('columnheader', { name: /Rating/ });
+    expect(header).toBeInTheDocument();
+    const ratingCol = Array.from(header.parentElement!.children).indexOf(header);
+    const ratings = screen.getAllByRole('row').slice(1)
+      .map((r) => Number(r.children[ratingCol].textContent));
+    expect(ratings).toEqual([...ratings].sort((a, b) => b - a));
+  });
+
+  test('single-player Stats Plus grid shows a Rating tile when a league baseline exists', () => {
+    nextNavigationMock.setSearchParams('sub=plus');
+    renderWithUrlState(
+      <SabremetricsLeaderboardView
+        rows={[row()]}
+        singlePlayer
+        leagueRows={[row(), sabremetricStatRow({ player_id: 2, match_id: 1 })]}
+      />,
+    );
+    expect(screen.getByText('Rating')).toBeInTheDocument();
+    expect(document.body.textContent).toMatch(/Rating\d+\.\d{2}/);
   });
 });

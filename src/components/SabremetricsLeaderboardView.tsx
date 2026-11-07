@@ -9,6 +9,7 @@ import {
   aggregateRows,
   computeLeagueAverages,
   computePlusStats,
+  computePlayerRating,
   aggregateWeaponKillStats,
   groupWeaponKillStatsByPlayer,
   aggregateFlairKillStats,
@@ -23,6 +24,7 @@ import {
   ALL_ECONOMY_TIERS,
   splitStat,
   type AggregatedSab,
+  type PlusStat,
   type SabremetricStatRow,
   type MatchKillRow,
   type WeaponKillStat,
@@ -1065,12 +1067,23 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
 
 // --- Plus Stats (1-scaled: 1.00 = league average) ---
 
+const RATING_TITLE =
+  'Player Rating: weighted composite of the Stats Plus columns (KAST+, ADR+, KPR+, K/D+, Trade+, Clutch+, Choke+, Objective+, Utility+, Aim+) (1.00 = league average)';
+
+function ratingTile(plus: PlusStat): StatTile {
+  const rating = computePlayerRating(plus);
+  return { label: 'Rating', title: RATING_TITLE, value: formatStat(rating, 2), valueStyle: plusStyle(rating) };
+}
+
 function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
-  const [sort, toggleSort] = useSortState('kast');
+  const [sort, toggleSort] = useSortState('rating');
 
   const withPlus = useMemo(() => {
     const leagueAverages = computeLeagueAverages(aggregated);
-    return aggregated.map((a) => ({ agg: a, plus: computePlusStats(a, leagueAverages) }));
+    return aggregated.map((a) => {
+      const plus = computePlusStats(a, leagueAverages);
+      return { agg: a, plus, rating: computePlayerRating(plus) };
+    });
   }, [aggregated]);
 
   const sorted = useMemo(() => {
@@ -1078,6 +1091,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
     copy.sort((a, b) => {
       let aVal: number, bVal: number;
       switch (sort.col) {
+        case 'rating': aVal = a.rating; bVal = b.rating; break;
         case 'kpr': aVal = a.plus.kpr; bVal = b.plus.kpr; break;
         case 'apr': aVal = a.plus.apr; bVal = b.plus.apr; break;
         case 'dpr': aVal = a.plus.dpr; bVal = b.plus.dpr; break;
@@ -1108,6 +1122,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
         <thead>
           <tr>
             <Th sticky>Player</Th>
+            <SortableTh label="Rating" title={RATING_TITLE} sortKey="rating" state={sort} align="right" onSort={toggleSort} />
             <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} align="right" onSort={toggleSort} />
             <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} align="right" onSort={toggleSort} />
             <SortableTh label="Deaths/Round+" title="League avg deaths per round vs this player's (1.00 = avg, higher = fewer deaths)" sortKey="dpr" state={sort} align="right" onSort={toggleSort} />
@@ -1127,9 +1142,10 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map(({ agg, plus }) => (
+          {sorted.map(({ agg, plus, rating }) => (
             <Tr key={agg.player_id} clickable>
               <PlayerCell id={agg.player_id} name={agg.player_name} />
+              <Td style={plusStyle(rating)}>{formatStat(rating, 2)}</Td>
               <Td style={plusStyle(plus.kpr)}>{formatStat(plus.kpr, 2)}</Td>
               <Td style={plusStyle(plus.apr)}>{formatStat(plus.apr, 2)}</Td>
               <Td style={plusStyle(plus.dpr)}>{formatStat(plus.dpr, 2)}</Td>
@@ -1245,6 +1261,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const hasLeagueBaseline = leagueAggregated.length > 1;
   const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
   const plusTiles: StatTile[] = plus ? [
+    ratingTile(plus),
     { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: formatStat(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: formatStat(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
     { label: 'Deaths/Round+', title: 'League avg deaths per round vs this player\'s (1.00 = avg, higher = fewer deaths)', value: formatStat(plus.dpr, 2), valueStyle: plusStyle(plus.dpr) },

@@ -562,6 +562,11 @@ every `+` stat it is built from (1.00 = league average). Independent from the
 [EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Implemented by
 `computePlayerRating()` in `src/lib/queries/sabremetrics.ts`, alongside `computePlusStats()`.
 
+Shown as the sortable `Rating` column (the default sort) of the Stats Plus table and as the first
+tile of the single-player Stats Plus grid in `SabremetricsLeaderboardView`, at two decimals on the
+1.00-centered scale (no 0-100 rescale). It is not on the player hover card, which has no cheap
+league-wide baseline.
+
 ```
 Player Rating = 1.00
   + 0.30(KAST+ - 1)
