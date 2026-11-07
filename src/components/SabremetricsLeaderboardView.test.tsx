@@ -138,12 +138,22 @@ describe('SabremetricsLeaderboardView — Utility tab in a team view', () => {
 });
 
 describe('SabremetricsLeaderboardView — Player Rating', () => {
-  test('Stats Plus table has a sortable Rating column', () => {
+  test('Stats Plus table has a Rating column, sorted descending by default', () => {
     nextNavigationMock.setSearchParams('sub=plus');
     renderWithUrlState(
-      <SabremetricsLeaderboardView rows={[row(), sabremetricStatRow({ player_id: 2, match_id: 1 })]} />,
+      <SabremetricsLeaderboardView
+        rows={[
+          row(),
+          sabremetricStatRow({ player_id: 2, match_id: 1, kills_ct: 20, damage_ct: 2000, kast_rounds: 14 }),
+        ]}
+      />,
     );
-    expect(screen.getByRole('columnheader', { name: /Rating/ })).toBeInTheDocument();
+    const header = screen.getByRole('columnheader', { name: /Rating/ });
+    expect(header).toBeInTheDocument();
+    const ratingCol = Array.from(header.parentElement!.children).indexOf(header);
+    const ratings = screen.getAllByRole('row').slice(1)
+      .map((r) => Number(r.children[ratingCol].textContent));
+    expect(ratings).toEqual([...ratings].sort((a, b) => b - a));
   });
 
   test('single-player Stats Plus grid shows a Rating tile when a league baseline exists', () => {

@@ -24,6 +24,7 @@ import {
   ALL_ECONOMY_TIERS,
   splitStat,
   type AggregatedSab,
+  type PlusStat,
   type SabremetricStatRow,
   type MatchKillRow,
   type WeaponKillStat,
@@ -1066,6 +1067,14 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
 
 // --- Plus Stats (1-scaled: 1.00 = league average) ---
 
+const RATING_TITLE =
+  'Player Rating: weighted composite of the Stats Plus columns (KAST+, ADR+, KPR+, K/D+, Trade+, Clutch+, Choke+, Objective+, Utility+, Aim+) (1.00 = league average)';
+
+function ratingTile(plus: PlusStat): StatTile {
+  const rating = computePlayerRating(plus);
+  return { label: 'Rating', title: RATING_TITLE, value: formatStat(rating, 2), valueStyle: plusStyle(rating) };
+}
+
 function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
   const [sort, toggleSort] = useSortState('rating');
 
@@ -1113,7 +1122,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
         <thead>
           <tr>
             <Th sticky>Player</Th>
-            <SortableTh label="Rating" title="Player Rating: weighted composite of the Stats Plus columns (KAST+, ADR+, KPR+, K/D+, Trade+, Clutch+, Choke+, Objective+, Utility+, Aim+) (1.00 = league average)" sortKey="rating" state={sort} align="right" onSort={toggleSort} />
+            <SortableTh label="Rating" title={RATING_TITLE} sortKey="rating" state={sort} align="right" onSort={toggleSort} />
             <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} align="right" onSort={toggleSort} />
             <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} align="right" onSort={toggleSort} />
             <SortableTh label="Deaths/Round+" title="League avg deaths per round vs this player's (1.00 = avg, higher = fewer deaths)" sortKey="dpr" state={sort} align="right" onSort={toggleSort} />
@@ -1251,9 +1260,8 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   // themselves yields all 1.00, so only render when we have other players.
   const hasLeagueBaseline = leagueAggregated.length > 1;
   const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
-  const rating = plus ? computePlayerRating(plus) : 1;
   const plusTiles: StatTile[] = plus ? [
-    { label: 'Rating', title: 'Player Rating: weighted composite of the Stats Plus columns (KAST+, ADR+, KPR+, K/D+, Trade+, Clutch+, Choke+, Objective+, Utility+, Aim+) (1.00 = league average)', value: formatStat(rating, 2), valueStyle: plusStyle(rating) },
+    ratingTile(plus),
     { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: formatStat(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: formatStat(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
     { label: 'Deaths/Round+', title: 'League avg deaths per round vs this player\'s (1.00 = avg, higher = fewer deaths)', value: formatStat(plus.dpr, 2), valueStyle: plusStyle(plus.dpr) },
