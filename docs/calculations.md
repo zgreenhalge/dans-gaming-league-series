@@ -640,6 +640,13 @@ otherwise (roster size mod 4 = 2, where each week's doubleheader adds two extra 
 one-match spread is accepted rather than ranking by win rate. Hand-edits in the Schedule Editor can
 still change the counts.
 
+Which players take the short count rotates across seasons. The short seeds are fixed per roster
+size, so `buildRosterSchedule()` (`src/lib/season-schedule-engine.ts`) orders the roster before
+mapping seeds to players: those with the most past short seasons take the full-count seeds, and ties
+keep roster order. `getShortCountHistory()` (`src/lib/queries/leaderboard.ts`) supplies the counts —
+archived regular seasons where match counts were uneven and the player sat on the minimum; gauntlet
+and in-progress seasons don't count.
+
 ## Canonical Gauntlet Ranking
 
 The official finish order for a completed gauntlet season. Used by the leaderboard table on

@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildRosterSchedule } from './season-schedule-engine';
+import { buildRosterSchedule, shortCountPlayerIds } from './season-schedule-engine';
 import { pairKey } from './season-schedule';
 import { test, report } from './test-support/miniTest';
 
@@ -76,6 +76,43 @@ async function main() {
 
   await test('buildRosterSchedule() — throws outside the supported 7-19 range (delegates to buildSeasonSchedule)', () => {
     assert.throws(() => buildRosterSchedule([1, 2, 3, 4, 5]));
+  });
+
+  const matchCounts = (playerIds: number[], shortCountHistory?: Map<number, number>) => {
+    const counts = new Map<number, number>(playerIds.map((id) => [id, 0]));
+    for (const w of buildRosterSchedule(playerIds, { shortCountHistory }))
+      for (const m of w.matches) for (const id of [...m.shirts, ...m.skins]) counts.set(id, counts.get(id)! + 1);
+    return counts;
+  };
+  const ROSTER_10 = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+
+  await test('shortCountPlayerIds() — players on the minimum, none when counts are equal', () => {
+    assert.deepEqual(shortCountPlayerIds(new Map([[1, 10], [2, 11], [3, 10]])), [1, 3]);
+    assert.deepEqual(shortCountPlayerIds(new Map([[1, 11], [2, 11]])), []);
+    assert.deepEqual(shortCountPlayerIds(new Map()), []);
+  });
+
+  await test('buildRosterSchedule(10) — shortCountHistory moves the short count off the players who had it', () => {
+    const base = shortCountPlayerIds(matchCounts(ROSTER_10));
+    assert.equal(base.length, 2);
+    const history = new Map(base.map((id) => [id, 1]));
+    const steered = matchCounts(ROSTER_10, history);
+    const shortNow = shortCountPlayerIds(steered);
+    assert.equal(shortNow.length, 2);
+    for (const id of base) assert.ok(!shortNow.includes(id), `player ${id} was short before and is short again`);
+  });
+
+  await test('buildRosterSchedule(10) — short count goes to the players with the fewest past short seasons', () => {
+    const history = new Map(ROSTER_10.map((id, i) => [id, i < 8 ? 2 : 0]));
+    assert.deepEqual(shortCountPlayerIds(matchCounts(ROSTER_10, history)).sort(), [19, 20]);
+  });
+
+  await test('buildRosterSchedule() — shortCountHistory keeps full coverage', () => {
+    const history = new Map(ROSTER_10.map((id, i) => [id, i % 3]));
+    const weeks = buildRosterSchedule(ROSTER_10, { shortCountHistory: history });
+    const teammates = new Set<string>();
+    for (const w of weeks) for (const m of w.matches) { teammates.add(pairKey(m.shirts[0], m.shirts[1])); teammates.add(pairKey(m.skins[0], m.skins[1])); }
+    assert.equal(teammates.size, 45);
   });
 
   report();
