@@ -7,8 +7,8 @@
 // real state. Updates then come via Supabase Realtime on the match's `match_server_state` row (no
 // polling). The Realtime event carries only `server_state` (the anon role can read no other
 // column), so the connect string comes from the access-checked status route, read on mount and
-// whenever the row flips to `live` — and only for viewers who can manage the server, the same
-// admin-or-in-match rule the route enforces. Teardown itself isn't a control here — it happens
+// whenever the row flips to `live` — and only for viewers who can join the server, the same rule the
+// route enforces (admin or in the match; any signed-in player for a scrim match). Teardown itself isn't a control here — it happens
 // automatically once the match is scored (`teardownMatchServer` in the score route / MatchZy log
 // ingest), with a manual "Tear down" safety valve on the admin server console for a server left
 // live.
@@ -27,15 +27,23 @@ interface StatusResponse {
 export default function MatchServerPanel({
   matchId,
   canManage,
+  canJoin = canManage,
+  signInToJoin = false,
   autoProvisioning,
   initialState,
 }: {
   matchId: number;
   canManage: boolean;
+  /** Whether the viewer may read the connect string and so see Join. Defaults to `canManage`; a scrim
+   *  match opens it to any signed-in player. */
+  canJoin?: boolean;
+  /** The viewer is signed out and the match is one anyone signed in may join: a live server shows a
+   *  sign-in prompt in place of Join. */
+  signInToJoin?: boolean;
   /** Veto just completed, so a server provision is imminent (fired server-side in `after()`) —
    *  show the spinner immediately instead of racing the idle state against the Realtime update. */
   autoProvisioning?: boolean;
-  /** The row's `server_state` as of the page render. Managers re-read it, with the connect string,
+  /** The row's `server_state` as of the page render. Joiners re-read it, with the connect string,
    *  from the status route on mount. */
   initialState: ServerState;
 }) {
@@ -66,12 +74,12 @@ export default function MatchServerPanel({
     }
   }, [matchId]);
 
-  // Managers' initial read adds the connect string and reconciles a stale `live` (Realtime only
-  // delivers subsequent changes).
+  // The initial read of a viewer who can join adds the connect string and reconciles a stale `live`
+  // (Realtime only delivers subsequent changes).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (canManage) void loadStatus();
-  }, [canManage, loadStatus]);
+    if (canJoin) void loadStatus();
+  }, [canJoin, loadStatus]);
 
   // Live updates off the match_server_state row — no polling. The row doesn't exist until the first
   // provision (`idle`), so this listens for INSERT as well as UPDATE.
@@ -83,7 +91,7 @@ export default function MatchServerPanel({
       if (!next) return;
       versionRef.current++;
       setState(next);
-      if (next === 'live' && canManage) void loadStatus();
+      if (next === 'live' && canJoin) void loadStatus();
     },
   );
 
@@ -150,7 +158,18 @@ export default function MatchServerPanel({
       )}
 
       {state === 'live' && !connect && (
-        <span className="text-sm text-[var(--color-text-secondary)]">Server is live.</span>
+        signInToJoin ? (
+          // A plain <a>: this route handler redirects to Steam's OpenID flow (see TopbarShell's Login).
+          // eslint-disable-next-line @next/next/no-html-link-for-pages
+          <a
+            href="/api/auth/steam"
+            className="block w-full rounded-md border border-[var(--color-border-primary)] px-5 py-2.5 text-center text-base font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)]"
+          >
+            Sign in to join the server
+          </a>
+        ) : (
+          <span className="text-sm text-[var(--color-text-secondary)]">Server is live.</span>
+        )
       )}
 
       {state === 'live' && connect && (

@@ -78,6 +78,16 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
           {/* An admin's config panel already shows an unstarted match. */}
           {(!canManage || !isScrimMatchEditable(match)) && <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />}
           {canManage && <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />}
+          {/* Once the server has started, anyone signed in can join it (an admin's panel has its own). */}
+          {!canManage && !isScrimMatchEditable(match) && (
+            <MatchServerPanel
+              matchId={match.id}
+              canManage={false}
+              canJoin={currentPlayerId != null}
+              signInToJoin={currentPlayerId == null}
+              initialState={(match.server_state ?? 'idle') as ServerState}
+            />
+          )}
           {queued.length > 0 && <UpNext queued={queued} names={names} />}
         </>
       ) : (

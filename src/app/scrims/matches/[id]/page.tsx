@@ -91,7 +91,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           </div>
           {!played && (
             <MatchPanelSlot>
-              <MatchServerPanel matchId={match.id} canManage={canManage} initialState={serverState} />
+              <MatchServerPanel matchId={match.id} canManage={canManage} canJoin={currentPlayerId != null} signInToJoin={currentPlayerId == null} initialState={serverState} />
             </MatchPanelSlot>
           )}
           {canManage && (

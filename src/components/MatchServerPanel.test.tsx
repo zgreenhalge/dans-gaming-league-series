@@ -32,6 +32,25 @@ describe('MatchServerPanel initialState', () => {
   });
 });
 
+describe('MatchServerPanel joining', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('a viewer who can join but not manage reads the connect string and sees Join, with no Start', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ serverState: 'live', connectString: '1.2.3.4:27015' }))));
+    render(<MatchServerPanel matchId={7} canManage={false} canJoin initialState="live" />);
+    expect(await screen.findByRole('link', { name: 'Join server' })).toHaveAttribute('href', 'steam://run/730//+connect 1.2.3.4:27015');
+    expect(screen.queryByRole('button', { name: /Start/ })).toBeNull();
+  });
+
+  test('a signed-out viewer of a live server is asked to sign in, and never calls the status route', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MatchServerPanel matchId={7} canManage={false} signInToJoin initialState="live" />);
+    expect(screen.getByRole('link', { name: 'Sign in to join the server' })).toHaveAttribute('href', '/api/auth/steam');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('MatchServerPanel Start anyway', () => {
   afterEach(() => vi.unstubAllGlobals());
 

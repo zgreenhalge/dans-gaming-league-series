@@ -60,8 +60,8 @@ the server) leaves the row unchanged — see the concurrency guard below.
 The in-match `MatchServerPanel` starts from the `server_state` the match page reads with
 `getMatchServerState()` (passed as `initialState`, for every viewer) and then follows the row over
 Realtime. `anon` may select only `match_id` and `server_state`, so each event carries just the state;
-the panel then re-reads `GET /api/matches/[id]/server/status` (admin or in-match only) for the
-connect string. Anyone else sees the state without a join link.
+the panel then re-reads `GET /api/matches/[id]/server/status` (admin or in-match; any signed-in player for a scrim match, `requireServerStatusAccess()`) for the
+connect string. A viewer who may not read it sees the state without a join link; on a scrim match a signed-out viewer is asked to sign in.
 
 Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client in
 **`src/lib/dathost.ts`** (DatHost REST `/api/0.1`, HTTP Basic auth):
@@ -438,7 +438,7 @@ to set its own override (a real match's per-match cvar here, or a pug launch's `
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/matches/[id]/server/status` | session (admin/in-match) | reconciled server state for the panel |
+| GET | `/api/matches/[id]/server/status` | session (admin/in-match; any signed-in player for a scrim match) | reconciled server state for the panel |
 | POST | `/api/matches/[id]/server/provision` | session | provision (202; boots in `after()`; 409 if busy; `{ force: true }` takes over a server live outside a DGLS match) |
 | POST | `/api/matches/[id]/server/apply-match-config` | session | re-push the match's loadmatch config (409 if busy) |
 | POST | `/api/matches/[id]/server/teardown` | session | stop the server |
