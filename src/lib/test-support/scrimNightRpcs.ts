@@ -1,10 +1,10 @@
 /**
  * Test-local fakes for the `start_scrim_night` / `leave_scrim_night` Postgres RPCs
- * (`supabase/migrations/20261102130000_scrim_nights_by_start_time.sql`) — see fakeSupabase.ts's
+ * (`supabase/migrations/20261107160000_scrim_night_overlap_by_end.sql`) — see fakeSupabase.ts's
  * header on why `.rpc()` needs a per-name fake. Mirrors each function's refusals as `FakeRpcError`s.
  */
 
-import { FakeRpcError, nextId, type RpcHandler } from './fakeSupabase';
+import { FakeRpcError, nextId, type Row, type RpcHandler } from './fakeSupabase';
 
 export const scrimNightRpcs: Record<string, RpcHandler> = {
   start_scrim_night: (args, db) => {
@@ -12,7 +12,12 @@ export const scrimNightRpcs: Record<string, RpcHandler> = {
     const length = (args.p_night_minutes as number) * 60_000;
     db.scrim_nights ??= [];
     db.scrim_signups ??= [];
-    if (db.scrim_nights.some((n) => Math.abs(Date.parse(n.starts_at as string) - start) < length)) {
+    const overlaps = (n: Row) => {
+      const nightStart = Date.parse(n.starts_at as string);
+      const nightEnd = Math.min(nightStart + length, n.ended_at ? Date.parse(n.ended_at as string) : Infinity);
+      return nightStart < start + length && nightEnd > start;
+    };
+    if (db.scrim_nights.some(overlaps)) {
       throw new FakeRpcError('overlapping-scrim-night');
     }
     const id = nextId(db.scrim_nights);
