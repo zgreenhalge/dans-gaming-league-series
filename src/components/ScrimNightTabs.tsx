@@ -16,10 +16,10 @@ export interface ScrimNightTabSpec {
   content: ReactNode;
 }
 
-/** `tabs` are only those with something to show; `defaultTab` is the one a link with no `?tab=`
- *  opens on, and the first tab stands in when the URL names one that isn't present. */
-export function ScrimNightTabs({ tabs, defaultTab }: { tabs: ScrimNightTabSpec[]; defaultTab: ScrimNightTab }) {
-  const [rawTab, setTab] = useTabState(SCRIM_NIGHT_TABS, defaultTab);
+/** `tabs` are only those with something to show, in display order. A link with no `?tab=`, or one
+ *  naming a tab that isn't present, opens on the first. */
+export function ScrimNightTabs({ tabs }: { tabs: ScrimNightTabSpec[] }) {
+  const [rawTab, setTab] = useTabState(SCRIM_NIGHT_TABS, tabs[0].key);
   const tab = resolveTab(rawTab, tabs);
   return (
     <>

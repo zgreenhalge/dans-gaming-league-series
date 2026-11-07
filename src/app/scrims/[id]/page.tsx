@@ -71,7 +71,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const rounds = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
 
   // The lobby only exists while check-in is open, and shows once anyone has checked in; before that
-  // it holds only the viewer's own Check in. A finished night has just results, so it opens on one.
+  // it holds only the viewer's own Check in. The page opens on the first tab present.
   const hasLobby = night.checkInOpen && (pool.length > 0 || lobbyMatch != null || currentPlayerId != null);
   const hasH2H = night.h2h.duos.length > 0 || night.h2h.rivals.length > 0;
   const tabs: ScrimNightTabSpec[] = [
@@ -81,8 +81,6 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           label: 'Lobby',
           content: (
             <>
-              {/* The lobby match's game ending frees the next match, so the page follows its server state. */}
-              {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
               {pool.length === 0 && !lobbyMatch && currentPlayerId != null ? (
                 <div className="flex justify-end">
                   <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
@@ -147,9 +145,13 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           </div>
         )}
 
+        {/* The lobby match's game ending frees the next match, so the page follows its server state
+            whichever tab is showing. */}
+        {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
+
         <Suspense>
           <UrlStateProvider>
-            <ScrimNightTabs tabs={tabs} defaultTab={tabs[0].key} />
+            <ScrimNightTabs tabs={tabs} />
           </UrlStateProvider>
         </Suspense>
       </main>
