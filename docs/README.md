@@ -27,5 +27,4 @@ Diagrams are Mermaid blocks in the doc that owns their area ([`patterns.md`](./p
 search the docs for ```` ```mermaid ```` to find them all.
 
 For quick-start, env vars, and npm commands see the root [`README.md`](../README.md). Agent-specific
-guidance lives in [`../CLAUDE.md`](../CLAUDE.md) and [`../AGENTS.md`](../AGENTS.md). The historical
-CSV ingestion pipeline is documented in [`../ingestion/README.md`](../ingestion/README.md).
+guidance lives in [`../CLAUDE.md`](../CLAUDE.md) and [`../AGENTS.md`](../AGENTS.md).

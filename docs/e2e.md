@@ -153,7 +153,7 @@ skips hidden elements) — or use a role locator outright.
 
 `e2e` is a job in `.github/workflows/ci.yml`, gated on the same `changes.outputs.frontend` path
 filter as the `frontend` job — it runs on every PR that touches the app (skipped for
-ingestion/docs-only changes), same as any other check, no manual trigger or label needed. A fully
+docs-only changes), same as any other check, no manual trigger or label needed. A fully
 local Docker-based stack made this cheap enough to run on every push: no Supabase branch to
 provision per run, no state-pollution risk against a shared project, and the whole job (image pulls,
 `supabase start`, Playwright browsers, the suite itself) runs in a couple of minutes. It installs the

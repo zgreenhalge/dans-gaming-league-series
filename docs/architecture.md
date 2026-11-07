@@ -755,10 +755,7 @@ succeed on its own.
 
 ## Data Ingestion
 
-Two ingestion paths populate match stats:
-
-- **Historical CSV** — `ingestion/` is a Python pipeline that reads CSV exports and writes to Supabase using the **service_role key**. Not deployed; runs locally. See `ingestion/README.md`.
-- **CS2 demo files** — uploaded per match through the site and parsed server-side into basic stats (`player_match_stats`) and advanced sabremetrics (`player_match_sabremetrics`). See [`demo-ingestion.md`](./demo-ingestion.md).
+Match stats come from CS2 demo files, uploaded per match through the site and parsed server-side into basic stats (`player_match_stats`) and advanced sabremetrics (`player_match_sabremetrics`). See [`demo-ingestion.md`](./demo-ingestion.md).
 
 ## Maps
 
@@ -797,4 +794,4 @@ also stored in Supabase Vault under the name `cron_secret` — kept in sync with
 
 ### CI
 
-`.github/workflows/ci.yml` gates PRs and pushes to `main`: a `frontend` job (`npm run typecheck && npm run lint && npm test && npm run build`), an `e2e` job (Playwright against a local Supabase stack — see [`e2e.md`](./e2e.md)), an `ingestion` job (`python3 -m unittest tests.test_ingest`), and an `ehog` job (the Python↔TS parity test — see [`ehog.md`](./ehog.md)'s "Running" section), each skipped unless its area's paths changed (`e2e` shares the `frontend` job's path filter: any path outside `ingestion/`, `docs/`, root-level `*.md` and `LICENSE`). The frontend job needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, which the browser bundle reads) as repo secrets — `next build` prerenders static pages that read from Supabase; `e2e` needs no secrets, since it never touches that project. This is separate from `demo-ingest.yml`/`radar-build.yml`, which are `workflow_dispatch`/`repository_dispatch`-triggered ingestion jobs, not PR gates.
+`.github/workflows/ci.yml` gates PRs and pushes to `main`: a `frontend` job (`npm run typecheck && npm run lint && npm test && npm run build`), an `e2e` job (Playwright against a local Supabase stack — see [`e2e.md`](./e2e.md)), and an `ehog` job (the Python↔TS parity test — see [`ehog.md`](./ehog.md)'s "Running" section), each skipped unless its area's paths changed (`e2e` shares the `frontend` job's path filter: any path outside `docs/`, root-level `*.md` and `LICENSE`). The frontend job needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, which the browser bundle reads) as repo secrets — `next build` prerenders static pages that read from Supabase; `e2e` needs no secrets, since it never touches that project. This is separate from `demo-ingest.yml`/`radar-build.yml`, which are `workflow_dispatch`/`repository_dispatch`-triggered ingestion jobs, not PR gates.

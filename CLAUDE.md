@@ -33,7 +33,7 @@ When citing code in docs, comments, or commits, reference it by **symbol name** 
 
 ## Commands
 
-See README.md for frontend npm commands. See `ingestion/README.md` for Python ingestion setup and commands.
+See README.md for frontend npm commands.
 
 ## Environment
 

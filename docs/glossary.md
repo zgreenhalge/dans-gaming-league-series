@@ -77,9 +77,8 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
   instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
   format anywhere in the app. `is_gauntlet` (season) picks the veto shape and ranking rule. Every
   match in a gauntlet season is written with `is_playoff_game = true` and a regular season holds
-  none, so either flag scopes a read to the playoffs; the pairing is kept by the writers
-  (`materializePod()` in `src/lib/gauntlet-engine.ts`, the CSV ingestion in `ingestion/`), not by a
-  DB constraint.
+  none, so either flag scopes a read to the playoffs; `materializePod()` (`src/lib/gauntlet-engine.ts`)
+  keeps that pairing, not a DB constraint.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
   - **Ban phase** — the 4 rostered players ban 4 maps total from the paired regular season's 5-map
     `map_pool`, into two slots per faction (`shirts_ban`/`shirts_ban2` for SHIRTS,
@@ -268,7 +267,6 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
 | Scrim nights (timing, reads, writes, access gate, page) | `src/lib/scrim-schedule.ts` (pure: start/end/check-in timing, input parsing), `src/lib/queries/scrims.ts` (`getUpcomingScrimNights()`, `getScrimNight()`), `src/lib/scrim-nights.ts` (writes), `src/lib/scrim-signup-access.ts`, `src/app/api/scrims/`, `src/lib/scrim-matchmaking.ts` (`pickNextScrimMatch()`), `src/lib/scrim-matches.ts` (lobby rules + match writes), `src/lib/scrim-match-access.ts`, `src/app/scrims/page.tsx`, `src/app/scrims/[id]/page.tsx` (a night, with `src/components/ScrimRoundsGenerator.tsx` reusing `ScheduleLabView` to generate rounds), `src/app/scrims/matches/[id]/page.tsx` (a scrim match, with `src/lib/match-page-data.ts` and `src/components/MatchBackdrop.tsx` shared with the league match page), `src/components/ScrimNightPanel.tsx` / `ScrimLobbyPanel.tsx` / `ScrimNightResults.tsx` / `ScrimNightTabs.tsx` / `ScrimNightH2H.tsx` / `ScrimNightStats.tsx` (data: `src/lib/queries/scrimStats.ts`) / `ScrimPastNights.tsx` / `ScrimCalendar.tsx` (with `src/lib/calendar-month.ts`) / `ScrimSeats.tsx` (seats shared with the home page's Upcoming panel and its `UpcomingWeekStrip.tsx`) / `StartScrimNightForm.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
 | Pages (routes) | `src/app/**` — see the route table in [`architecture.md`](./architecture.md) |
-| Historical CSV ingestion (Python, not deployed) | `ingestion/` |
 | Discord account linking (OAuth2 → `players.discord_id`) | `src/lib/discordLinkState.ts`, `src/lib/discord-link.ts`, `src/app/api/auth/discord/`, `src/components/DiscordLinkButton.tsx` |
 | Discord `#match-notifications` webhook alerts | `src/lib/discord-notify.ts` |
 | Discord `@Participants` role sync | `src/lib/discord-roles.ts`, hooked from `src/app/api/seasons/[id]/players/route.ts` (POST/DELETE) and `src/lib/season-lifecycle.ts` (`activateSeason()`/`checkSeasonCompletion()`/`checkGauntletCompletion()`) |
