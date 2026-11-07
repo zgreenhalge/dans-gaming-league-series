@@ -167,16 +167,16 @@ test('roundsPlayedBySide: partway through the first half stays entirely on the s
 });
 
 test('roundsPlayedBySide: matches buildRoundSides round-by-round for the same schedule', () => {
-  // Cross-check against buildRoundSides (event-driven) for a match that runs into OT, to
+  // Cross-check against buildRoundSides (event-driven) for a match that runs through two OT periods, to
   // confirm both entry points agree on the same per-round side assignment.
-  const events = Array.from({ length: 30 }, (_, i) => round(i + 1));
+  const events = Array.from({ length: 38 }, (_, i) => round(i + 1));
   const sides = buildRoundSides(events, 'CT', 13); // skins start CT -> shirts start T
   const expected = { ct: 0, t: 0 };
   for (const s of sides) {
     if (s.shirtsSide === 'CT') expected.ct++;
     else expected.t++;
   }
-  assert.deepEqual(roundsPlayedBySide('T', 30, 13), expected);
+  assert.deepEqual(roundsPlayedBySide('T', 38, 13), expected);
 });
 
 report();

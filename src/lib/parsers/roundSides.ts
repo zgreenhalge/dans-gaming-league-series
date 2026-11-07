@@ -33,18 +33,6 @@ export function reasonToCondition(reason: string | null): RoundCondition {
   }
 }
 
-/**
- * @param matchStartTick  Tick the live match begins at (see `findMatchStartTick`). Any round_end
- *   before it is warmup or an erroneously-recorded knife round and is dropped. Survivors keep their
- *   engine `total_rounds_played` as their `roundNumber` (not a 1..N renumbering), since that's what
- *   round-death/hurt events and the accumulator ticks are keyed by. The half-swap boundary, however,
- *   is computed relative to the *first surviving round*, not the raw engine number: a knife round
- *   played before the live match shifts every real round's engine number up by however many stray
- *   rounds the engine counted, but the actual in-game halftime swap still lands after
- *   `regRoundsPerHalf` *real* rounds. Comparing the raw engine number directly against
- *   `regRoundsPerHalf` would move the swap boundary earlier by that same shift and mislabel the
- *   round straddling it. Defaults to 0 (no tick filtering).
- */
 /** Rounds per overtime half: the server's `mp_overtime_maxrounds 4` is a 4-round period of two
  *  2-round halves (first to win 3 of the period). */
 const OT_ROUNDS_PER_HALF = 2;
@@ -95,6 +83,20 @@ export function filterLiveRoundEnds<T extends RoundEndRow>(events: T[], matchSta
   );
 }
 
+/**
+ * Per-round side assignment for the live rounds of one demo segment.
+ *
+ * @param matchStartTick  Tick the live match begins at (see `findMatchStartTick`). Any round_end
+ *   before it is warmup or an erroneously-recorded knife round and is dropped. Survivors keep their
+ *   engine `total_rounds_played` as their `roundNumber` (not a 1..N renumbering), since that's what
+ *   round-death/hurt events and the accumulator ticks are keyed by. The half-swap boundary, however,
+ *   is computed relative to the *first surviving round*, not the raw engine number: a knife round
+ *   played before the live match shifts every real round's engine number up by however many stray
+ *   rounds the engine counted, but the actual in-game halftime swap still lands after
+ *   `regRoundsPerHalf` *real* rounds. Comparing the raw engine number directly against
+ *   `regRoundsPerHalf` would move the swap boundary earlier by that same shift and mislabel the
+ *   round straddling it. Defaults to 0 (no tick filtering).
+ */
 export function buildRoundSides(
   roundEndEvents: RoundEndRow[],
   skinsStartingSide: 'CT' | 'T' | null,

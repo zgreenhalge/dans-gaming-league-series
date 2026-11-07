@@ -35,10 +35,10 @@ test('clean 13–8 regulation match is not quarantined', () => {
 });
 
 // --- clean overtime match passes (winner above target) ---
-test('clean overtime match (16–14) is not quarantined', () => {
+test('clean overtime match (17–14) is not quarantined', () => {
   const r = quarantineDemo({
-    roundHistory: cleanHistory(30),
-    shirtsScore: 16,
+    roundHistory: cleanHistory(31),
+    shirtsScore: 17,
     skinsScore: 14,
     targetWinRounds: 13,
   });
