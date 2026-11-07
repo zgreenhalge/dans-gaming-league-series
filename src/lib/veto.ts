@@ -1,9 +1,8 @@
 // Pick/ban completion check, shared by the match page (rendering) and the veto route (which uses it
 // to detect the incomplete→complete transition that fires server provisioning).
 //
-// Gauntlet = playoffs, so a single gauntlet-shaped boolean is all this needs — see docs/glossary.md's
-// Gauntlet entry for why callers should pass `isGauntlet || match.is_playoff_game` rather than
-// `isGauntlet` alone.
+// Gauntlet = playoffs, so the season's `is_gauntlet` is all this needs to pick the veto shape — see
+// docs/glossary.md's Gauntlet entry.
 
 import type { RoundHistoryEntry } from './types';
 

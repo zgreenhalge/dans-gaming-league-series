@@ -19,8 +19,8 @@ const REGULAR_STEPS = [
   { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
-// Gauntlet = playoffs — see docs/glossary.md's Gauntlet entry. `gauntletShaped` (below), not the raw
-// `isGauntlet` prop, is what this component branches on for veto shape and permissions.
+// Gauntlet = playoffs — see docs/glossary.md's Gauntlet entry. The `isGauntlet` prop (the season's
+// `is_gauntlet`) is what this component branches on for veto shape and permissions.
 // Simultaneous: either player fills either of their faction's two slots, in this display order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -88,11 +88,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     router.refresh(),
   );
 
-  // Falls back to the match's own is_playoff_game if the season's is_gauntlet was never set (e.g. a
-  // gauntlet CSV import whose season-patch step failed) — the pairing is a convention, not a DB
-  // constraint, so a mismatched match still needs to render its actual 4-ban shape.
-  const gauntletShaped = isGauntlet || match.is_playoff_game;
-  const steps = gauntletShaped ? GAUNTLET_STEPS : REGULAR_STEPS;
+  const steps = isGauntlet ? GAUNTLET_STEPS : REGULAR_STEPS;
 
   const side = match.skins_starting_side;
   const sideCls =
@@ -126,15 +122,13 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return fieldFaction === playerFaction;
   }
 
-  // Whether the viewer could fill this still-empty field. Gauntlet-shaped bans are simultaneous and
-  // shared per faction — either player (or admin) may fill any of their faction's open slots, in any
-  // order, right up until the 4th ban locks in the auto-picked map; a regular-season pick/ban is
-  // strictly sequential, one team-wide slot at a time. Keyed on `gauntletShaped`, not the raw
-  // `isGauntlet` prop, so a match whose season-level flag never got set still gets the 4-ban
-  // permission model that matches the tile shape it's actually rendering (see `gauntletShaped` above).
+  // Whether the viewer could fill this still-empty field. Gauntlet bans are simultaneous and shared
+  // per faction — either player (or admin) may fill any of their faction's open slots, in any order,
+  // right up until the 4th ban locks in the auto-picked map; a regular-season pick/ban is strictly
+  // sequential, one team-wide slot at a time.
   function isFillable(field: StepField): boolean {
     if (!canVeto || displayValue(field) !== null) return false;
-    if (!gauntletShaped && field !== sequenceNextField) return false;
+    if (!isGauntlet && field !== sequenceNextField) return false;
     return isAdmin || isMyFaction(field);
   }
 
@@ -163,7 +157,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   }
 
   // Gauntlet-shaped: show auto-picked map tile
-  const autoPickedMap = gauntletShaped ? effectivePickedMap(match) : null;
+  const autoPickedMap = isGauntlet ? effectivePickedMap(match) : null;
 
   async function submitVeto(field: StepField, value: string | null) {
     setError(null);
@@ -312,7 +306,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           })}
 
           {/* Auto-picked map tile for gauntlet */}
-          {gauntletShaped && (
+          {isGauntlet && (
             <span className="flex items-center gap-1 flex-1 min-w-[88px]">
               <span className="text-[var(--color-text-secondary)] text-sm shrink-0 font-mono">›</span>
               <div className={`flex-1 min-w-[88px] px-2.5 py-2 border ${autoPickedMap ? pickCls : pendingCls}`}>
