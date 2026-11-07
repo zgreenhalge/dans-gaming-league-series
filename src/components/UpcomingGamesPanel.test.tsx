@@ -12,7 +12,8 @@
 import { describe, expect, test } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { UpcomingGamesPanel } from './UpcomingGamesPanel';
-import type { ScrimSignupEntry, UpcomingGameRow, UpcomingScrimNight } from '@/lib/queries';
+import type { UpcomingGameRow, UpcomingScrimNight } from '@/lib/queries';
+import { scrimSignup } from '@/lib/test-support/scrimFixtures';
 
 function game(overrides: Partial<UpcomingGameRow> & { id: number }): UpcomingGameRow {
   return {
@@ -34,14 +35,7 @@ function scrim(id: number, startsAt: string, signups: [number, 'definite' | 'may
     night: { id, startsAt },
     started: false,
     checkInOpen: false,
-    signups: signups.map(([player_id, commitment]): ScrimSignupEntry => ({
-      player_id,
-      player_name: `P${player_id}`,
-      steam_avatar_url: null,
-      commitment,
-      signed_up_at: '2099-01-01T00:00:00Z',
-      checked_in_at: null,
-    })),
+    signups: signups.map(([player_id, commitment]) => scrimSignup(player_id, commitment)),
   };
 }
 const HEADING_HREF = '/seasons/4/weeks/12';
