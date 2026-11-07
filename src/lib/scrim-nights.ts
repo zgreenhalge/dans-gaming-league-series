@@ -5,10 +5,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SCRIM_NIGHT_LENGTH_MS, type ScrimCommitment } from './scrim-schedule';
 
-/** Thrown by `startScrimNight()` when another night is running at that time (`scrimNightEnd()`). */
+/** Thrown by `startScrimNight()` when the new night's slot overlaps another night's (`scrimNightEnd()`). */
 export class OverlappingScrimNightError extends Error {
   constructor() {
-    super('Another scrim night is running at that time — sign up for it instead.');
+    super('Another scrim night overlaps that time — sign up for it instead.');
     this.name = 'OverlappingScrimNightError';
   }
 }

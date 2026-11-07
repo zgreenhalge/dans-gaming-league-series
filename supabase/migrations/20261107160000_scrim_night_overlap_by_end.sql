@@ -22,7 +22,7 @@ begin
   if exists (
     select 1 from scrim_nights
     where starts_at < p_starts_at + v_length
-      and least(starts_at + v_length, coalesce(ended_at, 'infinity'::timestamptz)) > p_starts_at
+      and greatest(starts_at, least(starts_at + v_length, ended_at)) > p_starts_at
   ) then
     raise exception 'overlapping-scrim-night' using errcode = 'P0001';
   end if;

@@ -34,15 +34,17 @@ export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
 const SCRIM_LABEL_TIMEZONE = 'America/New_York';
 
 /** The instant `night` ends, in epoch ms: the earlier of `endedAt` and `SCRIM_NIGHT_LENGTH_MS` after it
- *  started. Its slot on the one shared server runs from `startsAt` to here, and
+ *  started, never before it started. Its slot on the one shared server runs from `startsAt` to here, and
  *  `start_scrim_night()` measures the slot the same way. */
 export function scrimNightEnd(night: ScrimNight): number {
-  const clockEnd = Date.parse(night.startsAt) + SCRIM_NIGHT_LENGTH_MS;
-  return night.endedAt ? Math.min(Date.parse(night.endedAt), clockEnd) : clockEnd;
+  const start = Date.parse(night.startsAt);
+  const clockEnd = start + SCRIM_NIGHT_LENGTH_MS;
+  return night.endedAt ? Math.max(start, Math.min(Date.parse(night.endedAt), clockEnd)) : clockEnd;
 }
 
 /** Whether `night` is over: ended by hand, or `SCRIM_NIGHT_LENGTH_MS` after it started. */
 export function hasScrimNightEnded(night: ScrimNight, now: Date): boolean {
+  if (night.endedAt) return true;
   return scrimNightEnd(night) <= now.getTime();
 }
 

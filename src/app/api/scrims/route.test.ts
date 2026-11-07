@@ -92,13 +92,18 @@ async function main() {
     assert.equal(db.scrim_nights.length, 2);
   });
 
-  await test('an ended night frees its slot: a night can start right after its end, but not before', async () => {
-    const running = scrimNightStartingIn(-3 * HOUR);
-    const db = installFixture({ scrim_nights: [{ ...running, ended_at: new Date(Date.now() - HOUR).toISOString() }] });
+  await test('an ended night frees its slot: a night can start after its end', async () => {
+    const ended = { ...scrimNightStartingIn(-3 * HOUR), ended_at: new Date(Date.now() - HOUR).toISOString() };
+    const db = installFixture({ scrim_nights: [ended] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 201);
     assert.equal(db.scrim_nights.length, 2);
-    db.scrim_nights = [{ ...running, ended_at: new Date(Date.now() + HOUR).toISOString() }];
+  });
+
+  await test('409 starting before a still-running night ends, even one set to end later', async () => {
+    const running = { ...scrimNightStartingIn(-3 * HOUR), ended_at: new Date(Date.now() + HOUR).toISOString() };
+    installFixture({ scrim_nights: [running] });
+    __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 409);
   });
 

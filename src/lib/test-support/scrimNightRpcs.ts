@@ -4,6 +4,7 @@
  * header on why `.rpc()` needs a per-name fake. Mirrors each function's refusals as `FakeRpcError`s.
  */
 
+import { scrimNightEnd } from '../scrim-schedule';
 import { FakeRpcError, nextId, type Row, type RpcHandler } from './fakeSupabase';
 
 export const scrimNightRpcs: Record<string, RpcHandler> = {
@@ -12,11 +13,9 @@ export const scrimNightRpcs: Record<string, RpcHandler> = {
     const length = (args.p_night_minutes as number) * 60_000;
     db.scrim_nights ??= [];
     db.scrim_signups ??= [];
-    const overlaps = (n: Row) => {
-      const nightStart = Date.parse(n.starts_at as string);
-      const nightEnd = Math.min(nightStart + length, n.ended_at ? Date.parse(n.ended_at as string) : Infinity);
-      return nightStart < start + length && nightEnd > start;
-    };
+    const overlaps = (n: Row) =>
+      Date.parse(n.starts_at as string) < start + length &&
+      scrimNightEnd({ id: n.id as number, startsAt: n.starts_at as string, endedAt: n.ended_at as string | null }) > start;
     if (db.scrim_nights.some(overlaps)) {
       throw new FakeRpcError('overlapping-scrim-night');
     }
