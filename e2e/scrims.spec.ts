@@ -118,7 +118,7 @@ test.describe('calendar and signups', () => {
     await expect(page).toHaveURL(/\/scrims\/\d+$/);
   });
 
-  test('starting a night within four hours of another is refused', async ({ page }) => {
+  test('starting a night that overlaps another is refused', async ({ page }) => {
     await page.goto('/scrims');
     const existing = await browserDay(page, 2, '21:00');
     await seedScrimNight(existing.startsAt, [{ playerId: CASEY }]);
@@ -127,7 +127,7 @@ test.describe('calendar and signups', () => {
     await pickDay(page, existing.day);
     await page.getByLabel('Night start time').fill('20:00');
     await page.getByRole('button', { name: "I'm in" }).click();
-    await expect(page.getByText(/Another scrim night starts within 4 hours/)).toBeVisible();
+    await expect(page.getByText(/Another scrim night overlaps that time/)).toBeVisible();
   });
 
   test('switching to maybe, then dropping out as the last player, removes the night', async ({ page }) => {
