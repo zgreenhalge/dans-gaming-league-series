@@ -20,7 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildRosterSchedule } from './season-schedule-engine';
 import type { DoubleheaderPolicy } from './season-schedule';
-import { getSeasonScheduleDraft, getSeasonRoster, getSideBalance, toDraftScheduleWeeks } from './queries';
+import { getSeasonScheduleDraft, getSeasonRoster, getSideBalance, getShortCountHistory, toDraftScheduleWeeks } from './queries';
 import {
   validateDraftIntegrity,
   validateDraftCompleteness,
@@ -99,15 +99,16 @@ function toDraftWeeksPayload(weeks: DraftScheduleWeek[]) {
  * Seeds the generator's shirts/skins optimizer with each roster player's real career balance
  * (`getSideBalance()`) rather than starting every player at zero — a player already skewed from
  * past seasons trends back toward even instead of this new season treating their history as if it
- * never happened. */
+ * never happened. Likewise `getShortCountHistory()` steers the short match count (roster size mod 4
+ * = 2) toward players who haven't had it in past seasons. */
 export async function generateSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   playerIds: number[],
   options?: { doubleheaderPolicy?: DoubleheaderPolicy },
 ): Promise<void> {
-  const initialBalance = await getSideBalance(playerIds);
-  const plan = buildRosterSchedule(playerIds, { ...options, initialBalance });
+  const [initialBalance, shortCountHistory] = await Promise.all([getSideBalance(playerIds), getShortCountHistory(playerIds)]);
+  const plan = buildRosterSchedule(playerIds, { ...options, initialBalance, shortCountHistory });
 
   for (const week of plan) {
     if (week.byePlayerIds.length > 1) {

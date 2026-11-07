@@ -807,3 +807,16 @@ export function factionColor(f: 'CT' | 'T' | null): string {
 export function roundedAdr(damage: number, rounds: number): number {
   return rounds > 0 ? Math.round(damage / rounds) : 0;
 }
+
+/**
+ * Players who played the short count in a season: when match counts differ at all, everyone on the
+ * minimum. Empty when every player has the same count. `appearances` holds one entry per player in
+ * the season.
+ */
+export function shortCountPlayerIds(appearances: Map<number, number>): number[] {
+  const counts = [...appearances.values()];
+  if (counts.length === 0) return [];
+  const min = Math.min(...counts);
+  if (min === Math.max(...counts)) return [];
+  return [...appearances].filter(([, n]) => n === min).map(([id]) => id);
+}
