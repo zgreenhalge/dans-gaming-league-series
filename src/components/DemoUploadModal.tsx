@@ -56,6 +56,7 @@ interface ParsedResult {
   matchRoundEconomy?: DemoMatchRoundEconomy[];
   matchDamageEvents?: DemoMatchDamageEvent[];
   round_history?: RoundHistoryEntry[] | null;
+  ot_rounds_per_half?: number | null;
 }
 
 type DraftStats = Record<number, { kills: string; assists: string; deaths: string; damage: string }>;
@@ -398,6 +399,7 @@ export default function DemoUploadModal({
           matchRoundEconomy: parsed.matchRoundEconomy,
           matchDamageEvents: parsed.matchDamageEvents,
           round_history: parsed.round_history ?? null,
+          ot_rounds_per_half: parsed.ot_rounds_per_half ?? null,
           // Forward warnings so the score route can learn steam ids from elimination matches.
           warnings: parsed.warnings,
         }),

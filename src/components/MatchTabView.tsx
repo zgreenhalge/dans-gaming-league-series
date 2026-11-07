@@ -20,7 +20,7 @@ import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, Re
 import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived, RoundHistoryEntry } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
-import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
+import { DEFAULT_OT_ROUNDS_PER_HALF, roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
 type Faction = 'CT' | 'T' | null;
 type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'h2h' | 'recap';
@@ -36,6 +36,7 @@ function Scoreboard({
   includeCT,
   includeT,
   targetWinRounds,
+  otRoundsPerHalf,
 }: {
   players: MatchStatRow[];
   mvpPlayerId: number | null;
@@ -48,6 +49,8 @@ function Scoreboard({
   /** The team's starting side (`faction`) plus this determine which rounds were played
    *  on which side, for the ADR-by-side denominator below. */
   targetWinRounds: number;
+  /** The match's `ot_rounds_per_half`; `null` when not recorded. */
+  otRoundsPerHalf?: number | null;
 }) {
   const cls = factionClass(faction);
   const hasSab = sabMap && sabMap.size > 0;
@@ -87,7 +90,7 @@ function Scoreboard({
           // total rounds played, which would understate ADR for the filtered side.
           let adrRounds = p.rounds_played;
           if (sab && !bothSides) {
-            const bySide = roundsPlayedBySide(faction, p.rounds_played, targetWinRounds);
+            const bySide = roundsPlayedBySide(faction, p.rounds_played, targetWinRounds, otRoundsPerHalf ?? DEFAULT_OT_ROUNDS_PER_HALF);
             adrRounds = (includeCT ? bySide.ct : 0) + (includeT ? bySide.t : 0);
           }
           const adr = adrRounds > 0 ? Math.round(dmg / adrRounds) : 0;
@@ -293,6 +296,7 @@ export default function MatchTabView({
   matchId,
   matchPlayers,
   targetWinRounds,
+  otRoundsPerHalf,
   skinsSide,
   sabremetrics = [],
   matchKills = [],
@@ -320,6 +324,8 @@ export default function MatchTabView({
   matchId: number;
   matchPlayers: { player_id: number; player_name: string; faction: 'SHIRTS' | 'SKINS' }[];
   targetWinRounds: number;
+  /** The match's `ot_rounds_per_half`; `null` when not recorded. */
+  otRoundsPerHalf?: number | null;
   skinsSide: 'CT' | 'T' | null;
   sabremetrics?: MatchSabremetricsRow[];
   /** This match's demo-derived kills, one row per kill — feeds the Advanced tab's Weapons table
@@ -521,7 +527,7 @@ export default function MatchTabView({
                   score={score?.shirts ?? null}
                   outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} targetWinRounds={targetWinRounds} />
+                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} targetWinRounds={targetWinRounds} otRoundsPerHalf={otRoundsPerHalf} />
               </div>
               <div className="mt-6">
                 <TeamHeader
@@ -530,7 +536,7 @@ export default function MatchTabView({
                   score={score?.skins ?? null}
                   outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} targetWinRounds={targetWinRounds} />
+                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} targetWinRounds={targetWinRounds} otRoundsPerHalf={otRoundsPerHalf} />
               </div>
             </>
           )}

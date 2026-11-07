@@ -198,6 +198,7 @@ async function main() {
           matchRoundEconomy: sab.matchRoundEconomy,
           matchDamageEvents: sab.matchDamageEvents,
           round_history: parsed.round_history,
+          ot_rounds_per_half: parsed.ot_rounds_per_half,
         }
       : null;
 
@@ -228,6 +229,7 @@ async function main() {
         matchRoundEconomy: payload.matchRoundEconomy,
         matchDamageEvents: payload.matchDamageEvents,
         round_history: payload.round_history,
+        ot_rounds_per_half: payload.ot_rounds_per_half,
       });
       if (written.ok) {
         // writeMatchScore() itself fires the rating-recompute/gauntlet-or-season-completion/steam-id

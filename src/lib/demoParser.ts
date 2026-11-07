@@ -45,6 +45,9 @@ export interface ParsedDemoResult {
    *  whether segments' scores are mutually compatible — a stored side makes every segment use the
    *  identical value regardless of that segment's own (possibly noisy) inference. */
   effective_side: 'CT' | 'T' | null;
+  /** Overtime half size inferred from the demo's mid-period side swap; `null` when the demo shows
+   *  none (no overtime). Persisted as `matches.ot_rounds_per_half`. */
+  ot_rounds_per_half: number | null;
 }
 
 export function parseDemoFile(
@@ -101,7 +104,7 @@ export function parseDemoFile(
 
   // --- Starting side: stored wins; fall back to inferring it from the demo (the
   // round-1 anchor gauntlet/knife matches have no stored value for). ---
-  const { inferredSide, effectiveSide, disagreementWarning } = resolveStartingSide(
+  const { inferredSide, effectiveSide, inferredOtRoundsPerHalf, otRoundsPerHalf, disagreementWarning } = resolveStartingSide(
     demoBuffer, liveRounds, steamToPlayer, skinsSide, targetWinRounds, startingRealRound,
   );
   if (disagreementWarning) warnings.push(disagreementWarning);
@@ -116,6 +119,7 @@ export function parseDemoFile(
     targetWinRounds,
     matchStartTick,
     startingRealRound,
+    otRoundsPerHalf,
   );
 
   // buildRoundSides filters identically to `liveRounds` above and preserves
@@ -176,6 +180,7 @@ export function parseDemoFile(
     warnings,
     inferred_side: inferredSide,
     effective_side: effectiveSide,
+    ot_rounds_per_half: inferredOtRoundsPerHalf,
   };
 }
 

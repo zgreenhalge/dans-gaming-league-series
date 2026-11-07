@@ -33,19 +33,21 @@ export function reasonToCondition(reason: string | null): RoundCondition {
   }
 }
 
-/** Rounds per overtime half: the server's `mp_overtime_maxrounds 4` is a 4-round period of two
- *  2-round halves (first to win 3 of the period). */
-const OT_ROUNDS_PER_HALF = 2;
+/** The overtime half size assumed for a match that has no recorded one (`matches.ot_rounds_per_half`
+ *  null and nothing inferable from its demo): `mp_overtime_maxrounds 4`, i.e. two 2-round halves per
+ *  OT period. Callers resolve a missing value to this; `sideForRealRound()` itself never defaults. */
+export const DEFAULT_OT_ROUNDS_PER_HALF = 2;
 
 /**
  * Which side a team starting on `startingSide` plays in 1-based *real* round number
  * `realRoundNumber` (post-knife-round renumbering), applying the regulation-half swap at
- * `targetWinRounds - 1` rounds and the mid-period OT swap beyond it. The
+ * `targetWinRounds - 1` rounds and the mid-period OT swap beyond it (an OT period is two halves of
+ * `otRoundsPerHalf` rounds, i.e. `mp_overtime_maxrounds / 2`; it varies per match). The
  * canonical side-assignment rule (see `docs/calculations.md`'s "Side Splits") — both
  * `buildRoundSides` (per recorded round) and `roundsPlayedBySide` (a rounds-played total,
  * with no per-round event data) derive from this one function so they can't drift apart.
  *
- * Its swap decision depends only on `realRoundNumber`/`targetWinRounds`, not `startingSide` —
+ * Its swap decision depends only on `realRoundNumber`/`targetWinRounds`/`otRoundsPerHalf`, not `startingSide` —
  * which makes it its own inverse for a fixed round: applying it a second time at the same round
  * recovers whichever side was passed in the first time. A caller with a side reading taken at a
  * later round, not round 1, can use that property to work backward to the round-1 anchor.
@@ -54,6 +56,7 @@ export function sideForRealRound(
   realRoundNumber: number,
   startingSide: 'CT' | 'T',
   targetWinRounds: number,
+  otRoundsPerHalf: number,
 ): 'CT' | 'T' {
   const otherSide: 'CT' | 'T' = startingSide === 'CT' ? 'T' : 'CT';
   const regRoundsPerHalf = targetWinRounds - 1;
@@ -63,7 +66,7 @@ export function sideForRealRound(
   // Sides swap between the two halves of an OT period but not between periods (nor between
   // regulation and the first period), so OT halves 0,1,2,3,4… sit after 0,1,1,2,2… swaps from the
   // regulation-H2 side.
-  const otHalf = Math.floor((realRoundNumber - regRoundsPerHalf * 2 - 1) / OT_ROUNDS_PER_HALF);
+  const otHalf = Math.floor((realRoundNumber - regRoundsPerHalf * 2 - 1) / otRoundsPerHalf);
   return Math.ceil(otHalf / 2) % 2 === 0 ? otherSide : startingSide;
 }
 
@@ -108,6 +111,8 @@ export function buildRoundSides(
    *  segment's own first live round instead would mislabel every round straddling the boundary
    *  once that segment isn't the match's true first segment. */
   startingRealRound = 1,
+  /** Rounds per overtime half for this match — see `sideForRealRound()`. */
+  otRoundsPerHalf = DEFAULT_OT_ROUNDS_PER_HALF,
 ): RoundSideInfo[] {
   if (skinsStartingSide === null) return [];
 
@@ -125,7 +130,7 @@ export function buildRoundSides(
       roundNumber,
       endTick: e.tick,
       winnerSide: e.winner as 'CT' | 'T' | null,
-      shirtsSide: sideForRealRound(realRoundNumber, shirtsStartSide, targetWinRounds),
+      shirtsSide: sideForRealRound(realRoundNumber, shirtsStartSide, targetWinRounds, otRoundsPerHalf),
       winReason: reasonToCondition(e.reason),
     };
   });
@@ -134,7 +139,8 @@ export function buildRoundSides(
 /**
  * How many of a team's `roundsPlayed` rounds (1-based real round order) were played on CT
  * vs T, derived from the same half/OT swap schedule as `buildRoundSides` — no per-round
- * event data needed, just the team's starting side and the season's `target_win_rounds`.
+ * event data needed, just the team's starting side, the season's `target_win_rounds` and the
+ * match's `otRoundsPerHalf`.
  * Used to side-scope per-round rate stats (e.g. ADR by side) where only a rounds-played
  * total, not a side-by-round breakdown, is stored per player.
  */
@@ -142,12 +148,13 @@ export function roundsPlayedBySide(
   startingSide: 'CT' | 'T' | null,
   roundsPlayed: number,
   targetWinRounds: number,
+  otRoundsPerHalf: number,
 ): { ct: number; t: number } {
   if (startingSide === null || roundsPlayed <= 0) return { ct: 0, t: 0 };
   let ct = 0;
   let t = 0;
   for (let n = 1; n <= roundsPlayed; n++) {
-    if (sideForRealRound(n, startingSide, targetWinRounds) === 'CT') ct++;
+    if (sideForRealRound(n, startingSide, targetWinRounds, otRoundsPerHalf) === 'CT') ct++;
     else t++;
   }
   return { ct, t };

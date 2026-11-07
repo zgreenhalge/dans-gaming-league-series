@@ -1,3 +1,4 @@
+import { DEFAULT_OT_ROUNDS_PER_HALF } from '@/lib/parsers/roundSides';
 import type { RoundHistoryEntry } from '@/lib/types';
 import { sideColor } from '@/lib/util';
 import { CONDITION_ICON, CONDITION_LABEL } from './icons/ConditionIcons';
@@ -16,13 +17,13 @@ import { CONDITION_ICON, CONDITION_LABEL } from './icons/ConditionIcons';
 
 /**
  * Regulation half length is `targetWinRounds - 1` rounds; overtime halves are
- * 3 rounds each. Returns a segment index that increments at every half boundary.
+ * `otRoundsPerHalf` rounds each. Returns a segment index that increments at every half boundary.
  */
-function segmentOf(n: number, regHalf: number): number {
+function segmentOf(n: number, regHalf: number, otRoundsPerHalf: number): number {
   if (n <= regHalf) return 0;
   if (n <= 2 * regHalf) return 1;
   const otRound = n - 2 * regHalf;
-  return 2 + Math.floor((otRound - 1) / 3);
+  return 2 + Math.floor((otRound - 1) / otRoundsPerHalf);
 }
 
 /** Label + emphasis for the divider that *precedes* the given segment. */
@@ -51,6 +52,7 @@ type Column =
 function buildColumns(
   rounds: RoundHistoryEntry[],
   regHalf: number,
+  otRoundsPerHalf: number,
 ): Column[] {
   const cols: Column[] = [];
   const firstN = rounds.length > 0 ? rounds[0].n : 0;
@@ -65,8 +67,8 @@ function buildColumns(
 
     const next = rounds[i + 1];
     if (next) {
-      const segHere = segmentOf(realRound(entry.n), regHalf);
-      const segNext = segmentOf(realRound(next.n), regHalf);
+      const segHere = segmentOf(realRound(entry.n), regHalf, otRoundsPerHalf);
+      const segNext = segmentOf(realRound(next.n), regHalf, otRoundsPerHalf);
       if (segNext !== segHere) {
         const { label, major } = dividerLabel(segNext);
         cols.push({ type: 'divider', label, major, shirts, skins });
@@ -121,14 +123,17 @@ function RoundTile({
 export default function RoundHistoryStrip({
   rounds,
   targetWinRounds,
+  otRoundsPerHalf,
 }: {
   rounds: RoundHistoryEntry[];
   targetWinRounds: number;
+  /** The match's `ot_rounds_per_half` (see `sideForRealRound()`); `null` when not recorded. */
+  otRoundsPerHalf?: number | null;
 }) {
   if (!rounds || rounds.length === 0) return null;
 
   const regHalf = Math.max(1, targetWinRounds - 1);
-  const columns = buildColumns(rounds, regHalf);
+  const columns = buildColumns(rounds, regHalf, otRoundsPerHalf ?? DEFAULT_OT_ROUNDS_PER_HALF);
 
   return (
     <section className="mt-6">

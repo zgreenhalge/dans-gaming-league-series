@@ -60,6 +60,9 @@ export interface Match {
   pre_match_win_prob_formula_version: string | null;
   scheduled_at: string | null;
   round_history: RoundHistoryEntry[] | null;
+  /** Rounds per overtime half (`mp_overtime_maxrounds / 2`), inferred from the match's demo; `null`
+   *  until a demo with overtime has been parsed (read as `DEFAULT_OT_ROUNDS_PER_HALF`). */
+  ot_rounds_per_half?: number | null;
   recording_url: string | null;
   /** Optional because older environments may predate the column (see `docs/replay.md`). */
   replay_status?: ReplayStatus | null;
