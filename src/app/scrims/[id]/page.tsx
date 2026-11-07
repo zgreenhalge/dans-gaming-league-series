@@ -75,9 +75,10 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   // Generate Rounds is offered where Next Match is: no match waiting, four checked in.
   const rounds = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
 
-  // The lobby only exists while check-in is open, and shows once anyone has checked in; before that
-  // it holds only the viewer's own Check in. The page opens on the first tab present.
-  const hasLobby = night.checkInOpen && (pool.length > 0 || lobbyMatch != null || currentPlayerId != null);
+  // The lobby only exists while check-in is open and someone has checked in; before that there is only
+  // the viewer's own Check in, above the tabs. The page opens on the first tab present.
+  const hasLobby = night.checkInOpen && (pool.length > 0 || lobbyMatch != null);
+  const showCheckInOnly = night.checkInOpen && !hasLobby && currentPlayerId != null;
   const hasH2H = night.h2h.duos.length > 0 || night.h2h.rivals.length > 0;
   const tabs: ScrimNightTabSpec[] = [
     ...(hasLobby
@@ -86,27 +87,21 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           label: 'Lobby',
           content: (
             <>
-              {pool.length === 0 && !lobbyMatch && currentPlayerId != null ? (
-                <div className="flex justify-end">
-                  <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
-                </div>
-              ) : (
-                <ScrimLobbyPanel
-                  key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
-                  nightId={night.night.id}
-                  match={lobbyMatch}
-                  queued={queuedMatches.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) }))}
-                  pool={pool}
-                  names={names}
-                  maps={maps}
-                  canMake={canMake}
-                  canManage={isAdmin}
-                  currentPlayerId={currentPlayerId}
-                  viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
-                  rounds={rounds}
-                  leagueMatches={leagueMatchesDuring(night.night, scheduled)}
-                />
-              )}
+              <ScrimLobbyPanel
+                key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
+                nightId={night.night.id}
+                match={lobbyMatch}
+                queued={queuedMatches.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) }))}
+                pool={pool}
+                names={names}
+                maps={maps}
+                canMake={canMake}
+                canManage={isAdmin}
+                currentPlayerId={currentPlayerId}
+                viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
+                rounds={rounds}
+                leagueMatches={leagueMatchesDuring(night.night, scheduled)}
+              />
               {night.leaderboard.length > 0 && (
                 <section className="mt-8">
                   <div className={SECTION_LABEL_CLS}>Leaderboard</div>
@@ -163,6 +158,13 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
             />
             {/* Check-in opens on the clock, so the page refreshes itself when it does. */}
             {!night.checkInOpen && <RefreshAt iso={new Date(Date.parse(night.night.startsAt) - SCRIM_CHECK_IN_LEAD_MS).toISOString()} />}
+          </div>
+        )}
+
+        {/* Before anyone has checked in there's no lobby, only the viewer's own Check in. */}
+        {showCheckInOnly && (
+          <div className="flex justify-end mb-8">
+            <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
           </div>
         )}
 
