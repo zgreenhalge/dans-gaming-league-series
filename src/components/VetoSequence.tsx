@@ -19,8 +19,7 @@ const REGULAR_STEPS = [
   { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
-// Gauntlet = playoffs — see docs/glossary.md's Gauntlet entry. The `isGauntlet` prop (the season's
-// `is_gauntlet`) is what this component branches on for veto shape and permissions.
+// Gauntlet = playoffs — see docs/glossary.md's Gauntlet entry.
 // Simultaneous: either player fills either of their faction's two slots, in this display order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -156,7 +155,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return pendingCls;
   }
 
-  // Gauntlet-shaped: show auto-picked map tile
+  // Gauntlet: show auto-picked map tile
   const autoPickedMap = isGauntlet ? effectivePickedMap(match) : null;
 
   async function submitVeto(field: StepField, value: string | null) {

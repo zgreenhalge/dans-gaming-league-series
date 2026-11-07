@@ -97,7 +97,6 @@ export default async function MatchPage({
   const { match, week, season, stats } = detail;
   const played = isPlayedScore(match.final_score);
 
-  // Veto complete: all required pick/ban fields are filled.
   const vetoComplete = isVetoComplete(match, season.is_gauntlet);
   const score = played ? parseScore(match.final_score) : null;
   const map = effectivePickedMap(match);
