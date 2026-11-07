@@ -363,6 +363,7 @@ export default async function MatchPage({
           <RoundHistoryStrip
             rounds={match.round_history}
             targetWinRounds={season.target_win_rounds}
+            otRoundsPerHalf={match.ot_rounds_per_half}
           />
         )}
 
@@ -387,6 +388,7 @@ export default async function MatchPage({
                 faction: s.faction as 'SHIRTS' | 'SKINS',
               }))}
               targetWinRounds={season.target_win_rounds}
+              otRoundsPerHalf={match.ot_rounds_per_half}
               skinsSide={skinsStartingSide}
               sabremetrics={sabremetrics}
               matchKills={matchKills}

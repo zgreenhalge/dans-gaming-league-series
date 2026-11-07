@@ -150,6 +150,9 @@ export interface WriteMatchScoreInput {
   matchRoundEconomy?: DemoMatchRoundEconomy[];
   matchDamageEvents?: DemoMatchDamageEvent[];
   round_history?: unknown;
+  /** The overtime half size the demo showed (`ParsedDemoResult.ot_rounds_per_half`). Stored as
+   *  `matches.ot_rounds_per_half` when a positive integer; anything else leaves the column as is. */
+  ot_rounds_per_half?: unknown;
   /** Parser warnings, forwarded so a single elimination-resolved match can learn a steam id. Only
    *  applied when `opts.learnSteamIds` is set. */
   warnings?: string[];
@@ -242,7 +245,7 @@ export async function writeMatchScore(
 ): Promise<WriteMatchScoreResult> {
   const {
     shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds,
-    matchUtilityThrows, matchRoundEconomy, matchDamageEvents, round_history, warnings,
+    matchUtilityThrows, matchRoundEconomy, matchDamageEvents, round_history, ot_rounds_per_half, warnings,
   } = input;
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
@@ -349,7 +352,13 @@ export async function writeMatchScore(
   const finalScore = `${shirts}-${skins}`;
   const { error: matchErr } = await supabaseAdmin
     .from('matches')
-    .update({ final_score: finalScore, round_history: roundHistory })
+    .update({
+      final_score: finalScore,
+      round_history: roundHistory,
+      ...(Number.isInteger(ot_rounds_per_half) && (ot_rounds_per_half as number) > 0
+        ? { ot_rounds_per_half }
+        : {}),
+    })
     .eq('id', matchId);
   if (matchErr) return { ok: false, error: matchErr.message, status: 500 };
 

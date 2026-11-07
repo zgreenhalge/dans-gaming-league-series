@@ -101,7 +101,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           )}
         </MatchMapBackdrop>
 
-        {played && match.round_history && <RoundHistoryStrip rounds={match.round_history} targetWinRounds={DEFAULT_TARGET_WIN_ROUNDS} />}
+        {played && match.round_history && <RoundHistoryStrip rounds={match.round_history} targetWinRounds={DEFAULT_TARGET_WIN_ROUNDS} otRoundsPerHalf={match.ot_rounds_per_half} />}
 
         <Suspense>
           <UrlStateProvider>
@@ -120,6 +120,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
               matchId={match.id}
               matchPlayers={stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name, faction: s.faction as 'SHIRTS' | 'SKINS' }))}
               targetWinRounds={DEFAULT_TARGET_WIN_ROUNDS}
+              otRoundsPerHalf={match.ot_rounds_per_half}
               skinsSide={skinsStartingSide}
               sabremetrics={facts.sabremetrics}
               matchKills={facts.matchKills}

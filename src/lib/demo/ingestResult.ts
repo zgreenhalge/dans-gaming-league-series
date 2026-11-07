@@ -32,6 +32,8 @@ export interface DemoConfirmPayload {
   matchRoundEconomy: DemoMatchRoundEconomy[];
   matchDamageEvents: DemoMatchDamageEvent[];
   round_history: RoundHistoryEntry[] | null;
+  /** `ParsedDemoResult.ot_rounds_per_half`; stored as `matches.ot_rounds_per_half`. */
+  ot_rounds_per_half: number | null;
 }
 
 export interface DemoIngestResult {

@@ -298,6 +298,7 @@ export interface ScrimMatchDetail {
   skins_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   round_history: RoundHistoryEntry[] | null;
+  ot_rounds_per_half: number | null;
   recording_url: string | null;
   stats: MatchStatRow[];
 }
@@ -308,7 +309,7 @@ export const getScrimMatchDetail = cache(async (matchId: number): Promise<ScrimM
   const [{ data, error }, playersById] = await Promise.all([
     getAdminClient()
       .from('matches')
-      .select('id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, recording_url, scrim_night_id, scrim_nights(starts_at), player_match_stats(*)')
+      .select('id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, ot_rounds_per_half, recording_url, scrim_night_id, scrim_nights(starts_at), player_match_stats(*)')
       .eq('id', matchId)
       .not('scrim_night_id', 'is', null)
       .maybeSingle(),

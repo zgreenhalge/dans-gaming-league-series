@@ -254,7 +254,11 @@ export function mergeSegmentResults(segments: ParsedDemoResult[]): ParsedDemoRes
     return { ...s, adr, is_win };
   });
 
-  return { stats, shirts_score, skins_score, round_history, warnings, inferred_side, effective_side };
+  // Only a segment containing the first overtime round can infer the half size; any segment that did
+  // carries the match's value.
+  const ot_rounds_per_half = segments.find((s) => s.ot_rounds_per_half !== null)?.ot_rounds_per_half ?? null;
+
+  return { stats, shirts_score, skins_score, round_history, warnings, inferred_side, effective_side, ot_rounds_per_half };
 }
 
 /** Combines each segment's `weaponStats`/`economyStats` bucket arrays (WeaponStatFields keyed by

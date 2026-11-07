@@ -1,6 +1,6 @@
 import { parseEvent, parseHeader, parseTicks } from '@laihoe/demoparser2';
 import {
-  buildRoundSides, filterLiveRoundEnds, sideForFaction, type RoundEndRow, type RoundSideInfo,
+  buildRoundSides, DEFAULT_OT_ROUNDS_PER_HALF, filterLiveRoundEnds, sideForFaction, type RoundEndRow, type RoundSideInfo,
 } from './roundSides';
 import { roundOf, type RoundBounds } from './_shared';
 
@@ -250,6 +250,8 @@ export function buildMatchContext(
   /** See `buildRoundSides()`'s doc — 1 for a standalone demo, or the match-wide starting round a
    *  multi-segment caller (`parseDemoSabremetricsSegments()`) supplies for a later segment. */
   startingRealRound = 1,
+  /** Rounds per overtime half for this match — see `sideForRealRound()`. */
+  otRoundsPerHalf = DEFAULT_OT_ROUNDS_PER_HALF,
 ): MatchContext {
   const warnings: string[] = [];
 
@@ -268,7 +270,7 @@ export function buildMatchContext(
 
   const matchStartTick = findMatchStartTick(demoBuffer);
   const rounds = buildRoundSides(
-    roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick, startingRealRound,
+    roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick, startingRealRound, otRoundsPerHalf,
   );
   const hasSides = rounds.length > 0;
 

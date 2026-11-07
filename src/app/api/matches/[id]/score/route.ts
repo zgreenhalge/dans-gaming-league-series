@@ -93,7 +93,7 @@ export async function PATCH(
 
   const {
     shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds,
-    matchUtilityThrows, matchRoundEconomy, matchDamageEvents, round_history, warnings,
+    matchUtilityThrows, matchRoundEconomy, matchDamageEvents, round_history, ot_rounds_per_half, warnings,
   } = body as {
     shirts: unknown;
     skins: unknown;
@@ -106,6 +106,7 @@ export async function PATCH(
     matchRoundEconomy?: DemoMatchRoundEconomy[];
     matchDamageEvents?: DemoMatchDamageEvent[];
     round_history?: unknown;
+    ot_rounds_per_half?: unknown;
     warnings?: unknown; // parser warnings forwarded from the confirm — used to learn steam ids
   };
 
@@ -124,6 +125,7 @@ export async function PATCH(
       matchRoundEconomy,
       matchDamageEvents,
       round_history,
+      ot_rounds_per_half,
       warnings: Array.isArray(warnings) ? (warnings as string[]) : undefined,
     },
     {

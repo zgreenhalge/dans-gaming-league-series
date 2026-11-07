@@ -406,7 +406,10 @@ Supabase rows (`config_sets`, `config_set_files`), not the fixed single-file reg
 `golden` (the production baseline every real match provisions with) is one row among however many
 exist; new sets are added via `scripts/seed-config-set.ts` or (once built) the admin config-set CRUD
 UI. `infra/matchzy/` (`golden-server-settings.json` + `cfg/`) is the seed input for `golden` and a
-disaster-recovery snapshot — it is **not read live** by the app.
+disaster-recovery snapshot — it is **not read live** by the app. The overtime cvar
+(`mp_overtime_maxrounds`) in those cfg files is also not read by the app: each match's overtime half
+size is inferred from its own demo and stored as `matches.ot_rounds_per_half`
+([`demo-ingestion.md`](./demo-ingestion.md#overtime-half-size)).
 
 | Table | Columns | Meaning |
 |---|---|---|
