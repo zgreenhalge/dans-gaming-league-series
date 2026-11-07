@@ -33,24 +33,14 @@ export function reasonToCondition(reason: string | null): RoundCondition {
   }
 }
 
-/**
- * @param matchStartTick  Tick the live match begins at (see `findMatchStartTick`). Any round_end
- *   before it is warmup or an erroneously-recorded knife round and is dropped. Survivors keep their
- *   engine `total_rounds_played` as their `roundNumber` (not a 1..N renumbering), since that's what
- *   round-death/hurt events and the accumulator ticks are keyed by. The half-swap boundary, however,
- *   is computed relative to the *first surviving round*, not the raw engine number: a knife round
- *   played before the live match shifts every real round's engine number up by however many stray
- *   rounds the engine counted, but the actual in-game halftime swap still lands after
- *   `regRoundsPerHalf` *real* rounds. Comparing the raw engine number directly against
- *   `regRoundsPerHalf` would move the swap boundary earlier by that same shift and mislabel the
- *   round straddling it. Defaults to 0 (no tick filtering).
- */
-const OT_ROUNDS_PER_HALF = 3;
+/** Rounds per overtime half: the server's `mp_overtime_maxrounds 4` is a 4-round period of two
+ *  2-round halves (first to win 3 of the period). */
+const OT_ROUNDS_PER_HALF = 2;
 
 /**
  * Which side a team starting on `startingSide` plays in 1-based *real* round number
  * `realRoundNumber` (post-knife-round renumbering), applying the regulation-half swap at
- * `targetWinRounds - 1` rounds and the every-`OT_ROUNDS_PER_HALF` OT swap beyond it. The
+ * `targetWinRounds - 1` rounds and the mid-period OT swap beyond it. The
  * canonical side-assignment rule (see `docs/calculations.md`'s "Side Splits") — both
  * `buildRoundSides` (per recorded round) and `roundsPlayedBySide` (a rounds-played total,
  * with no per-round event data) derive from this one function so they can't drift apart.
@@ -70,9 +60,11 @@ export function sideForRealRound(
 
   if (realRoundNumber <= regRoundsPerHalf) return startingSide;
   if (realRoundNumber <= regRoundsPerHalf * 2) return otherSide;
-  const otRound = realRoundNumber - regRoundsPerHalf * 2;
-  const otHalf = Math.ceil(otRound / OT_ROUNDS_PER_HALF);
-  return otHalf % 2 === 1 ? otherSide : startingSide;
+  // Sides swap between the two halves of an OT period but not between periods (nor between
+  // regulation and the first period), so OT halves 0,1,2,3,4… sit after 0,1,1,2,2… swaps from the
+  // regulation-H2 side.
+  const otHalf = Math.floor((realRoundNumber - regRoundsPerHalf * 2 - 1) / OT_ROUNDS_PER_HALF);
+  return Math.ceil(otHalf / 2) % 2 === 0 ? otherSide : startingSide;
 }
 
 /** Every `round_end` a caller's parse should count toward the score: warmup and null-winner rows
@@ -91,6 +83,20 @@ export function filterLiveRoundEnds<T extends RoundEndRow>(events: T[], matchSta
   );
 }
 
+/**
+ * Per-round side assignment for the live rounds of one demo segment.
+ *
+ * @param matchStartTick  Tick the live match begins at (see `findMatchStartTick`). Any round_end
+ *   before it is warmup or an erroneously-recorded knife round and is dropped. Survivors keep their
+ *   engine `total_rounds_played` as their `roundNumber` (not a 1..N renumbering), since that's what
+ *   round-death/hurt events and the accumulator ticks are keyed by. The half-swap boundary, however,
+ *   is computed relative to the *first surviving round*, not the raw engine number: a knife round
+ *   played before the live match shifts every real round's engine number up by however many stray
+ *   rounds the engine counted, but the actual in-game halftime swap still lands after
+ *   `regRoundsPerHalf` *real* rounds. Comparing the raw engine number directly against
+ *   `regRoundsPerHalf` would move the swap boundary earlier by that same shift and mislabel the
+ *   round straddling it. Defaults to 0 (no tick filtering).
+ */
 export function buildRoundSides(
   roundEndEvents: RoundEndRow[],
   skinsStartingSide: 'CT' | 'T' | null,
