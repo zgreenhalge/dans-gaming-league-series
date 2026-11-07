@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
@@ -10,11 +11,12 @@ import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNi
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
-import { scrimNightHref } from '@/lib/crumbs';
+import { scrimMatchHref, scrimNightHref } from '@/lib/crumbs';
 import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { parseRouteId } from '@/lib/util';
 import { scrimMatchNeedsServer } from '@/lib/scrim-matches';
+import { isPlayedScore } from '@/lib/util';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
@@ -61,6 +63,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
   // Matches play in order: the first still needing the server is the lobby's, the rest wait behind it.
   const [lobbyMatch = null, ...queuedMatches] = night.matches.filter(scrimMatchNeedsServer);
+  // Games over with no score: the demo is parsing, or the server stopped early. An admin confirms or discards them.
+  const awaitingScore = night.matches.filter((m) => !isPlayedScore(m.final_score) && !scrimMatchNeedsServer(m));
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
   const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
   const canMake = isAdmin || viewerCheckedIn;
@@ -135,6 +139,17 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
 
           <section>
             <div className={SECTION_LABEL_CLS}>Matches</div>
+            {isAdmin && awaitingScore.length > 0 && (
+              <p className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
+                {awaitingScore.map((m, i) => (
+                  <span key={m.id}>
+                    {i > 0 && ', '}
+                    <Link href={scrimMatchHref(m.id)} className="underline hover:text-[var(--color-text-primary)]">Match {m.match_number}</Link>
+                  </span>
+                ))}{' '}
+                {awaitingScore.length === 1 ? 'has' : 'have'} no score yet. Open {awaitingScore.length === 1 ? 'it' : 'them'} to confirm the result or discard.
+              </p>
+            )}
             <ScrimNightMatchList matches={night.matches} names={names} currentPlayerId={currentPlayerId} />
           </section>
         </div>

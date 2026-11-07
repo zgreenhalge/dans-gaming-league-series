@@ -25,7 +25,7 @@ import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/component
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
+import { fmtUtcShort, isServerLive, isServerOff, playersOnServer } from '@/lib/util';
 import { workshopIdFromInput } from '@/lib/workshop';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
@@ -547,7 +547,7 @@ export function ServerConsolePanel({
   const active = status ? status.active : initialActive;
   const canStart = configured && !!server && isServerOff(server);
   const canStop = configured && !!server && !isServerOff(server);
-  const casualUse = !!(configured && server && !active && (server.players_online ?? 0) > 0);
+  const casualUse = !!(configured && server && !active && playersOnServer(server) > 0);
 
   const configSetLabel = configSets.find((c) => c.key === configSet)?.label ?? configSet;
 
