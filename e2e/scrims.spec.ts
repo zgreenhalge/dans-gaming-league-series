@@ -185,7 +185,7 @@ test.describe('the lobby', () => {
     await clearMapWorkshopUrls();
   });
 
-  test('checking in, then Next Match makes a match; its side choice saves, and Discard clears it', async ({ page }) => {
+  test('checking in, then Next Match makes a match shown to the player as a card; an admin saves its side choice and discards it', async ({ page }) => {
     const nightId = await seedScrimNight(10 * MINUTE, [
       { playerId: CASEY, checkedIn: true },
       { playerId: DREW, checkedIn: true },
@@ -200,11 +200,15 @@ test.describe('the lobby', () => {
     await expect(page.getByRole('button', { name: 'Check out', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Next Match' }).click();
-    await expect(page.getByRole('link', { name: /Lobby · Match 1/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
+    await expect(page.getByText('Pending', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Starting side')).toHaveCount(0);
     const [match] = await scrimMatchesOf(nightId);
     expect(match.players.sort((a, b) => a - b)).toEqual([CASEY, DREW, SAM, DAN].sort((a, b) => a - b));
     expect(match.scrim_side_choice).toBe('knife');
 
+    await openNightAs(page, 'Zach', `/scrims/${nightId}`);
+    await expect(page.getByRole('link', { name: /Lobby · Match 1/ })).toBeVisible();
     await page.getByLabel('Starting side').selectOption('random');
     await expect.poll(async () => (await scrimMatchesOf(nightId))[0]?.scrim_side_choice).toBe('random');
     await page.reload();
@@ -266,7 +270,7 @@ test.describe('the lobby', () => {
     expect(count).toBeGreaterThan(0);
     await queue.click();
 
-    await expect(page.getByRole('link', { name: /Lobby · Match 1/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible({ timeout: 30_000 });
     if (count > 1) await expect(page.getByText(`Up next · ${count - 1}`)).toBeVisible();
     const matches = await scrimMatchesOf(nightId);
     expect(matches.map((m) => m.match_number)).toEqual(Array.from({ length: count }, (_, i) => i + 1));
