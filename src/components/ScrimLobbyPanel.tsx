@@ -83,13 +83,15 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
           )}
           {/* An admin runs the server; once it has started, anyone signed in can join it. */}
           {(canManage || !editable) && (
-            <MatchServerPanel
-              matchId={match.id}
-              canManage={canManage}
-              canJoin={canManage || currentPlayerId != null}
-              signInToJoin={!canManage && currentPlayerId == null}
-              initialState={(match.server_state ?? 'idle') as ServerState}
-            />
+            <div className="w-full max-w-md self-center">
+              <MatchServerPanel
+                matchId={match.id}
+                canManage={canManage}
+                canJoin={canManage || currentPlayerId != null}
+                signInToJoin={!canManage && currentPlayerId == null}
+                initialState={(match.server_state ?? 'idle') as ServerState}
+              />
+            </div>
           )}
           {queued.length > 0 && <UpNext queued={queued} names={names} />}
         </>
