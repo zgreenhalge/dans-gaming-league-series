@@ -66,9 +66,9 @@ function aggToRow(
 }
 
 /**
- * Aggregates stats from all gauntlet seasons (is_gauntlet = true).
- * The leaderboard view excludes playoff games, so we compute directly from
- * player_match_stats.
+ * Aggregates stats from all gauntlet seasons (is_gauntlet = true), scoped through their weeks.
+ * The leaderboard view excludes `is_playoff_game` matches, which every gauntlet match is, so we
+ * compute directly from player_match_stats.
  * Persisted by `persistentQuery()`, so every page reading it shares one read per data version.
  */
 export const getGauntletStats = persistentQuery('getGauntletStats', async (): Promise<{
@@ -96,8 +96,7 @@ export const getGauntletStats = persistentQuery('getGauntletStats', async (): Pr
     .in(
       'week_id',
       [...weekLookup.keys()],
-    )
-    .eq('is_playoff_game', true);
+    );
   if (mErr) throw mErr;
   if (!matches || matches.length === 0) return { career: [], bySeason: {} };
 
