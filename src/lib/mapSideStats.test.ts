@@ -164,6 +164,12 @@ test('classifyMatchVeto: no-pick is suppressed for matches without a map_pool (g
   assert.deepEqual(noPool.noPicked, []);
 });
 
+test('noPickPool: the pool for a regular season, null for a gauntlet or unknown season', () => {
+  assert.deepEqual(noPickPool({ is_gauntlet: false, map_pool: ['Palais'] }), ['Palais']);
+  assert.equal(noPickPool({ is_gauntlet: true, map_pool: ['Palais'] }), null);
+  assert.equal(noPickPool(undefined), null);
+});
+
 test('classifyMatchVeto: an unplayed match classifies as empty even with bans/pool set', () => {
   const out = classifyMatchVeto({
     final_score: null, skins_pick: 'Palais', shirts_pick: null,
@@ -374,9 +380,3 @@ test('aggregateMapIndexStats: seasonsPlayed counts distinct regular-season numbe
 });
 
 report();
-
-test('noPickPool: the pool for a regular season, null for a gauntlet or unknown season', () => {
-  assert.deepEqual(noPickPool({ is_gauntlet: false, map_pool: ['Palais'] }), ['Palais']);
-  assert.equal(noPickPool({ is_gauntlet: true, map_pool: ['Palais'] }), null);
-  assert.equal(noPickPool(undefined), null);
-});
