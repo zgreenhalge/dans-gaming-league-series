@@ -284,7 +284,7 @@ the score or corrupts the splits.
 ## Side splits (deterministic from the round-1 anchor)
 
 CT/T splits are derived **deterministically** from faction (SHIRTS/SKINS), the starting side, and the
-round number — the regulation half-swap and overtime (MR3) logic in `parsers/roundSides.ts` walks the
+round number — the regulation half-swap and overtime (2-round halves) logic in `parsers/roundSides.ts` walks the
 sides from that single round-1 anchor, with no per-round `team_num` reads. Per-round deltas come from
 the engine's `ActionTrackingServices` accumulators in `parsers/accumulators.ts`. See
 [`calculations.md`](./calculations.md#side-splits) for the exact rules.
@@ -481,9 +481,7 @@ field:
 | Knife round, no stored side | as above, with the starting side inferred from the demo |
 | No `begin_new_match` event | `matchStartTick` falls back to 0; `total_rounds_played` starts at 1 |
 | Multi-segment | a server restart splits the recording; each segment has its own tick space |
-
-No demo in the league's history has gone to overtime, so overtime round numbering and side swaps are
-covered only by `roundSides.test.ts`'s hand-built fixtures.
+| Overtime | rounds past `2 * (target_win_rounds - 1)`; 2-round OT halves swap sides mid-period and not between periods |
 
 **Adding a demo.** When a real match exposes a parser bug, add that match to `corpus.json` (its `shape`
 says what it exercises), run `npm run demo-fixtures:fetch`, and confirm the new entry fails before the

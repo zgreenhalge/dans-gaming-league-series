@@ -53,5 +53,14 @@
     "shape": "Multi-segment gauntlet match: a server restart splits the recording in two, each segment with its own tick space and its own begin_new_match sequence",
     "expectedScore": "13-10",
     "expectedRounds": 23
+  },
+  {
+    "matchId": 127,
+    "keys": [
+      "127/game.dem"
+    ],
+    "shape": "Two overtime periods: 2-round OT halves that swap sides mid-period and not at the period boundary, one begin_new_match at tick 0, stored starting side",
+    "expectedScore": "14-17",
+    "expectedRounds": 31
   }
 ]
