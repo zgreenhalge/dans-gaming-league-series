@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `ScrimLobbyPanel`'s lobby match: its card (`LobbyMatchCard`) reads Pending
- * before the server starts and Live once it has, for an admin and a non-admin alike; an admin's
- * Configure panel shows only before the match starts.
+ * before the server starts and Live once it has, for an admin and a non-admin alike. An admin can
+ * configure the match only before it starts, and discard it whenever it isn't holding the server.
  *
  * `MatchServerPanel` is stubbed — it has its own tests — and `next/navigation` is mocked for
  * `useRefreshingAction()`.
@@ -84,10 +84,19 @@ describe('ScrimLobbyPanel admin config', () => {
     expect(screen.getByRole('button', { name: /Configure · Match 3/ })).toBeInTheDocument();
   });
 
-  test('once the server is running there is no config, for an admin or anyone', () => {
-    renderLobby(scrimMatch('live'), true);
+  test('while the server is running there is no config to change and nothing to discard, for anyone', () => {
+    for (const canManage of [true, false]) {
+      const { unmount } = renderLobby(scrimMatch('live'), canManage);
+      expect(screen.queryByRole('button', { name: /Configure/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull();
+      unmount();
+    }
+  });
+
+  test('a match whose server stopped without a score can be discarded, not configured', () => {
+    renderLobby(scrimMatch('done'), true);
     expect(screen.queryByRole('button', { name: /Configure/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
   });
 
   test('a non-admin never sees the config', () => {

@@ -43,6 +43,11 @@ describe('RefreshAt', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  test('the farthest time setTimeout can wait for still schedules a refresh', () => {
+    render(<RefreshAt iso={new Date(NOW + 2 ** 31 - 1).toISOString()} />);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
   test('unmounting cancels the refresh', () => {
     const { unmount } = render(<RefreshAt iso={new Date(NOW + 1_000).toISOString()} />);
     unmount();

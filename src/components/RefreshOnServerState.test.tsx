@@ -15,11 +15,11 @@ import { RefreshOnServerState } from './RefreshOnServerState';
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
-type Subscription = { filter: { table: string; filter?: string }; handler: () => void };
+type Subscription = { name: string; filter: { table: string; filter?: string }; handler: () => void };
 const realtime = vi.hoisted(() => ({ last: null as Subscription | null }));
 vi.mock('./useRealtimeChanges', () => ({
-  useRealtimeChanges: (_name: string, filter: Subscription['filter'], handler: Subscription['handler']) => {
-    realtime.last = { filter, handler };
+  useRealtimeChanges: (name: string, filter: Subscription['filter'], handler: Subscription['handler']) => {
+    realtime.last = { name, filter, handler };
   },
 }));
 
@@ -31,12 +31,13 @@ beforeEach(() => {
   refresh.mockReset();
   realtime.last = null;
   setVisibility('visible');
+  vi.useFakeTimers();
 });
 
 afterEach(() => vi.useRealTimers());
 
 describe('RefreshOnServerState', () => {
-  test("a server state change for its match refreshes the page", () => {
+  test('a server state change for its match refreshes the page', () => {
     render(<RefreshOnServerState matchId={7} />);
     expect(realtime.last?.filter).toMatchObject({ table: 'match_server_state', filter: 'match_id=eq.7' });
     expect(refresh).not.toHaveBeenCalled();
@@ -48,6 +49,7 @@ describe('RefreshOnServerState', () => {
     const { rerender } = render(<RefreshOnServerState matchId={7} />);
     rerender(<RefreshOnServerState matchId={8} />);
     expect(realtime.last?.filter.filter).toBe('match_id=eq.8');
+    expect(realtime.last?.name).toContain('8');
   });
 
   test('the tab becoming visible again refreshes; going hidden does not', () => {
@@ -61,12 +63,19 @@ describe('RefreshOnServerState', () => {
   });
 
   test('a visible tab refreshes on the fallback interval; a hidden one does not', () => {
-    vi.useFakeTimers();
     render(<RefreshOnServerState matchId={7} />);
     act(() => void vi.advanceTimersByTime(30_000));
     expect(refresh).toHaveBeenCalledTimes(1);
     setVisibility('hidden');
     act(() => void vi.advanceTimersByTime(30_000));
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('unmounting stops the visibility and interval refreshes', () => {
+    const { unmount } = render(<RefreshOnServerState matchId={7} />);
+    unmount();
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(60_000);
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

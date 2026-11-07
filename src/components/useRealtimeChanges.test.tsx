@@ -2,7 +2,7 @@
 /**
  * Hook tests for `useRealtimeChanges`: it opens one `postgres_changes` channel on the given table and
  * filter, calls the latest `onChange` for each event, rebuilds the channel when the filter changes,
- * removes it on unmount, and opens nothing while disabled. `@/lib/supabase-browser`'s
+ * removes it on unmount, and opens nothing while disabled or without a browser client. `@/lib/supabase-browser`'s
  * `getBrowserClient()` is mocked with a client whose channels record their handler.
  *
  * Run:  npx vitest run src/components/useRealtimeChanges.test.tsx
@@ -18,7 +18,7 @@ interface FakeChannel {
   handler: (payload: RealtimeChange) => void;
 }
 
-const { channels, client } = vi.hoisted(() => {
+const { channels, client, env } = vi.hoisted(() => {
   const channels: FakeChannel[] = [];
   const client = {
     channel: (name: string) => {
@@ -37,15 +37,17 @@ const { channels, client } = vi.hoisted(() => {
     },
     removeChannel: vi.fn(),
   };
-  return { channels, client };
+  // `configured: false` stands for an unset browser Supabase env, where `getBrowserClient()` is null.
+  return { channels, client, env: { configured: true } };
 });
-vi.mock('@/lib/supabase-browser', () => ({ getBrowserClient: () => client }));
+vi.mock('@/lib/supabase-browser', () => ({ getBrowserClient: () => (env.configured ? client : null) }));
 
 const change = { eventType: 'UPDATE', new: { match_id: 7 }, old: {} } as unknown as RealtimeChange;
 
 beforeEach(() => {
   channels.length = 0;
   client.removeChannel.mockReset();
+  env.configured = true;
 });
 
 type Args = { filter: string; onChange: (p: RealtimeChange) => void; enabled?: boolean };
@@ -84,5 +86,13 @@ describe('useRealtimeChanges', () => {
   test('opens nothing while disabled', () => {
     renderHook(useSubject, { initialProps: { filter: 'match_id=eq.7', onChange: vi.fn(), enabled: false } });
     expect(channels).toHaveLength(0);
+  });
+
+  test('does nothing without a browser client', () => {
+    env.configured = false;
+    const { unmount } = renderHook(useSubject, { initialProps: { filter: 'match_id=eq.7', onChange: vi.fn() } });
+    unmount();
+    expect(channels).toHaveLength(0);
+    expect(client.removeChannel).not.toHaveBeenCalled();
   });
 });
