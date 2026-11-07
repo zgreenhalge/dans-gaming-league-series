@@ -5,7 +5,7 @@ import { MatchCard } from './MatchCard';
 import { matchCardRight } from '@/lib/match-card';
 import { playerHref, scrimMatchHref } from '@/lib/crumbs';
 import { formatStat } from '@/lib/util';
-import { isScrimMatchEditable, scrimMatchNeedsServer } from '@/lib/scrim-matches';
+import { isScrimMatchEditable, scrimMatchNeedsServer, scrimTeamLabel } from '@/lib/scrim-matches';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';
 
 /** A scrim night's standings: every player who played a scored match, ranked Wins → RWR% → ADR
@@ -54,26 +54,26 @@ export function ScrimNightMatchList({
   currentPlayerId: number | null;
 }) {
   const live = matches.filter((m) => scrimMatchNeedsServer(m) && !isScrimMatchEditable(m));
-  const played = matches.filter((m) => !scrimMatchNeedsServer(m));
-  const shown = [...live, ...played.reverse()];
+  const shown = [...live, ...matches.filter((m) => !scrimMatchNeedsServer(m)).reverse()];
   if (shown.length === 0) return <EmptyState message="No matches played yet." className="py-2" />;
   const statsFor = (m: ScrimMatch, faction: 'SHIRTS' | 'SKINS') =>
     m.players.filter((p) => p.faction === faction).map((p) => ({ ...p, player_name: names[p.player_id] ?? `#${p.player_id}` }));
-  const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       {shown.map((m) => {
-        const isLive = live.includes(m);
+        // The match on the server now has no stats yet, so its lineups show by name.
+        const live = scrimMatchNeedsServer(m);
         return (
           <MatchCard
             key={m.id}
             href={scrimMatchHref(m.id)}
             map={m.map}
             label={{ type: 'match', matchNumber: m.match_number, isFeatureMatch: false }}
-            right={isLive ? { type: 'live' } : matchCardRight(m.final_score, null, { type: 'pending' })}
-            {...(isLive
-              ? { shirtsFallback: team(m.shirts), skinsFallback: team(m.skins) }
-              : { shirtsStats: statsFor(m, 'SHIRTS'), skinsStats: statsFor(m, 'SKINS') })}
+            right={live ? { type: 'live' } : matchCardRight(m.final_score, null, { type: 'pending' })}
+            shirtsStats={live ? undefined : statsFor(m, 'SHIRTS')}
+            skinsStats={live ? undefined : statsFor(m, 'SKINS')}
+            shirtsFallback={live ? scrimTeamLabel(m.shirts, names) : undefined}
+            skinsFallback={live ? scrimTeamLabel(m.skins, names) : undefined}
             currentPlayerId={currentPlayerId}
           />
         );

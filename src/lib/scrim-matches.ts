@@ -25,6 +25,11 @@ type ScrimMatchState = { final_score: string | null; server_state: string | null
  *  stops, then stopped. */
 const GAME_OVER_SERVER_STATES = new Set(['tearing_down', 'done']);
 
+/** A side's players as one label, "A + B", falling back to the id for a name that isn't known. */
+export function scrimTeamLabel(ids: number[], names: Record<number, string>): string {
+  return ids.map((id) => names[id] ?? `#${id}`).join(' + ');
+}
+
 /** Whether a scrim match still needs the night's server: not scored, and its game isn't over. Once it
  *  is, the next match can go ahead (it takes the server over; see the provision route) while the demo
  *  is parsed or awaits review. The lobby holds the night's first such match. */

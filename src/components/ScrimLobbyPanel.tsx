@@ -17,7 +17,7 @@ import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import type { FormatRecord } from '@/lib/season-format';
-import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, type ScrimSideChoice } from '@/lib/scrim-matches';
+import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, scrimTeamLabel, type ScrimSideChoice } from '@/lib/scrim-matches';
 import { toSentenceCase } from '@/lib/maps';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
@@ -157,7 +157,6 @@ export function ScrimCheckInButton({ nightId, viewer }: { nightId: number; viewe
 /** The lobby's match, before and after its server starts: the same `MatchCard` every
  *  match list uses, linking to the match page. The starting side isn't on it. */
 function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; names: Props['names']; currentPlayerId: number | null }) {
-  const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <MatchCard
@@ -165,8 +164,8 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
         map={match.map}
         label={{ type: 'match', matchNumber: match.match_number, isFeatureMatch: false }}
         right={isScrimMatchEditable(match) ? { type: 'pending' } : { type: 'live' }}
-        shirtsFallback={team(match.shirts)}
-        skinsFallback={team(match.skins)}
+        shirtsFallback={scrimTeamLabel(match.shirts, names)}
+        skinsFallback={scrimTeamLabel(match.skins, names)}
         currentPlayerId={currentPlayerId}
       />
     </div>
