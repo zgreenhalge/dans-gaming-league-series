@@ -72,15 +72,11 @@ export function sideForRealRound(
 
   if (realRoundNumber <= regRoundsPerHalf) return startingSide;
   if (realRoundNumber <= regRoundsPerHalf * 2) return otherSide;
-  // An OT period is two halves of OT_ROUNDS_PER_HALF rounds. Sides swap between a period's halves
-  // but not between periods (nor between regulation and the first period), so a period starts on
-  // the side the previous one ended on: the side at round R is the regulation-H2 side flipped
-  // once per completed half-swap, counting the period index plus the swap inside this period.
-  const otIndex = realRoundNumber - regRoundsPerHalf * 2 - 1;
-  const period = Math.floor(otIndex / (OT_ROUNDS_PER_HALF * 2));
-  const inSecondHalf = otIndex % (OT_ROUNDS_PER_HALF * 2) >= OT_ROUNDS_PER_HALF;
-  const swaps = period + (inSecondHalf ? 1 : 0);
-  return swaps % 2 === 0 ? otherSide : startingSide;
+  // Sides swap between the two halves of an OT period but not between periods (nor between
+  // regulation and the first period), so OT halves 0,1,2,3,4… sit after 0,1,1,2,2… swaps from the
+  // regulation-H2 side.
+  const otHalf = Math.floor((realRoundNumber - regRoundsPerHalf * 2 - 1) / OT_ROUNDS_PER_HALF);
+  return Math.ceil(otHalf / 2) % 2 === 0 ? otherSide : startingSide;
 }
 
 /** Every `round_end` a caller's parse should count toward the score: warmup and null-winner rows
