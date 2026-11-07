@@ -1,78 +1,72 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `RefreshOnServerState`: a `match_server_state` change for its match refreshes
- * the router, the subscription is filtered to that match, and a new `matchId` swaps the channel for
- * one on the new match. `@/lib/supabase-browser`'s `getBrowserClient()` is mocked with a channel that
- * records its handler, so a test can deliver a change by hand.
+ * Component tests for `RefreshOnServerState`: it subscribes to its match's `match_server_state`
+ * changes and refreshes the router on each, follows a new `matchId`, and refreshes when the tab
+ * becomes visible again and on its slow fallback interval while visible. `useRealtimeChanges` is
+ * mocked to record each call, so a test can deliver a change by hand.
  *
  * Run:  npx vitest run src/components/RefreshOnServerState.test.tsx
  */
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import { RefreshOnServerState } from './RefreshOnServerState';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
-interface FakeChannel {
-  name: string;
-  filter: { table: string; filter?: string };
-  handler: (payload: unknown) => void;
-}
+type Subscription = { filter: { table: string; filter?: string }; handler: () => void };
+const realtime = vi.hoisted(() => ({ last: null as Subscription | null }));
+vi.mock('./useRealtimeChanges', () => ({
+  useRealtimeChanges: (_name: string, filter: Subscription['filter'], handler: Subscription['handler']) => {
+    realtime.last = { filter, handler };
+  },
+}));
 
-const { channels, client } = vi.hoisted(() => {
-  const channels: FakeChannel[] = [];
-  const client = {
-    channel: vi.fn((name: string) => {
-      const ch = { name } as FakeChannel;
-      const api = {
-        on: (_type: string, filter: FakeChannel['filter'], handler: FakeChannel['handler']) => {
-          ch.filter = filter;
-          ch.handler = handler;
-          return api;
-        },
-        subscribe: () => {
-          channels.push(ch);
-          return ch;
-        },
-      };
-      return api;
-    }),
-    removeChannel: vi.fn(),
-  };
-  return { channels, client };
-});
-vi.mock('@/lib/supabase-browser', () => ({ getBrowserClient: () => client }));
+function setVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+}
 
 beforeEach(() => {
   refresh.mockReset();
-  client.removeChannel.mockReset();
-  channels.length = 0;
+  realtime.last = null;
+  setVisibility('visible');
 });
 
+afterEach(() => vi.useRealTimers());
+
 describe('RefreshOnServerState', () => {
-  test('a server state change for its match refreshes the page', () => {
+  test("a server state change for its match refreshes the page", () => {
     render(<RefreshOnServerState matchId={7} />);
-    expect(channels).toHaveLength(1);
-    expect(channels[0].filter).toMatchObject({ table: 'match_server_state', filter: 'match_id=eq.7' });
+    expect(realtime.last?.filter).toMatchObject({ table: 'match_server_state', filter: 'match_id=eq.7' });
     expect(refresh).not.toHaveBeenCalled();
-    act(() => channels[0].handler({ eventType: 'UPDATE', new: { match_id: 7, server_state: 'live' } }));
+    act(() => realtime.last!.handler());
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  test('a new matchId re-subscribes on the new match and drops the old channel', () => {
+  test('a new matchId subscribes to the new match', () => {
     const { rerender } = render(<RefreshOnServerState matchId={7} />);
     rerender(<RefreshOnServerState matchId={8} />);
-    expect(client.removeChannel).toHaveBeenCalledWith(channels[0]);
-    expect(channels).toHaveLength(2);
-    expect(channels[1].name).toBe('match-server-refresh-8');
-    expect(channels[1].filter.filter).toBe('match_id=eq.8');
+    expect(realtime.last?.filter.filter).toBe('match_id=eq.8');
   });
 
-  test('unmounting removes the channel', () => {
-    const { unmount } = render(<RefreshOnServerState matchId={7} />);
-    unmount();
-    expect(client.removeChannel).toHaveBeenCalledWith(channels[0]);
+  test('the tab becoming visible again refreshes; going hidden does not', () => {
+    render(<RefreshOnServerState matchId={7} />);
+    setVisibility('hidden');
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
+    expect(refresh).not.toHaveBeenCalled();
+    setVisibility('visible');
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('a visible tab refreshes on the fallback interval; a hidden one does not', () => {
+    vi.useFakeTimers();
+    render(<RefreshOnServerState matchId={7} />);
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    setVisibility('hidden');
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

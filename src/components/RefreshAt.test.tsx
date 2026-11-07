@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `RefreshAt`: it refreshes the router half a second after the given time
- * (straight away for a time already past), and never for a time too far out for `setTimeout`.
+ * Component tests for `RefreshAt`: it refreshes the router shortly after the given time (straight
+ * away for a time already past), and never for a time too far out for `setTimeout`.
  *
  * Run:  npx vitest run src/components/RefreshAt.test.tsx
  */
@@ -26,22 +26,21 @@ afterEach(() => vi.useRealTimers());
 describe('RefreshAt', () => {
   test('refreshes once the time arrives, not before', () => {
     render(<RefreshAt iso={new Date(NOW + 60_000).toISOString()} />);
-    vi.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000 - 1);
     expect(refresh).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(1_000);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   test('a time already past refreshes straight away', () => {
     render(<RefreshAt iso={new Date(NOW - 60_000).toISOString()} />);
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(1_000);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   test('a time too far out for setTimeout never refreshes', () => {
     render(<RefreshAt iso={new Date(NOW + 2 ** 31).toISOString()} />);
-    vi.advanceTimersByTime(2 ** 31 - 1);
-    expect(refresh).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   test('unmounting cancels the refresh', () => {

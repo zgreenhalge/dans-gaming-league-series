@@ -10,24 +10,16 @@ import { describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ScrimNightPanel } from './ScrimNightPanel';
-import type { ScrimSignupEntry, UpcomingScrimNight } from '@/lib/queries';
+import type { UpcomingScrimNight } from '@/lib/queries';
+import { scrimSignup } from '@/lib/test-support/scrimFixtures';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
-
-const signup = (player_id: number, player_name: string, commitment: ScrimSignupEntry['commitment']): ScrimSignupEntry => ({
-  player_id,
-  player_name,
-  steam_avatar_url: null,
-  commitment,
-  signed_up_at: '2026-01-01T00:00:00Z',
-  checked_in_at: null,
-});
 
 const upcoming: UpcomingScrimNight = {
   night: { id: 5, startsAt: '2026-01-01T20:00:00Z' },
   started: true,
   checkInOpen: true,
-  signups: [signup(1, 'Alice', 'definite'), signup(2, 'Bob', 'maybe')],
+  signups: [scrimSignup(1, 'definite', { player_name: 'Alice' }), scrimSignup(2, 'maybe', { player_name: 'Bob' })],
 };
 
 describe('ScrimNightPanel attendance toggle', () => {

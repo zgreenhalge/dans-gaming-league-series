@@ -10,7 +10,8 @@
 import { describe, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { UpcomingWeekStrip } from './UpcomingWeekStrip';
-import type { ScrimSignupEntry, UpcomingScrimNight } from '@/lib/queries';
+import type { UpcomingScrimNight } from '@/lib/queries';
+import { scrimSignup } from '@/lib/test-support/scrimFixtures';
 
 /** Noon local time, `days` from today — clear of the day's edges whatever the time now. */
 function noon(days: number): string {
@@ -19,21 +20,13 @@ function noon(days: number): string {
 }
 
 function scrim(id: number, startsAt: string, definite: number, maybe: number): UpcomingScrimNight {
-  const signup = (player_id: number, commitment: 'definite' | 'maybe'): ScrimSignupEntry => ({
-    player_id,
-    player_name: `P${player_id}`,
-    steam_avatar_url: null,
-    commitment,
-    signed_up_at: '2099-01-01T00:00:00Z',
-    checked_in_at: null,
-  });
   return {
     night: { id, startsAt },
     started: false,
     checkInOpen: false,
     signups: [
-      ...Array.from({ length: definite }, (_, i) => signup(i + 1, 'definite')),
-      ...Array.from({ length: maybe }, (_, i) => signup(100 + i, 'maybe')),
+      ...Array.from({ length: definite }, (_, i) => scrimSignup(i + 1, 'definite')),
+      ...Array.from({ length: maybe }, (_, i) => scrimSignup(100 + i, 'maybe')),
     ],
   };
 }

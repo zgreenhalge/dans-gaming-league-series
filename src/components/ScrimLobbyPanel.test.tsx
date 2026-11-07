@@ -15,6 +15,7 @@ import { render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { ScrimLobbyPanel } from './ScrimLobbyPanel';
 import type { ScrimMatch } from '@/lib/queries';
+import { scrimMatchHref } from '@/lib/crumbs';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('./MatchServerPanel', () => ({ default: () => <div>server panel</div> }));
@@ -73,7 +74,7 @@ describe('ScrimLobbyPanel lobby match card', () => {
 
   test('the card links to the scrim match page', () => {
     renderLobby(scrimMatch(null), false);
-    expect(screen.getByText('Pending').closest('a')).toHaveAttribute('href', expect.stringContaining('42'));
+    expect(screen.getByText('Pending').closest('a')).toHaveAttribute('href', scrimMatchHref(42));
   });
 });
 
