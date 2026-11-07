@@ -1,12 +1,12 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
 import { RefreshAt } from '@/components/RefreshAt';
 import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
+import { ScrimAwaitingScore } from '@/components/ScrimAwaitingScore';
 import { ScrimNightH2H } from '@/components/ScrimNightH2H';
 import { ScrimNightTabs, type ScrimNightTabSpec } from '@/components/ScrimNightTabs';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -15,7 +15,7 @@ import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNi
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
-import { scrimMatchHref, scrimNightHref } from '@/lib/crumbs';
+import { scrimNightHref } from '@/lib/crumbs';
 import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { parseRouteId } from '@/lib/util';
@@ -122,17 +122,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
       label: 'Matches',
       content: (
         <>
-          {isAdmin && awaitingScore.length > 0 && (
-            <p className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
-              {awaitingScore.map((m, i) => (
-                <span key={m.id}>
-                  {i > 0 && ', '}
-                  <Link href={scrimMatchHref(m.id)} className="underline hover:text-[var(--color-text-primary)]">Match {m.match_number}</Link>
-                </span>
-              ))}{' '}
-              {awaitingScore.length === 1 ? 'has' : 'have'} no score yet. Open {awaitingScore.length === 1 ? 'it' : 'them'} to confirm the result or discard.
-            </p>
-          )}
+          {isAdmin && awaitingScore.length > 0 && <ScrimAwaitingScore matches={awaitingScore} />}
           <ScrimNightMatchList matches={night.matches} names={names} currentPlayerId={currentPlayerId} />
         </>
       ),

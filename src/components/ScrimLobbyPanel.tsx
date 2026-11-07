@@ -305,7 +305,6 @@ function LobbyMatch({
  *  admin. Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
 function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
   const { busy, error, act } = useRefreshingAction();
-  const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className={`px-4 py-2 border-b border-[var(--color-border-tertiary)] ${LABEL_CLS}`}>Up next · {queued.length}</div>
@@ -313,7 +312,7 @@ function UpNext({ queued, names }: { queued: Props['queued']; names: Props['name
         <div key={match.id} className="px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 flex items-center justify-between gap-3 font-mono text-[12px]">
           <span className="min-w-0">
             <span className="text-[var(--color-text-secondary)]">{match.match_number} · {match.map ? toSentenceCase(match.map) : '—'} · </span>
-            {team(match.shirts)} <span className="text-[var(--color-text-secondary)]">vs</span> {team(match.skins)}
+            {scrimTeamLabel(match.shirts, names)} <span className="text-[var(--color-text-secondary)]">vs</span> {scrimTeamLabel(match.skins, names)}
           </span>
           {canDiscard && (
             <button type="button" onClick={() => act('DELETE', `/api/scrims/matches/${match.id}`)} disabled={busy} className={BTN_CLS}>
