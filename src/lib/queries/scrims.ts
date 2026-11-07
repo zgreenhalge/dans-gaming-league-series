@@ -14,7 +14,7 @@ import { getPlayersById } from './player';
 import { computeH2H, scrimMatchesToH2HInput, type H2HData } from '../h2h';
 import { aggregatePlayerStats, type PlayerAggregateRow, type PlayerAggregateStats } from '../player-stats';
 import { canonicalSortValues, isPlayedScore } from '../util';
-import type { Player, PlayerMatchStat, RoundHistoryEntry } from '../types';
+import type { LeaderboardStatLine, Player, PlayerMatchStat, RoundHistoryEntry } from '../types';
 import { toMatchStatRows, type MatchStatRow } from './match';
 import type { ScrimSideChoice } from '../scrim-matches';
 
@@ -99,6 +99,8 @@ export interface ScrimMatch {
   workshop_id: string | null;
   /** The lobby's starting-side choice; it becomes `skins_starting_side` as the match starts. */
   side_choice: ScrimSideChoice;
+  /** The side SKINS started on, once the match has started with a side (none for a knife round). */
+  skins_starting_side: 'CT' | 'T' | null;
   shirts: [number, number];
   skins: [number, number];
   players: ScrimMatchPlayer[];
@@ -108,7 +110,7 @@ export interface ScrimMatch {
 }
 
 const SCRIM_MATCH_COLUMNS =
-  'id, scrim_night_id, match_number, shirts_pick, scrim_workshop_id, scrim_side_choice, final_score, ' +
+  'id, scrim_night_id, match_number, shirts_pick, scrim_workshop_id, scrim_side_choice, skins_starting_side, final_score, ' +
   'player_match_stats(player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win), ' +
   'match_server_state(server_state)';
 
@@ -119,6 +121,7 @@ interface ScrimMatchRow {
   shirts_pick: string | null;
   scrim_workshop_id: string | null;
   scrim_side_choice: ScrimSideChoice;
+  skins_starting_side: 'CT' | 'T' | null;
   final_score: string | null;
   player_match_stats: ScrimMatchPlayer[] | null;
   match_server_state: { server_state: string } | { server_state: string }[] | null;
@@ -135,6 +138,7 @@ function toScrimMatch(r: ScrimMatchRow): ScrimMatch {
     map: r.shirts_pick,
     workshop_id: r.scrim_workshop_id,
     side_choice: r.scrim_side_choice,
+    skins_starting_side: r.skins_starting_side,
     shirts: side('SHIRTS'),
     skins: side('SKINS'),
     players,
@@ -189,6 +193,32 @@ export function buildScrimNightLeaderboard(matches: ScrimMatch[], playersById: M
     out.push({ ...totals, player_id: playerId, player_name: player?.name ?? `#${playerId}`, steam_avatar_url: player?.steam_avatar_url ?? null });
   }
   return out.sort(canonicalSortValues);
+}
+
+/** A night's standings as the Stats tables' rows (`BasicStatsView`), in the same order. */
+export function scrimLeaderboardToStatLines(rows: ScrimLeaderboardRow[]): LeaderboardStatLine[] {
+  return rows.map((r) => ({
+    player_id: r.player_id,
+    player_name: r.player_name,
+    steam_avatar_url: r.steam_avatar_url,
+    matches_played: r.matches,
+    matches_won: r.wins,
+    matches_lost: r.losses,
+    win_rate_percentage: r.wr,
+    total_kills: r.kills,
+    total_assists: r.assists,
+    total_deaths: r.deaths,
+    kd_ratio: r.kd,
+    total_damage: r.damage,
+    total_rounds_played: r.rounds_played,
+    total_rounds_won: r.rounds_won,
+    rwr_percentage: r.rwr,
+    overall_adr: r.adr,
+    kills_in_wins: r.kills_in_wins,
+    deaths_in_wins: r.deaths_in_wins,
+    kills_in_losses: r.kills_in_losses,
+    deaths_in_losses: r.deaths_in_losses,
+  }));
 }
 
 export interface ScrimNightView extends UpcomingScrimNight {
