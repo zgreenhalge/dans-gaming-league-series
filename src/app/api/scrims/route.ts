@@ -1,6 +1,6 @@
 // Starts a scrim night (`POST { startsAt, commitment, player_id }`): the night is created with that
 // player as its first signup (`startScrimNight()`). Admin-or-self (`requireScrimSignupTarget()`).
-// 409 when another night starts within `SCRIM_NIGHT_LENGTH_MS` of `startsAt`.
+// 409 when another night is still running at `startsAt` or starts within `SCRIM_NIGHT_LENGTH_MS` after it.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';

@@ -83,13 +83,23 @@ async function main() {
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(-1), commitment: 'definite' })).status, 201);
   });
 
-  await test('409 within the night length of another night; fine just outside it', async () => {
+  await test('409 overlapping another night; fine just outside it', async () => {
     const db = installFixture({ scrim_nights: [scrimNightStartingIn(48 * HOUR)] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(50), commitment: 'definite' })).status, 409);
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(45), commitment: 'definite' })).status, 409);
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(53), commitment: 'definite' })).status, 201);
     assert.equal(db.scrim_nights.length, 2);
+  });
+
+  await test('an ended night frees its slot: a night can start right after its end, but not before', async () => {
+    const running = scrimNightStartingIn(-3 * HOUR);
+    const db = installFixture({ scrim_nights: [{ ...running, ended_at: new Date(Date.now() - HOUR).toISOString() }] });
+    __setTestSession(sessionFor(PLAYER_ID));
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 201);
+    assert.equal(db.scrim_nights.length, 2);
+    db.scrim_nights = [{ ...running, ended_at: new Date(Date.now() + HOUR).toISOString() }];
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 409);
   });
 
   report();

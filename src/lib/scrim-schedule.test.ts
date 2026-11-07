@@ -15,6 +15,7 @@ import {
   isScrimCheckInOpen,
   leagueMatchesDuring,
   parseCommitment,
+  scrimNightEnd,
   SCRIM_LEAGUE_CLEARANCE_MS,
   parseNightStart,
   upcomingScrimNights,
@@ -26,6 +27,7 @@ import {
 
 const START = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
 const NIGHT = { id: 1, startsAt: START };
+const HOUR = 60 * 60 * 1000;
 const at = (offsetMs: number) => new Date(Date.parse(START) + offsetMs);
 
 test('hasScrimNightStarted / hasScrimNightEnded: the night runs SCRIM_NIGHT_LENGTH_MS from its start', () => {
@@ -97,6 +99,19 @@ test('leagueMatchesDuring: league matches from the clearance before the start un
     at(SCRIM_NIGHT_LENGTH_MS, 3),
   ];
   assert.deepEqual(leagueMatchesDuring(NIGHT, matches).map((m) => m.id), [1, 2]);
+});
+
+test('scrimNightEnd: the earlier of endedAt and the clock end', () => {
+  assert.equal(scrimNightEnd(NIGHT), Date.parse(START) + SCRIM_NIGHT_LENGTH_MS);
+  const early = at(HOUR).toISOString();
+  assert.equal(scrimNightEnd({ ...NIGHT, endedAt: early }), Date.parse(early));
+  assert.equal(scrimNightEnd({ ...NIGHT, endedAt: at(SCRIM_NIGHT_LENGTH_MS + HOUR).toISOString() }), Date.parse(START) + SCRIM_NIGHT_LENGTH_MS);
+});
+
+test('leagueMatchesDuring: an early-ended night stops at endedAt', () => {
+  const m = (offsetMs: number, id: number) => ({ id, label: `M${id}`, scheduledAt: at(offsetMs).toISOString() });
+  const ended = { ...NIGHT, endedAt: at(HOUR).toISOString() };
+  assert.deepEqual(leagueMatchesDuring(ended, [m(HOUR - 1, 1), m(HOUR, 2), m(2 * HOUR, 3)]).map((x) => x.id), [1]);
 });
 
 report();
