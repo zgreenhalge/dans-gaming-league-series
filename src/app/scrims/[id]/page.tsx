@@ -45,6 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
+const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
 
 export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
@@ -106,6 +107,12 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                   leagueMatches={leagueMatchesDuring(night.night, scheduled)}
                 />
               )}
+              {night.leaderboard.length > 0 && (
+                <section className="mt-8">
+                  <div className={SECTION_LABEL_CLS}>Leaderboard</div>
+                  <ScrimNightLeaderboard rows={night.leaderboard} condensed />
+                </section>
+              )}
             </>
           ),
         }]
@@ -130,7 +137,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
         </>
       ),
     },
-    { key: 'leaderboard', label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> },
+    // With a lobby the standings sit under it, condensed; otherwise they get a tab.
+    ...(hasLobby ? [] : [{ key: 'leaderboard' as const, label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> }]),
     ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> }] : []),
   ];
 
