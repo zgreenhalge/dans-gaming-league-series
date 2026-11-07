@@ -36,8 +36,7 @@ interface Props {
   maps: WorkshopMapOption[];
   /** The viewer may make the next match (checked in, or an admin, with check-in open). */
   canMake: boolean;
-  /** The viewer may configure, discard or start `match` (an admin). Everyone else sees its card once
-   *  it has started. */
+  /** The viewer may configure, discard or start `match` (an admin). Everyone else sees its card. */
   canManage: boolean;
   currentPlayerId: number | null;
   /** The signed-in viewer and whether they're checked in; `null` when signed out. */
@@ -64,8 +63,8 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 type Lineup = [number, number, number, number];
 
 /** The scrim night lobby: checking in first, then the next match — Next Match makes one, Generate
- *  Rounds queues several — and, for the players in the lobby's match or an admin, its map, starting
- *  side and lineup (from the checked-in pool), starting it on the server, or discarding it. */
+ *  Rounds queues several — and the lobby's match: a card for everyone, and for an admin its map,
+ *  starting side and lineup (from the checked-in pool), starting it on the server, or discarding it. */
 export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, currentPlayerId, viewer, rounds, leagueMatches }: Props) {
   const { busy, error, act } = useRefreshingAction();
   const [generating, setGenerating] = useState(false);
@@ -76,7 +75,8 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
 
       {match ? (
         <>
-          {!isScrimMatchEditable(match) && <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />}
+          {/* An admin's config panel already shows an unstarted match. */}
+          {(!canManage || !isScrimMatchEditable(match)) && <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />}
           {canManage && <LobbyMatch match={match} pool={pool} names={names} maps={maps} canManage={canManage} />}
           {queued.length > 0 && <UpNext queued={queued} names={names} />}
         </>
@@ -154,8 +154,8 @@ export function ScrimCheckInButton({ nightId, viewer }: { nightId: number; viewe
   );
 }
 
-/** The lobby's match once its server has started: the same `MatchCard` every match list uses, for
- *  everyone, linking to the match page. */
+/** The lobby's match, before and after its server starts: the same `MatchCard` every
+ *  match list uses, linking to the match page. The starting side isn't on it. */
 function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; names: Props['names']; currentPlayerId: number | null }) {
   const team = (ids: number[]) => ids.map((id) => names[id] ?? `#${id}`).join(' + ');
   return (
@@ -164,7 +164,7 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
         href={scrimMatchHref(match.id)}
         map={match.map}
         label={{ type: 'match', matchNumber: match.match_number, isFeatureMatch: false }}
-        right={match.server_state === 'done' ? { type: 'pending' } : { type: 'live' }}
+        right={isScrimMatchEditable(match) || match.server_state === 'done' ? { type: 'pending' } : { type: 'live' }}
         shirtsFallback={team(match.shirts)}
         skinsFallback={team(match.skins)}
         currentPlayerId={currentPlayerId}
