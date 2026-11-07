@@ -5,8 +5,6 @@
 .idea
 
 # Virtualenvs
-.dgls-env/
-dgls-env/
 .venv/
 venv/
 
