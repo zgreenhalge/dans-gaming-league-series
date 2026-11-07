@@ -9,8 +9,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildRosterSchedule, shortCountPlayerIds } from './season-schedule-engine';
-import { pairKey } from './season-schedule';
+import { buildRosterSchedule } from './season-schedule-engine';
+import { pairKey, shortCountPlayerIds } from './season-schedule';
 import { test, report } from './test-support/miniTest';
 
 // Deliberately shuffled and non-sequential, so a bug that silently assumes seed === player_id

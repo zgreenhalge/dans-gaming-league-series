@@ -3,7 +3,8 @@ import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../t
 import { canonicalSort, compareWithinSeasonDesc, deriveRates, deriveRwr, isPlayedScore, mergeLeaderboardRows } from '../util';
 import { getGauntletStats } from './gauntlet';
 import { getPlayersById } from './player';
-import { shortCountPlayerIds } from '../season-schedule-engine';
+import { getSeasons } from './seasons';
+import { shortCountPlayerIds } from '../season-schedule';
 import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 import { persistentQuery } from './_persistentCache';
 
@@ -297,11 +298,8 @@ export async function getShortCountHistory(playerIds: number[]): Promise<Map<num
   const history = new Map<number, number>(playerIds.map((id) => [id, 0]));
   if (playerIds.length === 0) return history;
 
-  const { data: seasons, error } = await getAdminClient().from('seasons').select('id').eq('is_gauntlet', false).eq('status', 'ARCHIVED');
-  if (error) throw error;
-  const seasonIds = new Set(((seasons ?? []) as { id: number }[]).map((s) => s.id));
-
-  const matchSeason = await resolveMatchSeasons();
+  const [seasons, matchSeason] = await Promise.all([getSeasons(), resolveMatchSeasons()]);
+  const seasonIds = new Set(seasons.filter((s) => !s.is_gauntlet && s.status === 'ARCHIVED').map((s) => s.id));
   const matchIds = [...matchSeason].filter(([, sid]) => seasonIds.has(sid)).map(([id]) => id);
   if (matchIds.length === 0) return history;
 
