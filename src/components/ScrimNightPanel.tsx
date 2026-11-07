@@ -59,6 +59,8 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   const [addPlayerId, setAddPlayerId] = useState('');
   // An admin's controls over other players' signups stay folded away until asked for.
   const [adminOpen, setAdminOpen] = useState(false);
+  // The attendance lists fold away to leave the night's controls.
+  const [attendanceOpen, setAttendanceOpen] = useState(true);
   const showAdmin = isAdmin && adminOpen;
   const [, startTransition] = useTransition();
 
@@ -173,7 +175,15 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
         )}
       </div>
 
-      {SCRIM_COMMITMENTS.map(group)}
+      <button
+        type="button"
+        aria-expanded={attendanceOpen}
+        onClick={() => setAttendanceOpen(!attendanceOpen)}
+        className="w-full text-left px-4 py-2 border-b border-[var(--color-border-tertiary)] tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+      >
+        {attendanceOpen ? '▾' : '▸'} Attendance · {signups.length}
+      </button>
+      {attendanceOpen && SCRIM_COMMITMENTS.map(group)}
 
       {isAdmin && (
         <div className="px-4 py-2 border-t border-[var(--color-border-tertiary)]">

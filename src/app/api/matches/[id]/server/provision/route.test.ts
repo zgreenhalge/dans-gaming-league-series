@@ -168,6 +168,48 @@ async function main() {
     __setTestAfterMode(false);
   });
 
+  await test('POST — a scrim match takes the server from the previous match of its night once that game is over, ignoring its players', async () => {
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    db.matches = [
+      { id: 900, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'knife' },
+      { id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 2, final_score: null, scrim_side_choice: 'random', skins_starting_side: null },
+    ];
+    db.match_server_state = [
+      { match_id: 900, server_state: 'tearing_down', dathost_server_id: 'srv-1', connect_string: '1.2.3.4:27015', server_started_at: null, teardown_at: new Date(Date.now() + 60_000).toISOString() },
+    ];
+    const realFetch = globalThis.fetch;
+    let stopped = false;
+    process.env.DATHOST_SERVER_ID = 'srv-1';
+    process.env.DATHOST_EMAIL = 'test@example.com';
+    process.env.DATHOST_PASSWORD = 'test';
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(input);
+      if (target.endsWith('/game-servers/srv-1/stop')) {
+        stopped = true;
+        return new Response('{}', { status: 200 });
+      }
+      if (target.endsWith('/game-servers/srv-1') && (init?.method ?? 'GET') === 'GET') {
+        return new Response(JSON.stringify({ id: 'srv-1', on: true, booting: false, players_online: stopped ? 0 : 5 }), { status: 200 });
+      }
+      throw new Error('offline');
+    }) as typeof fetch;
+    __setTestAfterMode(true);
+    try {
+      assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+      assert.equal(stopped, true, 'the finished match\'s server was stopped for it');
+      assert.equal(db.match_server_state.find((r) => r.match_id === 900)!.server_state, 'done');
+      await __flushTestAfter();
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.DATHOST_SERVER_ID;
+      delete process.env.DATHOST_EMAIL;
+      delete process.env.DATHOST_PASSWORD;
+      delete process.env.MATCHZY_CONFIG_SECRET;
+      __setTestAfterMode(false);
+    }
+  });
+
   await test('POST — 409 for a scrim match within 30 minutes of a scheduled league match; the league match gets the server', async () => {
     process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
     const db = installFixture();

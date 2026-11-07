@@ -9,6 +9,7 @@ export type MatchCardRight =
   | { type: 'scheduled'; scheduledAt: string }
   | { type: 'week-window'; weekStart: Date; weekEnd: Date }
   | { type: 'pending' }
+  | { type: 'live' }
   | null;
 
 /** A match's right-hand status: its score once played, else its scheduled time once set, else the

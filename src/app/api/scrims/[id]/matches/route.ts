@@ -1,7 +1,8 @@
 // Makes a scrim night's next match: `pickNextScrimMatch()` over the checked-in players (by current
 // EHOG, against the night's earlier matches) on a random map from every map the server can load.
 // Any checked-in player or an admin, once check-in is open (`requireScrimNightMatchAccess()`). 409
-// while fewer than four are checked in, or while the night has a match without a score.
+// while fewer than four are checked in, or while the night has a match that still needs the server
+// (`scrimMatchNeedsServer()`: no score, and its server hasn't stopped).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';

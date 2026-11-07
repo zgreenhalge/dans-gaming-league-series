@@ -175,6 +175,12 @@ function renderRight(right: MatchCardRight) {
           {fmtWindowDate(right.weekStart)} – {fmtWindowDate(right.weekEnd)}
         </span>
       );
+    case 'live':
+      return (
+        <span className="tracked text-[9px] font-semibold text-[var(--color-accent-green-fg)]">
+          Live
+        </span>
+      );
     case 'pending':
       return (
         <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">

@@ -14,7 +14,8 @@ import {
   matchzyConfigContext,
   findServerOccupant,
   provisionErrorHandler,
-  getServerOccupancy,
+  getActiveServerMatch,
+  teardownMatchServer,
   liveServerOutsideMatch,
   occupancyMessage,
   playersOutsideMatchMessage,
@@ -24,7 +25,7 @@ import { parseRouteId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
-import { applyScrimSideChoice, isScrimMatch, leagueMatchBlockingScrim, scrimMatchPlaysAfter } from '@/lib/scrim-matches';
+import { applyScrimSideChoice, isScrimMatch, leagueMatchBlockingScrim, scrimMatchPlaysAfter, scrimNightIdOf } from '@/lib/scrim-matches';
 import { getScheduledUnplayedMatches } from '@/lib/queries';
 
 export async function POST(
@@ -47,27 +48,17 @@ export async function POST(
     return NextResponse.json({ error: 'Server hosting not configured' }, { status: 503 });
   }
 
-  // Refuse up front if another match holds the shared server (#134), so the panel gets a clear 409
-  // instead of a silent no-op. `provisionMatchServer` re-checks authoritatively to close the race.
-  const occupant = await findServerOccupant(getAdminClient(), matchId);
-  if (occupant !== null) {
-    return NextResponse.json(
-      { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
-      { status: 409 },
-    );
-  }
-
-  // A scrim match waits its turn and never bumps anything: a night plays its matches in order, a
-  // league match always gets the server (no scrim match starts within half an hour of one), and none
-  // starts while anyone is on the server — a DGLS match or players outside one
-  // (`getServerOccupancy()`, the admin server console's own gate).
+  // A scrim match waits its turn and bumps nothing but its own night's previous match, whose game is
+  // over: a night plays its matches in order, a league match always gets the server (no scrim match
+  // starts within half an hour of one), and none starts while anyone is on the server — a DGLS match
+  // or players outside one (`getServer()`'s player count, as the admin server console gates on).
   const isScrim = await isScrimMatch(getAdminClient(), matchId);
   if (isScrim) {
     const serverId = process.env.DATHOST_SERVER_ID;
-    const [playsAfter, scheduled, server] = await Promise.all([
+    const [playsAfter, scheduled, nightId] = await Promise.all([
       scrimMatchPlaysAfter(getAdminClient(), matchId),
       getScheduledUnplayedMatches(),
-      serverId ? getServer(serverId).catch(() => null) : Promise.resolve(null),
+      scrimNightIdOf(getAdminClient(), matchId),
     ]);
     if (playsAfter !== null) {
       return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
@@ -76,10 +67,35 @@ export async function POST(
     if (league) {
       return NextResponse.json({ error: `${league.label} is scheduled within 30 minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
     }
-    const occupancy = await getServerOccupancy(getAdminClient(), server);
-    if (occupancy.occupied && occupancy.active?.matchId !== matchId) {
-      return NextResponse.json({ error: occupancyMessage(occupancy), code: 'server_occupied' }, { status: 409 });
+    // The night's previous match, its game over, may still be on the server for its scoreboard grace
+    // period: this match takes the server from it now rather than waiting out the delay.
+    let tookOver = false;
+    const active = await getActiveServerMatch(getAdminClient());
+    if (active && active.matchId !== matchId) {
+      const sameNight = nightId !== null && (await scrimNightIdOf(getAdminClient(), active.matchId)) === nightId;
+      if (!(sameNight && active.serverState === 'tearing_down')) {
+        return NextResponse.json({ error: occupancyMessage({ active, playersOnline: null, occupied: true }), code: 'server_occupied' }, { status: 409 });
+      }
+      await teardownMatchServer(getAdminClient(), active.matchId);
+      tookOver = true;
     }
+    // Players on the server outside any DGLS match block it, read after the above so a teardown it just
+    // ran isn't counted (the previous match's players are still listed until DatHost catches up).
+    const server = !tookOver && serverId ? await getServer(serverId).catch(() => null) : null;
+    const playersOnline = server?.players_online ?? 0;
+    if (playersOnline > 0) {
+      return NextResponse.json({ error: playersOutsideMatchMessage(playersOnline), code: 'server_occupied' }, { status: 409 });
+    }
+  }
+
+  // Refuse up front if another match holds the shared server (#134), so the panel gets a clear 409
+  // instead of a silent no-op. `provisionMatchServer` re-checks authoritatively to close the race.
+  const occupant = await findServerOccupant(getAdminClient(), matchId);
+  if (occupant !== null) {
+    return NextResponse.json(
+      { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
+      { status: 409 },
+    );
   }
 
   // A league match can take over a server that is live outside any DGLS match (another DGLS match

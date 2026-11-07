@@ -30,7 +30,8 @@ export const scrimMatchRpcs: Record<string, RpcHandler> = {
     if (!(db.scrim_nights ?? []).some((n) => n.id === nightId)) throw new FakeRpcError(`Scrim night ${nightId} not found`);
     db.matches ??= [];
     const nightMatches = db.matches.filter((m) => m.scrim_night_id === nightId);
-    if (nightMatches.some((m) => m.final_score == null)) throw new FakeRpcError('unplayed-scrim-match');
+    const gameOver = (id: unknown) => (db.match_server_state ?? []).some((s) => s.match_id === id && (s.server_state === 'done' || s.server_state === 'tearing_down'));
+    if (nightMatches.some((m) => m.final_score == null && !gameOver(m.id))) throw new FakeRpcError('unplayed-scrim-match');
     const queued = args.p_matches as { map: string; workshop_id: string; shirts: number[]; skins: number[] }[];
     if (queued.length === 0) throw new FakeRpcError('No matches to queue');
     let number = Math.max(0, ...nightMatches.map((m) => m.match_number as number));

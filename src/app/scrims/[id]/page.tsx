@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
+import { RefreshAt } from '@/components/RefreshAt';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
@@ -9,9 +11,10 @@ import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
-import { formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
+import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
-import { isPlayedScore, parseRouteId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
+import { scrimMatchNeedsServer } from '@/lib/scrim-matches';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
@@ -56,11 +59,10 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
-  // Matches play in order: the first without a score is the lobby's, the rest wait behind it.
-  const [lobbyMatch = null, ...queuedMatches] = night.matches.filter((m) => !isPlayedScore(m.final_score));
+  // Matches play in order: the first still needing the server is the lobby's, the rest wait behind it.
+  const [lobbyMatch = null, ...queuedMatches] = night.matches.filter(scrimMatchNeedsServer);
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
   const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
-  const inLobbyMatch = !!lobbyMatch && inMatch(lobbyMatch);
   const canMake = isAdmin || viewerCheckedIn;
   // Generate Rounds is offered where Next Match is: no match waiting, four checked in.
   const rounds = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
@@ -95,12 +97,16 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
               allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
             />
           )}
+          {/* Check-in opens on the clock, so the page refreshes itself when it does. */}
+          {night.current && !night.checkInOpen && <RefreshAt iso={new Date(Date.parse(night.night.startsAt) - SCRIM_CHECK_IN_LEAD_MS).toISOString()} />}
           {/* Before anyone has checked in there's no lobby yet, only the viewer's own Check in. */}
           {night.checkInOpen && pool.length === 0 && !lobbyMatch && currentPlayerId != null && (
-            <div>
+            <div className="flex justify-end">
               <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
             </div>
           )}
+          {/* The lobby match's game ending frees the next match, so the page follows its server state. */}
+          {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
           {night.checkInOpen && (pool.length > 0 || lobbyMatch) && (
             <section>
               <div className={SECTION_LABEL_CLS}>Lobby</div>
@@ -113,7 +119,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
                 names={names}
                 maps={maps}
                 canMake={canMake}
-                canManage={isAdmin || inLobbyMatch}
+                canManage={isAdmin}
+                currentPlayerId={currentPlayerId}
                 viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
                 rounds={rounds}
                 leagueMatches={leagueMatchesDuring(night.night, scheduled)}
