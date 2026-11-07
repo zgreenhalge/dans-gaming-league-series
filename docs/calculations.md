@@ -68,8 +68,10 @@ stored always wins; see [`demo-ingestion.md`](./demo-ingestion.md#starting-side-
 
 - **Regulation:** Rounds 1–`regRoundsPerHalf` (= `target_win_rounds - 1`) use starting sides;
   rounds `regRoundsPerHalf + 1`–`regRoundsPerHalf * 2` use swapped sides.
-- **Overtime:** MR3 halves alternate starting from the regulation H2 sides. OT half 1 (odd) =
-  reg H2 sides, OT half 2 (even) = reg H1 sides.
+- **Overtime:** each OT period is two 2-round halves (`mp_overtime_maxrounds 4`; first to win 3 of
+  the period's 4). Sides swap between a period's halves and **not** between periods (nor between
+  regulation and OT), so a period begins on the side the previous one ended on: OT period 1 =
+  reg H2 sides then reg H1 sides, period 2 = reg H1 sides then reg H2 sides, and so on.
 - A player's side each round is `sideForFaction(roundSideInfo, faction)`.
 
 Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `match_rounds.shirts_side`

@@ -77,7 +77,7 @@ test('anchorToRoundOne: round-trips against sideForRealRound for an arbitrary ro
   // The correction is sideForRealRound's own inverse: whatever side a round-1 anchor of S produces
   // at round R, feeding that result back through anchorToRoundOne at the same R must recover S.
   for (const target of [13, 16]) {
-    for (const round of [1, 5, 12, 13, 20, 25, 27, 28]) {
+    for (const round of [1, 5, 12, 13, 20, 25, 27, 28, 29, 31, 35]) {
       for (const anchor of ['CT', 'T'] as const) {
         const sideAtRound = sideForRealRound(round, anchor, target);
         assert.equal(
