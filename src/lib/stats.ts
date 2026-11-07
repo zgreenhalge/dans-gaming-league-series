@@ -1,4 +1,4 @@
-import { LeaderboardRowWithId } from './types';
+import { LeaderboardStatLine } from './types';
 
 export interface AdvancedStats {
   killDiff: number;
@@ -23,7 +23,7 @@ export interface AdvancedStats {
   dPerGame: number;
 }
 
-export function computeAdvancedStats(row: LeaderboardRowWithId): AdvancedStats {
+export function computeAdvancedStats(row: LeaderboardStatLine): AdvancedStats {
   const {
     total_kills: k,
     total_deaths: d,

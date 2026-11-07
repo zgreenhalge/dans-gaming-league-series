@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useSortState } from './useSortState';
-import { LeaderboardRowWithId, type RoundCondition } from '@/lib/types';
+import { LeaderboardStatLine, type RoundCondition } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, SCORE_CATEGORY_INFO, type ScoreCategory, formatRoundWinPct, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { formatDiff, formatStat, tabCls } from '@/lib/util';
@@ -17,7 +17,7 @@ import { CONDITION_LABEL } from './icons/ConditionIcons';
 
 
 interface RowWithStats {
-  row: LeaderboardRowWithId;
+  row: LeaderboardStatLine;
   stats: AdvancedStats;
 }
 
@@ -486,7 +486,7 @@ const BASIC_STATS_TABS: readonly BasicStatsTab[] = ['basic', 'kills', 'games', '
  * from `tab`) directly, with no controlled/uncontrolled duality needed: exactly one `BasicStatsView`
  * is ever mounted at a time, unlike `SeasonTabView`'s two parallel regular/gauntlet instances.
  */
-export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; rounds?: RoundOutcome[]; singleMap?: boolean }) {
+export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { rows: LeaderboardStatLine[]; matches?: MatchPickBanInput[]; rounds?: RoundOutcome[]; singleMap?: boolean }) {
   const data = useMemo(() => rows.map((row) => ({ row, stats: computeAdvancedStats(row) })), [rows]);
   const [rawTab, setTab] = useTabState(BASIC_STATS_TABS, 'basic', 'stab');
 

@@ -8,13 +8,14 @@ import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimAwaitingScore } from '@/components/ScrimAwaitingScore';
 import { ScrimNightH2H } from '@/components/ScrimNightH2H';
+import { ScrimNightStats } from '@/components/ScrimNightStats';
 import { ScrimNightTabs, type ScrimNightTabSpec } from '@/components/ScrimNightTabs';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
 import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
@@ -73,7 +74,11 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
   const canMake = isAdmin || viewerCheckedIn;
   // Generate Rounds is offered where Next Match is: no match waiting, four checked in.
-  const rounds = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
+  const [rounds, hasAdvancedStats] = await Promise.all([
+    night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? getScheduleLabData(pool.map((p) => p.id)) : null,
+    // The Advanced Stats tab shows once a scored match has parsed sabremetrics.
+    hasScrimMatchSabremetrics(night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id)),
+  ]);
 
   // The lobby only exists while check-in is open and someone has checked in; before that there is only
   // the viewer's own Check in, above the tabs. The page opens on the first tab present.
@@ -124,6 +129,12 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     },
     // With a lobby the standings sit under it, condensed; otherwise they get a tab.
     ...(hasLobby ? [] : [{ key: 'leaderboard' as const, label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> }]),
+    ...(night.leaderboard.length > 0
+      ? [{ key: 'stats' as const, label: 'Stats', content: <ScrimNightStats nightId={night.night.id} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} /> }]
+      : []),
+    ...(hasAdvancedStats
+      ? [{ key: 'advanced' as const, label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} view="advanced" rows={[]} /> }]
+      : []),
     ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> }] : []),
   ];
 

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightLeaderboard, getMatch, getPastScrimNights, getScrimMatchDetail, getScrimNight, getUpcomingScrimNights, type ScrimMatch, type ScrimMatchPlayer } from './queries';
+import { buildScrimNightLeaderboard, getMatch, getPastScrimNights, getScrimMatchDetail, getScrimNight, getScrimNightStatsView, getUpcomingScrimNights, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, type ScrimMatch, type ScrimMatchPlayer } from './queries';
 
 const NOW = new Date('2026-11-02T12:00:00Z');
 const UPCOMING = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
@@ -22,7 +22,7 @@ function line(player_id: number, faction: 'SHIRTS' | 'SKINS', won: boolean, kill
 
 function scrimMatch(id: number, final_score: string | null, players: ScrimMatchPlayer[]): ScrimMatch {
   return {
-    id, night_id: 1, match_number: id, map: 'Foroglio', workshop_id: '111', side_choice: 'knife', final_score, server_state: null, players,
+    id, night_id: 1, match_number: id, map: 'Foroglio', workshop_id: '111', side_choice: 'knife', skins_starting_side: null, final_score, server_state: null, players,
     shirts: players.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id) as [number, number],
     skins: players.filter((p) => p.faction === 'SKINS').map((p) => p.player_id) as [number, number],
   };
@@ -73,6 +73,15 @@ function db(): FakeDb {
       stat(5, 901, 1, 'SHIRTS', false),
     ],
     match_server_state: [],
+    match_rounds: [
+      { id: 1, match_id: 900, round_number: 1, winner_side: 'CT', shirts_side: 'CT', win_reason: 'elimination' },
+      { id: 2, match_id: 900, round_number: 2, winner_side: 'T', shirts_side: 'CT', win_reason: 'bomb' },
+    ],
+    player_match_sabremetrics: [{ player_match_stats_id: 1 }],
+    match_kills: [],
+    player_match_weapon_stats: [],
+    player_match_economy_stats: [],
+    match_utility_throws: [],
   };
 }
 
@@ -91,6 +100,46 @@ async function main() {
     assert.equal(night.matches.length, 1);
     assert.deepEqual(night.matches[0].shirts.sort(), [1, 2]);
     assert.deepEqual(night.leaderboard.slice(0, 2).map((r) => r.wins), [1, 1]);
+  });
+
+  await test('getScrimNight: a night\'s H2H is computed over its scored matches only', async () => {
+    const night = await getScrimNight(1, NOW);
+    assert.ok(night);
+    assert.equal(night.h2h.duos.length, 2);
+    assert.equal(night.h2h.rivals.length, 4);
+    const empty = await getScrimNight(2, NOW);
+    assert.deepEqual([empty?.h2h.duos.length, empty?.h2h.rivals.length], [0, 0]);
+  });
+
+  await test('scrimLeaderboardToStatLines: totals carry over in the leaderboard\'s order', async () => {
+    const night = await getScrimNight(1, NOW);
+    assert.ok(night);
+    const lines = scrimLeaderboardToStatLines(night.leaderboard);
+    assert.deepEqual(lines.map((l) => l.player_id), night.leaderboard.map((r) => r.player_id));
+    const [first] = lines;
+    const row = night.leaderboard[0];
+    assert.deepEqual(
+      [first.matches_won, first.total_kills, first.total_rounds_played, first.overall_adr],
+      [row.wins, row.kills, row.rounds_played, row.adr],
+    );
+  });
+
+  await test('getScrimNightStatsView: the night\'s scored matches only, with their round outcomes and side data', async () => {
+    const view = await getScrimNightStatsView(1);
+    assert.equal(view.matches.length, 1);
+    assert.deepEqual([view.matches[0].shirts_pick, view.matches[0].final_score], ['Foroglio', '13-7']);
+    assert.equal(view.matches[0].shirts_stats.length, 2);
+    assert.deepEqual(view.sabremetrics.map((r) => [r.match_id, r.player_id, r.rounds_played]), [[900, 1, 20]]);
+    assert.deepEqual(view.rounds.map((r) => [r.winner_side, r.win_reason, r.ninja]), [['CT', 'elimination', false], ['T', 'bomb', false]]);
+    // A night whose only match is unscored has nothing to show.
+    const empty = await getScrimNightStatsView(2);
+    assert.deepEqual([empty.matches.length, empty.rounds.length, empty.sabremetrics.length], [0, 0, 0]);
+  });
+
+  await test('hasScrimMatchSabremetrics: only when a given match has parsed sabremetrics', async () => {
+    assert.equal(await hasScrimMatchSabremetrics([900]), true);
+    assert.equal(await hasScrimMatchSabremetrics([901]), false);
+    assert.equal(await hasScrimMatchSabremetrics([]), false);
   });
 
   await test('getScrimNight: the upcoming night is current, with its signups', async () => {

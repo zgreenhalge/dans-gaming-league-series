@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 import TopTabBar from './TopTabBar';
 import { resolveTab, useTabState } from './useTabState';
 
-export const SCRIM_NIGHT_TABS = ['lobby', 'matches', 'leaderboard', 'h2h'] as const;
+export const SCRIM_NIGHT_TABS = ['lobby', 'matches', 'leaderboard', 'stats', 'advanced', 'h2h'] as const;
 export type ScrimNightTab = (typeof SCRIM_NIGHT_TABS)[number];
 
 export interface ScrimNightTabSpec {

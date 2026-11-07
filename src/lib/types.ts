@@ -154,6 +154,10 @@ export interface LeaderboardRowWithId extends LeaderboardRow {
   deaths_in_losses: number;
 }
 
+/** A player's totals over some span of matches, without the season they belong to — what the Stats
+ *  tables read, and so what a scrim night (which has no season) can supply. */
+export type LeaderboardStatLine = Omit<LeaderboardRowWithId, 'season_id'>;
+
 export interface MapSeasonStat {
   seasonId: number;
   isGauntlet: boolean;

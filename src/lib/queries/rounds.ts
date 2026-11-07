@@ -1,6 +1,6 @@
 import { getAdminClient } from '../supabase-admin';
 import {
-  resolveMatchSeasons, fetchAllPages, asPage, fetchPmsFactionLookup,
+  resolveMatchSeasons, fetchAllPages, asPage, fetchPmsFactionLookup, type PmsFactionRow,
   buildPlayerFactionsAndRoster, getRoundSides, type RoundSideInfo,
 } from './_shared';
 import type { RoundCondition } from '../types';
@@ -34,32 +34,23 @@ type RawRoundRow = {
 
 type RawKillVictimRow = { match_id: number; round_number: number; victim_player_match_stats_id: number };
 
-/** Every recorded round outcome (`match_rounds`), joined to season, for every season at once —
- *  the raw ingredient behind round-win-%-by-side. Flat, ungrouped, matching `getAllMatchKills()`'s
- *  pattern. Also resolves `ninja` per round (`deriveNinjaDefuseRounds()`), which needs
- *  `match_kills`/`player_match_stats` faction data beyond `match_rounds` itself — fetched here
- *  rather than pushed onto every caller. Wrapped in `persistentQuery()`: `getAllMatchRounds()`
- *  filters this same season-independent computation down to `seasonId` rather than each distinct
- *  `seasonId` re-running its own `match_rounds`/`match_kills` scan. */
-const fetchAllMatchRoundRows = persistentQuery('fetchAllMatchRoundRows', async (): Promise<MatchRoundRow[]> => {
-  const [roundRows, matchSeason, killRows, pmsFactionLookup] = await Promise.all([
-    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').range(from, to)),
-    resolveMatchSeasons(),
-    fetchAllPages<RawKillVictimRow>((from, to) =>
-      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').range(from, to)),
-    ),
-    fetchPmsFactionLookup(),
-  ]);
+type RoundOutcomeRow = Omit<MatchRoundRow, 'season_id'>;
 
+/** Turns raw `match_rounds` rows into round outcomes, resolving `ninja` per round
+ *  (`deriveNinjaDefuseRounds()`), which needs `match_kills`/`player_match_stats` faction data beyond
+ *  `match_rounds` itself. Takes the rows already fetched, so it serves one match, a night or every
+ *  match at once. */
+function toRoundOutcomes(roundRows: RawRoundRow[], killRows: RawKillVictimRow[], pmsFactionRows: PmsFactionRow[]): RoundOutcomeRow[] {
+  const pmsFactionLookup = new Map(pmsFactionRows.map((r) => [r.id, r]));
   const victims: NinjaVictim[] = [];
   for (const k of killRows) {
     const pms = pmsFactionLookup.get(k.victim_player_match_stats_id);
     if (!pms) continue;
     victims.push({ match_id: k.match_id, round_number: k.round_number, victim_player_id: pms.player_id });
   }
-  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster([...pmsFactionLookup.values()]);
-  // Built inline from `roundRows` (already fetched above) rather than a `getRoundSides()` call —
-  // that would just re-fetch `match_rounds` a second time for the same rows.
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(pmsFactionRows);
+  // Built inline from `roundRows` (already fetched) rather than a `getRoundSides()` call — that would
+  // just re-fetch `match_rounds` a second time for the same rows.
   const roundSides = new Map(roundRows.map((r) => [
     `${r.match_id}:${r.round_number}`,
     { shirtsSide: r.shirts_side as 'CT' | 'T', winnerSide: r.winner_side as 'CT' | 'T' },
@@ -76,23 +67,53 @@ const fetchAllMatchRoundRows = persistentQuery('fetchAllMatchRoundRows', async (
     playerFactions,
     rosterByMatch,
   );
+  return roundRows.map((r) => ({
+    match_id: r.match_id,
+    round_number: r.round_number,
+    winner_side: r.winner_side as 'CT' | 'T',
+    shirts_side: r.shirts_side as 'CT' | 'T',
+    win_reason: r.win_reason as RoundCondition | null,
+    ninja: ninjaRounds.has(`${r.match_id}:${r.round_number}`),
+  }));
+}
 
+/** Every recorded round outcome (`match_rounds`), joined to season, for every season at once —
+ *  the raw ingredient behind round-win-%-by-side. Flat, ungrouped, matching `getAllMatchKills()`'s
+ *  pattern. A round of a match with no season (a scrim match) is left out. Wrapped in
+ *  `persistentQuery()`: `getAllMatchRounds()` filters this same season-independent computation down
+ *  to `seasonId` rather than each distinct `seasonId` re-running its own `match_rounds`/`match_kills`
+ *  scan. */
+const fetchAllMatchRoundRows = persistentQuery('fetchAllMatchRoundRows', async (): Promise<MatchRoundRow[]> => {
+  const [roundRows, matchSeason, killRows, pmsFactionLookup] = await Promise.all([
+    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').range(from, to)),
+    resolveMatchSeasons(),
+    fetchAllPages<RawKillVictimRow>((from, to) =>
+      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').range(from, to)),
+    ),
+    fetchPmsFactionLookup(),
+  ]);
   const result: MatchRoundRow[] = [];
-  for (const r of roundRows) {
+  for (const r of toRoundOutcomes(roundRows, killRows, [...pmsFactionLookup.values()])) {
     const sid = matchSeason.get(r.match_id);
     if (sid == null) continue;
-    result.push({
-      match_id: r.match_id,
-      season_id: sid,
-      round_number: r.round_number,
-      winner_side: r.winner_side as 'CT' | 'T',
-      shirts_side: r.shirts_side as 'CT' | 'T',
-      win_reason: r.win_reason as RoundCondition | null,
-      ninja: ninjaRounds.has(`${r.match_id}:${r.round_number}`),
-    });
+    result.push({ ...r, season_id: sid });
   }
   return result;
 });
+
+/** The round outcomes of the given matches (any kind, a scrim night's among them), in `match_rounds`
+ *  order — what `getAllMatchRounds()` gives for a season, scoped to a set of matches instead. */
+export async function getMatchRoundOutcomes(matchIds: number[]): Promise<RoundOutcomeRow[]> {
+  if (matchIds.length === 0) return [];
+  const [roundRows, killRows, pmsFactionLookups] = await Promise.all([
+    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').in('match_id', matchIds).range(from, to)),
+    fetchAllPages<RawKillVictimRow>((from, to) =>
+      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').in('match_id', matchIds).range(from, to)),
+    ),
+    Promise.all(matchIds.map((id) => fetchPmsFactionLookup(id))),
+  ]);
+  return toRoundOutcomes(roundRows, killRows, pmsFactionLookups.flatMap((m) => [...m.values()]));
+}
 
 /** `fetchAllMatchRoundRows()` filtered to one season — pass `seasonId` to scope to a single
  *  (regular or gauntlet) season; omit it for every season's rounds at once. */
