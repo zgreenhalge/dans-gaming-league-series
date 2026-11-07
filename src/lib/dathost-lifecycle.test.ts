@@ -293,9 +293,17 @@ async function testGetServerOccupancy() {
   await test('getServerOccupancy: occupied via raw players present with no DGLS match', async () => {
     const db: FakeDb = { match_server_state: [] };
     const client = createFakeSupabaseClient(db);
-    const server = { players_online: 2 } as never;
+    const server = { on: true, booting: false, players_online: 2 } as never;
     const result = await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1' }, () => getServerOccupancy(client as never, server));
     assert.deepEqual(result, { active: null, playersOnline: 2, occupied: true });
+  });
+
+  await test('getServerOccupancy: players DatHost still lists on a stopped server do not occupy it', async () => {
+    const db: FakeDb = { match_server_state: [] };
+    const client = createFakeSupabaseClient(db);
+    const server = { on: false, booting: false, players_online: 5 } as never;
+    const result = await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1' }, () => getServerOccupancy(client as never, server));
+    assert.deepEqual(result, { active: null, playersOnline: 0, occupied: false });
   });
 
   await test('getServerOccupancy: not occupied when neither signal is present', async () => {

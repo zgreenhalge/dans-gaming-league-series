@@ -15,7 +15,7 @@ import { effectivePickedMap } from './veto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
 import { workshopIdFromUrl } from './workshop';
-import { matchLabel, isServerOff, isServerLive } from './util';
+import { matchLabel, isServerOff, isServerLive, playersOnServer } from './util';
 import {
   dathostServerId,
   applyConfigSet,
@@ -566,7 +566,7 @@ export async function getServerOccupancy(
   server: DathostServer | null,
 ): Promise<ServerOccupancy> {
   const active = await getActiveServerMatch(supabaseAdmin, Promise.resolve(server));
-  const playersOnline = server?.players_online ?? null;
+  const playersOnline = server ? playersOnServer(server) : null;
   const occupied = active !== null || (playersOnline ?? 0) > 0;
   return { active, playersOnline, occupied };
 }

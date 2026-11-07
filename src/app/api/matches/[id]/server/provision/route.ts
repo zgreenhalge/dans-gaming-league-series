@@ -21,7 +21,7 @@ import {
   playersOutsideMatchMessage,
 } from '@/lib/dathost-lifecycle';
 import { getServer } from '@/lib/dathost';
-import { parseRouteId } from '@/lib/util';
+import { parseRouteId, playersOnServer } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
@@ -82,7 +82,7 @@ export async function POST(
     // Players on the server outside any DGLS match block it, read after the above so a teardown it just
     // ran isn't counted (the previous match's players are still listed until DatHost catches up).
     const server = !tookOver && serverId ? await getServer(serverId).catch(() => null) : null;
-    const playersOnline = server?.players_online ?? 0;
+    const playersOnline = playersOnServer(server);
     if (playersOnline > 0) {
       return NextResponse.json({ error: playersOutsideMatchMessage(playersOnline), code: 'server_occupied' }, { status: 409 });
     }

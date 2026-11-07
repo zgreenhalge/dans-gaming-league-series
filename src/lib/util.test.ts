@@ -12,6 +12,7 @@
 
 import assert from 'node:assert/strict';
 import {
+  playersOnServer,
   isPlayedScore,
   parseScore,
   extractSeasonNumber,
@@ -86,6 +87,14 @@ test('isPlayedScore: a real 0-N or N-0 result IS played', () => {
 });
 
 // --- parseScore: handles both hyphen and em-dash ---
+test('playersOnServer: counts players only while the server is running', () => {
+  assert.equal(playersOnServer({ on: true, booting: false, players_online: 5 }), 5);
+  assert.equal(playersOnServer({ on: false, booting: false, players_online: 5 }), 0, 'a stopped server keeps no players');
+  assert.equal(playersOnServer({ on: true, booting: true, players_online: 5 }), 0, 'a booting server has none yet');
+  assert.equal(playersOnServer({ on: true, booting: false, players_online: null }), 0);
+  assert.equal(playersOnServer(null), 0);
+});
+
 test('parseScore: hyphen and em-dash both parse', () => {
   assert.deepEqual(parseScore('13-9'), { shirts: 13, skins: 9 });
   assert.deepEqual(parseScore('13 – 9'), { shirts: 13, skins: 9 });

@@ -14,6 +14,12 @@ export function isServerLive(server: { on: boolean; booting: boolean } | null | 
   return !!server?.on && !server.booting;
 }
 
+/** The players on a server, counted only while it is running (`isServerLive()`): DatHost can keep
+ *  reporting `players_online` after a server has stopped, and an off server has nobody on it. */
+export function playersOnServer(server: { on: boolean; booting: boolean; players_online: number | null } | null | undefined): number {
+  return isServerLive(server) ? (server?.players_online ?? 0) : 0;
+}
+
 /** The complement of `isServerLive` that also excludes mid-boot — fully stopped, not booting either.
  *  The shared "can this be started" check, so it can't drift from `isServerLive`'s definition of the
  *  states in between. */
