@@ -155,16 +155,10 @@ test('aggregateMapPickBanStats: no-pick — a pool map untouched by veto in a pl
   assert.equal(nuke!.banned, 0);
 });
 
-test('classifyMatchVeto: no-pick is suppressed for playoff matches and matches without a map_pool', () => {
-  const playoff = classifyMatchVeto({
-    final_score: '13-9', skins_pick: 'Palais', shirts_pick: null,
-    is_playoff_game: true, map_pool: ['Palais', 'Nuke'],
-  });
-  assert.deepEqual(playoff.noPicked, []);
-
+test('classifyMatchVeto: no-pick is suppressed for matches without a map_pool (gauntlet seasons)', () => {
   const noPool = classifyMatchVeto({
     final_score: '13-9', skins_pick: 'Palais', shirts_pick: null,
-    is_playoff_game: false, map_pool: null,
+    map_pool: null,
   });
   assert.deepEqual(noPool.noPicked, []);
 });
@@ -172,7 +166,7 @@ test('classifyMatchVeto: no-pick is suppressed for playoff matches and matches w
 test('classifyMatchVeto: an unplayed match classifies as empty even with bans/pool set', () => {
   const out = classifyMatchVeto({
     final_score: null, skins_pick: 'Palais', shirts_pick: null,
-    shirts_ban: 'Vertigo', is_playoff_game: false, map_pool: ['Palais', 'Vertigo', 'Nuke'],
+    shirts_ban: 'Vertigo', map_pool: ['Palais', 'Vertigo', 'Nuke'],
   });
   assert.deepEqual(out, { picked: [], banned: [], noPicked: [] });
 });

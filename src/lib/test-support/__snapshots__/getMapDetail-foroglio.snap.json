@@ -30,7 +30,6 @@
       "season_number": 5,
       "season_name": "Season 5 Gauntlet",
       "is_gauntlet": true,
-      "is_playoff_game": true,
       "final_score": "13-11",
       "pre_match_win_prob": null,
       "shirts_stats": [
@@ -106,7 +105,6 @@
       "season_number": 5,
       "season_name": "Season 5",
       "is_gauntlet": false,
-      "is_playoff_game": false,
       "final_score": "13-9",
       "pre_match_win_prob": 0.55,
       "shirts_stats": [

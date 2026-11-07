@@ -43,7 +43,6 @@
       "shirts_ban2": null,
       "skins_ban1": null,
       "skins_ban2": null,
-      "is_playoff_game": false,
       "map_pool": [
         "Foroglio"
       ],
@@ -155,7 +154,6 @@
       "shirts_ban2": null,
       "skins_ban1": null,
       "skins_ban2": null,
-      "is_playoff_game": false,
       "map_pool": [
         "Foroglio",
         "Cobblestone",
@@ -269,7 +267,6 @@
       "shirts_ban2": null,
       "skins_ban1": null,
       "skins_ban2": null,
-      "is_playoff_game": true,
       "map_pool": null,
       "replay_status": "ready",
       "shirts": [

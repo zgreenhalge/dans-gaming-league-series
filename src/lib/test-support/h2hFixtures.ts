@@ -101,7 +101,6 @@ export function h2hMatchRow(overrides: Partial<MapMatchRow> = {}): MapMatchRow {
     season_number: 1,
     season_name: 'Season 1',
     is_gauntlet: false,
-    is_playoff_game: false,
     final_score: '13-9',
     pre_match_win_prob: null,
     shirts_stats: [],

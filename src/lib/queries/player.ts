@@ -33,7 +33,6 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   shirts_ban2: string | null;
   skins_ban1: string | null;
   skins_ban2: string | null;
-  is_playoff_game: boolean;
   /** This match's season's regular-season map pool. `null` for gauntlet seasons. */
   map_pool: string[] | null;
   /** `'ready'` once this match has a generated 2D replay — gates the Pathing tab. */
@@ -262,7 +261,6 @@ function toHistory(
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      is_playoff_game: m.is_playoff_game,
       map_pool: se.is_gauntlet ? null : se.map_pool,
       replay_status: m.replay_status ?? null,
     });

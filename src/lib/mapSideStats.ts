@@ -17,8 +17,7 @@ export interface VetoFields {
   shirts_ban2?: string | null;
   skins_ban1?: string | null;
   skins_ban2?: string | null;
-  is_playoff_game?: boolean;
-  /** The match's season's regular-season map pool. Pass `null` for gauntlet seasons. */
+  /** The match's season's regular-season map pool. Pass `null` for gauntlet seasons (no no-pick there). */
   map_pool?: string[] | null;
 }
 
@@ -27,7 +26,7 @@ export interface MapVetoOutcome {
   picked: string[];
   /** Every map banned in this match's veto, trimmed, original casing. */
   banned: string[];
-  /** Pool maps this match's veto never touched (pick or ban) — regular season, non-playoff only. */
+  /** Pool maps this match's veto never touched (pick or ban) — regular seasons only (`map_pool` set). */
   noPicked: string[];
 }
 
@@ -44,7 +43,7 @@ export function classifyMatchVeto(m: VetoFields): MapVetoOutcome {
     .map((v) => v.trim());
 
   let noPicked: string[] = [];
-  if (!m.is_playoff_game && picked.length > 0 && m.map_pool && m.map_pool.length > 0) {
+  if (picked.length > 0 && m.map_pool && m.map_pool.length > 0) {
     const touched = new Set([...picked, ...banned].map((v) => v.toLowerCase()));
     noPicked = m.map_pool.map((v) => v.trim()).filter((v) => v && !touched.has(v.toLowerCase()));
   }

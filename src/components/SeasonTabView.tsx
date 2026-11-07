@@ -349,7 +349,6 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      is_playoff_game: m.is_playoff_game,
       map_pool: mapPool,
     }));
   }, [isGauntlet, rounds, schedule, mapPool]);

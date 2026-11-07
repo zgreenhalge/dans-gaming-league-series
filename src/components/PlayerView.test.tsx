@@ -63,7 +63,6 @@ function historyRow(overrides: Partial<PlayerHistoryRow> = {}): PlayerHistoryRow
     shirts_ban2: null,
     skins_ban1: null,
     skins_ban2: null,
-    is_playoff_game: false,
     map_pool: null,
     replay_status: null,
     ...overrides,
