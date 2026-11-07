@@ -14,7 +14,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
-import { sabremetricStatRow, economyMatchRow } from '@/lib/test-support/sabFields';
+import { sabremetricStatRow, economyMatchRow, zeroSabFields } from '@/lib/test-support/sabFields';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -144,7 +144,7 @@ describe('SabremetricsLeaderboardView — Player Rating', () => {
       <SabremetricsLeaderboardView
         rows={[
           row(),
-          sabremetricStatRow({ player_id: 2, match_id: 1, kills_ct: 20, damage_ct: 2000, kast_rounds: 14 }),
+          sabremetricStatRow({ player_id: 2, match_id: 1, rounds_played: 24, sab: zeroSabFields({ kills_ct: 20, damage_ct: 2000, kast_rounds: 14 }) }),
         ]}
       />,
     );
@@ -166,5 +166,6 @@ describe('SabremetricsLeaderboardView — Player Rating', () => {
       />,
     );
     expect(screen.getByText('Rating')).toBeInTheDocument();
+    expect(document.body.textContent).toMatch(/Rating\d+\.\d{2}/);
   });
 });
