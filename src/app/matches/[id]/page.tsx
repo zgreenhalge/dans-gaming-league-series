@@ -97,10 +97,7 @@ export default async function MatchPage({
   const { match, week, season, stats } = detail;
   const played = isPlayedScore(match.final_score);
 
-  // Veto complete: all required pick/ban fields are filled. Falls back to the match's own
-  // is_playoff_game if the season's is_gauntlet was never set (e.g. a gauntlet CSV import whose
-  // season-patch step failed) — the pairing is a convention, not a DB constraint.
-  const vetoComplete = isVetoComplete(match, season.is_gauntlet || match.is_playoff_game);
+  const vetoComplete = isVetoComplete(match, season.is_gauntlet);
   const score = played ? parseScore(match.final_score) : null;
   const map = effectivePickedMap(match);
   const mapImg = mapImageFor(map, mapLookup);

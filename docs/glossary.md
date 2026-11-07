@@ -64,7 +64,7 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
     (`src/lib/veto.ts`) rather than an inline `shirts_pick ?? skins_pick`. `skins_pick` is
     written only when skins picked: it is never written for a gauntlet match (the auto-pick always
     lands in `shirts_pick`), so `skins_pick IS NULL` is neither a "gauntlet" nor a "pick/bans
-    incomplete" signal — use `season.is_gauntlet || match.is_playoff_game` and `isVetoComplete()`.
+    incomplete" signal — use `season.is_gauntlet` and `isVetoComplete()`.
   - **Who picked** is determined by `shirts_pick != null` (shirts picked) vs `shirts_pick == null`
     (skins picked). Do **not** compare `shirts_pick === skins_pick` — they are never equal because
     only one is populated per match.
@@ -75,16 +75,11 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
     operate on structures that carry all veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).
 - **Gauntlet** — a season format (`is_gauntlet = true`) that runs as a single-elimination bracket
   instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
-  format anywhere in the app, and `is_gauntlet` (season) is the flag code should prefer for picking a
-  veto shape or ranking rule. This pairing is a convention, not a DB constraint: the gauntlet CSV
-  importer (`ingestion/import_gauntlets.py`) writes `is_playoff_game = true` on the matches and then
-  patches the season's `is_gauntlet` in a separate step that can silently no-op (warns and returns if
-  the season name lookup fails), so a botched import can leave a season with real playoff matches but
-  `is_gauntlet = false`. For that reason, the display paths that read a match's veto
-  shape — `isVetoComplete()` (`src/lib/veto.ts`) and `VetoSequence.tsx`'s step/tile selection — treat
-  `isGauntlet || match.is_playoff_game` as gauntlet-shaped rather than trusting `is_gauntlet` alone;
-  live veto submission (`/api/matches/[id]/veto`) still keys off `is_gauntlet` alone since only
-  already-played CSV imports can hit the mismatch.
+  format anywhere in the app. `is_gauntlet` (season) picks the veto shape and ranking rule. Every
+  match in a gauntlet season is written with `is_playoff_game = true` and a regular season holds
+  none, so either flag scopes a read to the playoffs; the pairing is kept by the writers
+  (`materializePod()` in `src/lib/gauntlet-engine.ts`, the CSV ingestion in `ingestion/`), not by a
+  DB constraint.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
   - **Ban phase** — the 4 rostered players ban 4 maps total from the paired regular season's 5-map
     `map_pool`, into two slots per faction (`shirts_ban`/`shirts_ban2` for SHIRTS,
