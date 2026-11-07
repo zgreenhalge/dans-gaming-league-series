@@ -12,7 +12,8 @@ import { getMapsForWorkshopPicker, getPlayersById, getScheduleLabData, getSchedu
 import { scrimNightHref } from '@/lib/crumbs';
 import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
-import { isPlayedScore, parseRouteId } from '@/lib/util';
+import { parseRouteId } from '@/lib/util';
+import { scrimMatchNeedsServer } from '@/lib/scrim-matches';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
@@ -57,8 +58,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
-  // Matches play in order: the first without a score is the lobby's, the rest wait behind it.
-  const [lobbyMatch = null, ...queuedMatches] = night.matches.filter((m) => !isPlayedScore(m.final_score));
+  // Matches play in order: the first still needing the server is the lobby's, the rest wait behind it.
+  const [lobbyMatch = null, ...queuedMatches] = night.matches.filter(scrimMatchNeedsServer);
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
   const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
   const canMake = isAdmin || viewerCheckedIn;

@@ -111,6 +111,17 @@ async function main() {
     assert.equal(db.matches.find((m) => m.id === second)!.match_number, 2);
   });
 
+  await test('create: fine once the earlier match\'s server has stopped, before it is scored', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5]);
+    const first = await makeMatch(db, date);
+    db.match_server_state.push({ match_id: first, server_state: 'live' });
+    assert.equal((await create(date)).status, 409);
+    db.match_server_state.find((s) => s.match_id === first)!.server_state = 'done';
+    const res = await create(date);
+    assert.equal(res.status, 201);
+    assert.equal(db.matches.find((m) => m.id === first)!.final_score, null);
+  });
+
   await test('patch: a player in the match changes the map by workshop link; text that is not one is refused', async () => {
     const { db, date } = installFixture([2, 3, 4, 5]);
     const matchId = await makeMatch(db, date);

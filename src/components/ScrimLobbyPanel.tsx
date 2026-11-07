@@ -24,7 +24,7 @@ import { workshopIdFromInput } from '@/lib/workshop';
 
 interface Props {
   nightId: number;
-  /** The night's first match without a score, if any — the lobby. */
+  /** The night's first match still needing the server, if any — the lobby. */
   match: ScrimMatch | null;
   /** The pre-matched matches after it, in play order, and whether the viewer may discard each. */
   queued: { match: ScrimMatch; canDiscard: boolean }[];
@@ -164,7 +164,7 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
         href={scrimMatchHref(match.id)}
         map={match.map}
         label={{ type: 'match', matchNumber: match.match_number, isFeatureMatch: false }}
-        right={isScrimMatchEditable(match) || match.server_state === 'done' ? { type: 'pending' } : { type: 'live' }}
+        right={isScrimMatchEditable(match) ? { type: 'pending' } : { type: 'live' }}
         shirtsFallback={team(match.shirts)}
         skinsFallback={team(match.skins)}
         currentPlayerId={currentPlayerId}
@@ -193,8 +193,6 @@ function LobbyMatch({
 
   const canEdit = canManage && isScrimMatchEditable(match);
   const canDiscard = canManage && isScrimMatchDiscardable(match);
-  // The server stopped without a score: a crash, or a demo waiting for review on the match page.
-  const stoppedUnscored = match.server_state === 'done';
   const url = `/api/scrims/matches/${match.id}`;
   const lineupChanged = draft.some((id, i) => id !== current[i]);
   const lineupValid = new Set(draft).size === 4;
@@ -229,13 +227,6 @@ function LobbyMatch({
           </button>
         )}
       </div>
-      {stoppedUnscored && (
-        <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] font-mono text-[12px] text-[var(--color-text-secondary)]">
-          The server stopped without a score.{' '}
-          <Link href={scrimMatchHref(match.id)} className="underline hover:text-[var(--color-text-primary)]">Confirm its result</Link>
-          {canDiscard ? ' or discard it to make the next match.' : ' to make the next match.'}
-        </div>
-      )}
 
       <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">

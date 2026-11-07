@@ -21,6 +21,13 @@ const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down']);
 
 type ScrimMatchState = { final_score: string | null; server_state: string | null };
 
+/** Whether a scrim match still needs the night's server: not scored, and its server hasn't stopped.
+ *  Once it has (`done`), its demo is being parsed or awaiting review and the next match can go ahead.
+ *  The lobby holds the night's first such match. */
+export function scrimMatchNeedsServer(m: ScrimMatchState): boolean {
+  return !isPlayedScore(m.final_score) && m.server_state !== 'done';
+}
+
 /** Whether a scrim match's map, side and lineup can still change: not scored and never started — once
  *  it has claimed the server (`done` included), they're what the server loaded. `failed` and `idle`
  *  don't lock it: a failed start can be fixed and retried. */
@@ -30,7 +37,7 @@ export function isScrimMatchEditable(m: ScrimMatchState): boolean {
 
 /** Whether a scrim match can be discarded: not scored, and not holding the server right now. That
  *  includes one whose server stopped without a score (a crash, or a demo still waiting for review on
- *  its match page) — the night can only make its next match once this one is scored or discarded. */
+ *  its match page). */
 export function isScrimMatchDiscardable(m: ScrimMatchState): boolean {
   return !isPlayedScore(m.final_score) && !(m.server_state !== null && RUNNING_SERVER_STATES.has(m.server_state));
 }
@@ -77,20 +84,25 @@ export async function applyScrimSideChoice(db: SupabaseClient, matchId: number, 
   await db.from('matches').update({ skins_starting_side: resolveScrimSide(choice, rand) }).eq('id', matchId).throwOnError();
 }
 
-/** The number of the earlier match `matchId` waits behind — its night's lowest-numbered match without
- *  a score, when that isn't `matchId` — or `null` when it's next (or isn't a scrim match). A night plays
- *  its matches in `match_number` order on its one server. */
+/** The number of the earlier match `matchId` waits behind — its night's lowest-numbered match that
+ *  still `scrimMatchNeedsServer()`, when that isn't `matchId` — or `null` when it's next (or isn't a
+ *  scrim match). A night plays its matches in `match_number` order on its one server. */
 export async function scrimMatchPlaysAfter(db: SupabaseClient, matchId: number): Promise<number | null> {
   const { data } = await db.from('matches').select('scrim_night_id, match_number').eq('id', matchId).maybeSingle().throwOnError();
   const match = data as { scrim_night_id: number | null; match_number: number } | null;
   if (!match?.scrim_night_id) return null;
-  const { data: unscored } = await db
+  const { data: rows } = await db
     .from('matches')
-    .select('match_number')
+    .select('match_number, final_score, match_server_state(server_state)')
     .eq('scrim_night_id', match.scrim_night_id)
     .is('final_score', null)
     .throwOnError();
-  const first = Math.min(...((unscored ?? []) as { match_number: number }[]).map((m) => m.match_number));
+  const waiting = ((rows ?? []) as unknown as { match_number: number; final_score: string | null; match_server_state: { server_state: string } | { server_state: string }[] | null }[])
+    .filter((m) => {
+      const state = Array.isArray(m.match_server_state) ? m.match_server_state[0] : m.match_server_state;
+      return scrimMatchNeedsServer({ final_score: m.final_score, server_state: state?.server_state ?? null });
+    });
+  const first = Math.min(...waiting.map((m) => m.match_number));
   return first < match.match_number ? first : null;
 }
 
@@ -102,7 +114,7 @@ export function leagueMatchBlockingScrim(scheduled: ScheduledMatchRef[], now: Da
 }
 
 /** Thrown by `queueScrimMatches()` when the night can't take new matches yet: it already has a match
- *  without a score, or there is no map to start one on. */
+ *  that still needs the server, or there is no map to start one on. */
 export class ScrimMatchConflictError extends Error {
   constructor(message: string) {
     super(message);
