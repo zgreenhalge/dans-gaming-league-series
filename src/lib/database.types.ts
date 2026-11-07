@@ -1267,14 +1267,17 @@ export type Database = {
       }
       scrim_nights: {
         Row: {
+          ended_at: string | null
           id: number
           starts_at: string
         }
         Insert: {
+          ended_at?: string | null
           id?: number
           starts_at: string
         }
         Update: {
+          ended_at?: string | null
           id?: number
           starts_at?: string
         }

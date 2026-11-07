@@ -51,7 +51,7 @@ async function main() {
     const res = await start({ player_id: PLAYER_ID, startsAt, commitment: 'maybe' });
     assert.equal(res.status, 201);
     const { nightId } = (await res.json()) as { nightId: number };
-    assert.deepEqual(db.scrim_nights, [{ id: nightId, starts_at: startsAt }]);
+    assert.deepEqual(db.scrim_nights, [{ id: nightId, starts_at: startsAt, ended_at: null }]);
     assert.deepEqual(db.scrim_signups.map((s) => [s.night_id, s.player_id, s.commitment]), [[nightId, PLAYER_ID, 'maybe']]);
   });
 

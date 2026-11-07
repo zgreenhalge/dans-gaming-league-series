@@ -16,7 +16,7 @@ export const scrimNightRpcs: Record<string, RpcHandler> = {
       throw new FakeRpcError('overlapping-scrim-night');
     }
     const id = nextId(db.scrim_nights);
-    db.scrim_nights.push({ id, starts_at: args.p_starts_at });
+    db.scrim_nights.push({ id, starts_at: args.p_starts_at, ended_at: null });
     db.scrim_signups.push({
       id: nextId(db.scrim_signups),
       night_id: id,

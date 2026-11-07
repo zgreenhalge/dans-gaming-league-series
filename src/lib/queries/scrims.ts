@@ -30,9 +30,13 @@ export interface ScrimSignupEntry {
 
 /** Every scrim night, in no particular order. */
 export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): Promise<ScrimNight[]> => {
-  const { data, error } = await getAdminClient().from('scrim_nights').select('id, starts_at');
+  const { data, error } = await getAdminClient().from('scrim_nights').select('id, starts_at, ended_at');
   if (error) throw error;
-  return ((data ?? []) as { id: number; starts_at: string }[]).map((r) => ({ id: r.id, startsAt: new Date(r.starts_at).toISOString() }));
+  return ((data ?? []) as { id: number; starts_at: string; ended_at: string | null }[]).map((r) => ({
+    id: r.id,
+    startsAt: new Date(r.starts_at).toISOString(),
+    endedAt: r.ended_at ? new Date(r.ended_at).toISOString() : null,
+  }));
 });
 
 /** A night's signups: definite before maybe, then in signup order. A signup whose player row is
