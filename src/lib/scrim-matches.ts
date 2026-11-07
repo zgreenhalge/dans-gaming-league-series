@@ -54,8 +54,7 @@ export async function scrimNightIdOf(db: SupabaseClient, matchId: number): Promi
 
 /** Whether `matchId` is a scrim match (`scrim_night_id` set). */
 export async function isScrimMatch(db: SupabaseClient, matchId: number): Promise<boolean> {
-  const { data } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle().throwOnError();
-  return (data as { scrim_night_id: number | null } | null)?.scrim_night_id != null;
+  return (await scrimNightIdOf(db, matchId)) !== null;
 }
 
 /** How a scrim match's starting sides are decided, picked in the lobby. */

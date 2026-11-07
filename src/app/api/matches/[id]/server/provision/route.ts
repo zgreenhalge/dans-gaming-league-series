@@ -49,9 +49,9 @@ export async function POST(
   }
 
   // A scrim match waits its turn and bumps nothing but its own night's previous match, whose game is
-  // over: a night plays its matches in order, a league match always gets the server (no scrim match starts within half an hour of one), and none
-  // starts while anyone is on the server — a DGLS match or players outside one
-  // (`getServer()`'s player count, as the admin server console gates on).
+  // over: a night plays its matches in order, a league match always gets the server (no scrim match
+  // starts within half an hour of one), and none starts while anyone is on the server — a DGLS match
+  // or players outside one (`getServer()`'s player count, as the admin server console gates on).
   const isScrim = await isScrimMatch(getAdminClient(), matchId);
   if (isScrim) {
     const serverId = process.env.DATHOST_SERVER_ID;
