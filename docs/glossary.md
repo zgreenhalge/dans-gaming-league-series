@@ -221,7 +221,7 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
 - **Scrim night** — a practice night outside league competition, at whatever date and time a player
   picks. A night exists once someone signs up for it — the first signup starts it — and is removed
   when everyone drops out before it has any matches. Players sign up as **definite** or **maybe**, so
-  everyone can judge attendance ahead of time, and can switch or drop out right up until it ends.
+  everyone can judge attendance ahead of time, and can switch or drop out right up until it ends — at the clock, or sooner when a player or admin ends it.
   See `/scrims` and [`architecture.md`](./architecture.md) (Database, `scrim_nights`). A **scrim
   match** is a `matches` row tied to a scrim night instead of a week; its stats never count toward
   league figures (see `matches` in architecture.md). Each night has its own page (`/scrims/[id]`)

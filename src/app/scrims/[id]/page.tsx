@@ -164,6 +164,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
               upcoming={night}
               currentPlayerId={currentPlayerId}
               isAdmin={isAdmin}
+              canEnd={night.started && (isAdmin || night.signups.some((s) => s.player_id === currentPlayerId))}
               allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
             />
             {/* Check-in opens on the clock, so the page refreshes itself when it does. */}
