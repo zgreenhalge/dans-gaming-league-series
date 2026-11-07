@@ -290,7 +290,7 @@ export async function getSideBalance(
 /**
  * How many archived regular seasons each of `playerIds` spent on the short match count — the seasons
  * where match counts weren't all equal and the player sat on the minimum (`shortCountPlayerIds()`).
- * Gauntlet seasons, seasons still in progress and playoff matches don't count. Feeds `buildRosterSchedule()`'s
+ * Gauntlet seasons (the playoffs) and seasons still in progress don't count. Feeds `buildRosterSchedule()`'s
  * `shortCountHistory`; players with no such season default to 0.
  */
 export async function getShortCountHistory(playerIds: number[]): Promise<Map<number, number>> {
@@ -301,7 +301,7 @@ export async function getShortCountHistory(playerIds: number[]): Promise<Map<num
   const seasonIds = new Set(seasons.filter((s) => !s.is_gauntlet && s.status === 'ARCHIVED').map((s) => s.id));
   const matchSeason = new Map<number, number>();
   for (const m of allMatches) {
-    if (m.played && !m.is_playoff_game && seasonIds.has(m.season_id)) matchSeason.set(m.id, m.season_id);
+    if (m.played && seasonIds.has(m.season_id)) matchSeason.set(m.id, m.season_id);
   }
   const matchIds = [...matchSeason.keys()];
   if (matchIds.length === 0) return history;
