@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -5,6 +6,9 @@ import { LocalTime } from '@/components/LocalTime';
 import { RefreshAt } from '@/components/RefreshAt';
 import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
+import { ScrimNightH2H } from '@/components/ScrimNightH2H';
+import { ScrimNightTabs, type ScrimNightTabSpec } from '@/components/ScrimNightTabs';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
@@ -39,7 +43,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
 
 export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
@@ -67,6 +70,49 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   // Generate Rounds is offered where Next Match is: no match waiting, four checked in.
   const rounds = night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? await getScheduleLabData(pool.map((p) => p.id)) : null;
 
+  // The lobby only exists while check-in is open, and shows once anyone has checked in; before that
+  // it holds only the viewer's own Check in. A finished night has just results, so it opens on one.
+  const hasLobby = night.checkInOpen && (pool.length > 0 || lobbyMatch != null || currentPlayerId != null);
+  const hasH2H = night.h2h.duos.length > 0 || night.h2h.rivals.length > 0;
+  const tabs: ScrimNightTabSpec[] = [
+    ...(hasLobby
+      ? [{
+          key: 'lobby' as const,
+          label: 'Lobby',
+          content: (
+            <>
+              {/* The lobby match's game ending frees the next match, so the page follows its server state. */}
+              {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
+              {pool.length === 0 && !lobbyMatch && currentPlayerId != null ? (
+                <div className="flex justify-end">
+                  <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
+                </div>
+              ) : (
+                <ScrimLobbyPanel
+                  key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
+                  nightId={night.night.id}
+                  match={lobbyMatch}
+                  queued={queuedMatches.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) }))}
+                  pool={pool}
+                  names={names}
+                  maps={maps}
+                  canMake={canMake}
+                  canManage={isAdmin}
+                  currentPlayerId={currentPlayerId}
+                  viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
+                  rounds={rounds}
+                  leagueMatches={leagueMatchesDuring(night.night, scheduled)}
+                />
+              )}
+            </>
+          ),
+        }]
+      : []),
+    { key: 'matches', label: 'Matches', content: <ScrimNightMatchList matches={night.matches} names={names} currentPlayerId={currentPlayerId} /> },
+    { key: 'leaderboard', label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> },
+    ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> }] : []),
+  ];
+
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: dateLabel, localDate: night.night.startsAt }]} />
@@ -88,56 +134,24 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           )}
         </div>
 
-        <div className="flex flex-col gap-8">
-          {night.current && (
+        {night.current && (
+          <div className="mb-8">
             <ScrimNightPanel
               upcoming={night}
               currentPlayerId={currentPlayerId}
               isAdmin={isAdmin}
               allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
             />
-          )}
-          {/* Check-in opens on the clock, so the page refreshes itself when it does. */}
-          {night.current && !night.checkInOpen && <RefreshAt iso={new Date(Date.parse(night.night.startsAt) - SCRIM_CHECK_IN_LEAD_MS).toISOString()} />}
-          {/* Before anyone has checked in there's no lobby yet, only the viewer's own Check in. */}
-          {night.checkInOpen && pool.length === 0 && !lobbyMatch && currentPlayerId != null && (
-            <div className="flex justify-end">
-              <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
-            </div>
-          )}
-          {/* The lobby match's game ending frees the next match, so the page follows its server state. */}
-          {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
-          {night.checkInOpen && (pool.length > 0 || lobbyMatch) && (
-            <section>
-              <div className={SECTION_LABEL_CLS}>Lobby</div>
-              <ScrimLobbyPanel
-                key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
-                nightId={night.night.id}
-                match={lobbyMatch}
-                queued={queuedMatches.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) }))}
-                pool={pool}
-                names={names}
-                maps={maps}
-                canMake={canMake}
-                canManage={isAdmin}
-                currentPlayerId={currentPlayerId}
-                viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: viewerCheckedIn } : null}
-                rounds={rounds}
-                leagueMatches={leagueMatchesDuring(night.night, scheduled)}
-              />
-            </section>
-          )}
+            {/* Check-in opens on the clock, so the page refreshes itself when it does. */}
+            {!night.checkInOpen && <RefreshAt iso={new Date(Date.parse(night.night.startsAt) - SCRIM_CHECK_IN_LEAD_MS).toISOString()} />}
+          </div>
+        )}
 
-          <section>
-            <div className={SECTION_LABEL_CLS}>Leaderboard</div>
-            <ScrimNightLeaderboard rows={night.leaderboard} />
-          </section>
-
-          <section>
-            <div className={SECTION_LABEL_CLS}>Matches</div>
-            <ScrimNightMatchList matches={night.matches} names={names} currentPlayerId={currentPlayerId} />
-          </section>
-        </div>
+        <Suspense>
+          <UrlStateProvider>
+            <ScrimNightTabs tabs={tabs} defaultTab={tabs[0].key} />
+          </UrlStateProvider>
+        </Suspense>
       </main>
     </div>
   );
