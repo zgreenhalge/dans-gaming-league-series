@@ -11,7 +11,8 @@ import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
 import type { ScrimNightStatsView } from '@/lib/queries';
 import type { LeaderboardStatLine } from '@/lib/types';
 
-export function ScrimNightStats({ nightId, view, rows }: { nightId: number; view: 'stats' | 'advanced'; rows: LeaderboardStatLine[] }) {
+/** `rows` are the night's totals the Stats view shows; the Advanced view reads its own data. */
+export function ScrimNightStats({ nightId, view, rows = [] }: { nightId: number; view: 'stats' | 'advanced'; rows?: LeaderboardStatLine[] }) {
   const [data, setData] = useState<ScrimNightStatsView | null>(null);
   const [error, setError] = useState(false);
   // Bumped by the error state's Retry to re-run the fetch.

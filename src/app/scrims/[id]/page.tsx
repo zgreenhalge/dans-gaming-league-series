@@ -19,9 +19,8 @@ import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, sc
 import { scrimNightHref } from '@/lib/crumbs';
 import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
-import { parseRouteId } from '@/lib/util';
+import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { scrimMatchNeedsServer } from '@/lib/scrim-matches';
-import { isPlayedScore } from '@/lib/util';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
@@ -133,7 +132,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
       ? [{ key: 'stats' as const, label: 'Stats', content: <ScrimNightStats nightId={night.night.id} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} /> }]
       : []),
     ...(hasAdvancedStats
-      ? [{ key: 'advanced' as const, label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} view="advanced" rows={[]} /> }]
+      ? [{ key: 'advanced' as const, label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} view="advanced" /> }]
       : []),
     ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> }] : []),
   ];
