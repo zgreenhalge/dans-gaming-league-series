@@ -10,7 +10,6 @@ import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPl
 import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
-import { useRefreshingAction } from './useRefreshingAction';
 import { StatusPill } from './StatusPill';
 import type { UpcomingScrimNight } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
@@ -67,7 +66,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   const [attendanceOpen, setAttendanceOpen] = useState(true);
   const showAdmin = isAdmin && adminOpen;
   const [, startTransition] = useTransition();
-  const ending = useRefreshingAction();
 
   const mine = signups.find((s) => s.player_id === currentPlayerId) ?? null;
 
@@ -76,6 +74,14 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
     return run(async () => {
       const res = await sendJsonRequest<{ nightRemoved?: boolean } | null>(method, `/api/scrims/${night.id}/${path}`, { player_id: playerId, ...body });
       startTransition(() => (res?.nightRemoved ? router.push('/scrims') : router.refresh()));
+    });
+  }
+
+  function endNight() {
+    if (!window.confirm('End this scrim night for everyone?')) return;
+    return run(async () => {
+      await sendJsonRequest('POST', `/api/scrims/${night.id}/end`, {});
+      startTransition(() => router.refresh());
     });
   }
 
@@ -227,22 +233,20 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
           ))}
         </div>
       )}
-      <ErrorText error={error} size={12} className="px-4 pb-3" />
-
       {canEnd && (
         <div className="px-4 py-3 border-t border-[var(--color-border-tertiary)] flex flex-wrap items-center justify-between gap-3">
           <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Everyone done? Closes check-in and the lobby.</span>
           <button
             type="button"
-            onClick={() => window.confirm('End this scrim night for everyone?') && ending.act('POST', `/api/scrims/${night.id}/end`)}
-            disabled={ending.busy}
+            onClick={endNight}
+            disabled={busy}
             className={DROP_OUT_BTN_CLS}
           >
-            {ending.busy ? '…' : 'End night'}
+            End night
           </button>
         </div>
       )}
-      <ErrorText error={ending.error} size={12} className="px-4 pb-3" />
+      <ErrorText error={error} size={12} className="px-4 py-3" />
     </div>
   );
 }
