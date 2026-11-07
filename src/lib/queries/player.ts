@@ -8,6 +8,7 @@ import { asPage, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_sh
 import { getSeasons } from './seasons';
 import type { PlayerSeasonAdrTotal } from '../h2h';
 import { effectivePickedMap } from '../veto';
+import { noPickPool } from '../mapSideStats';
 import { persistentQuery } from './_persistentCache';
 
 
@@ -261,7 +262,7 @@ function toHistory(
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      map_pool: se.is_gauntlet ? null : se.map_pool,
+      map_pool: noPickPool(se),
       replay_status: m.replay_status ?? null,
     });
   }

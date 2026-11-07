@@ -30,6 +30,12 @@ export interface MapVetoOutcome {
   noPicked: string[];
 }
 
+/** The `map_pool` to pass `classifyMatchVeto()` for a match in `season`: the pool for a regular
+ *  season, `null` for a gauntlet season (no no-pick there) or an unknown one. */
+export function noPickPool(season: { is_gauntlet: boolean; map_pool: string[] | null } | undefined): string[] | null {
+  return season && !season.is_gauntlet ? season.map_pool : null;
+}
+
 /** Classifies a single match's maps into picked/banned/no-picked. Unplayed matches classify as
  *  empty across the board. */
 export function classifyMatchVeto(m: VetoFields): MapVetoOutcome {

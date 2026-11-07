@@ -15,6 +15,7 @@ import {
   aggregateScoreDistribution,
   aggregateWinConditions,
   classifyMatchVeto,
+  noPickPool,
   aggregatePlayerMapStats,
   aggregateMapIndexStats,
   type MatchPickBanInput,
@@ -373,3 +374,9 @@ test('aggregateMapIndexStats: seasonsPlayed counts distinct regular-season numbe
 });
 
 report();
+
+test('noPickPool: the pool for a regular season, null for a gauntlet or unknown season', () => {
+  assert.deepEqual(noPickPool({ is_gauntlet: false, map_pool: ['Palais'] }), ['Palais']);
+  assert.equal(noPickPool({ is_gauntlet: true, map_pool: ['Palais'] }), null);
+  assert.equal(noPickPool(undefined), null);
+});

@@ -42,10 +42,12 @@ interface PerPlayerStats {
 
 /**
  * Fetches the three shared tables (weeks, matches, player_match_stats) once
- * and returns both derived outputs: `perPlayerStats` (assists, rounds_won and the
- * win/loss kill splits the leaderboard view lacks, keyed by `${season_id}:${player_id}`,
- * over the matches the view counts — played, not `is_playoff_game`) and `rosterBySeason`. Wrapped in `persistentQuery()` so every
- * caller — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
+ * and returns both derived outputs: `perPlayerStats` and `rosterBySeason`.
+ * `perPlayerStats` holds what the leaderboard view lacks (assists, rounds_won,
+ * kill/death splits by win and loss), keyed by `${season_id}:${player_id}`, over
+ * the matches the view counts: played and not `is_playoff_game`.
+ *
+ * Wrapped in `persistentQuery()` so every caller — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
  * `getAllLeaderboards()` — shares this one full `player_match_stats`/`matches` read
  * rather than each re-scanning both tables independently.
  */

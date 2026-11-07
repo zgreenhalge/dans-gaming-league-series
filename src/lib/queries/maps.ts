@@ -3,7 +3,7 @@ import { getAdminClient } from '../supabase-admin';
 import { heatmapKey, mapHeatmapKey } from '../r2';
 import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc, deriveRates } from '../util';
-import { classifyMatchVeto } from '../mapSideStats';
+import { classifyMatchVeto, noPickPool } from '../mapSideStats';
 import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../workshop';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
@@ -133,7 +133,7 @@ export const getAllMatchesWithPickBan = persistentQuery('getAllMatchesWithPickBa
         shirts_ban2: m.shirts_ban2,
         skins_ban1: m.skins_ban1,
         skins_ban2: m.skins_ban2,
-        map_pool: season.is_gauntlet ? null : season.map_pool,
+        map_pool: noPickPool(season),
       };
     })
     .filter((r): r is MapMatchRow => r !== null);
@@ -239,7 +239,7 @@ export const getMapIndex = persistentQuery('getMapIndex', async (): Promise<MapI
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      map_pool: season && !season.is_gauntlet ? season.map_pool : null,
+      map_pool: noPickPool(season),
     });
 
     for (const name of picked) {
@@ -397,7 +397,7 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
       shirts_ban2: m.shirts_ban2,
       skins_ban1: m.skins_ban1,
       skins_ban2: m.skins_ban2,
-      map_pool: season && !season.is_gauntlet ? season.map_pool : null,
+      map_pool: noPickPool(season),
     });
     if (banned.some((b) => b.toLowerCase() === nameLower)) bans++;
     if (noPicked.some((n) => n.toLowerCase() === nameLower)) noPickCount++;
@@ -486,7 +486,7 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
         shirts_ban2: m.shirts_ban2,
         skins_ban1: m.skins_ban1,
         skins_ban2: m.skins_ban2,
-        map_pool: season.is_gauntlet ? null : season.map_pool,
+        map_pool: noPickPool(season),
       };
     })
     .filter((r): r is MapMatchRow => r !== null)
