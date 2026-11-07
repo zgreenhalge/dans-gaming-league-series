@@ -31,6 +31,7 @@ const SKINS2_ID = 6;
 const READY_MATCH_ID = 100;
 const PLAYED_MATCH_ID = 101;
 const VETO_INCOMPLETE_MATCH_ID = 102;
+const GAUNTLET_MATCH_ID = 103;
 
 function vetoCompleteFields() {
   return {
@@ -49,14 +50,22 @@ function makeDb(): FakeDb {
       { id: SKINS1_ID, is_admin: false, name: 'Skins 1' },
       { id: SKINS2_ID, is_admin: false, name: 'Skins 2' },
     ],
-    seasons: [{ id: 20, name: 'Season 50', status: 'ACTIVE', is_gauntlet: false, target_win_rounds: 13 }],
-    weeks: [{ id: 10, season_id: 20, week_number: 1, bye_player_id: null }],
+    seasons: [
+      { id: 20, name: 'Season 50', status: 'ACTIVE', is_gauntlet: false, target_win_rounds: 13 },
+      { id: 21, name: 'Season 50 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
+    ],
+    weeks: [
+      { id: 10, season_id: 20, week_number: 1, bye_player_id: null },
+      { id: 11, season_id: 21, week_number: 1, bye_player_id: null },
+    ],
     matches: [
       { id: READY_MATCH_ID, week_id: 10, match_number: 1, final_score: null, is_playoff_game: false, round_history: null, ...vetoCompleteFields() },
       { id: PLAYED_MATCH_ID, week_id: 10, match_number: 2, final_score: '13-9', is_playoff_game: false, round_history: null, ...vetoCompleteFields() },
       { id: VETO_INCOMPLETE_MATCH_ID, week_id: 10, match_number: 3, final_score: null, is_playoff_game: false, round_history: null, shirts_ban: null, shirts_ban2: null, skins_ban1: null, skins_ban2: null, shirts_pick: null, skins_starting_side: null },
+      // Gauntlet veto: four bans and the auto-pick, no starting side.
+      { id: GAUNTLET_MATCH_ID, week_id: 11, match_number: 1, final_score: null, is_playoff_game: true, round_history: null, shirts_ban: 'Vertigo', shirts_ban2: 'Nuke', skins_ban1: 'Inferno', skins_ban2: 'Overpass', shirts_pick: 'Foroglio', skins_starting_side: null },
     ],
-    player_match_stats: [READY_MATCH_ID, PLAYED_MATCH_ID, VETO_INCOMPLETE_MATCH_ID].flatMap((matchId) => [
+    player_match_stats: [READY_MATCH_ID, PLAYED_MATCH_ID, VETO_INCOMPLETE_MATCH_ID, GAUNTLET_MATCH_ID].flatMap((matchId) => [
       { id: matchId * 10 + 1, match_id: matchId, player_id: IN_MATCH_PLAYER_ID, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, damage: 0, adr: 0, rounds_played: 0, rounds_won: 0, is_win: false },
       { id: matchId * 10 + 2, match_id: matchId, player_id: SHIRTS2_ID, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, damage: 0, adr: 0, rounds_played: 0, rounds_won: 0, is_win: false },
       { id: matchId * 10 + 3, match_id: matchId, player_id: SKINS1_ID, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, damage: 0, adr: 0, rounds_played: 0, rounds_won: 0, is_win: false },
@@ -134,6 +143,12 @@ async function main() {
     const res = await call(VETO_INCOMPLETE_MATCH_ID, ADMIN_ID, validBody());
     assert.equal(res.status, 403);
     assert.equal((await res.json()).error, 'Pick/ban phase not complete');
+  });
+
+  await test("PATCH — a gauntlet season's match passes the veto gate with the gauntlet shape (no starting side)", async () => {
+    installFixture();
+    // No body: a 400 means the route got past the 403 veto gate to body parsing.
+    assert.equal((await call(GAUNTLET_MATCH_ID, ADMIN_ID)).status, 400);
   });
 
   await test('PATCH — a missing/malformed body is rejected (400)', async () => {

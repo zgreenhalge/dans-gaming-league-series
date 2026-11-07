@@ -75,9 +75,11 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
     operate on structures that carry all veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).
 - **Gauntlet** — a season format (`is_gauntlet = true`) that runs as a single-elimination bracket
   instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
-  format anywhere in the app. `is_gauntlet` (season) picks the veto shape and ranking rule; every
-  match in a gauntlet season is `is_playoff_game = true` and a regular season holds none, so either
-  flag scopes a read to the playoffs.
+  format anywhere in the app. `is_gauntlet` (season) picks the veto shape and ranking rule. Every
+  match in a gauntlet season is written with `is_playoff_game = true` and a regular season holds
+  none, so either flag scopes a read to the playoffs; the pairing is kept by the writers
+  (`materializePod()` in `src/lib/gauntlet-engine.ts`, the CSV ingestion in `ingestion/`), not by a
+  DB constraint.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
   - **Ban phase** — the 4 rostered players ban 4 maps total from the paired regular season's 5-map
     `map_pool`, into two slots per faction (`shirts_ban`/`shirts_ban2` for SHIRTS,
