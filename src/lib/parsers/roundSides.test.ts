@@ -1,7 +1,7 @@
 /**
  * Unit tests for buildRoundSides — the CT/T side-per-round assignment used to split every stat
  * (kills_ct/kills_t, KAST, clutches...) by side. Off-by-one here silently mislabels every stat in
- * the match, so lock down the regulation-half boundary, the OT-half flip cadence, and the
+ * the match, so lock down the regulation-half boundary, the OT swap cadence, and the
  * unknown-starting-side bail-out.
  *
  * Run:  npx vitest run src/lib/parsers/roundSides.test.ts
@@ -42,15 +42,19 @@ test('buildRoundSides: round 12 (last of half 1) and round 13 (first of half 2) 
   assert.equal(byNum.get(13)!.shirtsSide, 'CT');
 });
 
-test('buildRoundSides: OT alternates every 3 rounds, starting with the "other" side', () => {
+test('buildRoundSides: OT swaps mid-period and not between periods', () => {
   // regRoundsPerHalf = 12, so OT starts at round 25. skinsStartingSide 'CT' -> shirts start 'T',
-  // other side is 'CT'. otRound 1-3 -> otHalf 1 (other side, CT); otRound 4-6 -> otHalf 2 (start side, T).
-  const events = Array.from({ length: 30 }, (_, i) => round(i + 1));
+  // other (regulation H2) side is 'CT'. Each OT period is 2 + 2 rounds: swap after its first 2
+  // rounds, none at the period boundary. Rounds 25-26 CT, 27-30 T, 31-34 CT, 35-38 T.
+  const events = Array.from({ length: 38 }, (_, i) => round(i + 1));
   const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
-  assert.equal(byNum.get(25)!.shirtsSide, 'CT'); // round 25: otRound 1 -> otHalf 1 -> other (CT)
-  assert.equal(byNum.get(27)!.shirtsSide, 'CT'); // round 27: otRound 3 -> otHalf 1 -> other (CT)
-  assert.equal(byNum.get(28)!.shirtsSide, 'T'); // round 28: otRound 4 -> otHalf 2 -> start (T)
-  assert.equal(byNum.get(30)!.shirtsSide, 'T'); // round 30: otRound 6 -> otHalf 2 -> start (T)
+  const expected: Record<number, 'CT' | 'T'> = {
+    24: 'CT', 25: 'CT', 26: 'CT', 27: 'T', 28: 'T', 29: 'T', 30: 'T',
+    31: 'CT', 32: 'CT', 33: 'CT', 34: 'CT', 35: 'T', 36: 'T', 37: 'T', 38: 'T',
+  };
+  for (const [n, side] of Object.entries(expected)) {
+    assert.equal(byNum.get(Number(n))!.shirtsSide, side, `round ${n}`);
+  }
 });
 
 test('buildRoundSides: warmup and rounds with no winner are excluded', () => {

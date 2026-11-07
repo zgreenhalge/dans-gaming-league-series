@@ -45,12 +45,14 @@ export function reasonToCondition(reason: string | null): RoundCondition {
  *   `regRoundsPerHalf` would move the swap boundary earlier by that same shift and mislabel the
  *   round straddling it. Defaults to 0 (no tick filtering).
  */
-const OT_ROUNDS_PER_HALF = 3;
+/** Rounds per overtime half: the server's `mp_overtime_maxrounds 4` is a 4-round period of two
+ *  2-round halves (first to win 3 of the period). */
+const OT_ROUNDS_PER_HALF = 2;
 
 /**
  * Which side a team starting on `startingSide` plays in 1-based *real* round number
  * `realRoundNumber` (post-knife-round renumbering), applying the regulation-half swap at
- * `targetWinRounds - 1` rounds and the every-`OT_ROUNDS_PER_HALF` OT swap beyond it. The
+ * `targetWinRounds - 1` rounds and the mid-period OT swap beyond it. The
  * canonical side-assignment rule (see `docs/calculations.md`'s "Side Splits") — both
  * `buildRoundSides` (per recorded round) and `roundsPlayedBySide` (a rounds-played total,
  * with no per-round event data) derive from this one function so they can't drift apart.
@@ -70,9 +72,15 @@ export function sideForRealRound(
 
   if (realRoundNumber <= regRoundsPerHalf) return startingSide;
   if (realRoundNumber <= regRoundsPerHalf * 2) return otherSide;
-  const otRound = realRoundNumber - regRoundsPerHalf * 2;
-  const otHalf = Math.ceil(otRound / OT_ROUNDS_PER_HALF);
-  return otHalf % 2 === 1 ? otherSide : startingSide;
+  // An OT period is two halves of OT_ROUNDS_PER_HALF rounds. Sides swap between a period's halves
+  // but not between periods (nor between regulation and the first period), so a period starts on
+  // the side the previous one ended on: the side at round R is the regulation-H2 side flipped
+  // once per completed half-swap, counting the period index plus the swap inside this period.
+  const otIndex = realRoundNumber - regRoundsPerHalf * 2 - 1;
+  const period = Math.floor(otIndex / (OT_ROUNDS_PER_HALF * 2));
+  const inSecondHalf = otIndex % (OT_ROUNDS_PER_HALF * 2) >= OT_ROUNDS_PER_HALF;
+  const swaps = period + (inSecondHalf ? 1 : 0);
+  return swaps % 2 === 0 ? otherSide : startingSide;
 }
 
 /** Every `round_end` a caller's parse should count toward the score: warmup and null-winner rows
