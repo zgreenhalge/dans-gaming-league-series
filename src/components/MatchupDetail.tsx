@@ -103,8 +103,10 @@ function MatchRosterColumn({
   );
 }
 
-/** Compact "S{season}[G] W/R{week} M{match}" reference label for a match-history row. */
+/** Compact "S{season}[G] W/R{week} M{match}" reference label for a match-history row; just "M{match}"
+ *  for a match with no week (a scrim match). */
 function matchRefLabel(seasonNumber: number | null, isGauntlet: boolean, weekNumber: number, matchNumber: number): string {
+  if (weekNumber === 0) return `M${matchNumber}`;
   const sLabel = seasonNumber != null ? `S${seasonNumber}${isGauntlet ? 'G' : ''}` : null;
   const wLabel = `${isGauntlet ? 'R' : 'W'}${weekNumber}·M${matchNumber}`;
   return sLabel ? `${sLabel}·${wLabel}` : wLabel;

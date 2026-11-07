@@ -11,6 +11,7 @@ import {
 import { persistentQuery } from './_persistentCache';
 import { asPage, fetchAllPages } from './_shared';
 import { getPlayersById } from './player';
+import { computeH2H, scrimMatchesToH2HInput, type H2HData } from '../h2h';
 import { aggregatePlayerStats, type PlayerAggregateRow, type PlayerAggregateStats } from '../player-stats';
 import { canonicalSortValues, isPlayedScore } from '../util';
 import type { Player, PlayerMatchStat, RoundHistoryEntry } from '../types';
@@ -195,6 +196,8 @@ export interface ScrimNightView extends UpcomingScrimNight {
   current: boolean;
   matches: ScrimMatch[];
   leaderboard: ScrimLeaderboardRow[];
+  /** The night's partner and opponent records (`computeH2H()` over its scored matches). */
+  h2h: H2HData;
 }
 
 /** The night with id `nightId`, or `null`. */
@@ -212,6 +215,7 @@ export async function getScrimNight(nightId: number, now: Date): Promise<ScrimNi
     current: !hasScrimNightEnded(night, now),
     matches,
     leaderboard: buildScrimNightLeaderboard(matches, playersById),
+    h2h: computeH2H(scrimMatchesToH2HInput(matches), playersById),
   };
 }
 

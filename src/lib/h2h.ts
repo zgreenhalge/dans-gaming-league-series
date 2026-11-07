@@ -178,6 +178,7 @@ export interface H2HRosterRow {
 /** One played match, resolved to the fields `computeH2H` needs to aggregate and label it. */
 export interface H2HMatchInput {
   matchId: number;
+  /** The week or gauntlet round; `0` for a match with none (a scrim match), which labels as just its match number. */
   weekNumber: number;
   matchNumber: number;
   seasonNumber: number | null;
@@ -774,4 +775,35 @@ export function gauntletRoundsToH2HInput(
       .filter((m) => isPlayedScore(m.final_score))
       .map((m) => seasonMatchToH2HInput(m, r.round_number, seasonNumber, true)),
   );
+}
+
+/** Minimal shape `scrimMatchesToH2HInput` reads — mirrors `ScrimMatch` (queries/scrims.ts) without
+ *  importing it, so this file stays supabase-free. */
+interface _ScrimSourceMatch {
+  id: number;
+  match_number: number;
+  map: string | null;
+  final_score: string | null;
+  players: H2HRosterRow[];
+}
+
+/** Adapts a scrim night's matches into `computeH2H`'s input shape, for the night page's H2H tab.
+ *  Played matches only. A scrim match has no week, season, pick/ban or EHOG prediction, so those
+ *  fields are empty (`weekNumber` 0 labels the match by its number alone). */
+export function scrimMatchesToH2HInput(matches: _ScrimSourceMatch[]): H2HMatchInput[] {
+  return matches
+    .filter((m) => isPlayedScore(m.final_score))
+    .map((m) => ({
+      matchId: m.id,
+      weekNumber: 0,
+      matchNumber: m.match_number,
+      seasonNumber: null,
+      isGauntlet: false,
+      map: m.map,
+      shirtsWinProb: null,
+      pickedBy: null,
+      startingSide: null,
+      finalScore: m.final_score,
+      roster: m.players,
+    }));
 }
