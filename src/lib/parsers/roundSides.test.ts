@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildRoundSides, sideForFaction, sideForRealRound, roundsPlayedBySide, type RoundEndRow } from './roundSides';
+import { buildRoundSides, DEFAULT_OT_ROUNDS_PER_HALF, sideForFaction, sideForRealRound, roundsPlayedBySide, type RoundEndRow } from './roundSides';
 import { test, report } from '../test-support/miniTest';
 
 function round(n: number, winner: 'CT' | 'T' | null = 'CT', warmup = false): RoundEndRow {
@@ -47,7 +47,7 @@ test('buildRoundSides: OT swaps mid-period and not between periods', () => {
   // other (regulation H2) side is 'CT'. Each OT period is 2 + 2 rounds: swap after its first 2
   // rounds, none at the period boundary. Rounds 25-26 CT, 27-30 T, 31-34 CT, 35-38 T.
   const events = Array.from({ length: 38 }, (_, i) => round(i + 1));
-  const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
+  const byNum = new Map(buildRoundSides(events, 'CT', 13, 0, 1, 2).map((s) => [s.roundNumber, s]));
   const expected: Record<number, 'CT' | 'T'> = {
     24: 'CT', 25: 'CT', 26: 'CT', 27: 'T', 28: 'T', 29: 'T', 30: 'T',
     31: 'CT', 32: 'CT', 33: 'CT', 34: 'CT', 35: 'T', 36: 'T', 37: 'T', 38: 'T',
@@ -170,7 +170,7 @@ test('roundsPlayedBySide: matches buildRoundSides round-by-round for the same sc
   // Cross-check against buildRoundSides (event-driven) for a match that runs through two OT periods, to
   // confirm both entry points agree on the same per-round side assignment.
   const events = Array.from({ length: 38 }, (_, i) => round(i + 1));
-  const sides = buildRoundSides(events, 'CT', 13); // skins start CT -> shirts start T
+  const sides = buildRoundSides(events, 'CT', 13, 0, 1, 2); // skins start CT -> shirts start T
   const expected = { ct: 0, t: 0 };
   for (const s of sides) {
     if (s.shirtsSide === 'CT') expected.ct++;
@@ -214,6 +214,14 @@ test('roundsPlayedBySide: agrees with buildRoundSides for 3-round OT halves', ()
     else expected.t++;
   }
   assert.deepEqual(roundsPlayedBySide('T', 42, 13, 3), expected);
+});
+
+test('buildRoundSides: with no recorded half size, overtime uses DEFAULT_OT_ROUNDS_PER_HALF', () => {
+  const events = Array.from({ length: 30 }, (_, i) => round(i + 1));
+  const implicit = buildRoundSides(events, 'CT', 13);
+  const explicit = buildRoundSides(events, 'CT', 13, 0, 1, DEFAULT_OT_ROUNDS_PER_HALF);
+  assert.deepEqual(implicit, explicit);
+  assert.equal(DEFAULT_OT_ROUNDS_PER_HALF, 3);
 });
 
 report();

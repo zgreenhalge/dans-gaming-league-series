@@ -72,8 +72,8 @@ stored always wins; see [`demo-ingestion.md`](./demo-ingestion.md#starting-side-
   first to win more than `otRoundsPerHalf` of the period). The half size is per match — 2 for
   `mp_overtime_maxrounds 4`, 3 for `6` — and comes from the match's demo, stored as
   `matches.ot_rounds_per_half` (see [`demo-ingestion.md`](./demo-ingestion.md#overtime-half-size));
-  a match with none recorded reads as `DEFAULT_OT_ROUNDS_PER_HALF` (2). Sides swap between a period's halves and **not** between periods (nor between
-  regulation and OT), so a period begins on the side the previous one ended on: OT period 1 =
+  a match with none recorded reads as `DEFAULT_OT_ROUNDS_PER_HALF` (3). Sides swap between a period's halves and **not** between periods
+  (nor between regulation and OT), so a period begins on the side the previous one ended on: OT period 1 =
   reg H2 sides then reg H1 sides, period 2 = reg H1 sides then reg H2 sides, and so on.
 - A player's side each round is `sideForFaction(roundSideInfo, faction)`.
 

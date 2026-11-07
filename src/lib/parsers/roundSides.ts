@@ -34,9 +34,9 @@ export function reasonToCondition(reason: string | null): RoundCondition {
 }
 
 /** The overtime half size assumed for a match that has no recorded one (`matches.ot_rounds_per_half`
- *  null and nothing inferable from its demo): `mp_overtime_maxrounds 4`, i.e. two 2-round halves per
- *  OT period. Callers resolve a missing value to this; `sideForRealRound()` itself never defaults. */
-export const DEFAULT_OT_ROUNDS_PER_HALF = 2;
+ *  null and nothing inferable from its demo): `mp_overtime_maxrounds 6`, i.e. two 3-round halves per
+ *  OT period (the server's current setting). Callers resolve a missing value to this; `sideForRealRound()` itself never defaults. */
+export const DEFAULT_OT_ROUNDS_PER_HALF = 3;
 
 /**
  * Which side a team starting on `startingSide` plays in 1-based *real* round number

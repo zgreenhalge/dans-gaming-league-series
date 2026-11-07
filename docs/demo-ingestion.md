@@ -302,7 +302,7 @@ parse and is returned as `ParsedDemoResult.ot_rounds_per_half`, carried on the c
 (`DemoConfirmPayload`) into `writeMatchScore()`, which stores it as `matches.ot_rounds_per_half`. A
 demo with no overtime shows no swap, so the value is `null` and never affects a round's side; callers
 without a demo (the match scoreboard's `roundsPlayedBySide()`, `RoundHistoryStrip`) read the stored
-column, falling back to `DEFAULT_OT_ROUNDS_PER_HALF` (2). A later segment of a restart-interrupted
+column, falling back to `DEFAULT_OT_ROUNDS_PER_HALF` (3, the server's `mp_overtime_maxrounds 6`). A later segment of a restart-interrupted
 match that begins after the first OT round can't observe the swap and falls back to the default; the
 merged result keeps whichever segment inferred it.
 
