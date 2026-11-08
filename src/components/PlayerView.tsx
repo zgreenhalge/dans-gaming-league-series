@@ -176,8 +176,8 @@ export default function PlayerView({
     else { setMapSort(c); setMapAsc(c === 'map'); }
   }
 
-  // The season selection as a predicate, shared by the player's own rows and the league-wide ADR
-  // baseline so both cover the same seasons.
+  // The season selection as a predicate, shared by every per-row filter on this page so they all
+  // cover the same seasons.
   const inSeasonSelection = useMemo(() => {
     const pairedGntId = selectedSeason === 'all' ? undefined : regularToGauntlet.get(selectedSeason);
     return (r: { season_id: number; is_gauntlet: boolean }) =>
@@ -403,7 +403,7 @@ export default function PlayerView({
                   const pairedGntId = regularToGauntlet.get(s.id);
                   const seasonRows = history.filter((r) => {
                     if (r.season_id === s.id) return includesKind(r.is_gauntlet);
-                    if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
+                    if (pairedGntId != null && r.season_id === pairedGntId) return includesKind(true);
                     return false;
                   });
                   const a = aggregatePlayerStats(seasonRows);

@@ -2,7 +2,7 @@ import { getAdminClient } from '../supabase-admin';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics, Faction } from '../types';
 import { addNumericFields } from '../util';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons, matchIdsForSeason, fetchAllPages, asPage, batchedIn } from './_shared';
+import { resolveMatchSeasons, matchIdsForSeasons, fetchAllPages, asPage, batchedIn } from './_shared';
 import {
   getAllKillCreditFlags, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
   buildPlayerFactionsAndRoster, lookupDerivedSabFields, deriveRoundsBySide,
@@ -126,11 +126,11 @@ export const getAllSabremetrics = persistentQuery('getAllSabremetrics', async (s
  *  season detail page's tab bar needs to decide whether to show "Advanced Stats" at all, without
  *  fetching and deriving the full `getAllSabremetrics()` dataset (the most expensive per-match
  *  query in this codebase, joining kills/rounds/weapon-stats/economy/utility) just to check it's
- *  non-empty. `matchIdsForSeason()` reuses `resolveMatchSeasons()`'s already-cached map
+ *  non-empty. `matchIdsForSeasons()` reuses `resolveMatchSeasons()`'s already-cached map
  *  (`_shared.ts`) rather than a season-scoped query of its own — every caller of this function also
  *  calls `getSeasonEhogRatings()` in the same render pass, which already fetches it. */
 export const hasSeasonSabremetrics = persistentQuery('hasSeasonSabremetrics', async (seasonId: number): Promise<boolean> => {
-  const matchIds = await matchIdsForSeason(seasonId);
+  const matchIds = await matchIdsForSeasons([seasonId]);
   if (matchIds.length === 0) return false;
 
   // A single embedded-join query (`.select('player_match_stats_id, player_match_stats!inner(match_id)')`

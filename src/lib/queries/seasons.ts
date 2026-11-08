@@ -5,7 +5,7 @@ import type { Player, Season } from '../types';
 import { allMatchesPlayed, extractSeasonNumber, findPairedSeason } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { batchedIn, resolveAllMatches } from './_shared';
+import { batchedIn, matchIdsForSeasons, resolveAllMatches } from './_shared';
 import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics, type SabremetricMatchRow } from './sabremetrics';
@@ -234,17 +234,13 @@ export async function getSeasonParticipants(seasonId: number, playersById?: Map<
 }
 
 /** Ids of the players who played in a regular season — on a match with a played score, in the season
- *  itself or its paired gauntlet. The played matches come from the shared `resolveAllMatches()`;
- *  `cache()`-wrapped on `seasonId` alone so every caller in one request shares the stats read. */
+ *  itself or its paired gauntlet (`matchIdsForSeasons()`). `cache()`-wrapped on `seasonId` alone so
+ *  every caller in one request shares the stats read. */
 const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[]> => {
   const season = await getSeason(seasonId);
   if (!season) return [];
-  const [gauntlet, allMatches] = await Promise.all([
-    season.is_gauntlet ? null : getLinkedGauntlet(season.name),
-    resolveAllMatches(),
-  ]);
-  const seasonIds = new Set([seasonId, ...(gauntlet ? [gauntlet.id] : [])]);
-  const playedMatchIds = allMatches.filter((m) => m.played && seasonIds.has(m.season_id)).map((m) => m.id);
+  const gauntlet = season.is_gauntlet ? null : await getLinkedGauntlet(season.name);
+  const playedMatchIds = await matchIdsForSeasons([seasonId, ...(gauntlet ? [gauntlet.id] : [])]);
   if (playedMatchIds.length === 0) return [];
   const statRows = await batchedIn<{ player_id: number }>('player_match_stats', 'match_id', playedMatchIds, 'player_id');
   return [...new Set(statRows.map((r) => r.player_id))];

@@ -44,7 +44,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
   // single flagged list `SeasonFilter`'s own dropdown takes.
   const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(allSeasons), [allSeasons]);
 
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   // Per-map filtered stats, rolled up from statsBySeason.
   const displayStats = useMemo(
@@ -56,13 +56,12 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
     return maps.filter((map) => {
       if (map.seasons.length === 0) return selectedSeason === 'all';
       return map.seasons.some((s) => {
-        if (!includeRegular && !s.is_gauntlet) return false;
-        if (!includeGauntlet && s.is_gauntlet) return false;
+        if (!includesKind(s.is_gauntlet)) return false;
         if (selectedSeason !== 'all' && s.id !== selectedSeason) return false;
         return true;
       });
     });
-  }, [maps, includeRegular, includeGauntlet, selectedSeason]);
+  }, [maps, includesKind, selectedSeason]);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {

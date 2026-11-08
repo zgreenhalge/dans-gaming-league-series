@@ -343,13 +343,15 @@ export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> 
   return matchSeason;
 });
 
-/** A season's played match ids, from `resolveMatchSeasons()`'s already-cached map — the shared
- *  season-scoping step behind `getSeasonEhogRatings()` (`ehog.ts`) and `hasSeasonSabremetrics()`
- *  (`sabremetrics.ts`), which both need exactly this list and nothing more. */
-export async function matchIdsForSeason(seasonId: number): Promise<number[]> {
+/** The played match ids of `seasonIds`, from `resolveMatchSeasons()`'s already-cached map — the
+ *  shared season-scoping step behind `getSeasonEhogRatings()` (`ehog.ts`),
+ *  `hasSeasonSabremetrics()` (`sabremetrics.ts`) and `getSeasonPlayedPlayerIds()` (`seasons.ts`),
+ *  which need exactly this list and nothing more. */
+export async function matchIdsForSeasons(seasonIds: number[]): Promise<number[]> {
+  const scope = new Set(seasonIds);
   const matchIds: number[] = [];
   for (const [matchId, sid] of await resolveMatchSeasons()) {
-    if (sid === seasonId) matchIds.push(matchId);
+    if (scope.has(sid)) matchIds.push(matchId);
   }
   return matchIds;
 }

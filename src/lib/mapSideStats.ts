@@ -1,4 +1,4 @@
-import { extractSeasonNumber, isPlayedScore, parseScore } from './util';
+import { extractSeasonNumber, includesSeasonKind, isPlayedScore, parseScore } from './util';
 import type { MapIndexEntry, RoundCondition } from './types';
 import { resolveSide } from './parsers/roundSides';
 
@@ -522,8 +522,7 @@ export function aggregateMapIndexStats(
   const result = new Map<string, MapIndexDisplayStat>();
   for (const map of maps) {
     const relevant = map.statsBySeason.filter((s) => {
-      if (!includeRegular && !s.isGauntlet) return false;
-      if (!includeGauntlet && s.isGauntlet) return false;
+      if (!includesSeasonKind(s.isGauntlet, includeRegular, includeGauntlet)) return false;
       if (selectedSeason !== 'all' && s.seasonId !== selectedSeason) return false;
       return true;
     });

@@ -352,6 +352,12 @@ export function buildRegularToGauntletMap(
   return map;
 }
 
+/** Whether a row from a gauntlet (`isGauntlet`) or regular season passes the include flags — the
+ *  per-row half of the season filter, alongside `seasonsInScope()`'s per-list half. */
+export function includesSeasonKind(isGauntlet: boolean, includeRegular: boolean, includeGauntlet: boolean): boolean {
+  return isGauntlet ? includeGauntlet : includeRegular;
+}
+
 /**
  * Concatenates whichever of `regularSeasons`/`gauntletSeasons` the include flags currently admit —
  * the "which seasons are in scope" rule shared by `dedupeVisibleSeasons()` below and
