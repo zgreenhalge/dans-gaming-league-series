@@ -31,6 +31,9 @@ export function evaluateAutoCommit(input: AutoCommitInput): AutoCommitDecision {
   if (input.alreadyPlayed) {
     return { eligible: false, reason: 'match already has a confirmed score — auto-commit never overwrites a played match' };
   }
+  if (input.derived.shirts + input.derived.skins === 0) {
+    return { eligible: false, reason: 'demo score is 0-0 — a played match has at least one round' };
+  }
   if (!input.quarantinePassed) {
     return { eligible: false, reason: 'quarantined' };
   }
