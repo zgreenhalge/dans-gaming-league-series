@@ -254,6 +254,10 @@ export async function writeMatchScore(
   if (shirts < 0 || skins < 0) {
     return { ok: false, error: 'Scores cannot be negative', status: 400 };
   }
+  const roundsPlayed = shirts + skins;
+  if (roundsPlayed === 0) {
+    return { ok: false, error: 'A played match has at least one round', status: 400 };
+  }
   if (!Array.isArray(player_stats) || player_stats.length === 0) {
     return { ok: false, error: 'player_stats must be a non-empty array', status: 400 };
   }
@@ -284,8 +288,6 @@ export async function writeMatchScore(
     isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
     statsByPlayerId = toStatsByPlayerId((matchStats ?? []) as { player_id: number; faction: string }[]);
   }
-
-  const roundsPlayed = shirts + skins;
 
   const updates: Array<{
     player_id: number;

@@ -28,13 +28,12 @@ export function isServerOff(server: { on: boolean; booting: boolean } | null | u
 }
 
 /**
- * Returns true if a `final_score` string represents a real played result.
- * Treats null and "0-0" / "0 - 0" as not yet played (S3 matches are pre-staged
- * with "0-0" placeholders before stats are entered).
+ * Returns true if a `final_score` string represents a played result. An unplayed match has a
+ * `null` score: schedules and gauntlet pods create matches unscored, and `writeMatchScore()` sets
+ * the score only when a result is recorded (and refuses a 0-0 one).
  */
-export function isPlayedScore(finalScore: string | null | undefined): boolean {
-  if (!finalScore) return false;
-  return !/^\s*0\s*[-–]\s*0\s*$/.test(finalScore);
+export function isPlayedScore(finalScore: string | null | undefined): finalScore is string {
+  return finalScore != null;
 }
 
 /**

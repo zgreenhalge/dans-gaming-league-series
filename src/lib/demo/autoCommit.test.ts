@@ -32,6 +32,11 @@ test('evaluateAutoCommit: a match that already has a confirmed score is never au
   assert.ok(!r.eligible && /already has a confirmed score/.test(r.reason));
 });
 
+test('evaluateAutoCommit: a 0-0 demo score is never auto-committed, even when map_result agrees', () => {
+  const r = evaluateAutoCommit(baseInput({ derived: { shirts: 0, skins: 0 }, mapResult: { shirts: 0, skins: 0 } }));
+  assert.ok(!r.eligible && /0-0/.test(r.reason));
+});
+
 test('evaluateAutoCommit: quarantine failure blocks auto-commit', () => {
   const r = evaluateAutoCommit(baseInput({ quarantinePassed: false }));
   assert.equal(r.eligible, false);

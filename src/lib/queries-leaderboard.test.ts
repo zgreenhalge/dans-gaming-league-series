@@ -86,7 +86,7 @@ async function main() {
     // Alice(1)/Bob(2): SHIRTS in played match 100 (regular) and 200 (gauntlet) -> +2 each.
     // Carol(3)/Dave(4): SKINS in match 100, SHIRTS in played orphan-gauntlet match 300 -> net 0.
     // Erin(5)/Frank(6): SKINS in match 200 only -> -1 each. Grace(7)/Heidi(8): SKINS in match 300 -> -1 each.
-    // Match 101 (unplayed) and 102 (S3-style "0-0") are excluded by isPlayedScore() despite having rows.
+    // Matches 101 and 102 (both unplayed) are excluded by isPlayedScore() despite having rows.
     const balance = await getSideBalance([1, 2, 3, 4, 5, 6, 7, 8, 999]);
     assert.deepEqual(
       Object.fromEntries(balance),

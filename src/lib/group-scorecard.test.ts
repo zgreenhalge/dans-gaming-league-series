@@ -28,7 +28,7 @@ test('aggregatePlayerRecords: sums record, rounds and round-weighted ADR; skips 
   const records = aggregatePlayerRecords([
     match('13-9', [1, 2], [3, 4], 100),
     match('7-13', [1, 3], [2, 4], 60),
-    { final_score: '0-0', shirts_stats: [stat(1, 'SHIRTS', false)], skins_stats: [stat(2, 'SKINS', false)] },
+    { final_score: null, shirts_stats: [stat(1, 'SHIRTS', false)], skins_stats: [stat(2, 'SKINS', false)] },
     { final_score: null, shirts_stats: [stat(1, 'SHIRTS', false)], skins_stats: [stat(2, 'SKINS', false)] },
   ]);
   const p1 = records.get(1)!;
@@ -202,7 +202,7 @@ test('aggregatePlayerRecords: exact and fallback stats add up across matches for
 
 test('deriveGroupScorecard: roster players with no played match follow the ranked rows, in roster order', () => {
   const rows = deriveGroupScorecard(
-    [match('13-9', [1, 2], [3, 4]), { final_score: '0-0', shirts_stats: [stat(7, 'SHIRTS', false)], skins_stats: [] }],
+    [match('13-9', [1, 2], [3, 4]), { final_score: null, shirts_stats: [stat(7, 'SHIRTS', false)], skins_stats: [] }],
     'wins',
     [
       { player_id: 9, player_name: 'Bye' },

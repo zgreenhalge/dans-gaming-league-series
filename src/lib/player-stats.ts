@@ -41,7 +41,7 @@ export interface PlayerAggregateStats {
  * rates (via `deriveRates`) — the shared aggregation step behind PlayerView's career/season
  * summary tile, its season-history table rows, and `aggregatePlayerStatsByMap`'s per-map
  * buckets. Only rows that were actually played (`isPlayedScore` + `rounds_played > 0`) count;
- * unplayed/pre-staged rows contribute nothing.
+ * unplayed rows contribute nothing.
  */
 export function aggregatePlayerStats(rowsRaw: PlayerAggregateRow[]): PlayerAggregateStats {
   const rows = rowsRaw.filter((r) => isPlayedScore(r.final_score) && r.rounds_played > 0);

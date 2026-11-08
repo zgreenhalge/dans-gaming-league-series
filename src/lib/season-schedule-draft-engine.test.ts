@@ -283,20 +283,6 @@ async function main() {
     assert.ok(db.weeks.every((w) => w.week_number === 1));
   });
 
-  await test("rollbackSeasonScheduleDraft: a pre-staged S3 '0-0' score does not count as played", async () => {
-    const db = makeDb();
-    const client = installFixture(db);
-    await generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER);
-    await confirmSeasonScheduleDraft(client as never, SEASON_ID);
-    const week1 = db.weeks.find((w) => w.week_number === 1)!;
-    const week1Match = db.matches.find((m) => m.week_id === week1.id)!;
-    week1Match.final_score = '0-0';
-
-    const result = await rollbackSeasonScheduleDraft(client as never, SEASON_ID);
-    assert.deepEqual(result, { status: 'rolled-back', weeksDeleted: expectedWeekCount, protectedWeekNumbers: [] });
-    assert.equal(db.weeks.length, 0);
-  });
-
   // ─── mapScheduleDraftError ───────────────────────────────────────────────────
 
   await test('mapScheduleDraftError: an already-materialized error maps to 409, everything else to 500', async () => {

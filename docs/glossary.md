@@ -222,9 +222,10 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
   with its signups, the lobby, the night's matches and its leaderboard.
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
-- **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
-  `"0-0"` placeholders before real scores were entered. Always gate on `isPlayedScore()` from
-  `src/lib/util.ts`.
+- **Played match** — a match with a `final_score`. Unplayed matches are stored with a `null` score
+  (schedules and gauntlet pods create them unscored), and `writeMatchScore()` refuses a 0-0 result.
+  Gate on `isPlayedScore()` from `src/lib/util.ts`, which the `player_season_leaderboard` view and
+  `rollback_season_schedule_draft()` mirror.
 - **Career stats** — aggregated across seasons, always subject to the same `useSeasonFilter()`
   rules (`includeRegular` / `includeGauntlet` / `selectedSeason` / career) as every other view.
   See `getCareerLeaderboard()` and `CareerStatsView.tsx` — don't build a one-off filter.

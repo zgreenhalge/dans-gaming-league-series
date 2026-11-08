@@ -66,20 +66,14 @@ function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-9, msg ?? `expected ~${expected}, got ${actual}`);
 }
 
-// --- isPlayedScore: null and "0-0" placeholders are NOT played (S3 pre-staged rows) ---
+// --- isPlayedScore: a match is played once it has a final_score ---
 test('isPlayedScore: real score is played', () => {
   assert.equal(isPlayedScore('13-9'), true);
   assert.equal(isPlayedScore('13 – 9'), true); // em-dash
 });
-test('isPlayedScore: null / undefined / empty are not played', () => {
+test('isPlayedScore: null / undefined are not played', () => {
   assert.equal(isPlayedScore(null), false);
   assert.equal(isPlayedScore(undefined), false);
-  assert.equal(isPlayedScore(''), false);
-});
-test('isPlayedScore: "0-0" placeholders (hyphen, em-dash, spaced) are not played', () => {
-  assert.equal(isPlayedScore('0-0'), false);
-  assert.equal(isPlayedScore('0 - 0'), false);
-  assert.equal(isPlayedScore('0 – 0'), false);
 });
 test('isPlayedScore: a real 0-N or N-0 result IS played', () => {
   assert.equal(isPlayedScore('13-0'), true);

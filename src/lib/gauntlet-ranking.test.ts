@@ -26,7 +26,7 @@ test('canonicalGauntletRankMap: an incomplete final round returns an empty map',
       round_number: 1,
       matches: [
         {
-          final_score: '0-0', // unplayed
+          final_score: null, // unplayed
           shirts_stats: [gp(1, 'SHIRTS', false)],
           skins_stats: [gp(2, 'SKINS', false)],
         },

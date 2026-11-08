@@ -201,10 +201,10 @@ test('buildSeasonForm: each player\'s results newest first (week, then match num
   assert.deepEqual(buildSeasonForm(matches, stats).get(10), [true, false, true]);
 });
 
-test('getSeasonForm: a season\'s played matches only — unscored and 0-0 placeholders do not count', async () => {
+test('getSeasonForm: a season\'s played matches only — unscored ones do not count', async () => {
   const form = await getSeasonForm(1);
   matchesSnapshot('getSeasonForm-season1', form);
-  // Season 5 (id 1): match 100 is played (13-9), 101 is unscored and 102 is a 0-0 placeholder.
+  // Season 5 (id 1): match 100 is played (13-9), 101 and 102 are unscored.
   assert.deepEqual(form.get(1), [true]);
   assert.deepEqual(form.get(3), [false]);
   assert.equal(form.get(5), undefined);
@@ -220,7 +220,7 @@ test('getSeasonForm: a season with no weeks or no played matches is empty', asyn
 test('isPlayedHistoryRow / lastPlayed / nextUpcoming / opponentNames', () => {
   const history = [
     historyRow({ match_id: 5, final_score: null, rounds_played: 0 }), // upcoming, later
-    historyRow({ match_id: 4, final_score: '0-0', rounds_played: 0 }), // placeholder, upcoming, earlier
+    historyRow({ match_id: 4, final_score: null, rounds_played: 0 }), // unscored, upcoming, earlier
     historyRow({ match_id: 3, final_score: '13-9' }),
     historyRow({ match_id: 2, final_score: '9-13', is_win: false }),
     historyRow({ match_id: 1, final_score: '13-1' }),

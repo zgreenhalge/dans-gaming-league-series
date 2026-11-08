@@ -405,8 +405,8 @@ export const getPlayerRecent = persistentQuery('getPlayerRecent', async (
 type HistoryResult = Pick<PlayerHistoryRow, 'final_score' | 'rounds_played'>;
 
 /** True for a history row whose match has a real result — the row counts toward the player's
- *  record, "Last 5" and match history. A `"0-0"` placeholder, an unscored match, or a row with no
- *  rounds played is upcoming instead. */
+ *  record, "Last 5" and match history. An unscored match, or a row with no rounds played, is
+ *  upcoming instead. */
 export function isPlayedHistoryRow(r: HistoryResult): boolean {
   return isPlayedScore(r.final_score) && r.rounds_played > 0;
 }

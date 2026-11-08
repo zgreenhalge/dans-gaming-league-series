@@ -16,7 +16,7 @@ export type MatchCardRight =
  *  caller's fallback (a week window for the regular season's ScheduleList, plain "pending" for
  *  GauntletRoundsList, none for a scrim night's match list). */
 export function matchCardRight(finalScore: string | null, scheduledAt: string | null, fallback: MatchCardRight): MatchCardRight {
-  if (isPlayedScore(finalScore)) return { type: 'score', score: finalScore! };
+  if (isPlayedScore(finalScore)) return { type: 'score', score: finalScore };
   if (scheduledAt) return { type: 'scheduled', scheduledAt };
   return fallback;
 }

@@ -113,7 +113,7 @@ async function main() {
     assert.ok(ids.includes(200));
     assert.ok(ids.includes(300));
     assert.equal(ids.includes(101), false); // unplayed
-    assert.equal(ids.includes(102), false); // S3-style "0-0"
+    assert.equal(ids.includes(102), false); // unplayed
     assert.equal(ids.length, 3 + 625);
   });
 

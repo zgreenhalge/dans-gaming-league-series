@@ -2,8 +2,8 @@
  * Regression harness for matchScore.ts: the gauntlet-completion pipeline (#334) — asserts
  * runGauntletCompletionPipeline always finishes propagation before starting the completion check,
  * since checking completion first can see an incomplete round as "everything played" and archive a
- * gauntlet season early (see docs/architecture.md) — and writeMatchScore() on a scrim match, which
- * writes the score but runs none of the league hooks.
+ * gauntlet season early (see docs/architecture.md) — and writeMatchScore(): a scrim match, which
+ * writes the score but runs none of the league hooks, and a 0-0 result, which it refuses.
  *
  * Run:  npx vitest run src/lib/matchScore.test.ts
  */
@@ -62,6 +62,15 @@ async function main() {
     __setTestAdminClient(client);
     assert.deepEqual(await writeMatchScore(client as never, 100, scoreInput()), { ok: true });
     assert.ok(db.background_jobs.some((j) => j.job_type === 'ehog_recompute'), 'ehog_recompute job for a league match');
+  });
+
+  await test('writeMatchScore — a 0-0 result is rejected and the match stays unplayed', async () => {
+    const db = scoringDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestAdminClient(client);
+    const result = await writeMatchScore(client as never, 100, { ...scoreInput(), shirts: 0, skins: 0 });
+    assert.deepEqual(result, { ok: false, error: 'A played match has at least one round', status: 400 });
+    assert.equal(db.matches.find((m) => m.id === 100)!.final_score, null);
   });
 
   await test('runGauntletCompletionPipeline — propagation completes before the completion check starts', async () => {

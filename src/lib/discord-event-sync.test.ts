@@ -163,7 +163,7 @@ async function main() {
   await test('syncSeasonScheduledEvents: no thread yet reports "no_thread" without touching messages', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = GUILD_ID;
-    // Season 1 ("Season 5"): match 101 (week 1, unplayed) and 102 (week 2, unplayed "0-0") — neither
+    // Season 1 ("Season 5"): match 101 (week 1, unplayed) and 102 (week 2, unplayed) — neither
     // has a Discord thread in this scenario.
     const { calls } = stubDiscord({ events: [] });
     const result = await syncSeasonScheduledEvents(adminClient, 1);

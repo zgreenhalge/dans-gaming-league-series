@@ -215,7 +215,8 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
 A clean, corroborated parse skips the human Confirm. `evaluateAutoCommit()`
 (`src/lib/demo/autoCommit.ts`) is the **auto-commit predicate** — a pure decision over: the match has no
 existing confirmed score (auto-commit never overwrites a played match — a disagreement always routes
-to manual review, no matter how clean the new parse is), quarantine passes, zero parser warnings
+to manual review, no matter how clean the new parse is), the demo-derived score isn't 0-0
+(`writeMatchScore()` refuses one), quarantine passes, zero parser warnings
 (which also covers full roster resolution and a clean stored-vs-demo side agreement), the starting
 side is **trusted** (`sideTrusted`, resolved by `scripts/demo-ingest.ts` rather than the predicate
 itself — `skins_starting_side` was actually stored for a regular-season match, or the match is a
