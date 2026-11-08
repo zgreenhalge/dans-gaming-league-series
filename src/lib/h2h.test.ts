@@ -405,7 +405,7 @@ test('scrimMatchesToH2HInput keeps played matches only, with no week, season or 
   ];
   const inputs = scrimMatchesToH2HInput([
     { id: 20, match_number: 2, map: 'de_test', final_score: '13-9', players: players4 },
-    { id: 21, match_number: 3, map: 'de_test', final_score: '0-0', players: players4 }, // unplayed — dropped
+    { id: 21, match_number: 3, map: 'de_test', final_score: null, players: players4 }, // unplayed — dropped
   ]);
   assert.equal(inputs.length, 1);
   assert.deepEqual(

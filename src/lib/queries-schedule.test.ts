@@ -131,24 +131,18 @@ async function main() {
     assert.equal(findNextUnplayedWeek(schedule)?.week_number, 11);
   });
 
-  await test('findNextUnplayedWeek: treats a pre-staged "0-0" score as unplayed', () => {
-    const schedule = [weekWithScores(10, ['0-0'])];
-    assert.equal(findNextUnplayedWeek(schedule)?.week_number, 10);
-  });
-
   await test('findNextUnplayedWeek: every week already has a played match falls back to the last week', () => {
     const schedule = [weekWithScores(10, ['13-9']), weekWithScores(11, ['13-5'])];
     assert.equal(findNextUnplayedWeek(schedule)?.week_number, 11);
   });
 
-  await test('getUpcomingGames: scheduled bucket spans every week, soonest first, excludes played and "0-0" placeholder matches', () => {
+  await test('getUpcomingGames: scheduled bucket spans every week, soonest first, excludes played matches', () => {
     const schedule: WeekWithMatches[] = [
       { ...week(1, false), matches: [matchStub(1, 1, null, '2026-01-10T00:00:00Z'), matchStub(2, 2, '13-9', '2026-01-05T00:00:00Z')] },
-      { ...week(2, false), matches: [matchStub(3, 1, null, '2026-01-03T00:00:00Z'), matchStub(4, 2, '0-0', '2026-01-04T00:00:00Z')] },
+      { ...week(2, false), matches: [matchStub(3, 1, null, '2026-01-03T00:00:00Z'), matchStub(4, 2, null, '2026-01-04T00:00:00Z')] },
     ];
     const { scheduled } = getUpcomingGames(schedule, null);
-    // Match 2 is played, so it's dropped; match 4's "0-0" is a pre-staged placeholder
-    // (isPlayedScore()), so it still counts as unplayed and appears, sorted by scheduled_at.
+    // Match 2 is played, so it's dropped; the unplayed ones appear sorted by scheduled_at.
     assert.deepEqual(scheduled.map((m) => m.id), [3, 4, 1]);
   });
 

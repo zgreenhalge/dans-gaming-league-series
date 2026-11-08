@@ -42,7 +42,7 @@ test('rankPlayersThroughWeek: wins first, then RWR%, then ADR', () => {
 test('rankPlayersThroughWeek: only counts weeks up to throughWeek and ignores unplayed matches', () => {
   const weeks: StandingsWeek[] = [
     { week_number: 1, matches: [game('13-9', [2000, 1500, 1400, 1300])] },
-    { week_number: 2, matches: [game('9-13', [1000, 1000, 2000, 2000]), { final_score: '0-0', shirts_stats: [st(1, false, 0, 0, 0)], skins_stats: [] }] },
+    { week_number: 2, matches: [game('9-13', [1000, 1000, 2000, 2000]), { final_score: null, shirts_stats: [st(1, false, 0, 0, 0)], skins_stats: [] }] },
   ];
   assert.equal(rankPlayersThroughWeek(weeks, 0).size, 0);
   const after2 = rankPlayersThroughWeek(weeks, 2);

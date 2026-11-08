@@ -253,7 +253,7 @@
       "season_name": "Season 5",
       "is_gauntlet": false,
       "map": "Cobblestone",
-      "final_score": "0-0",
+      "final_score": null,
       "pre_match_win_prob": null,
       "scheduled_at": null,
       "skins_pick": "Cobblestone",

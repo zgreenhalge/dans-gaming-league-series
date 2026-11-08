@@ -404,9 +404,8 @@ export async function notifyMatchLiveScore(
  *  correction, so the message stays in sync with whatever `matches.final_score`/box score actually
  *  are rather than going stale after a fix. Editing in place means a correction that changes nothing
  *  just re-writes the same content, not a duplicate post. `meta.score` is only populated for a
- *  genuinely played match (gated on `isPlayedScore()` inside `getMatchMeta()`), which also excludes
- *  S3's pre-staged `"0-0"` rows — see the glossary on why `null` alone was never a sufficient played
- *  check; a call on a not-yet-played match is a no-op below rather than posting a premature result.
+ *  genuinely played match (gated on `isPlayedScore()` inside `getMatchMeta()`); a call on a
+ *  not-yet-played match is a no-op below rather than posting a premature result.
  *  Never throws — `writeMatchScore()` relies on that to call it unguarded inside its own `Promise.all`. */
 export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;

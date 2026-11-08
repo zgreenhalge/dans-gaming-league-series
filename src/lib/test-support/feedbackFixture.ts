@@ -1,6 +1,6 @@
 // Shared in-memory league for the survey / superlatives route tests: one regular season with a
 // paired gauntlet, where players 1-3 played a match with a played score and player 4 is only on an
-// unplayed (`"0-0"`) placeholder — so exactly 1-3 are eligible.
+// unplayed (`null` score) one — so exactly 1-3 are eligible.
 
 import { __setTestSession } from '../session';
 import { __setTestAdminClient } from '../supabase-admin';
@@ -32,7 +32,7 @@ export function makeFeedbackDb(): FakeDb {
     ],
     matches: [
       { id: 100, week_id: 10, final_score: '13-9' },
-      { id: 101, week_id: 10, final_score: '0-0' },
+      { id: 101, week_id: 10, final_score: null },
       { id: 200, week_id: 20, final_score: '13-5' },
     ],
     player_match_stats: [

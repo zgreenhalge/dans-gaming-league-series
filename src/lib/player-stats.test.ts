@@ -47,9 +47,9 @@ test('aggregatePlayerStats: sums raw totals and derives WR/KD/RWR/ADR via derive
   approx(a.adr, 87.5); // 3500 / 40
 });
 
-test('aggregatePlayerStats: excludes unplayed rows ("0-0" pre-staged and rounds_played === 0)', () => {
+test('aggregatePlayerStats: excludes unplayed rows (no final_score, or rounds_played === 0)', () => {
   const rows = [
-    playerRow({ final_score: '0-0' }),
+    playerRow({ final_score: null }),
     playerRow({ final_score: null }),
     playerRow({ final_score: '13-9', rounds_played: 0 }),
   ];
@@ -86,7 +86,7 @@ test('aggregatePlayerStatsByMap: buckets by map (groupByMap normalization) and s
 });
 
 test('aggregatePlayerStatsByMap: a map with zero played matches in scope is dropped, not shown as an empty row', () => {
-  const out = aggregatePlayerStatsByMap([playerRow({ map: 'Palais', final_score: '0-0' })]);
+  const out = aggregatePlayerStatsByMap([playerRow({ map: 'Palais', final_score: null })]);
   assert.equal(out.length, 0);
 });
 

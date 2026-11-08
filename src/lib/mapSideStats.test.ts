@@ -1,8 +1,8 @@
 /**
  * Unit tests for the map/pick-ban aggregators. `aggregateMapPickBanStats` is the one flagged as a
  * domain-edge-case magnet: map names are user-typed (case/whitespace bucketing), the "effective map"
- * falls back between shirts_pick and skins_pick depending on who picked, and unplayed ("0-0"
- * pre-staged) matches must be excluded. `aggregateScoreDistribution`'s margin buckets are also
+ * falls back between shirts_pick and skins_pick depending on who picked, and unplayed
+ * (unscored) matches must be excluded. `aggregateScoreDistribution`'s margin buckets are also
  * boundary-prone, so those get a couple of cases too.
  *
  * Run:  npx vitest run src/lib/mapSideStats.test.ts
@@ -82,9 +82,9 @@ test('aggregateMapPickBanStats: per-map CT/T W-L follows the side chosen by the 
   );
 });
 
-test('aggregateMapPickBanStats: unplayed ("0-0" pre-staged) matches are excluded', () => {
+test('aggregateMapPickBanStats: unplayed (unscored) matches are excluded', () => {
   const matches = [
-    match({ shirts_pick: 'Palais', final_score: '0-0' }),
+    match({ shirts_pick: 'Palais', final_score: null }),
     match({ shirts_pick: 'Palais', final_score: null }),
   ];
   assert.equal(aggregateMapPickBanStats(matches).length, 0);
@@ -230,7 +230,7 @@ test('aggregateScoreDistribution: loser-round buckets (crushed/convincing/compet
     match({ final_score: '13-5' }), // loser 5 -> convincing
     match({ final_score: '13-2' }), // loser 2 -> crushed
     match({ final_score: '16-14' }), // winner > 13 -> CRAZY (checked before loser buckets)
-    match({ final_score: '0-0' }), // unplayed -> excluded
+    match({ final_score: null }), // unplayed -> excluded
   ];
   const out = aggregateScoreDistribution(matches);
   assert.equal(out.total, 5);

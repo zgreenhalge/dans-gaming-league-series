@@ -353,7 +353,7 @@ async function main() {
     process.env.DISCORD_GUILD_ID = 'guild-1';
     stubDiscord();
     // Season 1's week_number 1 already has match 100 played (out-of-order entry); week_number 2 has
-    // only match 102, staged as "0-0" — unplayed. "next" must land on week_number 2, not 1, even
+    // only match 102, unplayed. "next" must land on week_number 2, not 1, even
     // though week 1 isn't fully played either.
     const result = await publishWeekThreads(adminClient, 1, 'next');
     assert.ok(!('error' in result));

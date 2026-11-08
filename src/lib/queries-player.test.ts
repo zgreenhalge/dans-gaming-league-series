@@ -26,7 +26,7 @@ async function main() {
     matchesSnapshot('getPlayersById', players);
   });
 
-  await test('getPlayer(1) — full history across 4 matches, real rounds/S3 exclusion, snapshot', async () => {
+  await test('getPlayer(1) — full history across 4 matches, real rounds/unplayed exclusion, snapshot', async () => {
     const detail = await getPlayer(1);
     assert.notEqual(detail, null);
     // Alice appears in matches 100, 102 (zero-stat), 200, 400 (zero-stat) = 4 stat rows total,
@@ -54,7 +54,7 @@ async function main() {
 
   await test('getPlayerRecent() — matches pickRecent() on a long history with upcoming matches', async () => {
     const db = buildFakeDb();
-    const played = db.matches.find((m) => m.final_score && m.final_score !== '0-0')!;
+    const played = db.matches.find((m) => m.final_score)!;
     const stats = db.player_match_stats.filter((st) => st.match_id === played.id);
     let statId = 900_000;
     for (let i = 0; i < 40; i++) {

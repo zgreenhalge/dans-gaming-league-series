@@ -9,7 +9,7 @@
  * - a paired regular+gauntlet season (id 1 + 2, "Season 5" / "Season 5 Gauntlet") and an orphan
  *   gauntlet with no regular-season pairing (id 4, "Season 4 Gauntlet")
  * - a played match, an unplayed-but-scheduled match (pre-veto, zero-stat pre-staged roster rows),
- *   and an S3-style pre-staged `"0-0"` match — both of the latter two must be excluded by
+ *   and an unplayed match in a second week — both of the latter two must be excluded by
  *   `isPlayedScore()`, the single most load-bearing edge case per `CLAUDE.md`
  * - gauntlet (`is_playoff_game=true`) matches, including one in the orphan gauntlet
  * - players with full EHOG rating history, a `seed_ehog`-only fallback, and neither (brand new)
@@ -62,7 +62,7 @@ export const PLAYERS: Row[] = [
 // ─── Matches ───────────────────────────────────────────────────────────────
 // 100: played, regular season.
 // 101: unplayed + scheduled, pre-veto (no picks/bans yet) — for getOtherScheduledMatches.
-// 102: S3-style pre-staged "0-0" — must be excluded by isPlayedScore().
+// 102: unplayed (week 11) — must be excluded by isPlayedScore().
 // 200: played gauntlet match (is_playoff_game=true), paired season.
 // 300: played gauntlet match in the orphan gauntlet.
 // 400: unplayed, unscheduled, active-season roster placeholder (zero-stat rostered rows).
@@ -85,7 +85,7 @@ export const MATCHES: Row[] = [
     replay_status: 'none',
   },
   {
-    id: 102, week_id: 11, match_number: 1, final_score: '0-0',
+    id: 102, week_id: 11, match_number: 1, final_score: null,
     skins_pick: 'Cobblestone', shirts_ban: null, shirts_ban2: null, skins_ban1: null, skins_ban2: null,
     shirts_pick: 'Cobblestone', skins_starting_side: null, is_playoff_game: false, is_feature_match: false,
     pre_match_win_prob: null, pre_match_win_prob_formula_version: null, scheduled_at: null,
@@ -140,7 +140,7 @@ export const PLAYER_MATCH_STATS: Row[] = [
   stat({ id: 1006, match_id: 101, player_id: 7, faction: 'SKINS' }),
   stat({ id: 1007, match_id: 101, player_id: 8, faction: 'SKINS' }),
 
-  // Match 102 (S3-style pre-staged "0-0" — zero stats)
+  // Match 102 (unplayed — zero stats)
   stat({ id: 1008, match_id: 102, player_id: 1, faction: 'SHIRTS' }),
   stat({ id: 1009, match_id: 102, player_id: 3, faction: 'SHIRTS' }),
   stat({ id: 1010, match_id: 102, player_id: 2, faction: 'SKINS' }),

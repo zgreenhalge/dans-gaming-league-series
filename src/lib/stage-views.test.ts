@@ -22,7 +22,6 @@ import { test } from './test-support/miniTest';
 test('stageStatus: complete / in-progress / upcoming', () => {
   assert.equal(stageStatus([]), 'upcoming');
   assert.equal(stageStatus([{ final_score: null }]), 'upcoming');
-  assert.equal(stageStatus([{ final_score: '0-0' }]), 'upcoming');
   assert.equal(stageStatus([{ final_score: '13-9' }, { final_score: null }]), 'in-progress');
   assert.equal(stageStatus([{ final_score: '13-9' }, { final_score: '13-1' }]), 'complete');
 });

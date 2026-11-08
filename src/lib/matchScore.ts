@@ -254,6 +254,9 @@ export async function writeMatchScore(
   if (shirts < 0 || skins < 0) {
     return { ok: false, error: 'Scores cannot be negative', status: 400 };
   }
+  if (shirts + skins === 0) {
+    return { ok: false, error: 'A played match has at least one round', status: 400 };
+  }
   if (!Array.isArray(player_stats) || player_stats.length === 0) {
     return { ok: false, error: 'player_stats must be a non-empty array', status: 400 };
   }

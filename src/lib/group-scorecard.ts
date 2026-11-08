@@ -71,7 +71,7 @@ function matchTotals(p: ScorecardStat, scores: { shirts: number; skins: number }
 }
 
 /** Rolls the played matches up into one record per player, in order of first appearance. Unplayed
- *  matches (including `"0-0"` placeholders) are skipped, so a pre-staged week reads as empty. */
+ *  matches are skipped, so a week with none played yet reads as empty. */
 export function aggregatePlayerRecords(matches: ScorecardMatch[]): Map<number, PlayerRecord> {
   const records = new Map<number, PlayerRecord>();
   for (const m of matches) {
