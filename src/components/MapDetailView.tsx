@@ -128,16 +128,15 @@ export default function MapDetailView({
   // single flagged list `SeasonFilter`'s own dropdown takes.
   const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(uniqueSeasons), [uniqueSeasons]);
 
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
 
   const filteredMatches = useMemo<MapMatchRow[]>(() => {
     return detail.matches.filter((m) => {
       if (selectedSeason !== 'all' && m.season_id !== selectedSeason) return false;
-      if (m.is_gauntlet) return includeGauntlet;
-      return includeRegular;
+      return includesKind(m.is_gauntlet);
     });
-  }, [detail.matches, includeRegular, includeGauntlet, selectedSeason]);
+  }, [detail.matches, includesKind, selectedSeason]);
 
   const filteredPlayerStats = useMemo(
     () => aggregatePlayerStats(filteredMatches),

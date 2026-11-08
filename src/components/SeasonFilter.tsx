@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { dedupeVisibleSeasons, seasonTitle, seasonsInScope } from '@/lib/util';
 import { useUrlState } from './useUrlState';
 
@@ -59,6 +59,8 @@ export function Checkbox({
 export interface SeasonFilterState {
   includeRegular: boolean;
   includeGauntlet: boolean;
+  /** Whether a row from a gauntlet (`true`) or regular (`false`) season passes the include flags. */
+  includesKind: (isGauntlet: boolean) => boolean;
   selectedSeason: number | 'all';
   toggleRegular: () => void;
   toggleGauntlet: () => void;
@@ -92,6 +94,10 @@ export function useSeasonFilter(options?: {
   const includeRegular = regRaw !== '0';
   const includeGauntlet = gntRaw !== '0';
   const rawSelectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
+  const includesKind = useCallback(
+    (isGauntlet: boolean) => (isGauntlet ? includeGauntlet : includeRegular),
+    [includeRegular, includeGauntlet],
+  );
 
   const hasValidityInput = options?.regularSeasons !== undefined || options?.gauntletSeasons !== undefined;
   const inScope = seasonsInScope(options?.regularSeasons ?? [], options?.gauntletSeasons ?? [], includeRegular, includeGauntlet);
@@ -114,7 +120,7 @@ export function useSeasonFilter(options?: {
     setSeasonRaw(s === 'all' ? 'all' : String(s));
   }
 
-  return { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };
+  return { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

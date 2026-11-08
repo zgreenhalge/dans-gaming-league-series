@@ -42,7 +42,7 @@ export default function CareerStatsView({
   /** The Stats, Advanced Stats and H2H tabs' data, still loading while the Leaderboard tab renders. */
   detail: Promise<StatisticsDetail>;
 }) {
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
@@ -71,10 +71,10 @@ export default function CareerStatsView({
   // rule the detail tabs filter their per-match rows by.
   const inSelection = useCallback(
     (seasonId: number, isGauntlet: boolean) => {
-      if (selectedSeason === 'all' || seasonId === selectedSeason) return isGauntlet ? includeGauntlet : includeRegular;
+      if (selectedSeason === 'all' || seasonId === selectedSeason) return includesKind(isGauntlet);
       return includeGauntlet && seasonId === regularToGauntlet.get(selectedSeason);
     },
-    [selectedSeason, includeRegular, includeGauntlet, regularToGauntlet],
+    [selectedSeason, includesKind, includeGauntlet, regularToGauntlet],
   );
 
   const trophyCounts = useMemo(() => {
@@ -90,11 +90,11 @@ export default function CareerStatsView({
 
   const ehogRatings = useMemo<Record<number, number>>(() => {
     const filtered = selectedSeason === 'all'
-      ? ehogSnapshots.filter((s) => s.isGauntlet ? includeGauntlet : includeRegular)
+      ? ehogSnapshots.filter((s) => includesKind(s.isGauntlet))
       : (() => {
           const sel = regularSeasons.find((rs) => rs.id === selectedSeason);
           const sn = sel ? extractSeasonNumber(sel.name) : null;
-          return ehogSnapshots.filter((s) => s.seasonNumber === sn && (s.isGauntlet ? includeGauntlet : includeRegular));
+          return ehogSnapshots.filter((s) => s.seasonNumber === sn && includesKind(s.isGauntlet));
         })();
     const latest: Record<number, { rating: number; seq: number }> = {};
     for (const s of filtered) {
@@ -106,7 +106,7 @@ export default function CareerStatsView({
     const result: Record<number, number> = {};
     for (const [pid, val] of Object.entries(latest)) result[Number(pid)] = val.rating;
     return result;
-  }, [ehogSnapshots, selectedSeason, includeRegular, includeGauntlet, regularSeasons]);
+  }, [ehogSnapshots, selectedSeason, includesKind, regularSeasons]);
 
   return (
     <>

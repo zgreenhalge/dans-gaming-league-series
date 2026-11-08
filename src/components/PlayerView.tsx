@@ -157,7 +157,7 @@ export default function PlayerView({
     return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: buildRegularToGauntletMap(reg, gnt) };
   }, [history]);
 
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   const [rawTab, setTab] = useTabState(PLAYER_TABS, 'stats');
   const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');
@@ -182,25 +182,14 @@ export default function PlayerView({
     const pairedGntId = selectedSeason === 'all' ? undefined : regularToGauntlet.get(selectedSeason);
     return (r: { season_id: number; is_gauntlet: boolean }) =>
       (selectedSeason === 'all' || r.season_id === selectedSeason || (pairedGntId != null && r.season_id === pairedGntId))
-      && (r.is_gauntlet ? includeGauntlet : includeRegular);
-  }, [selectedSeason, includeRegular, includeGauntlet, regularToGauntlet]);
+      && includesKind(r.is_gauntlet);
+  }, [selectedSeason, includesKind, regularToGauntlet]);
 
   const filtered = useMemo(() => history.filter(inSeasonSelection), [history, inSeasonSelection]);
 
   const last5 = useMemo(() => lastPlayed(filtered, 5), [filtered]);
 
-  const filteredTrophies = useMemo(() => {
-    const base = selectedSeason === 'all'
-      ? trophies
-      : (() => {
-          const pairedGntId = regularToGauntlet.get(selectedSeason);
-          return trophies.filter((t) =>
-            t.season_id === selectedSeason ||
-            (pairedGntId != null && t.season_id === pairedGntId),
-          );
-        })();
-    return base.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
-  }, [selectedSeason, trophies, includeRegular, includeGauntlet, regularToGauntlet]);
+  const filteredTrophies = useMemo(() => trophies.filter(inSeasonSelection), [trophies, inSeasonSelection]);
 
   const filteredEhog = useMemo(() => {
     const base = selectedSeason === 'all'
@@ -210,10 +199,8 @@ export default function PlayerView({
           const sn = sel ? extractSeasonNumber(sel.name) : null;
           return ehogHistory.filter((h) => h.seasonNumber === sn);
         })();
-    return base.filter((h) =>
-      h.isGauntlet ? includeGauntlet : includeRegular,
-    );
-  }, [selectedSeason, ehogHistory, includeRegular, includeGauntlet, regularSeasons]);
+    return base.filter((h) => includesKind(h.isGauntlet));
+  }, [selectedSeason, ehogHistory, includesKind, regularSeasons]);
 
   const agg = aggregatePlayerStats(filtered);
   const peakEhog = useMemo(() => {
@@ -274,20 +261,7 @@ export default function PlayerView({
 
   // League-wide sabremetric rows under the active season filter — used as the
   // baseline for the player's Plus stats (player per-round value vs. league avg).
-  const filteredLeagueSabremetrics = useMemo(() => {
-    const base = selectedSeason === 'all'
-      ? sabremetrics
-      : (() => {
-          const pairedGntId = regularToGauntlet.get(selectedSeason);
-          return sabremetrics.filter((r) =>
-            r.season_id === selectedSeason ||
-            (pairedGntId != null && r.season_id === pairedGntId),
-          );
-        })();
-    return base.filter((r) =>
-      r.is_gauntlet ? includeGauntlet : includeRegular,
-    );
-  }, [selectedSeason, sabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
+  const filteredLeagueSabremetrics = useMemo(() => sabremetrics.filter(inSeasonSelection), [sabremetrics, inSeasonSelection]);
 
   const filteredPlayerSabremetrics = useMemo(
     () => filteredLeagueSabremetrics.filter((r) => r.player_id === playerId),
@@ -428,7 +402,7 @@ export default function PlayerView({
                 rows={activeSeasons.map((s): LeaderboardRowWithId => {
                   const pairedGntId = regularToGauntlet.get(s.id);
                   const seasonRows = history.filter((r) => {
-                    if (r.season_id === s.id) return r.is_gauntlet ? includeGauntlet : includeRegular;
+                    if (r.season_id === s.id) return includesKind(r.is_gauntlet);
                     if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
                     return false;
                   });
