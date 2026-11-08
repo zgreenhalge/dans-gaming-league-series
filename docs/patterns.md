@@ -175,6 +175,24 @@ season filters, the hover/lift classes, the responsive-table treatment — preci
 for the visual primitives. When you genuinely need something new, ask whether it's a new *shape* or
 just a new *parameter* (color, count) of an existing primitive — usually it's the latter.
 
+## Run independent async work concurrently, however small the gain
+
+Two awaits that don't depend on each other run together, never one after the other. No saving is
+too small to take: a single extra round trip is still latency on every page that reaches it, and
+these chains compound as helpers call helpers. Review for this the same way as for correctness,
+not as an optional polish.
+
+- **Independent reads go in one `Promise.all`,** with `error` checked once, immediately after (see
+  [`recipes.md`](./recipes.md)'s query-helper recipe). `batchedIn()`'s chunks already run this way.
+- **Start a read before awaiting something it doesn't need.** When one step must wait on an earlier
+  result (a season's name before `getLinkedGauntlet()`), whatever doesn't need that result starts
+  alongside it rather than after.
+- **A helper can take a still-pending input.** `matchIdsForSeasons()` (`queries/_shared.ts`)
+  accepts its season ids as a promise and awaits them together with `resolveMatchSeasons()`, so a
+  caller still working out which seasons it wants doesn't hold up the match read.
+- **Truly dependent steps stay sequential.** Don't fire speculative reads whose results may be
+  thrown away just to look parallel.
+
 ## Gate a tab on data, not "always render it"
 
 A tab or sub-tab (`TabBar`/`tabCls` navigation) shouldn't render for a viewer who can only ever see
