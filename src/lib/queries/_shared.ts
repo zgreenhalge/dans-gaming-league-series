@@ -117,11 +117,13 @@ export type WeekLookup = Map<number, { season_id: number; week_number: number }>
 
 const getAllWeeks = persistentQuery('getAllWeeks', async (client?: SupabaseClient): Promise<WeekLookup> => {
   const db = client ?? getAdminClient();
-  const { data, error } = await db.from('weeks').select('id, season_id, week_number');
-  if (error) throw error;
+  type WeekRow = { id: number; season_id: number; week_number: number };
+  const data = await fetchAllPages<WeekRow>((from, to) =>
+    asPage<WeekRow>(db.from('weeks').select('id, season_id, week_number').order('id').range(from, to)),
+  );
 
   const lookup: WeekLookup = new Map();
-  for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
+  for (const w of data)
     lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
   return lookup;
 });
@@ -303,14 +305,18 @@ export interface AllMatchesRow {
  * full-table read instead of each re-querying `matches` with its own scoping/column selection.
  */
 export const resolveAllMatches = persistentQuery('resolveAllMatches', async (): Promise<AllMatchesRow[]> => {
-  const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
-    getAdminClient().from('matches').select('id, week_id, is_playoff_game, final_score'),
+  type MatchRow = { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null };
+  const [matchRows, weekLookup] = await Promise.all([
+    fetchAllPages<MatchRow>((from, to) =>
+      asPage<MatchRow>(
+        getAdminClient().from('matches').select('id, week_id, is_playoff_game, final_score').order('id').range(from, to),
+      ),
+    ),
     getWeekLookup(),
   ]);
-  if (matchErr) throw matchErr;
 
   const rows: AllMatchesRow[] = [];
-  for (const m of (matchRows ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
+  for (const m of matchRows) {
     const week = weekLookup.get(m.week_id);
     if (week == null) continue;
     rows.push({
@@ -343,13 +349,17 @@ export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> 
   return matchSeason;
 });
 
-/** A season's played match ids, from `resolveMatchSeasons()`'s already-cached map — the shared
- *  season-scoping step behind `getSeasonEhogRatings()` (`ehog.ts`) and `hasSeasonSabremetrics()`
- *  (`sabremetrics.ts`), which both need exactly this list and nothing more. */
-export async function matchIdsForSeason(seasonId: number): Promise<number[]> {
+/** The played match ids of `seasonIds`, from `resolveMatchSeasons()`'s already-cached map — the
+ *  shared season-scoping step behind `getSeasonEhogRatings()` (`ehog.ts`),
+ *  `hasSeasonSabremetrics()` (`sabremetrics.ts`) and `getSeasonPlayedPlayerIds()` (`seasons.ts`),
+ *  which need exactly this list and nothing more. `seasonIds` may be a promise, so a caller still
+ *  resolving which seasons it wants reads the match map alongside that lookup. */
+export async function matchIdsForSeasons(seasonIds: number[] | Promise<number[]>): Promise<number[]> {
+  const [ids, matchSeasons] = await Promise.all([seasonIds, resolveMatchSeasons()]);
+  const scope = new Set(ids);
   const matchIds: number[] = [];
-  for (const [matchId, sid] of await resolveMatchSeasons()) {
-    if (sid === seasonId) matchIds.push(matchId);
+  for (const [matchId, sid] of matchSeasons) {
+    if (scope.has(sid)) matchIds.push(matchId);
   }
   return matchIds;
 }

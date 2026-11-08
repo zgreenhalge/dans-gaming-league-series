@@ -104,6 +104,13 @@ describe('useSeasonFilter', () => {
     expect(result.current.selectedSeason).toBe(5);
   });
 
+  test('includesKind follows the include flag for each season kind', () => {
+    nextNavigationMock.setSearchParams('gnt=0');
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
+    expect(result.current.includesKind(false)).toBe(true);
+    expect(result.current.includesKind(true)).toBe(false);
+  });
+
   test('toggleRegular writes `reg=0` and replaces (not pushes)', () => {
     const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     act(() => result.current.toggleRegular());

@@ -57,6 +57,7 @@ import {
   formatRatio,
   roundTo,
   signedColor,
+  includesSeasonKind,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
 import { mapSlug } from './maps';
@@ -65,6 +66,14 @@ import { test, report } from './test-support/miniTest';
 function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-9, msg ?? `expected ~${expected}, got ${actual}`);
 }
+
+// --- includesSeasonKind: a row passes when its season kind's include flag is on ---
+test('includesSeasonKind: regular rows follow includeRegular, gauntlet rows follow includeGauntlet', () => {
+  assert.equal(includesSeasonKind(false, true, false), true);
+  assert.equal(includesSeasonKind(false, false, true), false);
+  assert.equal(includesSeasonKind(true, false, true), true);
+  assert.equal(includesSeasonKind(true, true, false), false);
+});
 
 // --- isPlayedScore: a match is played once it has a final_score ---
 test('isPlayedScore: real score is played', () => {
