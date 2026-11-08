@@ -72,9 +72,9 @@ export default function CareerStatsView({
   const inSelection = useCallback(
     (seasonId: number, isGauntlet: boolean) => {
       if (selectedSeason === 'all' || seasonId === selectedSeason) return includesKind(isGauntlet);
-      return includesKind(true) && seasonId === regularToGauntlet.get(selectedSeason);
+      return includeGauntlet && seasonId === regularToGauntlet.get(selectedSeason);
     },
-    [selectedSeason, includesKind, regularToGauntlet],
+    [selectedSeason, includesKind, includeGauntlet, regularToGauntlet],
   );
 
   const trophyCounts = useMemo(() => {

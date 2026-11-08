@@ -117,11 +117,13 @@ export type WeekLookup = Map<number, { season_id: number; week_number: number }>
 
 const getAllWeeks = persistentQuery('getAllWeeks', async (client?: SupabaseClient): Promise<WeekLookup> => {
   const db = client ?? getAdminClient();
-  const { data, error } = await db.from('weeks').select('id, season_id, week_number');
-  if (error) throw error;
+  type WeekRow = { id: number; season_id: number; week_number: number };
+  const data = await fetchAllPages<WeekRow>((from, to) =>
+    asPage<WeekRow>(db.from('weeks').select('id, season_id, week_number').order('id').range(from, to)),
+  );
 
   const lookup: WeekLookup = new Map();
-  for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
+  for (const w of data)
     lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
   return lookup;
 });
@@ -303,14 +305,18 @@ export interface AllMatchesRow {
  * full-table read instead of each re-querying `matches` with its own scoping/column selection.
  */
 export const resolveAllMatches = persistentQuery('resolveAllMatches', async (): Promise<AllMatchesRow[]> => {
-  const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
-    getAdminClient().from('matches').select('id, week_id, is_playoff_game, final_score'),
+  type MatchRow = { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null };
+  const [matchRows, weekLookup] = await Promise.all([
+    fetchAllPages<MatchRow>((from, to) =>
+      asPage<MatchRow>(
+        getAdminClient().from('matches').select('id, week_id, is_playoff_game, final_score').order('id').range(from, to),
+      ),
+    ),
     getWeekLookup(),
   ]);
-  if (matchErr) throw matchErr;
 
   const rows: AllMatchesRow[] = [];
-  for (const m of (matchRows ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
+  for (const m of matchRows) {
     const week = weekLookup.get(m.week_id);
     if (week == null) continue;
     rows.push({

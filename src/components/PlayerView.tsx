@@ -403,7 +403,7 @@ export default function PlayerView({
                   const pairedGntId = regularToGauntlet.get(s.id);
                   const seasonRows = history.filter((r) => {
                     if (r.season_id === s.id) return includesKind(r.is_gauntlet);
-                    if (pairedGntId != null && r.season_id === pairedGntId) return includesKind(true);
+                    if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
                     return false;
                   });
                   const a = aggregatePlayerStats(seasonRows);

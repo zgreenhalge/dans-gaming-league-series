@@ -216,9 +216,8 @@ export async function getSeasonParticipants(seasonId: number, playersById?: Map<
   const byId = new Map(roster.map((r) => [r.player_id, r]));
   const matchIds = allMatches.filter((m) => m.season_id === seasonId).map((m) => m.id);
   if (matchIds.length > 0) {
-    const { data: statRows, error: statErr } = await getAdminClient().from('player_match_stats').select('player_id').in('match_id', matchIds);
-    if (statErr) throw statErr;
-    for (const { player_id } of (statRows ?? []) as { player_id: number }[]) {
+    const statRows = await batchedIn<{ player_id: number }>('player_match_stats', 'match_id', matchIds, 'player_id');
+    for (const { player_id } of statRows) {
       if (byId.has(player_id)) continue;
       const player = resolvedPlayersById.get(player_id);
       if (!player) continue;
