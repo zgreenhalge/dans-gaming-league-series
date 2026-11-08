@@ -108,7 +108,7 @@ export async function getMatchMeta(matchId: number, client?: SupabaseClient) {
   const mapName = map ? toSentenceCase(map) : null;
   const played = isPlayedScore(m.final_score);
 
-  const score = played && m.final_score ? parseScore(m.final_score) : null;
+  const score = played ? parseScore(m.final_score) : null;
 
   let scheduledAt: string | null = null;
   if (m.scheduled_at && !played) {

@@ -650,7 +650,7 @@ export default function PlayerView({
                       map={h.map}
                       label={{ type: 'player-history', seasonNumber: h.season_number, isGauntlet: h.is_gauntlet, weekNumber: h.week_number, matchNumber: h.match_number }}
                       outcome={h.is_win ? 'win' : 'loss'}
-                      right={{ type: 'score', score: h.final_score! }}
+                      right={{ type: 'score', score: h.final_score }}
                       shirtsStats={h.shirts_stats}
                       skinsStats={h.skins_stats}
                       shirtsFallback={h.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
