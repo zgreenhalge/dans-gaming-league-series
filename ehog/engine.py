@@ -126,14 +126,9 @@ def predict_win(
 # SCORE / SEASON HELPERS  (mirrors of src/lib/util.ts)
 # ---------------------------------------------------------------------------
 
-_PLAYED_SCORE_RE = re.compile(r"^\s*0\s*[-–]\s*0\s*$")
-
-
 def is_played_score(final_score: str | None) -> bool:
-    """Port of isPlayedScore(). False for None, empty, "0-0", or "0 – 0"."""
-    if not final_score:
-        return False
-    return _PLAYED_SCORE_RE.match(final_score) is None
+    """Port of isPlayedScore(): a match is played once it has a final_score."""
+    return bool(final_score)
 
 
 def extract_season_number(name: str) -> int | None:

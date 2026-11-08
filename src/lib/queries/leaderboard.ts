@@ -554,7 +554,7 @@ export function buildSeasonForm(
  * One paginated `player_match_stats` read
  * with the match and its week embedded: the embedded `weeks.season_id` filter scopes it to the
  * season, so no week or match id list is fetched first. Played-ness (`isPlayedScore()`) is applied
- * after the read, the same predicate every other played check uses.
+ * after the read.
  */
 export const getSeasonForm = persistentQuery('getSeasonForm', async (seasonId: number): Promise<Map<number, boolean[]>> => {
   type FormRow = {

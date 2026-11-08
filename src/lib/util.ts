@@ -32,7 +32,7 @@ export function isServerOff(server: { on: boolean; booting: boolean } | null | u
  * `null` score: schedules and gauntlet pods create matches unscored, and `writeMatchScore()` sets
  * the score only when a result is recorded (and refuses a 0-0 one).
  */
-export function isPlayedScore(finalScore: string | null | undefined): boolean {
+export function isPlayedScore(finalScore: string | null | undefined): finalScore is string {
   return !!finalScore;
 }
 
