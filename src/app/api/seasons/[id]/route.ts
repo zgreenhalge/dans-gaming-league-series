@@ -8,8 +8,8 @@ import { accessDenied } from '@/lib/access-control';
 
 /**
  * Deletes an UPCOMING regular season outright. UPCOMING is the one stage a season has no schedule or
- * results yet — nothing in this app ever writes `weeks` rows for a season before it goes live (that
- * only happens through the historical CSV ingestion pipeline), so there's nothing to lose. Refuses
+ * results yet — nothing in this app ever writes `weeks` rows for a season before it goes live, so
+ * there's nothing to lose. Refuses
  * anything else: gauntlet seasons are never UPCOMING (born ACTIVE) and have their own reset route
  * (`DELETE /api/seasons/[id]/gauntlet`); ACTIVE/ARCHIVED seasons always carry real history, with no
  * force override here.

@@ -11,7 +11,7 @@
     "api/ehog/recompute.py": {
       "runtime": "@vercel/python@6.45.0",
       "includeFiles": "ehog/**",
-      "excludeFiles": "{src/**,public/**,docs/**,e2e/**,ingestion/**,supabase/**,scripts/**,infra/**,node_modules/**,.next/**}"
+      "excludeFiles": "{src/**,public/**,docs/**,e2e/**,supabase/**,scripts/**,infra/**,node_modules/**,.next/**}"
     }
   }
 }
