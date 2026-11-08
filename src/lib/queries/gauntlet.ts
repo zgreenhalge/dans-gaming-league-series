@@ -66,56 +66,33 @@ function aggToRow(
 }
 
 /**
- * Aggregates stats from all gauntlet seasons (is_gauntlet = true), scoped through their weeks.
- * The leaderboard view excludes `is_playoff_game` matches, which every gauntlet match is, so we
- * compute directly from player_match_stats.
+ * Aggregates stats from all gauntlet seasons (is_gauntlet = true), over their played matches from
+ * `resolveAllMatches()`. The leaderboard view excludes `is_playoff_game` matches, which every
+ * gauntlet match is, so we compute directly from player_match_stats.
  * Persisted by `persistentQuery()`, so every page reading it shares one read per data version.
  */
 export const getGauntletStats = persistentQuery('getGauntletStats', async (): Promise<{
   career: LeaderboardRowWithId[];
   bySeason: Record<number, LeaderboardRowWithId[]>;
 }> => {
-  const { data: gauntletSeasons, error: gsErr } = await getAdminClient()
-    .from('seasons')
-    .select('id')
-    .eq('is_gauntlet', true);
+  const [{ data: gauntletSeasons, error: gsErr }, allMatches] = await Promise.all([
+    getAdminClient().from('seasons').select('id').eq('is_gauntlet', true),
+    resolveAllMatches(),
+  ]);
   if (gsErr) throw gsErr;
-  if (!gauntletSeasons || gauntletSeasons.length === 0)
-    return { career: [], bySeason: {} };
+  const gauntletSeasonIds = new Set(((gauntletSeasons ?? []) as { id: number }[]).map((s) => s.id));
 
-  const gauntletSeasonIds = (gauntletSeasons as { id: number }[]).map(
-    (s) => s.id,
-  );
-
-  const weekLookup = await getWeekLookup(gauntletSeasonIds);
-  if (weekLookup.size === 0) return { career: [], bySeason: {} };
-
-  const { data: matches, error: mErr } = await getAdminClient()
-    .from('matches')
-    .select('id, week_id, final_score')
-    .in(
-      'week_id',
-      [...weekLookup.keys()],
-    );
-  if (mErr) throw mErr;
-  if (!matches || matches.length === 0) return { career: [], bySeason: {} };
-
-  const matchRows = (matches as { id: number; week_id: number; final_score: string | null }[])
-    .filter((m) => isPlayedScore(m.final_score));
   const matchToSeason = new Map<number, number>();
-  for (const m of matchRows) {
-    const sid = weekLookup.get(m.week_id)?.season_id;
-    if (sid != null) matchToSeason.set(m.id, sid);
+  for (const m of allMatches) {
+    if (m.played && gauntletSeasonIds.has(m.season_id)) matchToSeason.set(m.id, m.season_id);
   }
+  if (matchToSeason.size === 0) return { career: [], bySeason: {} };
 
   const [{ data: stats, error: sErr }, players] = await Promise.all([
     getAdminClient()
       .from('player_match_stats')
       .select('*')
-      .in(
-        'match_id',
-        matchRows.map((m) => m.id),
-      ),
+      .in('match_id', [...matchToSeason.keys()]),
     getPlayersById(),
   ]);
   if (sErr) throw sErr;
