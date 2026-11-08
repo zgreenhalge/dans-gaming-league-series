@@ -33,7 +33,7 @@ export function isServerOff(server: { on: boolean; booting: boolean } | null | u
  * the score only when a result is recorded (and refuses a 0-0 one).
  */
 export function isPlayedScore(finalScore: string | null | undefined): finalScore is string {
-  return !!finalScore;
+  return finalScore != null;
 }
 
 /**

@@ -128,7 +128,7 @@ def predict_win(
 
 def is_played_score(final_score: str | None) -> bool:
     """Port of isPlayedScore(): a match is played once it has a final_score."""
-    return bool(final_score)
+    return final_score is not None
 
 
 def extract_season_number(name: str) -> int | None:

@@ -289,7 +289,6 @@ export async function writeMatchScore(
     statsByPlayerId = toStatsByPlayerId((matchStats ?? []) as { player_id: number; faction: string }[]);
   }
 
-
   const updates: Array<{
     player_id: number;
     kills: number;

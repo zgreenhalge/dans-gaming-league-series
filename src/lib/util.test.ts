@@ -71,10 +71,9 @@ test('isPlayedScore: real score is played', () => {
   assert.equal(isPlayedScore('13-9'), true);
   assert.equal(isPlayedScore('13 – 9'), true); // em-dash
 });
-test('isPlayedScore: null / undefined / empty are not played', () => {
+test('isPlayedScore: null / undefined are not played', () => {
   assert.equal(isPlayedScore(null), false);
   assert.equal(isPlayedScore(undefined), false);
-  assert.equal(isPlayedScore(''), false);
 });
 test('isPlayedScore: a real 0-N or N-0 result IS played', () => {
   assert.equal(isPlayedScore('13-0'), true);

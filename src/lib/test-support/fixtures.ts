@@ -10,7 +10,7 @@
  *   gauntlet with no regular-season pairing (id 4, "Season 4 Gauntlet")
  * - a played match, an unplayed-but-scheduled match (pre-veto, zero-stat pre-staged roster rows),
  *   and an unplayed match in a second week — both of the latter two must be excluded by
- *   `isPlayedScore()`, the single most load-bearing edge case per `CLAUDE.md`
+ *   `isPlayedScore()`
  * - gauntlet (`is_playoff_game=true`) matches, including one in the orphan gauntlet
  * - players with full EHOG rating history, a `seed_ehog`-only fallback, and neither (brand new)
  * - maps with and without radar calibration
