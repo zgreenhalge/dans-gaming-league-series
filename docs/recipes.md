@@ -126,8 +126,8 @@ in.
    `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs or compare
    `extractSeasonNumber()` results inline (see
    [`glossary.md`](./glossary.md)).
-7. Gate "did this match actually happen" on `isPlayedScore(m.final_score)`, not `final_score !=
-   null` — Season 3 has `"0-0"` placeholder rows.
+7. Gate "did this match actually happen" on `isPlayedScore(m.final_score)` — the one played-match
+   predicate, so every read agrees on it.
 8. **If a helper needs something from another domain file** (e.g. `trophies.ts` calling
    `getSeasons()` from `seasons.ts`), import it directly (`import { getSeasons } from './seasons'`)
    — don't duplicate the query. Check the existing cross-file imports in the target file first;
