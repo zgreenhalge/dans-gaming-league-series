@@ -93,13 +93,22 @@ test('no lobby before anyone checks in — only a signed-in viewer\'s own Check 
   assert.equal(buildScrimNightPageModel(night({ checkInOpen: false }), PLAYER(1)).checkInOnlyFor, null);
 });
 
+test('tabs: only those with something to show — an upcoming night with nothing played has none', () => {
+  const order = (n: ScrimNightView, advanced = false) => scrimNightTabOrder(n, buildScrimNightPageModel(n, PLAYER(1)), advanced);
+  assert.deepEqual(order(night({ checkInOpen: false, started: false })), []);
+  assert.deepEqual(order(night({ current: false, checkInOpen: false })), [], 'an ended night with no matches');
+  assert.deepEqual(order(night()), ['lobby'], 'a lobby with no match started yet');
+  assert.deepEqual(order(night({ matches: [match(1, null, null)] })), ['lobby'], 'an unstarted lobby match is not listed');
+  assert.deepEqual(order(night({ matches: [match(1, null, 'live')] })), ['lobby', 'matches']);
+});
+
 test('tabs: a lobby leads with the standings under it; an ended night leads with Leaderboard', () => {
   const order = (n: ScrimNightView, advanced = false) => scrimNightTabOrder(n, buildScrimNightPageModel(n, PLAYER(1)), advanced);
-  assert.deepEqual(order(night()), ['lobby', 'matches']);
-  assert.deepEqual(order(night({ leaderboard: standings }), true), ['lobby', 'matches', 'stats', 'advanced']);
-  const ended = night({ current: false, checkInOpen: false, leaderboard: standings, h2h: { ...NO_H2H, duos: [{} as H2HData['duos'][number]] } });
+  const played = [match(1, '13-9', 'done')];
+  assert.deepEqual(order(night({ matches: played, leaderboard: standings }), true), ['lobby', 'matches', 'stats', 'advanced']);
+  const ended = night({ current: false, checkInOpen: false, matches: played, leaderboard: standings, h2h: { ...NO_H2H, duos: [{} as H2HData['duos'][number]] } });
   assert.deepEqual(order(ended), ['leaderboard', 'matches', 'stats', 'h2h']);
-  assert.deepEqual(order(night({ checkInOpen: false })), ['matches', 'leaderboard']);
+  assert.deepEqual(order(night({ checkInOpen: false, matches: played, leaderboard: standings })), ['matches', 'leaderboard', 'stats'], 'a running night with nobody checked in');
 });
 
 report();

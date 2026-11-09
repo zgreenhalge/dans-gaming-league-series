@@ -166,11 +166,14 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
             whichever tab is showing. */}
         {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
 
-        <Suspense>
-          <UrlStateProvider>
-            <ScrimNightTabs tabs={tabs} />
-          </UrlStateProvider>
-        </Suspense>
+        {/* A night with nothing played or running yet has no tabs: the signup panel above is all of it. */}
+        {tabs.length > 0 && (
+          <Suspense>
+            <UrlStateProvider>
+              <ScrimNightTabs tabs={tabs} />
+            </UrlStateProvider>
+          </Suspense>
+        )}
       </main>
     </div>
   );

@@ -3,7 +3,7 @@
 // night and renders what this returns, so the rules are testable without rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
-import { scrimMatchNeedsServer } from './scrim-matches';
+import { isScrimMatchListed, scrimMatchNeedsServer } from './scrim-matches';
 import { SCRIM_MATCH_SIZE } from './scrim-schedule';
 import { isPlayedScore } from './util';
 
@@ -63,17 +63,19 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
   };
 }
 
-/** The page's tabs in display order — only those with something to show; the page opens on the first.
- *  With a lobby, the standings sit under it condensed rather than in a tab of their own; once the night
- *  is over (and there's no lobby), the standings are the headline, so they lead. */
+/** The page's tabs in display order — only those with something to show (`docs/patterns.md`, "Gate a
+ *  tab on data"), so a night with nothing played yet has none; the page opens on the first. Matches
+ *  shows once a match has started (`isScrimMatchListed()`), Leaderboard once there are standings. With
+ *  a lobby, the standings sit under it condensed rather than in a tab of their own; once the night is
+ *  over (and there's no lobby), they are the headline, so they lead. */
 export function scrimNightTabOrder(night: ScrimNightView, model: ScrimNightPageModel, hasAdvancedStats: boolean): ScrimNightTab[] {
   const hasStandings = night.leaderboard.length > 0;
   const leaderboardFirst = !night.current && !model.hasLobby && hasStandings;
   const tabs: ScrimNightTab[] = [];
   if (model.hasLobby) tabs.push('lobby');
   if (leaderboardFirst) tabs.push('leaderboard');
-  tabs.push('matches');
-  if (!model.hasLobby && !leaderboardFirst) tabs.push('leaderboard');
+  if (night.matches.some(isScrimMatchListed)) tabs.push('matches');
+  if (hasStandings && !model.hasLobby && !leaderboardFirst) tabs.push('leaderboard');
   if (hasStandings) tabs.push('stats');
   if (hasAdvancedStats) tabs.push('advanced');
   if (night.h2h.duos.length > 0 || night.h2h.rivals.length > 0) tabs.push('h2h');

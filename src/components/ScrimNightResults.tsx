@@ -5,7 +5,7 @@ import { MatchCard } from './MatchCard';
 import { matchCardRight } from '@/lib/match-card';
 import { playerHref, scrimMatchHref } from '@/lib/crumbs';
 import { formatStat } from '@/lib/util';
-import { isScrimMatchEditable, scrimMatchNeedsServer, scrimTeamLabel } from '@/lib/scrim-matches';
+import { isScrimMatchListed, scrimMatchNeedsServer, scrimTeamLabel } from '@/lib/scrim-matches';
 import type { ScrimLeaderboardRow, ScrimMatch } from '@/lib/queries';
 
 /** A scrim night's standings: every player who played a scored match, ranked Wins → RWR% → ADR
@@ -53,8 +53,9 @@ export function ScrimNightMatchList({
   names: Record<number, string>;
   currentPlayerId: number | null;
 }) {
-  const live = matches.filter((m) => scrimMatchNeedsServer(m) && !isScrimMatchEditable(m));
-  const shown = [...live, ...matches.filter((m) => !scrimMatchNeedsServer(m)).reverse()];
+  // The match on the server now leads; the rest follow newest first.
+  const listed = matches.filter(isScrimMatchListed);
+  const shown = [...listed.filter(scrimMatchNeedsServer), ...listed.filter((m) => !scrimMatchNeedsServer(m)).reverse()];
   if (shown.length === 0) return <EmptyState message="No matches played yet." className="py-2" />;
   const statsFor = (m: ScrimMatch, faction: 'SHIRTS' | 'SKINS') =>
     m.players.filter((p) => p.faction === faction).map((p) => ({ ...p, player_name: names[p.player_id] ?? `#${p.player_id}` }));
