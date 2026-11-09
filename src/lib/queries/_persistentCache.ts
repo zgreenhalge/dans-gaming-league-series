@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { getAdminClient } from '../supabase-admin';
+import { isDevFallbackClient } from '../dev-fallback-supabase';
 
 // The persistent read cache. A `persistentQuery()` read is stored in Next's data cache, which outlives
 // a single request, under a key that includes `data_version.version` (see
@@ -22,10 +23,13 @@ let lastVersionError: string | undefined;
  * (during a render; a route handler has no render scope, so each read there fetches the version
  * itself and sees the writes the handler already made). `null` when the version can't be read — the
  * `data_version` migration isn't applied, or the read failed: reads then go straight to the database,
- * the always-fresh direction, and the failure is logged (once per distinct message).
+ * the always-fresh direction, and the failure is logged (once per distinct message). Also `null`,
+ * without a log, on the in-memory fixture client, whose data has no version.
  */
 const getDataVersion = cache(async (): Promise<number | null> => {
-  const { data, error } = await getAdminClient().from('data_version').select('version').eq('id', 1).single();
+  const client = getAdminClient();
+  if (isDevFallbackClient(client)) return null;
+  const { data, error } = await client.from('data_version').select('version').eq('id', 1).single();
   const failure = error ? error.message : data ? null : 'no row';
   if (failure === null) return Number(data!.version);
   if (failure !== lastVersionError) {
@@ -98,7 +102,14 @@ export function persistentQuery<A extends unknown[], R>(
     const read = unstable_cache(async (...a: A) => encodeCacheValue(await fn(...a)), [name, String(version)], {
       revalidate: CACHE_TTL_SECONDS,
     });
-    return decodeCacheValue<R>(await read(...args));
+    const encoded: unknown = await read(...args);
+    // The data cache can resolve no entry at all instead of a value. That is a cache miss: read
+    // straight from the database.
+    if (typeof encoded !== 'string') {
+      console.error(`persistent cache returned no entry for "${name}"; reading uncached`);
+      return fn(...args);
+    }
+    return decodeCacheValue<R>(encoded);
   });
   // Trailing `undefined` arguments are dropped before `memo`, so `getSeasons()` and
   // `getSeasons(undefined)` (a forwarded optional `client`) are one call to React's `cache()` and to
