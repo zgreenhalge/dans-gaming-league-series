@@ -58,6 +58,7 @@ import {
   roundTo,
   signedColor,
   includesSeasonKind,
+  seasonSelectionPredicate,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
 import { mapSlug } from './maps';
@@ -73,6 +74,28 @@ test('includesSeasonKind: regular rows follow includeRegular, gauntlet rows foll
   assert.equal(includesSeasonKind(false, false, true), false);
   assert.equal(includesSeasonKind(true, false, true), true);
   assert.equal(includesSeasonKind(true, true, false), false);
+});
+
+// --- seasonSelectionPredicate: selected season or its paired gauntlet, then the include flags ---
+test('seasonSelectionPredicate: a season selection covers that season and its paired gauntlet', () => {
+  const pairs = new Map([[3, 16]]);
+  const inSeason3 = seasonSelectionPredicate(3, pairs, true, true);
+  assert.equal(inSeason3(3, false), true);
+  assert.equal(inSeason3(16, true), true);
+  assert.equal(inSeason3(2, false), false);
+  assert.equal(inSeason3(7, true), false);
+});
+test('seasonSelectionPredicate: the include flags still apply inside the selection', () => {
+  const pairs = new Map([[3, 16]]);
+  assert.equal(seasonSelectionPredicate(3, pairs, true, false)(16, true), false);
+  assert.equal(seasonSelectionPredicate(3, pairs, false, true)(3, false), false);
+  assert.equal(seasonSelectionPredicate('all', pairs, false, true)(7, true), true);
+  assert.equal(seasonSelectionPredicate('all', pairs, false, true)(2, false), false);
+});
+test('seasonSelectionPredicate: a season with no paired gauntlet covers only itself', () => {
+  const inSeason4 = seasonSelectionPredicate(4, new Map([[3, 16]]), true, true);
+  assert.equal(inSeason4(4, false), true);
+  assert.equal(inSeason4(16, true), false);
 });
 
 // --- isPlayedScore: a match is played once it has a final_score ---

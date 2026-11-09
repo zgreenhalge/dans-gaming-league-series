@@ -144,11 +144,7 @@ export function SeasonFilter({
 
   const visibleSeasons = useMemo(
     () =>
-      seasons?.filter((s) => {
-        if (!includeRegular && !s.is_gauntlet) return false;
-        if (!includeGauntlet && s.is_gauntlet) return false;
-        return true;
-      }),
+      seasons?.filter((s) => includesSeasonKind(s.is_gauntlet, includeRegular, includeGauntlet)),
     [seasons, includeRegular, includeGauntlet],
   );
 

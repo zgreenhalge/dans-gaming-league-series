@@ -7,7 +7,7 @@ import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { adrBaselineFor, type PlayerSeasonAdrTotal } from '@/lib/h2h';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonSelectionPredicate, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import DevGate from './DevGate';
@@ -179,11 +179,9 @@ export default function PlayerView({
   // The season selection as a predicate, shared by every per-row filter on this page so they all
   // cover the same seasons.
   const inSeasonSelection = useMemo(() => {
-    const pairedGntId = selectedSeason === 'all' ? undefined : regularToGauntlet.get(selectedSeason);
-    return (r: { season_id: number; is_gauntlet: boolean }) =>
-      (selectedSeason === 'all' || r.season_id === selectedSeason || (pairedGntId != null && r.season_id === pairedGntId))
-      && includesKind(r.is_gauntlet);
-  }, [selectedSeason, includesKind, regularToGauntlet]);
+    const inSelection = seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet);
+    return (r: { season_id: number; is_gauntlet: boolean }) => inSelection(r.season_id, r.is_gauntlet);
+  }, [selectedSeason, regularToGauntlet, includeRegular, includeGauntlet]);
 
   const filtered = useMemo(() => history.filter(inSeasonSelection), [history, inSeasonSelection]);
 
@@ -400,12 +398,8 @@ export default function PlayerView({
                 firstColMode="season"
                 stickyNameCol={false}
                 rows={activeSeasons.map((s): LeaderboardRowWithId => {
-                  const pairedGntId = regularToGauntlet.get(s.id);
-                  const seasonRows = history.filter((r) => {
-                    if (r.season_id === s.id) return includesKind(r.is_gauntlet);
-                    if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
-                    return false;
-                  });
+                  const inSeason = seasonSelectionPredicate(s.id, regularToGauntlet, includeRegular, includeGauntlet);
+                  const seasonRows = history.filter((r) => inSeason(r.season_id, r.is_gauntlet));
                   const a = aggregatePlayerStats(seasonRows);
                   return {
                     season_id: s.id,

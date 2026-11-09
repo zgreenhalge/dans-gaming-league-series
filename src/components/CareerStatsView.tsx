@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
@@ -8,7 +8,7 @@ import { useTabState } from './useTabState';
 import CareerDetailTabs from './CareerDetailTabs';
 import ErrorBoundary from './ErrorBoundary';
 import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
-import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, seasonSelectionPredicate, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, EhogSnapshotRow, StatisticsDetail } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
@@ -69,12 +69,9 @@ export default function CareerStatsView({
 
   // Whether a row of `seasonId` is inside the current Regular / Gauntlet / season filter — the one
   // rule the detail tabs filter their per-match rows by.
-  const inSelection = useCallback(
-    (seasonId: number, isGauntlet: boolean) => {
-      if (selectedSeason === 'all' || seasonId === selectedSeason) return includesKind(isGauntlet);
-      return includeGauntlet && seasonId === regularToGauntlet.get(selectedSeason);
-    },
-    [selectedSeason, includesKind, includeGauntlet, regularToGauntlet],
+  const inSelection = useMemo(
+    () => seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet),
+    [selectedSeason, regularToGauntlet, includeRegular, includeGauntlet],
   );
 
   const trophyCounts = useMemo(() => {

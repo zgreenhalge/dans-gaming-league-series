@@ -359,6 +359,24 @@ export function includesSeasonKind(isGauntlet: boolean, includeRegular: boolean,
 }
 
 /**
+ * The season filter as a row predicate: a row of `seasonId` is in when it belongs to `selected` (or
+ * any season, for `'all'`) or to `selected`'s paired gauntlet (`regularToGauntlet`, from
+ * `buildRegularToGauntletMap()`), and its season kind passes the include flags
+ * (`includesSeasonKind()`). Shared by every view that scopes per-row data to a season selection.
+ */
+export function seasonSelectionPredicate(
+  selected: number | 'all',
+  regularToGauntlet: Map<number, number>,
+  includeRegular: boolean,
+  includeGauntlet: boolean,
+): (seasonId: number, isGauntlet: boolean) => boolean {
+  const pairedGntId = selected === 'all' ? undefined : regularToGauntlet.get(selected);
+  return (seasonId, isGauntlet) =>
+    (selected === 'all' || seasonId === selected || seasonId === pairedGntId) &&
+    includesSeasonKind(isGauntlet, includeRegular, includeGauntlet);
+}
+
+/**
  * Concatenates whichever of `regularSeasons`/`gauntletSeasons` the include flags currently admit —
  * the "which seasons are in scope" rule shared by `dedupeVisibleSeasons()` below and
  * `useSeasonFilter()`'s own season-validity clamp (`SeasonFilter.tsx`). Kept undeduplicated (unlike
