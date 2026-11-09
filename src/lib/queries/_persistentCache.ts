@@ -98,7 +98,14 @@ export function persistentQuery<A extends unknown[], R>(
     const read = unstable_cache(async (...a: A) => encodeCacheValue(await fn(...a)), [name, String(version)], {
       revalidate: CACHE_TTL_SECONDS,
     });
-    return decodeCacheValue<R>(await read(...args));
+    const encoded: unknown = await read(...args);
+    // The data cache can resolve no entry at all (a read racing another worker's write of the same
+    // key during a parallel build). That is a cache miss: read straight from the database.
+    if (typeof encoded !== 'string') {
+      console.error(`persistent cache returned no entry for "${name}"; reading uncached`);
+      return fn(...args);
+    }
+    return decodeCacheValue<R>(encoded);
   });
   // Trailing `undefined` arguments are dropped before `memo`, so `getSeasons()` and
   // `getSeasons(undefined)` (a forwarded optional `client`) are one call to React's `cache()` and to

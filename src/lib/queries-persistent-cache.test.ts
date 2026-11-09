@@ -10,10 +10,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const store = new Map<string, unknown>();
+let cacheReturnsNothing = false;
 vi.mock('next/cache', () => ({
   unstable_cache:
     <A extends unknown[], R>(fn: (...a: A) => Promise<R>, keyParts: string[]) =>
     async (...args: A): Promise<R> => {
+      if (cacheReturnsNothing) return undefined as R;
       const key = JSON.stringify([keyParts, args]);
       if (!store.has(key)) store.set(key, await fn(...args));
       return store.get(key) as R;
@@ -31,6 +33,7 @@ const db: FakeDb = { data_version: [{ id: 1, version: 1 }] };
 
 beforeEach(() => {
   store.clear();
+  cacheReturnsNothing = false;
   db.data_version = [{ id: 1, version: 1 }];
   __setTestAdminClient(createFakeSupabaseClient(db));
   vi.stubEnv('NEXT_RUNTIME', 'nodejs');
@@ -101,6 +104,16 @@ describe('persistentQuery', () => {
     await persistentQuery('bypass', read)();
     expect(read).toHaveBeenCalledTimes(1);
     expect(store.size).toBe(0);
+  });
+
+  test('a data cache that returns no entry reads straight from the database and logs', async () => {
+    cacheReturnsNothing = true;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const read = vi.fn(async () => ({ ok: true }));
+    expect(await persistentQuery('empty', read)()).toEqual({ ok: true });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   test.each([
