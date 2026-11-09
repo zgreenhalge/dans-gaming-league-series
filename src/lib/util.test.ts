@@ -57,6 +57,9 @@ import {
   formatRatio,
   roundTo,
   signedColor,
+  includesSeasonKind,
+  seasonSelectionPredicate,
+  pairedSeasonId,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
 import { mapSlug } from './maps';
@@ -65,6 +68,48 @@ import { test, report } from './test-support/miniTest';
 function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-9, msg ?? `expected ~${expected}, got ${actual}`);
 }
+
+// --- includesSeasonKind: a row passes when its season kind's include flag is on ---
+test('includesSeasonKind: regular rows follow includeRegular, gauntlet rows follow includeGauntlet', () => {
+  assert.equal(includesSeasonKind(false, true, false), true);
+  assert.equal(includesSeasonKind(false, false, true), false);
+  assert.equal(includesSeasonKind(true, false, true), true);
+  assert.equal(includesSeasonKind(true, true, false), false);
+});
+
+// --- seasonSelectionPredicate: selected season or its paired gauntlet, then the include flags ---
+test('seasonSelectionPredicate: a season selection covers that season and its paired gauntlet', () => {
+  const pairs = new Map([[3, 16]]);
+  const inSeason3 = seasonSelectionPredicate(3, pairs, true, true);
+  assert.equal(inSeason3(3, false), true);
+  assert.equal(inSeason3(16, true), true);
+  assert.equal(inSeason3(2, false), false);
+  assert.equal(inSeason3(7, true), false);
+});
+test('seasonSelectionPredicate: the include flags still apply inside the selection', () => {
+  const pairs = new Map([[3, 16]]);
+  assert.equal(seasonSelectionPredicate(3, pairs, true, false)(16, true), false);
+  assert.equal(seasonSelectionPredicate(3, pairs, false, true)(3, false), false);
+  assert.equal(seasonSelectionPredicate('all', pairs, false, true)(7, true), true);
+  assert.equal(seasonSelectionPredicate('all', pairs, false, true)(2, false), false);
+});
+test('seasonSelectionPredicate: selecting the gauntlet of a pair covers its regular season too', () => {
+  const inGauntlet16 = seasonSelectionPredicate(16, new Map([[3, 16]]), true, true);
+  assert.equal(inGauntlet16(16, true), true);
+  assert.equal(inGauntlet16(3, false), true);
+  assert.equal(seasonSelectionPredicate(16, new Map([[3, 16]]), false, true)(3, false), false);
+});
+test('pairedSeasonId: reads the regular+gauntlet pair in either direction', () => {
+  const pairs = new Map([[3, 16]]);
+  assert.equal(pairedSeasonId(3, pairs), 16);
+  assert.equal(pairedSeasonId(16, pairs), 3);
+  assert.equal(pairedSeasonId(4, pairs), undefined);
+});
+test('seasonSelectionPredicate: a season with no paired gauntlet covers only itself', () => {
+  const inSeason4 = seasonSelectionPredicate(4, new Map([[3, 16]]), true, true);
+  assert.equal(inSeason4(4, false), true);
+  assert.equal(inSeason4(16, true), false);
+});
 
 // --- isPlayedScore: a match is played once it has a final_score ---
 test('isPlayedScore: real score is played', () => {

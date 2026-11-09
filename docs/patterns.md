@@ -175,6 +175,24 @@ season filters, the hover/lift classes, the responsive-table treatment — preci
 for the visual primitives. When you genuinely need something new, ask whether it's a new *shape* or
 just a new *parameter* (color, count) of an existing primitive — usually it's the latter.
 
+## A small performance gain is not, by itself, a reason to drop it
+
+"The gain is marginal" can't be the sole reason to skip or discard a performance change, such as
+running two independent awaits together or dropping a round trip. A small saving still lands on
+every page that reaches it, and chains of helpers calling helpers compound it. The change still
+has to earn its place on every other count: it has to be as clear, simple and correct as the code
+it replaces (see the design heuristics above). A gain that needs obtuse code, a clever abstraction
+or a speculative read is declined for that reason, not for its size.
+
+- **Independent reads go in one `Promise.all`,** with `error` checked once, immediately after (see
+  [`recipes.md`](./recipes.md)'s query-helper recipe). `batchedIn()`'s chunks already run this way.
+- **Start a read before awaiting something it doesn't need.** When one step must wait on an earlier
+  result (a season's name before `getLinkedGauntlet()`), whatever doesn't need that result can start
+  alongside it. `matchIdsForSeasons()` (`queries/_shared.ts`) accepts its season ids as a promise
+  for this, so a caller still working out which seasons it wants doesn't hold up the match read.
+- **Truly dependent steps stay sequential.** Don't fire reads whose results may be thrown away just
+  to look parallel.
+
 ## Gate a tab on data, not "always render it"
 
 A tab or sub-tab (`TabBar`/`tabCls` navigation) shouldn't render for a viewer who can only ever see

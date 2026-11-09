@@ -7,14 +7,14 @@ import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod } from '../stage-types';
 import { getPlayersById } from './player';
-import { getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
+import { batchedIn, getWeekLookup, weekRowsFromLookup, resolveAllMatches, resolveMatchSeasons } from './_shared';
 import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics } from './sabremetrics';
 import { getAllMatchRounds } from './rounds';
 import { getAllMatchKills } from './kills';
 import { getAllWeaponClassStats, getAllEconomyStats } from './weaponStats';
-import type { SeasonStatsView } from './seasons';
+import { getSeasons, type SeasonStatsView } from './seasons';
 import { persistentQuery } from './_persistentCache';
 
 export type { GauntletPlayerStat, GauntletMatch, GauntletRound, BracketSlot, BracketPod };
@@ -66,59 +66,29 @@ function aggToRow(
 }
 
 /**
- * Aggregates stats from all gauntlet seasons (is_gauntlet = true), scoped through their weeks.
- * The leaderboard view excludes `is_playoff_game` matches, which every gauntlet match is, so we
- * compute directly from player_match_stats.
+ * Aggregates stats from all gauntlet seasons (is_gauntlet = true), over their played matches from
+ * `resolveMatchSeasons()`. The leaderboard view excludes `is_playoff_game` matches, which every
+ * gauntlet match is, so we compute directly from player_match_stats.
  * Persisted by `persistentQuery()`, so every page reading it shares one read per data version.
  */
 export const getGauntletStats = persistentQuery('getGauntletStats', async (): Promise<{
   career: LeaderboardRowWithId[];
   bySeason: Record<number, LeaderboardRowWithId[]>;
 }> => {
-  const { data: gauntletSeasons, error: gsErr } = await getAdminClient()
-    .from('seasons')
-    .select('id')
-    .eq('is_gauntlet', true);
-  if (gsErr) throw gsErr;
-  if (!gauntletSeasons || gauntletSeasons.length === 0)
-    return { career: [], bySeason: {} };
+  const [seasons, playedMatchSeasons] = await Promise.all([getSeasons(), resolveMatchSeasons()]);
+  const gauntletSeasonIds = new Set(seasons.filter((s) => s.is_gauntlet).map((s) => s.id));
 
-  const gauntletSeasonIds = (gauntletSeasons as { id: number }[]).map(
-    (s) => s.id,
-  );
-
-  const weekLookup = await getWeekLookup(gauntletSeasonIds);
-  if (weekLookup.size === 0) return { career: [], bySeason: {} };
-
-  const { data: matches, error: mErr } = await getAdminClient()
-    .from('matches')
-    .select('id, week_id, final_score')
-    .in(
-      'week_id',
-      [...weekLookup.keys()],
-    );
-  if (mErr) throw mErr;
-  if (!matches || matches.length === 0) return { career: [], bySeason: {} };
-
-  const matchRows = (matches as { id: number; week_id: number; final_score: string | null }[])
-    .filter((m) => isPlayedScore(m.final_score));
   const matchToSeason = new Map<number, number>();
-  for (const m of matchRows) {
-    const sid = weekLookup.get(m.week_id)?.season_id;
-    if (sid != null) matchToSeason.set(m.id, sid);
+  for (const [matchId, sid] of playedMatchSeasons) {
+    if (gauntletSeasonIds.has(sid)) matchToSeason.set(matchId, sid);
   }
+  if (matchToSeason.size === 0) return { career: [], bySeason: {} };
 
-  const [{ data: stats, error: sErr }, players] = await Promise.all([
-    getAdminClient()
-      .from('player_match_stats')
-      .select('*')
-      .in(
-        'match_id',
-        matchRows.map((m) => m.id),
-      ),
+  // Every played gauntlet match across all seasons — a list that only grows, so it's batched.
+  const [stats, players] = await Promise.all([
+    batchedIn<PlayerMatchStat>('player_match_stats', 'match_id', [...matchToSeason.keys()], '*'),
     getPlayersById(),
   ]);
-  if (sErr) throw sErr;
 
   type Agg = {
     player_id: number;
@@ -140,7 +110,7 @@ export const getGauntletStats = persistentQuery('getGauntletStats', async (): Pr
 
   const bySeasonPlayer = new Map<string, Agg>();
 
-  for (const s of (stats ?? []) as PlayerMatchStat[]) {
+  for (const s of stats) {
     const sid = matchToSeason.get(s.match_id);
     if (sid == null) continue;
     const player = players.get(s.player_id);

@@ -2,10 +2,10 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import type { Player, Season } from '../types';
-import { allMatchesPlayed, extractSeasonNumber, findPairedSeason, isPlayedScore } from '../util';
+import { allMatchesPlayed, extractSeasonNumber, findPairedSeason } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { batchedIn } from './_shared';
+import { batchedIn, matchIdsForSeasons, resolveAllMatches } from './_shared';
 import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics, type SabremetricMatchRow } from './sabremetrics';
@@ -198,7 +198,7 @@ export const getPlayerRosterSeasonIds = persistentQuery('getPlayerRosterSeasonId
 });
 
 /** Everyone currently part of a season, unioning `season_players` with anyone who already has a
- *  scheduled or played match under it (`weeks` → `matches` → `player_match_stats`). `season_players`
+ *  scheduled or played match under it (`resolveAllMatches()` → `player_match_stats`). `season_players`
  *  alone is the pre-schedule signup list; once a schedule exists, a season's real participants are
  *  whoever it actually rostered into matches — which for a season imported or scheduled without ever
  *  writing `season_players` rows (e.g. a historically-imported season) is the *only* place that
@@ -207,56 +207,44 @@ export const getPlayerRosterSeasonIds = persistentQuery('getPlayerRosterSeasonId
  *  (`discord-roles.ts`, `season-lifecycle.ts`), not `getSeasonRoster()`'s own callers (the roster
  *  editor, schedule generation), which specifically want the raw pre-schedule signup list. */
 export async function getSeasonParticipants(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
-  const [roster, resolvedPlayersById, { data: weekRows, error: weekErr }] = await Promise.all([
+  const [roster, resolvedPlayersById, allMatches] = await Promise.all([
     getSeasonRoster(seasonId),
     playersById ?? getPlayersById(),
-    getAdminClient().from('weeks').select('id').eq('season_id', seasonId),
+    resolveAllMatches(),
   ]);
-  if (weekErr) throw weekErr;
 
   const byId = new Map(roster.map((r) => [r.player_id, r]));
-  const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
-  if (weekIds.length > 0) {
-    const { data: matchRows, error: matchErr } = await getAdminClient().from('matches').select('id').in('week_id', weekIds);
-    if (matchErr) throw matchErr;
-    const matchIds = ((matchRows ?? []) as { id: number }[]).map((m) => m.id);
-    if (matchIds.length > 0) {
-      const { data: statRows, error: statErr } = await getAdminClient().from('player_match_stats').select('player_id').in('match_id', matchIds);
-      if (statErr) throw statErr;
-      for (const { player_id } of (statRows ?? []) as { player_id: number }[]) {
-        if (byId.has(player_id)) continue;
-        const player = resolvedPlayersById.get(player_id);
-        if (!player) continue;
-        byId.set(player_id, {
-          player_id,
-          player_name: player.name,
-          steam_avatar_url: player.steam_avatar_url,
-          discord_id: player.discord_id,
-        });
-      }
+  const matchIds = allMatches.filter((m) => m.season_id === seasonId).map((m) => m.id);
+  if (matchIds.length > 0) {
+    const statRows = await batchedIn<{ player_id: number }>('player_match_stats', 'match_id', matchIds, 'player_id');
+    for (const { player_id } of statRows) {
+      if (byId.has(player_id)) continue;
+      const player = resolvedPlayersById.get(player_id);
+      if (!player) continue;
+      byId.set(player_id, {
+        player_id,
+        player_name: player.name,
+        steam_avatar_url: player.steam_avatar_url,
+        discord_id: player.discord_id,
+      });
     }
   }
   return [...byId.values()].sort((a, b) => a.player_name.localeCompare(b.player_name));
 }
 
-/** Ids of the players who played in a regular season — on a match with a played score, in the season
- *  itself or its paired gauntlet. `cache()`-wrapped on `seasonId` alone (the weeks → matches → stats
- *  walk is the expensive part) so every caller in one request shares it. */
-const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[]> => {
+/** `seasonId` plus its paired gauntlet's id when it has one; empty for an unknown season. */
+async function seasonAndPairedGauntletIds(seasonId: number): Promise<number[]> {
   const season = await getSeason(seasonId);
   if (!season) return [];
   const gauntlet = season.is_gauntlet ? null : await getLinkedGauntlet(season.name);
+  return [seasonId, ...(gauntlet ? [gauntlet.id] : [])];
+}
 
-  const { data: weekRows, error: weekErr } = await getAdminClient()
-    .from('weeks')
-    .select('id')
-    .in('season_id', [seasonId, ...(gauntlet ? [gauntlet.id] : [])]);
-  if (weekErr) throw weekErr;
-
-  const weekIds = (weekRows ?? []).map((w) => w.id);
-  if (weekIds.length === 0) return [];
-  const matchRows = await batchedIn<{ id: number; final_score: string | null }>('matches', 'week_id', weekIds, 'id, final_score');
-  const playedMatchIds = matchRows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
+/** Ids of the players who played in a regular season — on a match with a played score, in the season
+ *  itself or its paired gauntlet (`matchIdsForSeasons()`). `cache()`-wrapped on `seasonId` alone so
+ *  every caller in one request shares the stats read. */
+const getSeasonPlayedPlayerIds = cache(async (seasonId: number): Promise<number[]> => {
+  const playedMatchIds = await matchIdsForSeasons(seasonAndPairedGauntletIds(seasonId));
   if (playedMatchIds.length === 0) return [];
   const statRows = await batchedIn<{ player_id: number }>('player_match_stats', 'match_id', playedMatchIds, 'player_id');
   return [...new Set(statRows.map((r) => r.player_id))];

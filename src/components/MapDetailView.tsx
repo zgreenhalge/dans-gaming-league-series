@@ -124,20 +124,17 @@ export default function MapDetailView({
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [detail.matches]);
 
-  // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
-  // single flagged list `SeasonFilter`'s own dropdown takes.
+  // Split for `useSeasonFilter` — its validity check and season pairing need regular/gauntlet apart,
+  // not the single flagged list `SeasonFilter`'s own dropdown takes.
   const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(uniqueSeasons), [uniqueSeasons]);
 
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, inSelection, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
 
-  const filteredMatches = useMemo<MapMatchRow[]>(() => {
-    return detail.matches.filter((m) => {
-      if (selectedSeason !== 'all' && m.season_id !== selectedSeason) return false;
-      if (m.is_gauntlet) return includeGauntlet;
-      return includeRegular;
-    });
-  }, [detail.matches, includeRegular, includeGauntlet, selectedSeason]);
+  const filteredMatches = useMemo<MapMatchRow[]>(
+    () => detail.matches.filter((m) => inSelection(m.season_id, m.is_gauntlet)),
+    [detail.matches, inSelection],
+  );
 
   const filteredPlayerStats = useMemo(
     () => aggregatePlayerStats(filteredMatches),
