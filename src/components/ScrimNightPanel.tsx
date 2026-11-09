@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ErrorText from './ErrorText';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { LocalTime } from './LocalTime';
 import { CountdownTimer } from './CountdownTimer';
 import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPlayerRow';
@@ -51,7 +52,8 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
  *  out. Checking in is the lobby's (`ScrimLobbyPanel`). Admins can do all of it for any player, and
  *  check players in or out, from an Admin controls toggle that stays closed until opened.
  *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. On the
- *  night page, `canEnd` adds an End night button that closes the night before the clock does. */
+ *  night page, `canEnd` adds an End night button that, after a confirm, closes the night before the
+ *  clock does. */
 export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers, showNightLink, canEnd }: Props) {
   const { night, started, checkInOpen, signups } = upcoming;
   const router = useRouter();
@@ -64,6 +66,8 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   const [adminOpen, setAdminOpen] = useState(false);
   // The attendance lists fold away to leave the night's controls.
   const [attendanceOpen, setAttendanceOpen] = useState(true);
+  // End night asks for a confirm before it closes the night for everyone.
+  const [endArmed, setEndArmed] = useState(false);
   const showAdmin = isAdmin && adminOpen;
   const [, startTransition] = useTransition();
 
@@ -78,11 +82,10 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   }
 
   function endNight() {
-    if (!window.confirm('End this scrim night for everyone?')) return;
     return run(async () => {
       await sendJsonRequest('POST', `/api/scrims/${night.id}/end`, {});
       startTransition(() => router.refresh());
-    });
+    }).then(() => setEndArmed(false));
   }
 
   function mutate(playerId: number, commitment: ScrimCommitment | null) {
@@ -234,16 +237,18 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
         </div>
       )}
       {canEnd && (
-        <div className="px-4 py-3 border-t border-[var(--color-border-tertiary)] flex flex-wrap items-center justify-between gap-3">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Everyone done? Closes check-in and the lobby.</span>
-          <button
-            type="button"
-            onClick={endNight}
-            disabled={busy}
-            className={DROP_OUT_BTN_CLS}
-          >
-            End night
-          </button>
+        <div className="px-4 py-3 border-t border-[var(--color-border-tertiary)] flex justify-end">
+          <ArmedConfirmButton
+            armed={endArmed}
+            onArm={() => setEndArmed(true)}
+            onCancel={() => setEndArmed(false)}
+            onConfirm={endNight}
+            busy={busy}
+            triggerLabel="End night"
+            confirmLabel="End night for everyone"
+            busyLabel="Ending…"
+            variant="danger"
+          />
         </div>
       )}
       <ErrorText error={error} size={12} className="px-4 py-3" />
