@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { extractSeasonNumber, tabCls, splitSeasonsByGauntlet } from '@/lib/util';
+import { buildRegularToGauntletMap, extractSeasonNumber, seasonSelectionPredicate, tabCls, splitSeasonsByGauntlet } from '@/lib/util';
 import { aggregateMapIndexStats } from '@/lib/mapSideStats';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
@@ -43,25 +43,26 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
   // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
   // single flagged list `SeasonFilter`'s own dropdown takes.
   const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(allSeasons), [allSeasons]);
+  const regularToGauntlet = useMemo(
+    () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
+    [regularSeasons, gauntletSeasons],
+  );
 
-  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   // Per-map filtered stats, rolled up from statsBySeason.
   const displayStats = useMemo(
-    () => aggregateMapIndexStats(maps, { includeRegular, includeGauntlet, selectedSeason }),
-    [maps, includeRegular, includeGauntlet, selectedSeason],
+    () => aggregateMapIndexStats(maps, { includeRegular, includeGauntlet, selectedSeason, regularToGauntlet }),
+    [maps, includeRegular, includeGauntlet, selectedSeason, regularToGauntlet],
   );
 
   const filtered = useMemo(() => {
+    const inSelection = seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet);
     return maps.filter((map) => {
       if (map.seasons.length === 0) return selectedSeason === 'all';
-      return map.seasons.some((s) => {
-        if (!includesKind(s.is_gauntlet)) return false;
-        if (selectedSeason !== 'all' && s.id !== selectedSeason) return false;
-        return true;
-      });
+      return map.seasons.some((s) => inSelection(s.id, s.is_gauntlet));
     });
-  }, [maps, includesKind, selectedSeason]);
+  }, [maps, selectedSeason, regularToGauntlet, includeRegular, includeGauntlet]);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {

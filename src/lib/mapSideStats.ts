@@ -1,4 +1,4 @@
-import { extractSeasonNumber, includesSeasonKind, isPlayedScore, parseScore } from './util';
+import { extractSeasonNumber, isPlayedScore, parseScore, seasonSelectionPredicate } from './util';
 import type { MapIndexEntry, RoundCondition } from './types';
 import { resolveSide } from './parsers/roundSides';
 
@@ -492,6 +492,9 @@ export interface MapIndexSeasonFilter {
   includeRegular: boolean;
   includeGauntlet: boolean;
   selectedSeason: number | 'all';
+  /** Regular season id → its paired gauntlet's id (`buildRegularToGauntletMap()`), so a selected
+   *  season also covers its gauntlet. */
+  regularToGauntlet: Map<number, number>;
 }
 
 export interface MapIndexDisplayStat {
@@ -518,14 +521,15 @@ export function aggregateMapIndexStats(
   maps: MapIndexEntry[],
   filter: MapIndexSeasonFilter,
 ): Map<string, MapIndexDisplayStat> {
-  const { includeRegular, includeGauntlet, selectedSeason } = filter;
+  const inSelection = seasonSelectionPredicate(
+    filter.selectedSeason,
+    filter.regularToGauntlet,
+    filter.includeRegular,
+    filter.includeGauntlet,
+  );
   const result = new Map<string, MapIndexDisplayStat>();
   for (const map of maps) {
-    const relevant = map.statsBySeason.filter((s) => {
-      if (!includesSeasonKind(s.isGauntlet, includeRegular, includeGauntlet)) return false;
-      if (selectedSeason !== 'all' && s.seasonId !== selectedSeason) return false;
-      return true;
-    });
+    const relevant = map.statsBySeason.filter((s) => inSelection(s.seasonId, s.isGauntlet));
     const regularPoolNums = new Set(
       map.seasons
         .filter((s) => !s.is_gauntlet)
