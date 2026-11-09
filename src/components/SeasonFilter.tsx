@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { dedupeVisibleSeasons, includesSeasonKind, seasonTitle, seasonsInScope } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, includesSeasonKind, seasonSelectionPredicate, seasonTitle, seasonsInScope } from '@/lib/util';
 import { useUrlState } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
@@ -61,6 +61,11 @@ export interface SeasonFilterState {
   includeGauntlet: boolean;
   /** `includesSeasonKind()` bound to this filter's include flags. */
   includesKind: (isGauntlet: boolean) => boolean;
+  /** `seasonSelectionPredicate()` bound to this filter: whether a row of `seasonId` is in the
+   *  current selection (the selected season or its pair) and include flags. */
+  inSelection: (seasonId: number, isGauntlet: boolean) => boolean;
+  /** Regular season id → its paired gauntlet's id, from the seasons passed in. */
+  regularToGauntlet: Map<number, number>;
   selectedSeason: number | 'all';
   toggleRegular: () => void;
   toggleGauntlet: () => void;
@@ -73,17 +78,20 @@ export interface SeasonFilterState {
  * (`CareerStatsView`, `PlayerView`, `MapDetailView`, `MapIndexView`), so `reg`/`gnt` are URL-backed
  * for all of them through this one hook rather than a separate migration per view.
  *
- * `regularSeasons`/`gauntletSeasons` — a caller's full season lists (unfiltered by `reg`/`gnt`).
- * When given, `selectedSeason` clamps to `'all'` on every read whenever the raw URL value doesn't
+ * `regularSeasons`/`gauntletSeasons` — a caller's full season lists (unfiltered by `reg`/`gnt`),
+ * memoized by the caller. They pair regular seasons with their gauntlets (`regularToGauntlet`,
+ * `inSelection`), and when given, `selectedSeason` clamps to `'all'` on every read whenever the raw URL value doesn't
  * name an id currently `seasonsInScope()` of this hook's own `includeRegular`/`includeGauntlet`
  * flags — a pure derive-at-read fallback, the same shape as `resolveTab()` (`useTabState.ts`).
  * Toggling `reg`/`gnt` needs no special-casing of `season`: the very next render's include-flags
  * already reflect the toggle, so a selection that's no longer in scope self-corrects with no effect
  * and no second navigation.
  */
+const NO_SEASONS: { id: number; name: string }[] = [];
+
 export function useSeasonFilter(options?: {
-  regularSeasons?: { id: number }[];
-  gauntletSeasons?: { id: number }[];
+  regularSeasons?: { id: number; name: string }[];
+  gauntletSeasons?: { id: number; name: string }[];
 }): SeasonFilterState {
   const [regRaw, setRegRaw] = useUrlState<'0' | '1'>('reg', '1');
   const [gntRaw, setGntRaw] = useUrlState<'0' | '1'>('gnt', '1');
@@ -99,12 +107,23 @@ export function useSeasonFilter(options?: {
     [includeRegular, includeGauntlet],
   );
 
+  const regularSeasons = options?.regularSeasons ?? NO_SEASONS;
+  const gauntletSeasons = options?.gauntletSeasons ?? NO_SEASONS;
   const hasValidityInput = options?.regularSeasons !== undefined || options?.gauntletSeasons !== undefined;
-  const inScope = seasonsInScope(options?.regularSeasons ?? [], options?.gauntletSeasons ?? [], includeRegular, includeGauntlet);
+  const inScope = seasonsInScope(regularSeasons, gauntletSeasons, includeRegular, includeGauntlet);
   const selectedSeason: number | 'all' =
     hasValidityInput && rawSelectedSeason !== 'all' && !inScope.some((s) => s.id === rawSelectedSeason)
       ? 'all'
       : rawSelectedSeason;
+
+  const regularToGauntlet = useMemo(
+    () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
+    [regularSeasons, gauntletSeasons],
+  );
+  const inSelection = useMemo(
+    () => seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet),
+    [selectedSeason, regularToGauntlet, includeRegular, includeGauntlet],
+  );
 
   function toggleRegular() {
     if (includeRegular && !includeGauntlet) return;
@@ -120,7 +139,7 @@ export function useSeasonFilter(options?: {
     setSeasonRaw(s === 'all' ? 'all' : String(s));
   }
 
-  return { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };
+  return { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

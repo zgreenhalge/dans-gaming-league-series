@@ -92,6 +92,12 @@ test('seasonSelectionPredicate: the include flags still apply inside the selecti
   assert.equal(seasonSelectionPredicate('all', pairs, false, true)(7, true), true);
   assert.equal(seasonSelectionPredicate('all', pairs, false, true)(2, false), false);
 });
+test('seasonSelectionPredicate: selecting the gauntlet of a pair covers its regular season too', () => {
+  const inGauntlet16 = seasonSelectionPredicate(16, new Map([[3, 16]]), true, true);
+  assert.equal(inGauntlet16(16, true), true);
+  assert.equal(inGauntlet16(3, false), true);
+  assert.equal(seasonSelectionPredicate(16, new Map([[3, 16]]), false, true)(3, false), false);
+});
 test('seasonSelectionPredicate: a season with no paired gauntlet covers only itself', () => {
   const inSeason4 = seasonSelectionPredicate(4, new Map([[3, 16]]), true, true);
   assert.equal(inSeason4(4, false), true);

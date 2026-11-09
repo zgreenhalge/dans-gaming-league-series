@@ -228,8 +228,8 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
   `rollback_season_schedule_draft()` mirror.
 - **Career stats** — aggregated across seasons, always subject to the same `useSeasonFilter()`
   rules (`includeRegular` / `includeGauntlet` / `selectedSeason` / career) as every other view.
-  A selected season covers its paired gauntlet as well; per-row filters use
-  `seasonSelectionPredicate()` (`src/lib/util.ts`). See `getCareerLeaderboard()` and
+  A selected season covers the other half of its regular+gauntlet pair as well; per-row filters use
+  `useSeasonFilter()`'s `inSelection` (`seasonSelectionPredicate()` in `src/lib/util.ts`). See `getCareerLeaderboard()` and
   `CareerStatsView.tsx` — don't build a one-off filter.
 - **Trusted auto-commit predicate** — `evaluateAutoCommit()` (`src/lib/demo/autoCommit.ts`)
   decides whether a parsed demo's score writes to the match automatically, skipping the human

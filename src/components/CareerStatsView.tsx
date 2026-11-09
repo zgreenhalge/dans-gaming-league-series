@@ -8,7 +8,7 @@ import { useTabState } from './useTabState';
 import CareerDetailTabs from './CareerDetailTabs';
 import ErrorBoundary from './ErrorBoundary';
 import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
-import { buildRegularToGauntletMap, extractSeasonNumber, mergeLeaderboardRows, seasonSelectionPredicate, tabCls } from '@/lib/util';
+import { extractSeasonNumber, mergeLeaderboardRows, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, EhogSnapshotRow, StatisticsDetail } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
@@ -42,15 +42,9 @@ export default function CareerStatsView({
   /** The Stats, Advanced Stats and H2H tabs' data, still loading while the Leaderboard tab renders. */
   detail: Promise<StatisticsDetail>;
 }) {
-  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
-
-  // Map regular season ID → paired gauntlet season ID (matched by season number)
-  const regularToGauntlet = useMemo(
-    () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
-    [regularSeasons, gauntletSeasons],
-  );
 
   const rows = useMemo<LeaderboardRowWithId[]>(() => {
     if (selectedSeason === 'all') {
@@ -66,13 +60,6 @@ export default function CareerStatsView({
     if (reg.length > 0 && gnt.length > 0) return mergeLeaderboardRows(reg, gnt);
     return reg.length > 0 ? reg : gnt;
   }, [selectedSeason, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
-
-  // Whether a row of `seasonId` is inside the current Regular / Gauntlet / season filter — the one
-  // rule the detail tabs filter their per-match rows by.
-  const inSelection = useMemo(
-    () => seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet),
-    [selectedSeason, regularToGauntlet, includeRegular, includeGauntlet],
-  );
 
   const trophyCounts = useMemo(() => {
     const counts = new Map<number, Record<1 | 2 | 3, number>>();

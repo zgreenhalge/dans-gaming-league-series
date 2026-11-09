@@ -10,7 +10,7 @@ import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { useLiveH2HData } from './useLiveH2HData';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
-import { buildRegularToGauntletMap, tabCls, canonicalSort, deriveRates, seasonSelectionPredicate, splitSeasonsByGauntlet, filterByMatchIds } from '@/lib/util';
+import { tabCls, canonicalSort, deriveRates, splitSeasonsByGauntlet, filterByMatchIds } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, MatchRoundRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
@@ -124,21 +124,17 @@ export default function MapDetailView({
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [detail.matches]);
 
-  // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
-  // single flagged list `SeasonFilter`'s own dropdown takes.
+  // Split for `useSeasonFilter` — its validity check and season pairing need regular/gauntlet apart,
+  // not the single flagged list `SeasonFilter`'s own dropdown takes.
   const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(uniqueSeasons), [uniqueSeasons]);
-  const regularToGauntlet = useMemo(
-    () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
-    [regularSeasons, gauntletSeasons],
-  );
 
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, inSelection, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
 
-  const filteredMatches = useMemo<MapMatchRow[]>(() => {
-    const inSelection = seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet);
-    return detail.matches.filter((m) => inSelection(m.season_id, m.is_gauntlet));
-  }, [detail.matches, selectedSeason, regularToGauntlet, includeRegular, includeGauntlet]);
+  const filteredMatches = useMemo<MapMatchRow[]>(
+    () => detail.matches.filter((m) => inSelection(m.season_id, m.is_gauntlet)),
+    [detail.matches, inSelection],
+  );
 
   const filteredPlayerStats = useMemo(
     () => aggregatePlayerStats(filteredMatches),

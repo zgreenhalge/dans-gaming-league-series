@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { adrBaselineFor, type PlayerSeasonAdrTotal } from '@/lib/h2h';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonSelectionPredicate, seasonTitle, tabCls } from '@/lib/util';
+import { dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonSelectionPredicate, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import DevGate from './DevGate';
@@ -146,7 +146,7 @@ export default function PlayerView({
     return '';
   }, [history, playerId]);
 
-  const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
+  const { regularSeasons, gauntletSeasons } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
     const gntMap = new Map<number, { id: number; name: string }>();
     for (const r of history) {
@@ -154,10 +154,10 @@ export default function PlayerView({
     }
     const reg = Array.from(regMap.values()).sort((a, b) => a.id - b.id);
     const gnt = Array.from(gntMap.values()).sort((a, b) => a.id - b.id);
-    return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: buildRegularToGauntletMap(reg, gnt) };
+    return { regularSeasons: reg, gauntletSeasons: gnt };
   }, [history]);
 
-  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   const [rawTab, setTab] = useTabState(PLAYER_TABS, 'stats');
   const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');
@@ -176,12 +176,45 @@ export default function PlayerView({
     else { setMapSort(c); setMapAsc(c === 'map'); }
   }
 
-  // The season selection as a predicate, shared by every per-row filter on this page so they all
-  // cover the same seasons.
-  const inSeasonSelection = useMemo(() => {
-    const inSelection = seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet);
-    return (r: { season_id: number; is_gauntlet: boolean }) => inSelection(r.season_id, r.is_gauntlet);
-  }, [selectedSeason, regularToGauntlet, includeRegular, includeGauntlet]);
+  // The season selection over a row's own `season_id`/`is_gauntlet`, shared by every per-row filter
+  // on this page so they all cover the same seasons.
+  const inSeasonSelection = useCallback(
+    (r: { season_id: number; is_gauntlet: boolean }) => inSelection(r.season_id, r.is_gauntlet),
+    [inSelection],
+  );
+
+  // One row per season the filter shows, each over that season and its pair (the Season history
+  // table).
+  const seasonHistoryRows = useMemo(
+    () =>
+      activeSeasons.map((s): LeaderboardRowWithId => {
+        const inSeason = seasonSelectionPredicate(s.id, regularToGauntlet, includeRegular, includeGauntlet);
+        const a = aggregatePlayerStats(history.filter((r) => inSeason(r.season_id, r.is_gauntlet)));
+        return {
+          season_id: s.id,
+          player_id: s.id,
+          player_name: seasonTitle(s.name),
+          matches_played: a.matches,
+          matches_won: a.wins,
+          matches_lost: a.losses,
+          win_rate_percentage: a.wr,
+          total_kills: a.kills,
+          total_assists: a.assists,
+          total_deaths: a.deaths,
+          kd_ratio: a.kd,
+          total_damage: a.damage,
+          total_rounds_played: a.rounds_played,
+          total_rounds_won: a.rounds_won,
+          rwr_percentage: a.rwr,
+          overall_adr: a.adr,
+          kills_in_wins: a.kills_in_wins,
+          deaths_in_wins: a.deaths_in_wins,
+          kills_in_losses: a.kills_in_losses,
+          deaths_in_losses: a.deaths_in_losses,
+        };
+      }),
+    [activeSeasons, history, regularToGauntlet, includeRegular, includeGauntlet],
+  );
 
   const filtered = useMemo(() => history.filter(inSeasonSelection), [history, inSeasonSelection]);
 
@@ -397,33 +430,7 @@ export default function PlayerView({
               <LeaderboardTable
                 firstColMode="season"
                 stickyNameCol={false}
-                rows={activeSeasons.map((s): LeaderboardRowWithId => {
-                  const inSeason = seasonSelectionPredicate(s.id, regularToGauntlet, includeRegular, includeGauntlet);
-                  const seasonRows = history.filter((r) => inSeason(r.season_id, r.is_gauntlet));
-                  const a = aggregatePlayerStats(seasonRows);
-                  return {
-                    season_id: s.id,
-                    player_id: s.id,
-                    player_name: seasonTitle(s.name),
-                    matches_played: a.matches,
-                    matches_won: a.wins,
-                    matches_lost: a.losses,
-                    win_rate_percentage: a.wr,
-                    total_kills: a.kills,
-                    total_assists: a.assists,
-                    total_deaths: a.deaths,
-                    kd_ratio: a.kd,
-                    total_damage: a.damage,
-                    total_rounds_played: a.rounds_played,
-                    total_rounds_won: a.rounds_won,
-                    rwr_percentage: a.rwr,
-                    overall_adr: a.adr,
-                    kills_in_wins: a.kills_in_wins,
-                    deaths_in_wins: a.deaths_in_wins,
-                    kills_in_losses: a.kills_in_losses,
-                    deaths_in_losses: a.deaths_in_losses,
-                  };
-                })}
+                rows={seasonHistoryRows}
               />
             </>
           )}

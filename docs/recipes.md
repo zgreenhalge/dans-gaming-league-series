@@ -230,9 +230,10 @@ If the view aggregates across seasons (like `CareerStatsView`, `H2HMatrix`):
 1. Use `useSeasonFilter()` / `<SeasonFilter>` from `src/components/SeasonFilter.tsx` — don't build a
    one-off season selector
 2. Respect the same `includeRegular` / `includeGauntlet` / `selectedSeason` / career semantics that
-   `getCareerLeaderboard()` uses. To scope per-row data, filter with `seasonSelectionPredicate()`
-   (`src/lib/util.ts`): a selected season covers its paired gauntlet too, and the include flags
-   apply inside it
+   `getCareerLeaderboard()` uses. To scope per-row data, filter with the hook's `inSelection`
+   (`seasonSelectionPredicate()`, `src/lib/util.ts`, for code outside a component): a selected
+   season covers the other half of its regular+gauntlet pair too, and the include flags apply
+   inside it
 3. If the view needs a tab UI (regular/gauntlet/career toggle), use `tabCls(active)` from
    `src/lib/util.ts` for the standard bordered-underline style — don't hand-roll tab classes
 

@@ -360,9 +360,10 @@ export function includesSeasonKind(isGauntlet: boolean, includeRegular: boolean,
 
 /**
  * The season filter as a row predicate: a row of `seasonId` is in when it belongs to `selected` (or
- * any season, for `'all'`) or to `selected`'s paired gauntlet (`regularToGauntlet`, from
- * `buildRegularToGauntletMap()`), and its season kind passes the include flags
- * (`includesSeasonKind()`). Shared by every view that scopes per-row data to a season selection.
+ * any season, for `'all'`) or to the other half of `selected`'s regular+gauntlet pair
+ * (`regularToGauntlet`, from `buildRegularToGauntletMap()`, read in either direction — a season
+ * dropdown entry stands for the pair and may carry either id), and its season kind passes the
+ * include flags (`includesSeasonKind()`). `useSeasonFilter()` returns it bound as `inSelection`.
  */
 export function seasonSelectionPredicate(
   selected: number | 'all',
@@ -370,9 +371,16 @@ export function seasonSelectionPredicate(
   includeRegular: boolean,
   includeGauntlet: boolean,
 ): (seasonId: number, isGauntlet: boolean) => boolean {
-  const pairedGntId = selected === 'all' ? undefined : regularToGauntlet.get(selected);
+  let pairedId: number | undefined;
+  if (selected !== 'all') {
+    pairedId = regularToGauntlet.get(selected);
+    for (const [regularId, gauntletId] of regularToGauntlet) {
+      if (pairedId !== undefined) break;
+      if (gauntletId === selected) pairedId = regularId;
+    }
+  }
   return (seasonId, isGauntlet) =>
-    (selected === 'all' || seasonId === selected || seasonId === pairedGntId) &&
+    (selected === 'all' || seasonId === selected || seasonId === pairedId) &&
     includesSeasonKind(isGauntlet, includeRegular, includeGauntlet);
 }
 

@@ -23,6 +23,7 @@ import {
   type RoundOutcome,
 } from './mapSideStats';
 import type { MapIndexEntry, MapSeasonStat } from './types';
+import { seasonSelectionPredicate } from './util';
 
 function round(opts: Partial<RoundOutcome>): RoundOutcome {
   return { winner_side: 'CT', shirts_side: 'CT', win_reason: 'elim', ...opts };
@@ -305,7 +306,7 @@ function mapIndexEntry(opts: Partial<MapIndexEntry>): MapIndexEntry {
   };
 }
 
-const allIn = { includeRegular: true, includeGauntlet: true, selectedSeason: 'all' as const, regularToGauntlet: new Map<number, number>() };
+const allIn = seasonSelectionPredicate('all', new Map(), true, true);
 
 test('aggregateMapIndexStats: sums a map\'s per-season stats and derives avgRounds from totalRounds/pickCount', () => {
   const maps = [
@@ -345,7 +346,7 @@ test('aggregateMapIndexStats: includeGauntlet=false excludes gauntlet-season sta
       ],
     }),
   ];
-  const out = aggregateMapIndexStats(maps, { includeRegular: true, includeGauntlet: false, selectedSeason: 'all', regularToGauntlet: new Map() });
+  const out = aggregateMapIndexStats(maps, seasonSelectionPredicate('all', new Map(), true, false));
   assert.equal(out.get('palais')!.pickCount, 2);
 });
 
@@ -359,7 +360,7 @@ test('aggregateMapIndexStats: selectedSeason narrows to that season (a season wi
       ],
     }),
   ];
-  const out = aggregateMapIndexStats(maps, { includeRegular: true, includeGauntlet: true, selectedSeason: 2, regularToGauntlet: new Map() });
+  const out = aggregateMapIndexStats(maps, seasonSelectionPredicate(2, new Map(), true, true));
   assert.equal(out.get('palais')!.pickCount, 5);
 });
 
@@ -375,9 +376,9 @@ test('aggregateMapIndexStats: a selected season also covers its paired gauntlet 
     }),
   ];
   const pairs = new Map([[3, 16]]);
-  const both = aggregateMapIndexStats(maps, { includeRegular: true, includeGauntlet: true, selectedSeason: 3, regularToGauntlet: pairs });
+  const both = aggregateMapIndexStats(maps, seasonSelectionPredicate(3, pairs, true, true));
   assert.equal(both.get('palais')!.pickCount, 7); // 2 + 5
-  const regularOnly = aggregateMapIndexStats(maps, { includeRegular: true, includeGauntlet: false, selectedSeason: 3, regularToGauntlet: pairs });
+  const regularOnly = aggregateMapIndexStats(maps, seasonSelectionPredicate(3, pairs, true, false));
   assert.equal(regularOnly.get('palais')!.pickCount, 2);
 });
 
@@ -393,7 +394,7 @@ test('aggregateMapIndexStats: seasonsPlayed counts distinct regular-season numbe
       statsBySeason: [],
     }),
   ];
-  const out = aggregateMapIndexStats(maps, { includeRegular: false, includeGauntlet: false, selectedSeason: 'all', regularToGauntlet: new Map() });
+  const out = aggregateMapIndexStats(maps, seasonSelectionPredicate('all', new Map(), false, false));
   assert.equal(out.get('palais')!.seasonsPlayed, 2); // Season 1 and Season 2 (gauntlet excluded, filter ignored)
 });
 

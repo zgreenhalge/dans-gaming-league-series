@@ -1,4 +1,4 @@
-import { extractSeasonNumber, isPlayedScore, parseScore, seasonSelectionPredicate } from './util';
+import { extractSeasonNumber, isPlayedScore, parseScore } from './util';
 import type { MapIndexEntry, RoundCondition } from './types';
 import { resolveSide } from './parsers/roundSides';
 
@@ -488,15 +488,6 @@ export function aggregatePlayerSideStats(
 
 // ─── Map index display stats ─────────────────────────────────────────────────
 
-export interface MapIndexSeasonFilter {
-  includeRegular: boolean;
-  includeGauntlet: boolean;
-  selectedSeason: number | 'all';
-  /** Regular season id → its paired gauntlet's id (`buildRegularToGauntletMap()`), so a selected
-   *  season also covers its gauntlet. */
-  regularToGauntlet: Map<number, number>;
-}
-
 export interface MapIndexDisplayStat {
   seasonsPlayed: number;
   pickCount: number;
@@ -510,8 +501,9 @@ export interface MapIndexDisplayStat {
 
 /**
  * Rolls each map's already-per-season stats (`MapIndexEntry.statsBySeason`, produced by
- * `getMapIndex()`) up into the totals the map index's Statistics tab displays, honoring the same
- * season filter as every other cross-season view (see `useSeasonFilter`/`SeasonFilter`).
+ * `getMapIndex()`) up into the totals the map index's Statistics tab displays, over the seasons
+ * `inSelection` admits — the season filter every cross-season view shares (`useSeasonFilter()`'s
+ * `inSelection`, `seasonSelectionPredicate()`).
  * `seasonsPlayed` counts distinct regular-season numbers in the map's pool (`extractSeasonNumber`,
  * falling back to the season id when a name has no parseable number) and is intentionally not
  * affected by the filter — "how many seasons has this map ever been in the pool for" doesn't
@@ -519,14 +511,8 @@ export interface MapIndexDisplayStat {
  */
 export function aggregateMapIndexStats(
   maps: MapIndexEntry[],
-  filter: MapIndexSeasonFilter,
+  inSelection: (seasonId: number, isGauntlet: boolean) => boolean,
 ): Map<string, MapIndexDisplayStat> {
-  const inSelection = seasonSelectionPredicate(
-    filter.selectedSeason,
-    filter.regularToGauntlet,
-    filter.includeRegular,
-    filter.includeGauntlet,
-  );
   const result = new Map<string, MapIndexDisplayStat>();
   for (const map of maps) {
     const relevant = map.statsBySeason.filter((s) => inSelection(s.seasonId, s.isGauntlet));
