@@ -1,16 +1,11 @@
-// A scrim night's seats — the four a match needs, filled by its signups — and how full that makes it.
+// A scrim night's seats — the four a match needs, filled by its signups — and the day fill that goes
+// with them (counts and fill: `src/lib/scrim-seats.ts`).
 // The scrims calendar and the home page's Upcoming panel draw nights with these, so a night reads the
 // same everywhere, beside `LeagueGameMark` for a league game. Plain components, usable from server
 // and client components alike.
 
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
-import type { ScrimCommitment } from '@/lib/scrim-schedule';
-
-/** A night's definite and maybe signup counts. */
-export function signupCounts(signups: { commitment: ScrimCommitment }[]): { definite: number; maybe: number } {
-  const definite = signups.filter((s) => s.commitment === 'definite').length;
-  return { definite, maybe: signups.length - definite };
-}
+import type { NightFill } from '@/lib/scrim-seats';
 
 /** A night's seats: the four a match needs (`SCRIM_MATCH_SIZE`), filled in signup order — a filled
  *  person per definite, a hollow one per maybe — with the seats still open drawn dotted and anyone
@@ -53,29 +48,13 @@ export function PersonIcon({ kind }: { kind: SeatKind }) {
   );
 }
 
-/** How full a night is: `full` once `SCRIM_MATCH_SIZE` players are definite, `could-fill` when its
- *  maybes would get it there, otherwise `short`. */
-export function nightFill(definite: number, maybe: number): 'full' | 'could-fill' | 'short' {
-  if (definite >= SCRIM_MATCH_SIZE) return 'full';
-  return definite + maybe >= SCRIM_MATCH_SIZE ? 'could-fill' : 'short';
-}
-
-/** Of a day's nights' signup counts, the one that speaks for the day: the most definite signups, then
- *  the most maybes. `null` for a day with no nights. */
-export function leadNight(counts: { definite: number; maybe: number }[]): { definite: number; maybe: number } | null {
-  return counts.reduce<{ definite: number; maybe: number } | null>(
-    (best, c) => (best === null || c.definite > best.definite || (c.definite === best.definite && c.maybe > best.maybe) ? c : best),
-    null,
-  );
-}
-
-/** A day cell's border and fill for its lead night's `nightFill()`: green once full, amber dashes when
+/** A day cell's border and fill for its lead night's `nightFill()` (`src/lib/scrim-seats.ts`): green once full, amber dashes when
  *  its maybes could fill it, plain otherwise — the scrims calendar's and the home week strip's days. */
-export const DAY_FILL_CLS = {
+export const DAY_FILL_CLS: Record<NightFill, string> = {
   full: 'bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]',
   'could-fill': 'border-dashed border-[var(--color-accent-amber-border)]',
   short: 'border-[var(--color-border-tertiary)]',
-} as const;
+};
 
 /** A league game's mark — a small diamond — wherever scrim nights and league games share a view,
  *  so the two read apart at a glance. */

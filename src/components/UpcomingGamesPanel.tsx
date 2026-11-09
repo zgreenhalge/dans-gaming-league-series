@@ -11,7 +11,8 @@ import type { ReactNode } from 'react';
 import type { UpcomingGameRow, UpcomingScrimNight } from '@/lib/queries';
 import { effectivePickedMap } from '@/lib/veto';
 import { scrimNightHref } from '@/lib/crumbs';
-import { Seats, nightFill, signupCounts } from './ScrimSeats';
+import { Seats } from './ScrimSeats';
+import { nightFill, signupCounts } from '@/lib/scrim-seats';
 import { UpcomingWeekStrip } from './UpcomingWeekStrip';
 
 function TeamNames({ players, dimmed, currentPlayerId }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean; currentPlayerId?: number | null }) {

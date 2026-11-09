@@ -166,6 +166,12 @@ export function parseRouteId(id: string): number | null {
  *  dates swapped into a page title (`LocalDateInTitle`). */
 export const SHORT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
 
+/** The league's timezone, and the label that names it, for times written where the viewer's own
+ *  timezone isn't known — link previews and server-rendered page titles. In-page times render in the
+ *  viewer's timezone (`LocalTime`). */
+export const LEAGUE_TIMEZONE = 'America/New_York';
+export const LEAGUE_TIMEZONE_LABEL = 'ET';
+
 export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
