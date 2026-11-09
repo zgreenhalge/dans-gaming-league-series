@@ -23,6 +23,7 @@ vi.mock('next/cache', () => ({
 }));
 
 import { __setTestAdminClient } from './supabase-admin';
+import { getDevFallbackSupabaseClient } from './dev-fallback-supabase';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { OPERATIONAL_TABLES } from './test-support/migrationSql';
@@ -113,6 +114,19 @@ describe('persistentQuery', () => {
     expect(await persistentQuery('empty', read)()).toEqual({ ok: true });
     expect(read).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  test('the no-config fixture client has no data_version, so its reads run uncached', async () => {
+    __setTestAdminClient(getDevFallbackSupabaseClient());
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const read = vi.fn(async () => 1);
+    await persistentQuery('fixture', read)();
+    await persistentQuery('fixture', read)();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(store.size).toBe(0);
+    vi.restoreAllMocks();
     consoleError.mockRestore();
   });
 
