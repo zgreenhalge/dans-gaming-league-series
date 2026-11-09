@@ -59,6 +59,7 @@ import {
   signedColor,
   includesSeasonKind,
   seasonSelectionPredicate,
+  pairedSeasonId,
 } from './util';
 import type { LeaderboardRowWithId } from './types';
 import { mapSlug } from './maps';
@@ -97,6 +98,12 @@ test('seasonSelectionPredicate: selecting the gauntlet of a pair covers its regu
   assert.equal(inGauntlet16(16, true), true);
   assert.equal(inGauntlet16(3, false), true);
   assert.equal(seasonSelectionPredicate(16, new Map([[3, 16]]), false, true)(3, false), false);
+});
+test('pairedSeasonId: reads the regular+gauntlet pair in either direction', () => {
+  const pairs = new Map([[3, 16]]);
+  assert.equal(pairedSeasonId(3, pairs), 16);
+  assert.equal(pairedSeasonId(16, pairs), 3);
+  assert.equal(pairedSeasonId(4, pairs), undefined);
 });
 test('seasonSelectionPredicate: a season with no paired gauntlet covers only itself', () => {
   const inSeason4 = seasonSelectionPredicate(4, new Map([[3, 16]]), true, true);

@@ -358,12 +358,23 @@ export function includesSeasonKind(isGauntlet: boolean, includeRegular: boolean,
   return isGauntlet ? includeGauntlet : includeRegular;
 }
 
+/** The other half of `seasonId`'s regular+gauntlet pair (`regularToGauntlet`, from
+ *  `buildRegularToGauntletMap()`, read in either direction), or `undefined` when it has none. A
+ *  season dropdown entry stands for the pair and may carry either id. */
+export function pairedSeasonId(seasonId: number, regularToGauntlet: Map<number, number>): number | undefined {
+  const gauntletId = regularToGauntlet.get(seasonId);
+  if (gauntletId !== undefined) return gauntletId;
+  for (const [regularId, pairedGauntletId] of regularToGauntlet) {
+    if (pairedGauntletId === seasonId) return regularId;
+  }
+  return undefined;
+}
+
 /**
  * The season filter as a row predicate: a row of `seasonId` is in when it belongs to `selected` (or
- * any season, for `'all'`) or to the other half of `selected`'s regular+gauntlet pair
- * (`regularToGauntlet`, from `buildRegularToGauntletMap()`, read in either direction — a season
- * dropdown entry stands for the pair and may carry either id), and its season kind passes the
- * include flags (`includesSeasonKind()`). `useSeasonFilter()` returns it bound as `inSelection`.
+ * any season, for `'all'`) or to the other half of its pair (`pairedSeasonId()`), and its season
+ * kind passes the include flags (`includesSeasonKind()`). `useSeasonFilter()` returns it bound as
+ * `inSelection`.
  */
 export function seasonSelectionPredicate(
   selected: number | 'all',
@@ -371,14 +382,7 @@ export function seasonSelectionPredicate(
   includeRegular: boolean,
   includeGauntlet: boolean,
 ): (seasonId: number, isGauntlet: boolean) => boolean {
-  let pairedId: number | undefined;
-  if (selected !== 'all') {
-    pairedId = regularToGauntlet.get(selected);
-    for (const [regularId, gauntletId] of regularToGauntlet) {
-      if (pairedId !== undefined) break;
-      if (gauntletId === selected) pairedId = regularId;
-    }
-  }
+  const pairedId = selected === 'all' ? undefined : pairedSeasonId(selected, regularToGauntlet);
   return (seasonId, isGauntlet) =>
     (selected === 'all' || seasonId === selected || seasonId === pairedId) &&
     includesSeasonKind(isGauntlet, includeRegular, includeGauntlet);

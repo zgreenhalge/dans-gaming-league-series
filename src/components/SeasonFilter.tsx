@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, includesSeasonKind, seasonSelectionPredicate, seasonTitle, seasonsInScope } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, includesSeasonKind, seasonSelectionPredicate, seasonTitle, seasonsInScope } from '@/lib/util';
 import { useUrlState } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
@@ -56,6 +56,8 @@ export function Checkbox({
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+const NO_SEASONS: { id: number; name: string }[] = [];
+
 export interface SeasonFilterState {
   includeRegular: boolean;
   includeGauntlet: boolean;
@@ -67,6 +69,9 @@ export interface SeasonFilterState {
   /** Regular season id → its paired gauntlet's id, from the seasons passed in. */
   regularToGauntlet: Map<number, number>;
   selectedSeason: number | 'all';
+  /** The selected season's number (`extractSeasonNumber()`), shared by both halves of its pair;
+   *  `null` for `'all'` or a season without one — for data keyed by number rather than id. */
+  selectedSeasonNumber: number | null;
   toggleRegular: () => void;
   toggleGauntlet: () => void;
   setSelectedSeason: (s: number | 'all') => void;
@@ -79,16 +84,14 @@ export interface SeasonFilterState {
  * for all of them through this one hook rather than a separate migration per view.
  *
  * `regularSeasons`/`gauntletSeasons` — a caller's full season lists (unfiltered by `reg`/`gnt`),
- * memoized by the caller. They pair regular seasons with their gauntlets (`regularToGauntlet`,
- * `inSelection`), and when given, `selectedSeason` clamps to `'all'` on every read whenever the raw URL value doesn't
- * name an id currently `seasonsInScope()` of this hook's own `includeRegular`/`includeGauntlet`
+ * memoized by the caller. The hook pairs each regular season with its gauntlet from them
+ * (`regularToGauntlet`, `inSelection`). When given, `selectedSeason` also clamps to `'all'` on
+ * every read whenever the raw URL value doesn't name an id currently `seasonsInScope()` of this hook's own `includeRegular`/`includeGauntlet`
  * flags — a pure derive-at-read fallback, the same shape as `resolveTab()` (`useTabState.ts`).
  * Toggling `reg`/`gnt` needs no special-casing of `season`: the very next render's include-flags
  * already reflect the toggle, so a selection that's no longer in scope self-corrects with no effect
  * and no second navigation.
  */
-const NO_SEASONS: { id: number; name: string }[] = [];
-
 export function useSeasonFilter(options?: {
   regularSeasons?: { id: number; name: string }[];
   gauntletSeasons?: { id: number; name: string }[];
@@ -124,6 +127,11 @@ export function useSeasonFilter(options?: {
     () => seasonSelectionPredicate(selectedSeason, regularToGauntlet, includeRegular, includeGauntlet),
     [selectedSeason, regularToGauntlet, includeRegular, includeGauntlet],
   );
+  const selectedSeasonNumber = useMemo(() => {
+    if (selectedSeason === 'all') return null;
+    const season = [...regularSeasons, ...gauntletSeasons].find((s) => s.id === selectedSeason);
+    return season ? extractSeasonNumber(season.name) : null;
+  }, [selectedSeason, regularSeasons, gauntletSeasons]);
 
   function toggleRegular() {
     if (includeRegular && !includeGauntlet) return;
@@ -139,7 +147,7 @@ export function useSeasonFilter(options?: {
     setSeasonRaw(s === 'all' ? 'all' : String(s));
   }
 
-  return { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };
+  return { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, selectedSeasonNumber, toggleRegular, toggleGauntlet, setSelectedSeason };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

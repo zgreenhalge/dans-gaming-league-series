@@ -120,6 +120,16 @@ describe('useSeasonFilter', () => {
     expect(result.current.inSelection(3, false)).toBe(true);
     expect(result.current.inSelection(16, true)).toBe(true);
     expect(result.current.inSelection(4, false)).toBe(false);
+    expect(result.current.selectedSeasonNumber).toBe(3);
+  });
+
+  test('selectedSeasonNumber resolves a gauntlet-id selection too', () => {
+    nextNavigationMock.setSearchParams('season=16');
+    const regularSeasons = [{ id: 3, name: 'Season 3' }];
+    const gauntletSeasons = [{ id: 16, name: 'Season 3 Gauntlet' }];
+    const { result } = renderHook(() => useSeasonFilter({ regularSeasons, gauntletSeasons }), { wrapper: UrlStateProvider });
+    expect(result.current.selectedSeasonNumber).toBe(3);
+    expect(result.current.inSelection(3, false)).toBe(true);
   });
 
   test('toggleRegular writes `reg=0` and replaces (not pushes)', () => {

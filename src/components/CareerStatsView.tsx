@@ -8,7 +8,7 @@ import { useTabState } from './useTabState';
 import CareerDetailTabs from './CareerDetailTabs';
 import ErrorBoundary from './ErrorBoundary';
 import { TabLoadingSkeleton, TabLoadError } from './Skeleton';
-import { extractSeasonNumber, mergeLeaderboardRows, tabCls } from '@/lib/util';
+import { mergeLeaderboardRows, pairedSeasonId, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, EhogSnapshotRow, StatisticsDetail } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
@@ -42,7 +42,7 @@ export default function CareerStatsView({
   /** The Stats, Advanced Stats and H2H tabs' data, still loading while the Leaderboard tab renders. */
   detail: Promise<StatisticsDetail>;
 }) {
-  const { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, selectedSeasonNumber, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
@@ -52,11 +52,10 @@ export default function CareerStatsView({
       if (includeRegular) return careerRows;
       return gauntletCareerRows;
     }
-    const reg = includeRegular ? (bySeason[selectedSeason] ?? []) : [];
-    const pairedGntId = regularToGauntlet.get(selectedSeason);
-    const gnt = includeGauntlet
-      ? (pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[selectedSeason]) ?? []
-      : [];
+    // The selection and its pair (either direction): each half reads whichever id it's keyed by.
+    const ids = [selectedSeason, pairedSeasonId(selectedSeason, regularToGauntlet)].filter((id) => id !== undefined);
+    const reg = includeRegular ? ids.flatMap((id) => bySeason[id] ?? []) : [];
+    const gnt = includeGauntlet ? ids.flatMap((id) => gauntletBySeason[id] ?? []) : [];
     if (reg.length > 0 && gnt.length > 0) return mergeLeaderboardRows(reg, gnt);
     return reg.length > 0 ? reg : gnt;
   }, [selectedSeason, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
@@ -75,11 +74,7 @@ export default function CareerStatsView({
   const ehogRatings = useMemo<Record<number, number>>(() => {
     const filtered = selectedSeason === 'all'
       ? ehogSnapshots.filter((s) => includesKind(s.isGauntlet))
-      : (() => {
-          const sel = regularSeasons.find((rs) => rs.id === selectedSeason);
-          const sn = sel ? extractSeasonNumber(sel.name) : null;
-          return ehogSnapshots.filter((s) => s.seasonNumber === sn && includesKind(s.isGauntlet));
-        })();
+      : ehogSnapshots.filter((s) => s.seasonNumber === selectedSeasonNumber && includesKind(s.isGauntlet));
     const latest: Record<number, { rating: number; seq: number }> = {};
     for (const s of filtered) {
       const prev = latest[s.playerId];
@@ -90,7 +85,7 @@ export default function CareerStatsView({
     const result: Record<number, number> = {};
     for (const [pid, val] of Object.entries(latest)) result[Number(pid)] = val.rating;
     return result;
-  }, [ehogSnapshots, selectedSeason, includesKind, regularSeasons]);
+  }, [ehogSnapshots, selectedSeason, selectedSeasonNumber, includesKind]);
 
   return (
     <>

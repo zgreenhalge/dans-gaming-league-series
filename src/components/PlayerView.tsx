@@ -7,7 +7,7 @@ import { groupRoundsByMatch, isPlayedHistoryRow, lastPlayed, opponentNames, type
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { adrBaselineFor, type PlayerSeasonAdrTotal } from '@/lib/h2h';
-import { dedupeVisibleSeasons, extractSeasonNumber, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonSelectionPredicate, seasonTitle, tabCls } from '@/lib/util';
+import { dedupeVisibleSeasons, canonicalSortValues, filterByMatchIds, formatStat, isPlayedScore, seasonSelectionPredicate, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import DevGate from './DevGate';
@@ -157,7 +157,7 @@ export default function PlayerView({
     return { regularSeasons: reg, gauntletSeasons: gnt };
   }, [history]);
 
-  const { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, includesKind, inSelection, regularToGauntlet, selectedSeason, selectedSeasonNumber, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   const [rawTab, setTab] = useTabState(PLAYER_TABS, 'stats');
   const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');
@@ -223,15 +223,9 @@ export default function PlayerView({
   const filteredTrophies = useMemo(() => trophies.filter(inSeasonSelection), [trophies, inSeasonSelection]);
 
   const filteredEhog = useMemo(() => {
-    const base = selectedSeason === 'all'
-      ? ehogHistory
-      : (() => {
-          const sel = regularSeasons.find((s) => s.id === selectedSeason);
-          const sn = sel ? extractSeasonNumber(sel.name) : null;
-          return ehogHistory.filter((h) => h.seasonNumber === sn);
-        })();
+    const base = selectedSeason === 'all' ? ehogHistory : ehogHistory.filter((h) => h.seasonNumber === selectedSeasonNumber);
     return base.filter((h) => includesKind(h.isGauntlet));
-  }, [selectedSeason, ehogHistory, includesKind, regularSeasons]);
+  }, [selectedSeason, selectedSeasonNumber, ehogHistory, includesKind]);
 
   const agg = aggregatePlayerStats(filtered);
   const peakEhog = useMemo(() => {
