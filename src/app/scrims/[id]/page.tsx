@@ -84,6 +84,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const hasLobby = night.checkInOpen && (pool.length > 0 || lobbyMatch != null);
   const showCheckInOnly = night.checkInOpen && !hasLobby && currentPlayerId != null;
   const hasH2H = night.h2h.duos.length > 0 || night.h2h.rivals.length > 0;
+  const leaderboardTab: ScrimNightTabSpec = { key: 'leaderboard', label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> };
+  const leaderboardFirst = !night.current && !hasLobby && night.leaderboard.length > 0;
   const tabs: ScrimNightTabSpec[] = [
     ...(hasLobby
       ? [{
@@ -116,6 +118,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           ),
         }]
       : []),
+    // Once the night is over the standings are the headline, so they lead.
+    ...(leaderboardFirst ? [leaderboardTab] : []),
     {
       key: 'matches',
       label: 'Matches',
@@ -127,7 +131,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
       ),
     },
     // With a lobby the standings sit under it, condensed; otherwise they get a tab.
-    ...(hasLobby ? [] : [{ key: 'leaderboard' as const, label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> }]),
+    ...(hasLobby || leaderboardFirst ? [] : [leaderboardTab]),
     ...(night.leaderboard.length > 0
       ? [{ key: 'stats' as const, label: 'Stats', content: <ScrimNightStats nightId={night.night.id} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} /> }]
       : []),
