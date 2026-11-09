@@ -10,10 +10,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const store = new Map<string, unknown>();
+let cacheReturnsNothing = false;
 vi.mock('next/cache', () => ({
   unstable_cache:
     <A extends unknown[], R>(fn: (...a: A) => Promise<R>, keyParts: string[]) =>
     async (...args: A): Promise<R> => {
+      if (cacheReturnsNothing) return undefined as R;
       const key = JSON.stringify([keyParts, args]);
       if (!store.has(key)) store.set(key, await fn(...args));
       return store.get(key) as R;
@@ -21,6 +23,7 @@ vi.mock('next/cache', () => ({
 }));
 
 import { __setTestAdminClient } from './supabase-admin';
+import { getDevFallbackSupabaseClient } from './dev-fallback-supabase';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { OPERATIONAL_TABLES } from './test-support/migrationSql';
@@ -31,11 +34,16 @@ const db: FakeDb = { data_version: [{ id: 1, version: 1 }] };
 
 beforeEach(() => {
   store.clear();
+  cacheReturnsNothing = false;
   db.data_version = [{ id: 1, version: 1 }];
   __setTestAdminClient(createFakeSupabaseClient(db));
   vi.stubEnv('NEXT_RUNTIME', 'nodejs');
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  delete (globalThis as { __dgls_dev_fallback_client?: unknown }).__dgls_dev_fallback_client;
+});
 
 describe('persistentQuery', () => {
   test('a repeat read at the same version is served from the cache', async () => {
@@ -101,6 +109,27 @@ describe('persistentQuery', () => {
     await persistentQuery('bypass', read)();
     expect(read).toHaveBeenCalledTimes(1);
     expect(store.size).toBe(0);
+  });
+
+  test('a data cache that returns no entry reads straight from the database and logs', async () => {
+    cacheReturnsNothing = true;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const read = vi.fn(async () => ({ ok: true }));
+    expect(await persistentQuery('empty', read)()).toEqual({ ok: true });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
+  });
+
+  test('the no-config fixture client reads straight from the database, without logging', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    __setTestAdminClient(getDevFallbackSupabaseClient());
+    const read = vi.fn(async () => 1);
+    await persistentQuery('fixture', read)();
+    await persistentQuery('fixture', read)();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(store.size).toBe(0);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   test.each([
