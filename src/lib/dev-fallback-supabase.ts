@@ -39,12 +39,16 @@ export function getDevFallbackSupabaseClient(): SupabaseClient<Database> {
         'serving in-memory fixture data (src/lib/test-support/fixtures.ts) instead of a real database. ' +
         'Set those in .env.local for a real Supabase connection.',
     );
-    // An empty `data_version` table gives the persistent read cache (`queries/_persistentCache.ts`) no
-    // version to key on, so fixture reads always run uncached. A fixed version would key entries
-    // in `.next/cache` identically across builds, serving one commit's fixture data to the next.
-    const db = buildFakeDb();
-    db.data_version = [];
-    g.__dgls_dev_fallback_client = createFakeSupabaseClient(db) as unknown as SupabaseClient<Database>;
+    g.__dgls_dev_fallback_client = createFakeSupabaseClient(buildFakeDb()) as unknown as SupabaseClient<Database>;
   }
   return g.__dgls_dev_fallback_client;
+}
+
+/**
+ * Whether `client` is the in-memory fixture client. The persistent read cache
+ * (`queries/_persistentCache.ts`) skips it: fixture data has no real `data_version`, and entries kept
+ * in `.next/cache` under a fixed key would serve one commit's fixture data to the next.
+ */
+export function isDevFallbackClient(client: unknown): boolean {
+  return client === (globalThis as GlobalWithFakeClient).__dgls_dev_fallback_client;
 }

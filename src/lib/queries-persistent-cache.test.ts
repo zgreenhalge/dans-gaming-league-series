@@ -39,7 +39,10 @@ beforeEach(() => {
   __setTestAdminClient(createFakeSupabaseClient(db));
   vi.stubEnv('NEXT_RUNTIME', 'nodejs');
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe('persistentQuery', () => {
   test('a repeat read at the same version is served from the cache', async () => {
@@ -114,20 +117,18 @@ describe('persistentQuery', () => {
     expect(await persistentQuery('empty', read)()).toEqual({ ok: true });
     expect(read).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();
-    consoleError.mockRestore();
   });
 
-  test('the no-config fixture client has no data_version, so its reads run uncached', async () => {
-    __setTestAdminClient(getDevFallbackSupabaseClient());
+  test('the no-config fixture client reads straight from the database, without logging', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    __setTestAdminClient(getDevFallbackSupabaseClient());
     const read = vi.fn(async () => 1);
     await persistentQuery('fixture', read)();
     await persistentQuery('fixture', read)();
     expect(read).toHaveBeenCalledTimes(2);
     expect(store.size).toBe(0);
-    vi.restoreAllMocks();
-    consoleError.mockRestore();
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   test.each([
