@@ -15,12 +15,12 @@ import { ScrimNightPanel } from '@/components/ScrimNightPanel';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimNightStatsVersion, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
 import { SCRIM_CHECK_IN_LEAD_MS, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { formatLeagueDate, formatLeagueDateTime, parseRouteId } from '@/lib/util';
-import { buildScrimNightPageModel, scrimNightStatsVersion, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
+import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
@@ -65,13 +65,13 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
   const model = buildScrimNightPageModel(night, { playerId: currentPlayerId, isAdmin });
   const { pool, lobbyMatch, scoredMatchIds } = model;
-  const [rounds, hasAdvancedStats] = await Promise.all([
+  const [rounds, hasAdvancedStats, statsVersion] = await Promise.all([
     model.offerRounds ? getScheduleLabData(pool.map((p) => p.id)) : null,
     // The Advanced Stats tab shows once a scored match has parsed sabremetrics.
     hasScrimMatchSabremetrics(scoredMatchIds),
+    getScrimNightStatsVersion(),
   ]);
 
-  const statsVersion = scrimNightStatsVersion(night.matches, hasAdvancedStats);
   const content: Record<ScrimNightTab, { label: string; content: ReactNode }> = {
     lobby: {
       label: 'Lobby',

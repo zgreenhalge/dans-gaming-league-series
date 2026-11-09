@@ -189,9 +189,9 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
   );
 }
 
-/** The lobby's match, for admins: Discard (after a confirm), and while the match is `editable`
- *  (unstarted) a `CollapsiblePanel`, collapsed by default, holding the map, starting side and lineup
- *  pickers, with Discard in its summary. */
+/** The lobby's match, for admins: a header with Discard (after a confirm), and while the match is
+ *  `editable` (unstarted) a Configure `CollapsiblePanel` under it, collapsed by default, holding the
+ *  map, starting side and lineup pickers. */
 function LobbyMatchConfig({
   match,
   editable,
@@ -231,82 +231,80 @@ function LobbyMatchConfig({
     </select>
   );
 
-  const discard = <ScrimDiscardButton matchId={match.id} />;
-  if (!editable) {
-    return (
-      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex items-center justify-between gap-3">
-        <span className={LABEL_CLS}>Match {match.match_number}</span>
-        {discard}
-      </div>
-    );
-  }
-
   return (
-    <CollapsiblePanel title={`Configure · Match ${match.match_number}`} preview={discard} className="bg-[var(--color-bg-primary)]">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <span className={LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
-          <MapPicker
-            maps={maps}
-            value={mapChoice}
-            onChange={(value) => {
-              setCustomOpen(value === CUSTOM_MAP_CHOICE);
-              if (value && value !== CUSTOM_MAP_CHOICE) act('PATCH', url, { workshop: value });
-            }}
-            customValue={customMap}
-            onCustomChange={setCustomMap}
-            customInvalid={customMap.trim() !== '' && !customId}
-            disabled={busy}
-          />
-          {mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
-            <button type="button" onClick={() => act('PATCH', url, { workshop: customId })} disabled={busy} className={`${GO_BTN_CLS} self-start`}>
-              Use this map
-            </button>
-          )}
-        </div>
-        <label className="flex flex-col gap-1">
-          <span className={LABEL_CLS}>Starting side</span>
-          <select
-            value={match.side_choice}
-            disabled={busy}
-            onChange={(e) => act('PATCH', url, { side: e.target.value })}
-            className={`${SELECT_CLS} w-full`}
-          >
-            {SCRIM_SIDE_CHOICES.map((c) => (
-              <option key={c} value={c}>{SIDE_LABEL[c]}</option>
-            ))}
-          </select>
-        </label>
-        <div className="flex flex-col gap-1">
-          <span className={LABEL_CLS}>Shirts</span>
-          {slot(0)}
-          {slot(1)}
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className={LABEL_CLS}>Skins</span>
-          {slot(2)}
-          {slot(3)}
-        </div>
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+      <div className="px-4 py-3 flex items-center justify-between gap-3">
+        <span className={LABEL_CLS}>Match {match.match_number}</span>
+        <ScrimDiscardButton matchId={match.id} />
       </div>
+      {editable && (
+        <CollapsiblePanel title="Configure" className="mx-4 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <span className={LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
+              <MapPicker
+                maps={maps}
+                value={mapChoice}
+                onChange={(value) => {
+                  setCustomOpen(value === CUSTOM_MAP_CHOICE);
+                  if (value && value !== CUSTOM_MAP_CHOICE) act('PATCH', url, { workshop: value });
+                }}
+                customValue={customMap}
+                onCustomChange={setCustomMap}
+                customInvalid={customMap.trim() !== '' && !customId}
+                disabled={busy}
+              />
+              {mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
+                <button type="button" onClick={() => act('PATCH', url, { workshop: customId })} disabled={busy} className={`${GO_BTN_CLS} self-start`}>
+                  Use this map
+                </button>
+              )}
+            </div>
+            <label className="flex flex-col gap-1">
+              <span className={LABEL_CLS}>Starting side</span>
+              <select
+                value={match.side_choice}
+                disabled={busy}
+                onChange={(e) => act('PATCH', url, { side: e.target.value })}
+                className={`${SELECT_CLS} w-full`}
+              >
+                {SCRIM_SIDE_CHOICES.map((c) => (
+                  <option key={c} value={c}>{SIDE_LABEL[c]}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex flex-col gap-1">
+              <span className={LABEL_CLS}>Shirts</span>
+              {slot(0)}
+              {slot(1)}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className={LABEL_CLS}>Skins</span>
+              {slot(2)}
+              {slot(3)}
+            </div>
+          </div>
 
-      {lineupChanged && (
-        <div className="pt-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => act('PATCH', url, { lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
-            disabled={busy || !lineupValid}
-            className={GO_BTN_CLS}
-          >
-            Save lineup
-          </button>
-          <button type="button" onClick={() => setDraft(current)} disabled={busy} className={BTN_CLS}>
-            Reset
-          </button>
-          {!lineupValid && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Each player can only take one slot.</span>}
-        </div>
+          {lineupChanged && (
+            <div className="pt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => act('PATCH', url, { lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
+                disabled={busy || !lineupValid}
+                className={GO_BTN_CLS}
+              >
+                Save lineup
+              </button>
+              <button type="button" onClick={() => setDraft(current)} disabled={busy} className={BTN_CLS}>
+                Reset
+              </button>
+              {!lineupValid && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Each player can only take one slot.</span>}
+            </div>
       )}
       <ErrorText error={error} size={12} className="pt-3" />
     </CollapsiblePanel>
+      )}
+    </div>
   );
 }
 

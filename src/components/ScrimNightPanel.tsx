@@ -82,10 +82,11 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   }
 
   function endNight() {
+    // An ended night's page drops this panel on refresh; a failed end stays armed beside its error.
     return run(async () => {
       await sendJsonRequest('POST', `/api/scrims/${night.id}/end`, {});
       startTransition(() => router.refresh());
-    }).then(() => setEndArmed(false));
+    });
   }
 
   function mutate(playerId: number, commitment: ScrimCommitment | null) {

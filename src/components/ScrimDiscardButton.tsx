@@ -14,7 +14,8 @@ export function ScrimDiscardButton({ matchId }: { matchId: number }) {
       armed={armed}
       onArm={() => setArmed(true)}
       onCancel={() => setArmed(false)}
-      onConfirm={() => act('DELETE', `/api/scrims/matches/${matchId}`).then(() => setArmed(false))}
+      // A discarded match leaves the page on refresh; a failed one stays armed beside its error.
+      onConfirm={() => act('DELETE', `/api/scrims/matches/${matchId}`)}
       busy={busy}
       error={error}
       triggerLabel="Discard"

@@ -24,7 +24,7 @@ let lastVersionError: string | undefined;
  * `data_version` migration isn't applied, or the read failed: reads then go straight to the database,
  * the always-fresh direction, and the failure is logged (once per distinct message).
  */
-const getDataVersion = cache(async (): Promise<number | null> => {
+export const getDataVersion = cache(async (): Promise<number | null> => {
   const { data, error } = await getAdminClient().from('data_version').select('version').eq('id', 1).single();
   const failure = error ? error.message : data ? null : 'no row';
   if (failure === null) return Number(data!.version);

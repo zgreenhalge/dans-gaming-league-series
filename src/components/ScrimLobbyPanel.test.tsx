@@ -83,7 +83,7 @@ describe('ScrimLobbyPanel lobby match card', () => {
 describe('ScrimLobbyPanel admin config', () => {
   test('an admin can configure the match before the server starts', () => {
     renderLobby(scrimMatch(null), true);
-    expect(screen.getByText(/Configure · Match 3/)).toBeInTheDocument();
+    expect(screen.getByText('Configure')).toBeInTheDocument();
   });
 
   test('while the server is running there is no config to change and nothing to discard, for anyone', () => {

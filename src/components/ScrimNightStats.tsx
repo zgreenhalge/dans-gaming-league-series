@@ -31,8 +31,8 @@ function loadStats(nightId: number, version: string): Promise<ScrimNightStatsVie
 }
 
 /** `rows` are the night's totals the Stats view shows; the Advanced view reads its own data.
- *  `version` changes whenever the night's stats do (`scrimNightStatsVersion()`), so a fetch is reused
- *  only while it's current. */
+ *  `version` changes whenever the night's stats could have (`getScrimNightStatsVersion()`), so a fetch
+ *  is reused only while it's current. */
 export function ScrimNightStats({
   nightId,
   version,
@@ -65,7 +65,9 @@ export function ScrimNightStats({
     };
   }, [nightId, version, attempt]);
 
-  if (!data) return error ? <TabLoadError label={view === 'stats' ? 'stats' : 'advanced stats'} onRetry={() => setAttempt((n) => n + 1)} /> : <TabLoadingSkeleton />;
+  // A failed fetch shows its error even over an earlier version's data, rather than leaving it up.
+  if (error) return <TabLoadError label={view === 'stats' ? 'stats' : 'advanced stats'} onRetry={() => setAttempt((n) => n + 1)} />;
+  if (!data) return <TabLoadingSkeleton />;
   if (view === 'stats') return <BasicStatsView rows={rows} matches={data.matches} rounds={data.rounds} />;
   return (
     <SabremetricsLeaderboardView

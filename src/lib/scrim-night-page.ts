@@ -80,9 +80,3 @@ export function scrimNightTabOrder(night: ScrimNightView, model: ScrimNightPageM
   return tabs;
 }
 
-/** What a night's Stats and Advanced Stats tabs show depends on: its scored matches and their scores,
- *  and whether any has parsed sabremetrics. `ScrimNightStats` reuses a fetch only while this holds. */
-export function scrimNightStatsVersion(matches: ScrimMatch[], hasAdvancedStats: boolean): string {
-  const scored = matches.filter((m) => isPlayedScore(m.final_score)).map((m) => `${m.id}:${m.final_score}`);
-  return `${scored.join(',')}|${hasAdvancedStats ? 'advanced' : 'basic'}`;
-}
