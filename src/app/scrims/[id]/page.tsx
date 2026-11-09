@@ -72,11 +72,12 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const viewerCheckedIn = currentPlayerId != null && pool.some((p) => p.id === currentPlayerId);
   const inMatch = (m: { shirts: number[]; skins: number[] }) => currentPlayerId != null && [...m.shirts, ...m.skins].includes(currentPlayerId);
   const canMake = isAdmin || viewerCheckedIn;
+  const scoredMatchIds = night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
   // Generate Rounds is offered where Next Match is: no match waiting, four checked in.
   const [rounds, hasAdvancedStats] = await Promise.all([
     night.checkInOpen && canMake && !lobbyMatch && pool.length >= SCRIM_MATCH_SIZE ? getScheduleLabData(pool.map((p) => p.id)) : null,
     // The Advanced Stats tab shows once a scored match has parsed sabremetrics.
-    hasScrimMatchSabremetrics(night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id)),
+    hasScrimMatchSabremetrics(scoredMatchIds),
   ]);
 
   // The lobby only exists while check-in is open and someone has checked in; before that there is only
@@ -133,10 +134,10 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     // With a lobby the standings sit under it, condensed; otherwise they get a tab.
     ...(hasLobby || leaderboardFirst ? [] : [leaderboardTab]),
     ...(night.leaderboard.length > 0
-      ? [{ key: 'stats' as const, label: 'Stats', content: <ScrimNightStats nightId={night.night.id} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} /> }]
+      ? [{ key: 'stats' as const, label: 'Stats', content: <ScrimNightStats nightId={night.night.id} scoredMatchIds={scoredMatchIds} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} /> }]
       : []),
     ...(hasAdvancedStats
-      ? [{ key: 'advanced' as const, label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} view="advanced" /> }]
+      ? [{ key: 'advanced' as const, label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} scoredMatchIds={scoredMatchIds} view="advanced" /> }]
       : []),
     ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> }] : []),
   ];
