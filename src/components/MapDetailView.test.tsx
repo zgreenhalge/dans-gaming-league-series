@@ -117,6 +117,19 @@ describe('MapDetailView — season filter', () => {
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/maps/de_dust2?season=1&reg=0');
   });
 
+  test('a selected season also counts its paired gauntlet\'s matches while Gauntlet is included', () => {
+    nextNavigationMock.setSearchParams('season=1');
+    const detail = baseDetail({
+      matches: [
+        matchRow({ match_id: 1, season_id: 1, season_name: 'Season 1', is_gauntlet: false }),
+        matchRow({ match_id: 2, season_id: 2, season_name: 'Season 1 Gauntlet', is_gauntlet: true }),
+        matchRow({ match_id: 3, season_id: 3, season_name: 'Season 2', is_gauntlet: false }),
+      ],
+    });
+    renderWithUrlState(<MapDetailView detail={detail} players={players} />);
+    expect(screen.getByRole('tab', { name: /Matches/ }).textContent).toContain('(2)');
+  });
+
   test('a regular-season selection stays selected when gauntlet is toggled off', () => {
     nextNavigationMock.setSearchParams('season=1&gnt=0');
     const detail = baseDetail({

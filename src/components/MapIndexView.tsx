@@ -40,28 +40,24 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [maps]);
 
-  // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
-  // single flagged list `SeasonFilter`'s own dropdown takes.
+  // Split for `useSeasonFilter` — its validity check and season pairing need regular/gauntlet apart,
+  // not the single flagged list `SeasonFilter`'s own dropdown takes.
   const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(allSeasons), [allSeasons]);
 
-  const { includeRegular, includeGauntlet, includesKind, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const { includeRegular, includeGauntlet, inSelection, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   // Per-map filtered stats, rolled up from statsBySeason.
   const displayStats = useMemo(
-    () => aggregateMapIndexStats(maps, { includeRegular, includeGauntlet, selectedSeason }),
-    [maps, includeRegular, includeGauntlet, selectedSeason],
+    () => aggregateMapIndexStats(maps, inSelection),
+    [maps, inSelection],
   );
 
   const filtered = useMemo(() => {
     return maps.filter((map) => {
       if (map.seasons.length === 0) return selectedSeason === 'all';
-      return map.seasons.some((s) => {
-        if (!includesKind(s.is_gauntlet)) return false;
-        if (selectedSeason !== 'all' && s.id !== selectedSeason) return false;
-        return true;
-      });
+      return map.seasons.some((s) => inSelection(s.id, s.is_gauntlet));
     });
-  }, [maps, includesKind, selectedSeason]);
+  }, [maps, selectedSeason, inSelection]);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {

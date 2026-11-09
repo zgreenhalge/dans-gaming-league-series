@@ -120,6 +120,15 @@ describe('CareerStatsView — season filter', () => {
   });
 });
 
+describe('CareerStatsView — paired season selection', () => {
+  test('a gauntlet-id selection still lists its regular season\'s leaderboard rows', async () => {
+    // `season=2` is Season 1 Gauntlet, the other half of Season 1's pair; both kinds are included.
+    nextNavigationMock.setSearchParams('tab=leaderboard&season=2');
+    await renderView(baseProps());
+    expect(screen.getAllByText(leaderboardRow().player_name).length).toBeGreaterThan(0);
+  });
+});
+
 describe('CareerStatsView — H2H initial pair', () => {
   test('resolves `a`/`b`/`type` from the URL into the H2H tab', async () => {
     nextNavigationMock.setSearchParams('tab=h2h&a=Alice&b=Bob&type=opponent');

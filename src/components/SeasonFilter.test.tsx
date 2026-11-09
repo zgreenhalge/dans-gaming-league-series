@@ -111,6 +111,27 @@ describe('useSeasonFilter', () => {
     expect(result.current.includesKind(true)).toBe(false);
   });
 
+  test('inSelection pairs a selected season with its gauntlet from the seasons passed in', () => {
+    nextNavigationMock.setSearchParams('season=3');
+    const regularSeasons = [{ id: 3, name: 'Season 3' }, { id: 4, name: 'Season 4' }];
+    const gauntletSeasons = [{ id: 16, name: 'Season 3 Gauntlet' }];
+    const { result } = renderHook(() => useSeasonFilter({ regularSeasons, gauntletSeasons }), { wrapper: UrlStateProvider });
+    expect(result.current.regularToGauntlet.get(3)).toBe(16);
+    expect(result.current.inSelection(3, false)).toBe(true);
+    expect(result.current.inSelection(16, true)).toBe(true);
+    expect(result.current.inSelection(4, false)).toBe(false);
+    expect(result.current.selectedSeasonNumber).toBe(3);
+  });
+
+  test('selectedSeasonNumber resolves a gauntlet-id selection too', () => {
+    nextNavigationMock.setSearchParams('season=16');
+    const regularSeasons = [{ id: 3, name: 'Season 3' }];
+    const gauntletSeasons = [{ id: 16, name: 'Season 3 Gauntlet' }];
+    const { result } = renderHook(() => useSeasonFilter({ regularSeasons, gauntletSeasons }), { wrapper: UrlStateProvider });
+    expect(result.current.selectedSeasonNumber).toBe(3);
+    expect(result.current.inSelection(3, false)).toBe(true);
+  });
+
   test('toggleRegular writes `reg=0` and replaces (not pushes)', () => {
     const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     act(() => result.current.toggleRegular());
@@ -137,7 +158,7 @@ describe('useSeasonFilter', () => {
 
   test('toggling always writes a single key, leaving `season` untouched in the URL', () => {
     nextNavigationMock.setSearchParams('season=5');
-    const { result } = renderHook(() => useSeasonFilter({ regularSeasons: [{ id: 5 }], gauntletSeasons: [] }), { wrapper: UrlStateProvider });
+    const { result } = renderHook(() => useSeasonFilter({ regularSeasons: [{ id: 5, name: 'S5' }], gauntletSeasons: [] }), { wrapper: UrlStateProvider });
     act(() => result.current.toggleRegular());
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -161,7 +182,7 @@ describe('useSeasonFilter', () => {
   test('clamps `selectedSeason` to \'all\' when the raw id names no season in the valid lists', () => {
     nextNavigationMock.setSearchParams('season=99');
     const { result } = renderHook(
-      () => useSeasonFilter({ regularSeasons: [{ id: 1 }, { id: 2 }], gauntletSeasons: [{ id: 3 }] }),
+      () => useSeasonFilter({ regularSeasons: [{ id: 1, name: 'S1' }, { id: 2, name: 'S2' }], gauntletSeasons: [{ id: 3, name: 'S3' }] }),
       { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe('all');
@@ -170,7 +191,7 @@ describe('useSeasonFilter', () => {
   test('keeps `selectedSeason` when the raw id is in the valid regular or gauntlet list', () => {
     nextNavigationMock.setSearchParams('season=3');
     const { result } = renderHook(
-      () => useSeasonFilter({ regularSeasons: [{ id: 1 }, { id: 2 }], gauntletSeasons: [{ id: 3 }] }),
+      () => useSeasonFilter({ regularSeasons: [{ id: 1, name: 'S1' }, { id: 2, name: 'S2' }], gauntletSeasons: [{ id: 3, name: 'S3' }] }),
       { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe(3);
@@ -179,7 +200,7 @@ describe('useSeasonFilter', () => {
   test('clamps a regular-season selection to \'all\' once `reg=0` excludes its list', () => {
     nextNavigationMock.setSearchParams('reg=0&season=1');
     const { result } = renderHook(
-      () => useSeasonFilter({ regularSeasons: [{ id: 1 }], gauntletSeasons: [{ id: 2 }] }),
+      () => useSeasonFilter({ regularSeasons: [{ id: 1, name: 'S1' }], gauntletSeasons: [{ id: 2, name: 'S2' }] }),
       { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe('all');
@@ -188,7 +209,7 @@ describe('useSeasonFilter', () => {
   test('a selection from the still-included list survives the other flag being off', () => {
     nextNavigationMock.setSearchParams('gnt=0&season=1');
     const { result } = renderHook(
-      () => useSeasonFilter({ regularSeasons: [{ id: 1 }], gauntletSeasons: [{ id: 2 }] }),
+      () => useSeasonFilter({ regularSeasons: [{ id: 1, name: 'S1' }], gauntletSeasons: [{ id: 2, name: 'S2' }] }),
       { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe(1);
