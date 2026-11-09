@@ -42,6 +42,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  delete (globalThis as { __dgls_dev_fallback_client?: unknown }).__dgls_dev_fallback_client;
 });
 
 describe('persistentQuery', () => {
