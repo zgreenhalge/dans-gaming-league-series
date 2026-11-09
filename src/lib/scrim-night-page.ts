@@ -35,8 +35,8 @@ export interface ScrimNightPageModel {
   offerRounds: boolean;
   /** The lobby exists while check-in is open and someone has checked in or a match is waiting. */
   hasLobby: boolean;
-  /** Before the lobby exists, a signed-in viewer still gets their own Check in. */
-  showCheckInOnly: boolean;
+  /** Before the lobby exists, a signed-in viewer still gets their own Check in: their id, else `null`. */
+  checkInOnlyFor: number | null;
 }
 
 export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNightViewer): ScrimNightPageModel {
@@ -59,7 +59,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
     canEnd: night.started && (isAdmin || night.signups.some((s) => s.player_id === playerId)),
     offerRounds: night.checkInOpen && canMake && lobbyMatch == null && pool.length >= SCRIM_MATCH_SIZE,
     hasLobby,
-    showCheckInOnly: night.checkInOpen && !hasLobby && playerId != null,
+    checkInOnlyFor: night.checkInOpen && !hasLobby ? playerId : null,
   };
 }
 
@@ -78,4 +78,11 @@ export function scrimNightTabOrder(night: ScrimNightView, model: ScrimNightPageM
   if (hasAdvancedStats) tabs.push('advanced');
   if (night.h2h.duos.length > 0 || night.h2h.rivals.length > 0) tabs.push('h2h');
   return tabs;
+}
+
+/** What a night's Stats and Advanced Stats tabs show depends on: its scored matches and their scores,
+ *  and whether any has parsed sabremetrics. `ScrimNightStats` reuses a fetch only while this holds. */
+export function scrimNightStatsVersion(matches: ScrimMatch[], hasAdvancedStats: boolean): string {
+  const scored = matches.filter((m) => isPlayedScore(m.final_score)).map((m) => `${m.id}:${m.final_score}`);
+  return `${scored.join(',')}|${hasAdvancedStats ? 'advanced' : 'basic'}`;
 }

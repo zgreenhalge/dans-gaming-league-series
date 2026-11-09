@@ -27,7 +27,7 @@ import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
 import { applyScrimSideChoice, leagueMatchBlockingScrim, scrimMatchPlaysAfter, scrimNightIdOf } from '@/lib/scrim-matches';
 import { SCRIM_LEAGUE_CLEARANCE_MS } from '@/lib/scrim-schedule';
-import { getScheduledUnplayedMatches } from '@/lib/queries';
+import { getScheduledUnplayedMatches, getScrimNightMatches } from '@/lib/queries';
 
 export async function POST(
   req: NextRequest,
@@ -57,10 +57,8 @@ export async function POST(
   const isScrim = nightId !== null;
   if (isScrim) {
     const serverId = process.env.DATHOST_SERVER_ID;
-    const [playsAfter, scheduled] = await Promise.all([
-      scrimMatchPlaysAfter(getAdminClient(), matchId),
-      getScheduledUnplayedMatches(),
-    ]);
+    const [nightMatches, scheduled] = await Promise.all([getScrimNightMatches(nightId), getScheduledUnplayedMatches()]);
+    const playsAfter = scrimMatchPlaysAfter(nightMatches, matchId);
     if (playsAfter !== null) {
       return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
     }

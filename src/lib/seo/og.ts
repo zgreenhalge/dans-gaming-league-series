@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr, LEAGUE_TIMEZONE, LEAGUE_TIMEZONE_LABEL } from '@/lib/util';
+import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr, formatLeagueDateTime } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup, getMatchTeamNames, getGauntletSeasonLeaderboard } from '../queries';
 import type { Player, Match } from '@/lib/types';
@@ -112,10 +112,7 @@ export async function getMatchMeta(matchId: number, client?: SupabaseClient) {
 
   let scheduledAt: string | null = null;
   if (m.scheduled_at && !played) {
-    const d = new Date(m.scheduled_at);
-    const fmt = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: LEAGUE_TIMEZONE });
-    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: LEAGUE_TIMEZONE });
-    scheduledAt = `${fmt} at ${time} ${LEAGUE_TIMEZONE_LABEL}`;
+    scheduledAt = formatLeagueDateTime(m.scheduled_at);
   }
 
   // Text description for meta tags

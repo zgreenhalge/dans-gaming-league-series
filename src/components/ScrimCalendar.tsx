@@ -9,7 +9,7 @@ import { SkeletonBar } from './Skeleton';
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { useHasMounted } from './useHasMounted';
 import { DAY_FILL_CLS, Seats } from './ScrimSeats';
-import { dayNightFill, signupCounts } from '@/lib/scrim-seats';
+import { dayNightFill } from '@/lib/scrim-seats';
 import { addMonths, localDayKey, monthGrid } from '@/lib/calendar-month';
 import { SCRIM_MAX_DAYS_AHEAD } from '@/lib/scrim-schedule';
 import type { PastScrimNight, UpcomingScrimNight } from '@/lib/queries';
@@ -132,9 +132,8 @@ function DayCell({
   onPick: (day: string) => void;
 }) {
   const upcoming = nights?.upcoming ?? [];
-  const { lead, fill } = dayNightFill(upcoming);
   // The label totals every night that day; the lead night alone colours the cell.
-  const total = signupCounts(upcoming.flatMap((u) => u.signups));
+  const { lead, fill, total } = dayNightFill(upcoming);
   const hasPast = (nights?.past.length ?? 0) > 0;
   const title = [
     lead && `${upcoming.length} upcoming · ${total.definite} definite, ${total.maybe} maybe${fill === 'full' ? ' · full' : ''}`,

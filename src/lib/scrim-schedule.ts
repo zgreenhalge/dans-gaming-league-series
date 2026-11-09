@@ -2,7 +2,6 @@
 // signup and removed when its last player drops out (see `scrim-nights.ts`). Pure — every function
 // takes `now` and the rows as arguments, so the clock and the database stay at the edges.
 
-import { LEAGUE_TIMEZONE, LEAGUE_TIMEZONE_LABEL, SHORT_DATE_FORMAT } from './util';
 import type { ScheduledMatchRef } from './server-schedule-collision';
 
 export type ScrimCommitment = 'definite' | 'maybe';
@@ -27,7 +26,6 @@ export const SCRIM_NIGHT_LENGTH_MS = 4 * 60 * 60 * 1000;
 
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
 export const SCRIM_CHECK_IN_LEAD_MS = 30 * 60 * 1000;
-
 
 /** The instant `night` ends, in epoch ms: the earlier of `endedAt` and `SCRIM_NIGHT_LENGTH_MS` after it
  *  started, never before it started. Its slot on the one shared server runs from `startsAt` to here, and
@@ -75,19 +73,6 @@ export function leagueMatchesDuring(night: ScrimNight, matches: ScheduledMatchRe
 /** The nights that haven't ended, soonest first. */
 export function upcomingScrimNights(nights: ScrimNight[], now: Date): ScrimNight[] {
   return nights.filter((n) => !hasScrimNightEnded(n, now)).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-}
-
-/** A night's date for a server-rendered label (`SHORT_DATE_FORMAT`, e.g. `Thu, Nov 5`), in
- *  `LEAGUE_TIMEZONE`: the page title, until `LocalDateInTitle` swaps in the viewer's own date. */
-export function formatNightDate(startsAt: string): string {
-  return new Date(startsAt).toLocaleDateString('en-US', { ...SHORT_DATE_FORMAT, timeZone: LEAGUE_TIMEZONE });
-}
-
-/** A night's start for a link preview, e.g. `Thu, Nov 5, 8:00 PM ET`, in `LEAGUE_TIMEZONE` and
- *  labelled so — a preview is read wherever it's shared, so it names its zone. */
-export function formatNightStart(startsAt: string): string {
-  const time = new Date(startsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: LEAGUE_TIMEZONE });
-  return `${formatNightDate(startsAt)}, ${time} ${LEAGUE_TIMEZONE_LABEL}`;
 }
 
 /** How far ahead a night can be started. */

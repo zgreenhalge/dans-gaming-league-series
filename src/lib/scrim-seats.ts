@@ -33,9 +33,11 @@ export function leadNight(counts: SignupCounts[]): SignupCounts | null {
   );
 }
 
-/** A day's nights as one day cell shows them: the lead night's counts (`leadNight()`), and its fill —
- *  `short` for a day with no nights. */
-export function dayNightFill(nights: { signups: { commitment: ScrimCommitment }[] }[]): { lead: SignupCounts | null; fill: NightFill } {
-  const lead = leadNight(nights.map((n) => signupCounts(n.signups)));
-  return { lead, fill: lead ? nightFill(lead.definite, lead.maybe) : 'short' };
+/** A day's nights as one day cell shows them: the lead night's counts (`leadNight()`) and its fill —
+ *  `short` for a day with no nights — and the counts across every night that day. */
+export function dayNightFill(nights: { signups: { commitment: ScrimCommitment }[] }[]): { lead: SignupCounts | null; fill: NightFill; total: SignupCounts } {
+  const counts = nights.map((n) => signupCounts(n.signups));
+  const lead = leadNight(counts);
+  const total = counts.reduce((sum, c) => ({ definite: sum.definite + c.definite, maybe: sum.maybe + c.maybe }), { definite: 0, maybe: 0 });
+  return { lead, fill: lead ? nightFill(lead.definite, lead.maybe) : 'short', total };
 }

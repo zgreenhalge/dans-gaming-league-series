@@ -1,13 +1,13 @@
 /**
  * The scrim night page's per-viewer rules: which match the lobby holds and which wait, who may act,
- * and which tabs show in what order.
+ * which tabs show in what order, and when the stats tabs' data is stale.
  *
  * Run:  npx vitest run src/lib/scrim-night-page.test.ts
  */
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightPageModel, scrimNightTabOrder } from './scrim-night-page';
+import { buildScrimNightPageModel, scrimNightStatsVersion, scrimNightTabOrder } from './scrim-night-page';
 import { scrimSignup } from './test-support/scrimFixtures';
 import type { ScrimLeaderboardRow, ScrimMatch, ScrimNightView } from './queries';
 import type { H2HData } from './h2h';
@@ -87,10 +87,10 @@ test('ending the night: once started, for anyone signed up or an admin', () => {
 test('no lobby before anyone checks in — only a signed-in viewer\'s own Check in', () => {
   const empty = night({ signups: [scrimSignup(1, 'definite')] });
   assert.equal(buildScrimNightPageModel(empty, PLAYER(1)).hasLobby, false);
-  assert.equal(buildScrimNightPageModel(empty, PLAYER(1)).showCheckInOnly, true);
-  assert.equal(buildScrimNightPageModel(empty, SIGNED_OUT).showCheckInOnly, false);
+  assert.equal(buildScrimNightPageModel(empty, PLAYER(1)).checkInOnlyFor, 1);
+  assert.equal(buildScrimNightPageModel(empty, SIGNED_OUT).checkInOnlyFor, null);
   assert.equal(buildScrimNightPageModel(night(), PLAYER(1)).hasLobby, true);
-  assert.equal(buildScrimNightPageModel(night({ checkInOpen: false }), PLAYER(1)).showCheckInOnly, false);
+  assert.equal(buildScrimNightPageModel(night({ checkInOpen: false }), PLAYER(1)).checkInOnlyFor, null);
 });
 
 test('tabs: a lobby leads with the standings under it; an ended night leads with Leaderboard', () => {
@@ -100,6 +100,14 @@ test('tabs: a lobby leads with the standings under it; an ended night leads with
   const ended = night({ current: false, checkInOpen: false, leaderboard: standings, h2h: { ...NO_H2H, duos: [{} as H2HData['duos'][number]] } });
   assert.deepEqual(order(ended), ['leaderboard', 'matches', 'stats', 'h2h']);
   assert.deepEqual(order(night({ checkInOpen: false })), ['matches', 'leaderboard']);
+});
+
+test('the stats version changes with a newly scored match, a changed score, or sabremetrics arriving — not with an unscored one', () => {
+  const base = scrimNightStatsVersion([match(1, '13-9', 'done')], false);
+  assert.equal(scrimNightStatsVersion([match(1, '13-9', 'done'), match(2, null, 'live')], false), base);
+  assert.notEqual(scrimNightStatsVersion([match(1, '13-9', 'done'), match(2, '13-7', 'done')], false), base);
+  assert.notEqual(scrimNightStatsVersion([match(1, '13-11', 'done')], false), base);
+  assert.notEqual(scrimNightStatsVersion([match(1, '13-9', 'done')], true), base);
 });
 
 report();

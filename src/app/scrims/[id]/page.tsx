@@ -17,10 +17,10 @@ import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
-import { SCRIM_CHECK_IN_LEAD_MS, formatNightDate, formatNightStart, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
+import { SCRIM_CHECK_IN_LEAD_MS, hasScrimNightEnded, leagueMatchesDuring } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
-import { parseRouteId } from '@/lib/util';
-import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
+import { formatLeagueDate, formatLeagueDateTime, parseRouteId } from '@/lib/util';
+import { buildScrimNightPageModel, scrimNightStatsVersion, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
@@ -33,8 +33,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const signups = await getScrimSignups(night.id);
   const definite = signups.filter((s) => s.commitment === 'definite').length;
   const status = hasScrimNightEnded(night, new Date()) ? 'final' : `${definite} definite, ${signups.length - definite} maybe`;
-  const title = `Scrims · ${formatNightDate(night.startsAt)}`;
-  const description = `Scrim night · ${formatNightStart(night.startsAt)} · ${status} — sign up, check in and see the night's results on DGLS.`;
+  const title = `Scrims · ${formatLeagueDate(night.startsAt)}`;
+  const description = `Scrim night · ${formatLeagueDateTime(night.startsAt)} · ${status} — sign up, check in and see the night's results on DGLS.`;
   return {
     title,
     description,
@@ -59,7 +59,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   ]);
   if (!night) notFound();
 
-  const dateLabel = formatNightDate(night.night.startsAt);
+  const dateLabel = formatLeagueDate(night.night.startsAt);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
@@ -71,6 +71,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     hasScrimMatchSabremetrics(scoredMatchIds),
   ]);
 
+  const statsVersion = scrimNightStatsVersion(night.matches, hasAdvancedStats);
   const content: Record<ScrimNightTab, { label: string; content: ReactNode }> = {
     lobby: {
       label: 'Lobby',
@@ -112,9 +113,9 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     leaderboard: { label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> },
     stats: {
       label: 'Stats',
-      content: <ScrimNightStats nightId={night.night.id} scoredMatchIds={scoredMatchIds} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} />,
+      content: <ScrimNightStats nightId={night.night.id} version={statsVersion} view="stats" rows={scrimLeaderboardToStatLines(night.leaderboard)} />,
     },
-    advanced: { label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} scoredMatchIds={scoredMatchIds} view="advanced" /> },
+    advanced: { label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} version={statsVersion} view="advanced" /> },
     h2h: { label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> },
   };
   const tabs: ScrimNightTabSpec[] = scrimNightTabOrder(night, model, hasAdvancedStats).map((key) => ({ key, ...content[key] }));
@@ -155,9 +156,9 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
         )}
 
         {/* Before anyone has checked in there's no lobby, only the viewer's own Check in. */}
-        {model.showCheckInOnly && currentPlayerId != null && (
+        {model.checkInOnlyFor != null && (
           <div className="flex justify-end mb-8">
-            <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: currentPlayerId, checkedIn: false }} />
+            <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: model.checkInOnlyFor, checkedIn: false }} />
           </div>
         )}
 

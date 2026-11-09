@@ -172,6 +172,18 @@ export const SHORT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short',
 export const LEAGUE_TIMEZONE = 'America/New_York';
 export const LEAGUE_TIMEZONE_LABEL = 'ET';
 
+/** `iso`'s date (`SHORT_DATE_FORMAT`) in `LEAGUE_TIMEZONE`, e.g. `Thu, Nov 5`. */
+export function formatLeagueDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { ...SHORT_DATE_FORMAT, timeZone: LEAGUE_TIMEZONE });
+}
+
+/** `iso` as a date and time in `LEAGUE_TIMEZONE`, labelled so, e.g. `Thu, Nov 5, 8:00 PM ET` — for
+ *  text read wherever it's shared, like a link preview. */
+export function formatLeagueDateTime(iso: string): string {
+  const time = new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: LEAGUE_TIMEZONE });
+  return `${formatLeagueDate(iso)}, ${time} ${LEAGUE_TIMEZONE_LABEL}`;
+}
+
 export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
