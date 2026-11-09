@@ -44,6 +44,12 @@ export function isScrimMatchEditable(m: ScrimMatchState): boolean {
   return !isPlayedScore(m.final_score) && (m.server_state === null || !(RUNNING_SERVER_STATES.has(m.server_state) || m.server_state === 'done'));
 }
 
+/** Whether a scrim match belongs in the night's match list: it has started (it holds or held the
+ *  server) or its game is over. A match still waiting in the lobby, never started, is not listed. */
+export function isScrimMatchListed(m: ScrimMatchState): boolean {
+  return !scrimMatchNeedsServer(m) || !isScrimMatchEditable(m);
+}
+
 /** Whether a scrim match can be discarded: not scored, and not holding the server right now. That
  *  includes one whose server stopped without a score (a crash, or a demo still waiting for review on
  *  its match page). */
@@ -98,25 +104,13 @@ export async function applyScrimSideChoice(db: SupabaseClient, matchId: number, 
   await db.from('matches').update({ skins_starting_side: resolveScrimSide(choice, rand) }).eq('id', matchId).throwOnError();
 }
 
-/** The number of the earlier match `matchId` waits behind — its night's lowest-numbered match that
- *  still `scrimMatchNeedsServer()`, when that isn't `matchId` — or `null` when it's next (or isn't a
- *  scrim match). A night plays its matches in `match_number` order on its one server. */
-export async function scrimMatchPlaysAfter(db: SupabaseClient, matchId: number): Promise<number | null> {
-  const { data } = await db.from('matches').select('scrim_night_id, match_number').eq('id', matchId).maybeSingle().throwOnError();
-  const match = data as { scrim_night_id: number | null; match_number: number } | null;
-  if (!match?.scrim_night_id) return null;
-  const { data: rows } = await db
-    .from('matches')
-    .select('match_number, final_score, match_server_state(server_state)')
-    .eq('scrim_night_id', match.scrim_night_id)
-    .is('final_score', null)
-    .throwOnError();
-  const waiting = ((rows ?? []) as unknown as { match_number: number; final_score: string | null; match_server_state: { server_state: string } | { server_state: string }[] | null }[])
-    .filter((m) => {
-      const state = Array.isArray(m.match_server_state) ? m.match_server_state[0] : m.match_server_state;
-      return scrimMatchNeedsServer({ final_score: m.final_score, server_state: state?.server_state ?? null });
-    });
-  const first = Math.min(...waiting.map((m) => m.match_number));
+/** The number of the earlier match `matchId` waits behind — the lowest-numbered of its night's
+ *  `matches` that still `scrimMatchNeedsServer()`, when that isn't `matchId` — or `null` when it's next.
+ *  A night plays its matches in `match_number` order on its one server. */
+export function scrimMatchPlaysAfter(matches: (ScrimMatchState & { id: number; match_number: number })[], matchId: number): number | null {
+  const match = matches.find((m) => m.id === matchId);
+  if (!match) return null;
+  const first = Math.min(...matches.filter(scrimMatchNeedsServer).map((m) => m.match_number));
   return first < match.match_number ? first : null;
 }
 

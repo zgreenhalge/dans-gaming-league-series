@@ -47,9 +47,6 @@ export function StartScrimNightForm({ playerId, day }: { playerId: number; day: 
           Maybe
         </button>
       </div>
-      <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        Starts on the quarter hour. You&apos;ll be its first signup; a night is removed if everyone drops out.
-      </div>
       <ErrorText error={error} size={12} />
     </div>
   );

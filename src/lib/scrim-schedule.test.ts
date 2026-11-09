@@ -1,6 +1,6 @@
 /**
  * Scrim night timing: when a night has started and ended, the check-in window, the upcoming-nights
- * list, the server-side date label, and request-body parsing.
+ * list, and request-body parsing.
  *
  * Run:  npx vitest run src/lib/scrim-schedule.test.ts
  */
@@ -8,8 +8,6 @@
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
 import {
-  formatNightDate,
-  formatNightStart,
   hasScrimNightEnded,
   hasScrimNightStarted,
   isScrimCheckInOpen,
@@ -58,14 +56,6 @@ test('upcomingScrimNights: drops ended nights, soonest first', () => {
     { id: 1, startsAt: '2026-10-30T00:00:00.000Z' },
   ];
   assert.deepEqual(upcomingScrimNights(nights, at(60_000)).map((n) => n.id), [2, 3]);
-});
-
-test('formatNightDate: the date in the league timezone, not UTC', () => {
-  assert.equal(formatNightDate(START), 'Thu, Nov 5');
-});
-
-test('formatNightStart: date and time in the league timezone, labelled ET', () => {
-  assert.equal(formatNightStart(START), 'Thu, Nov 5, 8:00 PM ET');
 });
 
 test('parseNightStart: a quarter-hour instant that has not already ended, within SCRIM_MAX_DAYS_AHEAD', () => {

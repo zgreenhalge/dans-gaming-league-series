@@ -25,8 +25,9 @@ import { parseRouteId, playersOnServer } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
-import { applyScrimSideChoice, isScrimMatch, leagueMatchBlockingScrim, scrimMatchPlaysAfter, scrimNightIdOf } from '@/lib/scrim-matches';
-import { getScheduledUnplayedMatches } from '@/lib/queries';
+import { applyScrimSideChoice, leagueMatchBlockingScrim, scrimMatchPlaysAfter, scrimNightIdOf } from '@/lib/scrim-matches';
+import { SCRIM_LEAGUE_CLEARANCE_MS } from '@/lib/scrim-schedule';
+import { getScheduledUnplayedMatches, getScrimNightMatches } from '@/lib/queries';
 
 export async function POST(
   req: NextRequest,
@@ -52,27 +53,25 @@ export async function POST(
   // over: a night plays its matches in order, a league match always gets the server (no scrim match
   // starts within half an hour of one), and none starts while anyone is on the server — a DGLS match
   // or players outside one (`getServer()`'s player count, as the admin server console gates on).
-  const isScrim = await isScrimMatch(getAdminClient(), matchId);
+  const nightId = await scrimNightIdOf(getAdminClient(), matchId);
+  const isScrim = nightId !== null;
   if (isScrim) {
     const serverId = process.env.DATHOST_SERVER_ID;
-    const [playsAfter, scheduled, nightId] = await Promise.all([
-      scrimMatchPlaysAfter(getAdminClient(), matchId),
-      getScheduledUnplayedMatches(),
-      scrimNightIdOf(getAdminClient(), matchId),
-    ]);
+    const [nightMatches, scheduled] = await Promise.all([getScrimNightMatches(nightId), getScheduledUnplayedMatches()]);
+    const playsAfter = scrimMatchPlaysAfter(nightMatches, matchId);
     if (playsAfter !== null) {
       return NextResponse.json({ error: `Match ${playsAfter} of this scrim night plays first.` }, { status: 409 });
     }
     const league = leagueMatchBlockingScrim(scheduled, new Date());
     if (league) {
-      return NextResponse.json({ error: `${league.label} is scheduled within 30 minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
+      return NextResponse.json({ error: `${league.label} is scheduled within ${SCRIM_LEAGUE_CLEARANCE_MS / 60_000} minutes and gets the server.`, code: 'league_match_due' }, { status: 409 });
     }
     // The night's previous match, its game over, may still be on the server for its scoreboard grace
     // period: this match takes the server from it now rather than waiting out the delay.
     let tookOver = false;
     const active = await getActiveServerMatch(getAdminClient());
     if (active && active.matchId !== matchId) {
-      const sameNight = nightId !== null && (await scrimNightIdOf(getAdminClient(), active.matchId)) === nightId;
+      const sameNight = (await scrimNightIdOf(getAdminClient(), active.matchId)) === nightId;
       if (!(sameNight && active.serverState === 'tearing_down')) {
         return NextResponse.json({ error: occupancyMessage({ active, playersOnline: null, occupied: true }), code: 'server_occupied' }, { status: 409 });
       }

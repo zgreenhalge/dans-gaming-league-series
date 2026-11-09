@@ -26,7 +26,7 @@ let lastVersionError: string | undefined;
  * the always-fresh direction, and the failure is logged (once per distinct message). Also `null`,
  * without a log, on the in-memory fixture client, whose data has no version.
  */
-const getDataVersion = cache(async (): Promise<number | null> => {
+export const getDataVersion = cache(async (): Promise<number | null> => {
   const client = getAdminClient();
   if (isDevFallbackClient(client)) return null;
   const { data, error } = await client.from('data_version').select('version').eq('id', 1).single();

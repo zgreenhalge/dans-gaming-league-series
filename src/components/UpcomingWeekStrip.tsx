@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { SkeletonBar } from './Skeleton';
 import { useHasMounted } from './useHasMounted';
-import { DAY_FILL_CLS, LeagueGameMark, Seats, leadNight, nightFill, signupCounts } from './ScrimSeats';
+import { DAY_FILL_CLS, LeagueGameMark, Seats } from './ScrimSeats';
+import { dayNightFill } from '@/lib/scrim-seats';
 import { localDayKey } from '@/lib/calendar-month';
 import type { UpcomingScrimNight } from '@/lib/queries';
 
@@ -52,8 +53,7 @@ function Strip({ gameTimes, scrims }: Props) {
       {days.map((date, i) => {
         const key = localDayKey(date);
         const games = gamesOn.get(key) ?? 0;
-        const lead = leadNight((scrimsOn.get(key) ?? []).map((s) => signupCounts(s.signups)));
-        const fill = lead ? nightFill(lead.definite, lead.maybe) : 'short';
+        const { lead, fill } = dayNightFill(scrimsOn.get(key) ?? []);
         // A league game owns its day: the scrim night stays visible but doesn't colour the day.
         const dayFill = games > 0 ? 'short' : fill;
         const label = [

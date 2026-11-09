@@ -6,9 +6,7 @@
 import type { ReactNode } from 'react';
 import TopTabBar from './TopTabBar';
 import { resolveTab, useTabState } from './useTabState';
-
-export const SCRIM_NIGHT_TABS = ['lobby', 'matches', 'leaderboard', 'stats', 'advanced', 'h2h'] as const;
-export type ScrimNightTab = (typeof SCRIM_NIGHT_TABS)[number];
+import { SCRIM_NIGHT_TABS, type ScrimNightTab } from '@/lib/scrim-night-page';
 
 export interface ScrimNightTabSpec {
   key: ScrimNightTab;
@@ -16,7 +14,7 @@ export interface ScrimNightTabSpec {
   content: ReactNode;
 }
 
-/** `tabs` are only those with something to show, in display order. A link with no `?tab=`, or one
+/** `tabs` are only those with something to show, in display order (`scrimNightTabOrder()`). A link with no `?tab=`, or one
  *  naming a tab that isn't present, opens on the first. */
 export function ScrimNightTabs({ tabs }: { tabs: ScrimNightTabSpec[] }) {
   const [rawTab, setTab] = useTabState(SCRIM_NIGHT_TABS, tabs[0].key);

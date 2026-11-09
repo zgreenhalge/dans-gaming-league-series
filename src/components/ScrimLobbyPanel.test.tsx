@@ -2,7 +2,8 @@
 /**
  * Component tests for `ScrimLobbyPanel`'s lobby match: its card (`LobbyMatchCard`) reads Pending
  * before the server starts and Live once it has, for an admin and a non-admin alike. An admin can
- * configure the match only before it starts, and discard it whenever it isn't holding the server.
+ * configure the match only before it starts, and discard it — after a confirm — whenever it isn't
+ * holding the server.
  *
  * `MatchServerPanel` is stubbed — it has its own tests — and `next/navigation` is mocked for
  * `useRefreshingAction()`.
@@ -12,6 +13,7 @@
 
 import { describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { ScrimLobbyPanel } from './ScrimLobbyPanel';
 import type { ScrimMatch } from '@/lib/queries';
@@ -81,13 +83,13 @@ describe('ScrimLobbyPanel lobby match card', () => {
 describe('ScrimLobbyPanel admin config', () => {
   test('an admin can configure the match before the server starts', () => {
     renderLobby(scrimMatch(null), true);
-    expect(screen.getByRole('button', { name: /Configure · Match 3/ })).toBeInTheDocument();
+    expect(screen.getByText('Configure')).toBeInTheDocument();
   });
 
   test('while the server is running there is no config to change and nothing to discard, for anyone', () => {
     for (const canManage of [true, false]) {
       const { unmount } = renderLobby(scrimMatch('live'), canManage);
-      expect(screen.queryByRole('button', { name: /Configure/ })).toBeNull();
+      expect(screen.queryByText(/Configure/)).toBeNull();
       expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull();
       unmount();
     }
@@ -95,12 +97,23 @@ describe('ScrimLobbyPanel admin config', () => {
 
   test('a match whose server stopped without a score can be discarded, not configured', () => {
     renderLobby(scrimMatch('done'), true);
-    expect(screen.queryByRole('button', { name: /Configure/ })).toBeNull();
+    expect(screen.queryByText(/Configure/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
+  });
+
+  test('Discard asks for a confirm before it deletes anything', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
+    vi.stubGlobal('fetch', fetchMock);
+    renderLobby(scrimMatch('done'), true);
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm discard' }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/scrims/matches/42', expect.objectContaining({ method: 'DELETE' })));
+    vi.unstubAllGlobals();
   });
 
   test('a non-admin never sees the config', () => {
     renderLobby(scrimMatch(null), false);
-    expect(screen.queryByRole('button', { name: /Configure/ })).toBeNull();
+    expect(screen.queryByText(/Configure/)).toBeNull();
   });
 });

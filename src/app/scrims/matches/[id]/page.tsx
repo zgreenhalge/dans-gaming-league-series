@@ -13,11 +13,10 @@ import { getSession } from '@/lib/session';
 import { getMapLookup, getMatchServerState, getPlayersById, getScrimMatchDetail } from '@/lib/queries';
 import { loadMatchPageFacts, matchMvpPlayerId, shirtsFaction } from '@/lib/match-page-data';
 import { scrimNightHref } from '@/lib/crumbs';
-import { formatNightDate } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
-import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
+import { formatLeagueDate, isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
 import { DEFAULT_TARGET_WIN_ROUNDS } from '@/lib/replay/inputs';
 
 // The server panel's state and the lobby's lock change live; don't cache.
@@ -26,7 +25,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const matchId = parseRouteId((await params).id);
   const match = matchId === null ? null : await getScrimMatchDetail(matchId);
-  return { title: match ? `Scrim · ${formatNightDate(match.night_starts_at)} · Match ${match.match_number}` : 'Scrim match' };
+  return { title: match ? `Scrim · ${formatLeagueDate(match.night_starts_at)} · Match ${match.match_number}` : 'Scrim match' };
 }
 
 /** A scrim match's page: the same score header, server panel, demo review and stat tabs as a league
@@ -60,7 +59,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
   const skinsStartingSide = effectiveSkinsStartingSide(match);
   const shirtsF = shirtsFaction(skinsStartingSide);
 
-  const nightLabel = formatNightDate(match.night_starts_at);
+  const nightLabel = formatLeagueDate(match.night_starts_at);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const canManage = currentPlayerId != null && (isAdmin || stats.some((s) => s.player_id === currentPlayerId));

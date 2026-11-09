@@ -12,6 +12,8 @@
 
 import assert from 'node:assert/strict';
 import {
+  formatLeagueDate,
+  formatLeagueDateTime,
   playersOnServer,
   isPlayedScore,
   parseScore,
@@ -640,4 +642,10 @@ test('parsePlayerName: the normalized name, or the 400 message for a missing or 
     assert.equal(parsed.ok, false);
     assert.match(parsed.ok ? '' : parsed.error, /^Name must be 2-32 letters/);
   }
+});
+
+test('formatLeagueDate / formatLeagueDateTime: in the league timezone, not UTC, the time labelled ET', () => {
+  const start = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
+  assert.equal(formatLeagueDate(start), 'Thu, Nov 5');
+  assert.equal(formatLeagueDateTime(start), 'Thu, Nov 5, 8:00 PM ET');
 });

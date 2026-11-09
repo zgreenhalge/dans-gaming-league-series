@@ -8,6 +8,7 @@ import { getMatchRoundOutcomes } from './rounds';
 import type { SabremetricStatRow } from './sabremetrics';
 import { getMatchEconomyStats, getMatchWeaponClassStats, type EconomyMatchRow, type WeaponClassMatchRow } from './weaponStats';
 import { getScrimNightMatches, type ScrimMatch } from './scrims';
+import { getDataVersion } from './_persistentCache';
 
 /** What a scrim night's Stats and Advanced Stats tabs show, over the night's scored matches — the
  *  same shapes `BasicStatsView` and `SabremetricsLeaderboardView` take for a season. */
@@ -64,6 +65,15 @@ export async function getScrimNightStatsView(nightId: number): Promise<ScrimNigh
     weaponClassStats: weaponClassStats.flat(),
     economyStats: economyStats.flat(),
   };
+}
+
+/** A token that changes whenever a night's Stats/Advanced Stats data could have: the content version
+ *  (`data_version`), which every write to a match, its stats or its sabremetrics bumps. `ScrimNightStats`
+ *  reuses a fetch only while it holds. When the version can't be read, a fresh token each render, so
+ *  the tabs always refetch. */
+export async function getScrimNightStatsVersion(): Promise<string> {
+  const version = await getDataVersion();
+  return version === null ? `uncached-${Date.now()}` : String(version);
 }
 
 /** Whether any of the given scored scrim matches has parsed sabremetrics — the gate for a night's

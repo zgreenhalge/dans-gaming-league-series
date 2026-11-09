@@ -208,17 +208,17 @@ test.describe('the lobby', () => {
     expect(match.scrim_side_choice).toBe('knife');
 
     await openNightAs(page, 'Zach', `/scrims/${nightId}`);
-    const configure = page.getByRole('button', { name: /Configure · Match 1/ });
-    await expect(configure).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByLabel('Starting side')).toHaveCount(0);
+    const configure = page.getByText('Configure', { exact: true });
+    await expect(page.getByLabel('Starting side')).toBeHidden();
     await configure.click();
     await page.getByLabel('Starting side').selectOption('random');
     await expect.poll(async () => (await scrimMatchesOf(nightId))[0]?.scrim_side_choice).toBe('random');
     await page.reload();
-    await page.getByRole('button', { name: /Configure · Match 1/ }).click();
+    await page.getByText('Configure', { exact: true }).click();
     await expect(page.getByLabel('Starting side')).toHaveValue('random');
 
     await page.getByRole('button', { name: 'Discard' }).click();
+    await page.getByRole('button', { name: 'Confirm discard' }).click();
     await expect(page.getByRole('button', { name: 'Next Match' })).toBeVisible();
     expect(await scrimMatchesOf(nightId)).toHaveLength(0);
   });

@@ -10,6 +10,8 @@ import { SELECT_CLS } from './formStyles';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
 import { MatchCard } from './MatchCard';
+import { CollapsiblePanel } from './CollapsiblePanel';
+import { ScrimDiscardButton } from './ScrimDiscardButton';
 import { ScrimRoundsGenerator } from './ScrimRoundsGenerator';
 import { LocalTime } from './LocalTime';
 import { LeagueGameMark } from './ScrimSeats';
@@ -187,8 +189,9 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
   );
 }
 
-/** The lobby's match, for admins: Discard in the header, and while the match is `editable` (unstarted)
- *  a collapsible body, collapsed by default, holding the map, starting side and lineup pickers. */
+/** The lobby's match, for admins: a header with Discard (after a confirm), and while the match is
+ *  `editable` (unstarted) a Configure `CollapsiblePanel` under it, collapsed by default, holding the
+ *  map, starting side and lineup pickers. */
 function LobbyMatchConfig({
   match,
   editable,
@@ -197,7 +200,6 @@ function LobbyMatchConfig({
   maps,
 }: Pick<Props, 'pool' | 'names' | 'maps'> & { match: ScrimMatch; editable: boolean }) {
   const { busy, error, act } = useRefreshingAction();
-  const [open, setOpen] = useState(false);
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
   // The picker shows the saved map; only the custom-id field is local, opened by picking "Custom".
@@ -232,27 +234,12 @@ function LobbyMatchConfig({
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-4 py-3 flex items-center justify-between gap-3">
-        {editable ? (
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            aria-expanded={open}
-            className={`${LABEL_CLS} flex items-center gap-2 hover:underline`}
-          >
-            <span aria-hidden>{open ? '▾' : '▸'}</span>
-            Configure · Match {match.match_number}
-          </button>
-        ) : (
-          <span className={LABEL_CLS}>Match {match.match_number}</span>
-        )}
-        <button type="button" onClick={() => act('DELETE', url)} disabled={busy} className={BTN_CLS}>
-          Discard
-        </button>
+        <span className={LABEL_CLS}>Match {match.match_number}</span>
+        <ScrimDiscardButton matchId={match.id} />
       </div>
-
-      {editable && open && (
-        <div className="border-t border-[var(--color-border-tertiary)]">
-          <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {editable && (
+        <CollapsiblePanel title="Configure" className="mx-4 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <span className={LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
               <MapPicker
@@ -299,7 +286,7 @@ function LobbyMatchConfig({
           </div>
 
           {lineupChanged && (
-            <div className="px-4 pb-3 flex items-center gap-2">
+            <div className="pt-3 flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => act('PATCH', url, { lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
@@ -313,18 +300,17 @@ function LobbyMatchConfig({
               </button>
               {!lineupValid && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Each player can only take one slot.</span>}
             </div>
-          )}
-        </div>
       )}
-      <ErrorText error={error} size={12} className="px-4 pb-3" />
+      <ErrorText error={error} size={12} className="pt-3" />
+    </CollapsiblePanel>
+      )}
     </div>
   );
 }
 
 /** The pre-matched matches waiting behind the lobby's, each with a Discard for its players or an
- *  admin. Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
+ *  admin (after a confirm). Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
 function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
-  const { busy, error, act } = useRefreshingAction();
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className={`px-4 py-2 border-b border-[var(--color-border-tertiary)] ${LABEL_CLS}`}>Up next · {queued.length}</div>
@@ -334,14 +320,9 @@ function UpNext({ queued, names }: { queued: Props['queued']; names: Props['name
             <span className="text-[var(--color-text-secondary)]">{match.match_number} · {match.map ? toSentenceCase(match.map) : '—'} · </span>
             {scrimTeamLabel(match.shirts, names)} <span className="text-[var(--color-text-secondary)]">vs</span> {scrimTeamLabel(match.skins, names)}
           </span>
-          {canDiscard && (
-            <button type="button" onClick={() => act('DELETE', `/api/scrims/matches/${match.id}`)} disabled={busy} className={BTN_CLS}>
-              Discard
-            </button>
-          )}
+          {canDiscard && <ScrimDiscardButton matchId={match.id} />}
         </div>
       ))}
-      <ErrorText error={error} size={12} className="px-4 pb-3" />
     </div>
   );
 }
