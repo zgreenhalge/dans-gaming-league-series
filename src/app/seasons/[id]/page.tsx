@@ -30,11 +30,8 @@ import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
 import type { Season } from '@/lib/types';
-import SeasonStartDateButton from '@/components/SeasonStartDateButton';
-import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
-import { SeasonMapPoolPanel } from '@/components/SeasonMapPoolPanel';
+import { SeasonSetupDetails } from '@/components/SeasonSetupDetails';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
-import { SeasonBuyInPanel } from '@/components/SeasonBuyInPanel';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
@@ -179,14 +176,12 @@ export default async function SeasonPage({
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
               {matchCount} matches · {rounds.length} rounds
             </div>
-            <div className="mt-2">
-              <SeasonStartDateButton
-                seasonId={season.id}
-                startDate={season.start_date}
-                canEdit={isAdmin && season.status !== 'ARCHIVED'}
-                seasonStatus={season.status}
-              />
-            </div>
+            <SeasonSetupDetails
+              seasonId={season.id}
+              seasonStatus={season.status}
+              isAdmin={isAdmin}
+              startDate={season.start_date}
+            />
           </div>
           <Suspense>
             <UrlStateProvider>
@@ -302,34 +297,18 @@ export default async function SeasonPage({
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
             {leaderboard.length} players · {matchCount} matches · {matchSummaries.weekCount} weeks
           </div>
-          <div className="mt-2 flex items-center gap-3 flex-wrap">
-            <SeasonStartDateButton
-              seasonId={season.id}
-              startDate={season.start_date}
-              canEdit={isAdmin && season.status !== 'ARCHIVED'}
-              seasonStatus={season.status}
-            />
-            <MarkSeasonActiveButton
-              seasonId={season.id}
-              canEdit={isAdmin}
-              seasonStatus={season.status}
-            />
-          </div>
-          {isUpcoming && (
-            <div className="mt-2">
-              <SeasonMapPoolPanel
-                seasonId={season.id}
-                mapPool={season.map_pool}
-                knownMaps={knownMaps}
-                canEdit={isAdmin}
-              />
-              <SeasonBuyInPanel
-                seasonId={season.id}
-                buyInAmount={season.buy_in_amount}
-                canEdit={isAdmin && !scheduleGenerated}
-              />
-            </div>
-          )}
+          <SeasonSetupDetails
+            seasonId={season.id}
+            seasonStatus={season.status}
+            isAdmin={isAdmin}
+            startDate={season.start_date}
+            regular={{
+              mapPool: season.map_pool,
+              knownMaps,
+              buyInAmount: season.buy_in_amount,
+              buyInEditable: !scheduleGenerated,
+            }}
+          />
         </div>
         {isUpcoming && (
           <div className="mb-10 flex flex-col gap-3">

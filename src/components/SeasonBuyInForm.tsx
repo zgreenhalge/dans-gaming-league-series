@@ -1,64 +1,32 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { formatBuyIn, parseBuyInText } from '@/lib/season-buy-in';
+import { useState } from 'react';
+import { parseBuyInText } from '@/lib/season-buy-in';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasonId: number;
   buyInAmount: number | null;
-  canEdit: boolean;
+  /** Called after a save lands, and on Cancel. */
+  onDone: (saved: boolean) => void;
 }
 
-/** An UPCOMING season's buy-in. Admins can change it here until the season's schedule is generated
- * (`canEdit` is false from then on, and the API refuses too). */
-export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
-  const router = useRouter();
-  // The in-progress text while editing; `null` when not editing.
-  const [draft, setDraft] = useState<string | null>(null);
-  const { busy: saving, error, run, clearError } = useAsyncAction();
-  const [isPending, startTransition] = useTransition();
+/** An admin's editor for an UPCOMING season's buy-in, opened from `SeasonSetupDetails`' admin menu
+ *  until the season's schedule is generated (the API refuses after that too). Blank saves as TBD. */
+export function SeasonBuyInForm({ seasonId, buyInAmount, onDone }: Props) {
+  const [draft, setDraft] = useState(buyInAmount != null ? String(buyInAmount) : '');
+  const { busy, error, run } = useAsyncAction();
+  const input = parseBuyInText(draft);
 
-  async function save() {
-    if (draft === null) return;
-    const input = parseBuyInText(draft);
+  function save() {
     if (!input.ok) return;
-    await run(async () => {
-      const res = await fetch(`/api/seasons/${seasonId}/buy-in`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buy_in_amount: input.amount }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Failed to save buy-in.');
-      }
-      setDraft(null);
-      startTransition(() => router.refresh());
+    return run(async () => {
+      await sendJsonRequest('PATCH', `/api/seasons/${seasonId}/buy-in`, { buy_in_amount: input.amount });
+      onDone(true);
     });
-  }
-
-  const busy = saving || isPending;
-
-  if (draft === null) {
-    return (
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-          Buy-in: {buyInAmount != null ? formatBuyIn(buyInAmount) : <span className="opacity-60">TBD</span>}
-        </span>
-        {canEdit && (
-          <button
-            onClick={() => setDraft(buyInAmount != null ? String(buyInAmount) : '')}
-            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-          >
-            Edit
-          </button>
-        )}
-      </div>
-    );
   }
 
   return (
@@ -77,17 +45,14 @@ export function SeasonBuyInPanel({ seasonId, buyInAmount, canEdit }: Props) {
         <button
           type="button"
           onClick={save}
-          disabled={busy || !parseBuyInText(draft).ok}
+          disabled={busy || !input.ok}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           {busy ? 'Saving…' : 'Save buy-in'}
         </button>
         <button
           type="button"
-          onClick={() => {
-            setDraft(null);
-            clearError();
-          }}
+          onClick={() => onDone(false)}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel

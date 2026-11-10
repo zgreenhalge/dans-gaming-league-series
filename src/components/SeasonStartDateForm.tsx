@@ -1,105 +1,28 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { sendJsonRequest } from './sendJsonRequest';
+import { useAsyncAction } from './useAsyncAction';
 import ErrorText from '@/components/ErrorText';
 
 interface Props {
   seasonId: number;
   startDate: string | null;
-  canEdit: boolean;
-  seasonStatus: string;
+  /** Called after a save or clear lands, and on Cancel. */
+  onDone: (saved: boolean) => void;
 }
 
-function fmtDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00Z').toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-export default function SeasonStartDateButton({ seasonId, startDate, canEdit, seasonStatus }: Props) {
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
+/** An admin's editor for an UPCOMING season's start date, opened from `SeasonSetupDetails`' admin
+ *  menu: a date, Save, ✕ to clear a set date, and Cancel. */
+export function SeasonStartDateForm({ seasonId, startDate, onDone }: Props) {
   const [value, setValue] = useState(startDate ?? '');
-  const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const { busy, error, run } = useAsyncAction();
 
-  async function save() {
-    if (!value) return;
-    setError(null);
-    const res = await fetch(`/api/seasons/${seasonId}/start-date`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_date: value }),
+  function write(start_date: string | null) {
+    return run(async () => {
+      await sendJsonRequest('PATCH', `/api/seasons/${seasonId}/start-date`, { start_date });
+      onDone(true);
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to save.');
-      return;
-    }
-    setEditing(false);
-    startTransition(() => router.refresh());
-  }
-
-  async function clear() {
-    setError(null);
-    const res = await fetch(`/api/seasons/${seasonId}/start-date`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_date: null }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to clear.');
-      return;
-    }
-    setEditing(false);
-    startTransition(() => router.refresh());
-  }
-
-  if (!editing) {
-    // A start date only matters for planning ahead — once a season is live or archived, its weeks
-    // already happened on whatever schedule they happened on, so there's nothing left to show or
-    // edit here.
-    if (seasonStatus !== 'UPCOMING') return null;
-    return (
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-            Starts:{' '}
-            {startDate ? (
-              fmtDate(startDate)
-            ) : (
-              <span className="text-[var(--color-text-tertiary,var(--color-text-secondary))] opacity-60">TBD</span>
-            )}
-          </span>
-          {canEdit && startDate && (
-            <button
-              onClick={clear}
-              className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none"
-              title="Clear start date"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => {
-              setValue(startDate ?? '');
-              setEditing(true);
-            }}
-            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-          >
-            {startDate ? 'Edit' : 'Set start date'}
-          </button>
-        )}
-      </div>
-    );
   }
 
   return (
@@ -109,26 +32,32 @@ export default function SeasonStartDateButton({ seasonId, startDate, canEdit, se
           type="date"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          aria-label="Start date"
           className="font-mono text-[13px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
         />
         <button
-          onClick={save}
-          disabled={!value}
+          type="button"
+          onClick={() => write(value)}
+          disabled={!value || busy}
           className="tracked text-[10px] font-semibold px-2 py-1.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] disabled:opacity-40 transition-colors"
         >
-          Save
+          {busy ? 'Saving…' : 'Save'}
         </button>
         {startDate && (
           <button
-            onClick={clear}
-            className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none"
+            type="button"
+            onClick={() => write(null)}
+            disabled={busy}
+            className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none disabled:opacity-40"
             title="Clear start date"
+            aria-label="Clear start date"
           >
             ✕
           </button>
         )}
         <button
-          onClick={() => { setEditing(false); setError(null); }}
+          type="button"
+          onClick={() => onDone(false)}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel

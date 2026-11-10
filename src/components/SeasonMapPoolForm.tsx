@@ -1,10 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { toSentenceCase } from '@/lib/maps';
-import { hasMapPool } from '@/lib/season-map-pool';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 import ErrorText from '@/components/ErrorText';
@@ -13,66 +10,24 @@ interface Props {
   seasonId: number;
   mapPool: string[] | null;
   knownMaps: string[];
-  canEdit: boolean;
+  /** Called after a save lands, and on Cancel. */
+  onDone: (saved: boolean) => void;
 }
 
-/** An UPCOMING season's map pool. Shows "TBD" until it's set; admins can set or change it here
- * (a season can't go live without one). */
-export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Props) {
-  const router = useRouter();
+/** An admin's editor for an UPCOMING season's map pool (a season can't go live without one), opened
+ *  from `SeasonSetupDetails`' admin menu. */
+export function SeasonMapPoolForm({ seasonId, mapPool, knownMaps, onDone }: Props) {
   const selection = useMapPoolSelection(mapPool ?? []);
-  const [editing, setEditing] = useState(false);
-  const { busy: saving, error, run, clearError } = useAsyncAction();
-  const [isPending, startTransition] = useTransition();
+  const { busy, error, run } = useAsyncAction();
 
-  async function save() {
-    await run(async () => {
-      const res = await fetch(`/api/seasons/${seasonId}/map-pool`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps }),
+  function save() {
+    return run(async () => {
+      await sendJsonRequest('PATCH', `/api/seasons/${seasonId}/map-pool`, {
+        map_pool: selection.mapPool,
+        new_maps: selection.newMaps,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Failed to save map pool.');
-      }
-      // The added maps are in `maps` now; keeping them would re-send them on the next save.
-      selection.reset(selection.mapPool);
-      setEditing(false);
-      startTransition(() => router.refresh());
+      onDone(true);
     });
-  }
-
-  function cancel() {
-    selection.reset(mapPool ?? []);
-    clearError();
-    setEditing(false);
-  }
-
-  const busy = saving || isPending;
-  const hasPool = hasMapPool(mapPool);
-
-  if (!editing) {
-    return (
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-          Maps:{' '}
-          {hasPool ? (
-            mapPool!.map(toSentenceCase).join(', ')
-          ) : (
-            <span className="opacity-60">TBD</span>
-          )}
-        </span>
-        {canEdit && (
-          <button
-            onClick={() => setEditing(true)}
-            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-          >
-            {hasPool ? 'Edit' : 'Set map pool'}
-          </button>
-        )}
-      </div>
-    );
   }
 
   return (
@@ -90,7 +45,7 @@ export function SeasonMapPoolPanel({ seasonId, mapPool, knownMaps, canEdit }: Pr
         </button>
         <button
           type="button"
-          onClick={cancel}
+          onClick={() => onDone(false)}
           className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
           Cancel
