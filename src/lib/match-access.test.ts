@@ -1,6 +1,6 @@
 /**
- * Covers `requireMatchAccess()`'s four outcomes: site admin, in-match player, out-of-match player,
- * no session. Uses the shared `test-support/fixtures.ts` `PLAYERS` list (Alice, id 1,
+ * Covers `requireMatchAccess()`'s outcomes: site admin, in-match player, out-of-match player, no
+ * session, and a failed read (which throws rather than denying with a 403). Uses the shared `test-support/fixtures.ts` `PLAYERS` list (Alice, id 1,
  * `is_admin: true`; everyone else `is_admin: false`) for the admin-vs-non-admin distinction, plus a
  * small local `player_match_stats` roster for one match — both read through the admin client, since
  * `requireMatchAccess()` reads `players`/`player_match_stats` via `getAdminClient()` directly rather
@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from './session';
 import { __setTestAdminClient } from './supabase-admin';
-import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { PLAYERS } from './test-support/fixtures';
 import { sessionFor } from './test-support/nextRequest';
 import { test, report } from './test-support/miniTest';
@@ -23,7 +23,7 @@ const IN_MATCH_PLAYER_ID = 2; // Bob — is_admin: false, rostered on MATCH_ID
 const OUT_OF_MATCH_PLAYER_ID = 4; // Dave — is_admin: false, not rostered on MATCH_ID
 const MATCH_ID = 5000;
 
-function installFixture(): void {
+function fixtureClient() {
   const db: FakeDb = {
     players: PLAYERS,
     player_match_stats: [
@@ -31,7 +31,11 @@ function installFixture(): void {
       { match_id: MATCH_ID, player_id: 3 },
     ],
   };
-  __setTestAdminClient(createFakeSupabaseClient(db));
+  return createFakeSupabaseClient(db);
+}
+
+function installFixture(): void {
+  __setTestAdminClient(fixtureClient());
 }
 
 async function main() {
@@ -62,6 +66,14 @@ async function main() {
     const result = await requireMatchAccess(MATCH_ID);
     assert.deepEqual(result, { ok: false, status: 401, error: 'Unauthorized' });
   });
+
+  for (const table of ['players', 'player_match_stats']) {
+    await test(`a failed ${table} read throws instead of answering 403`, async () => {
+      __setTestAdminClient(clientFailingOn(fixtureClient(), table, 'select', { code: 'TEST', message: 'connection reset' }));
+      __setTestSession(sessionFor(OUT_OF_MATCH_PLAYER_ID));
+      await assert.rejects(requireMatchAccess(MATCH_ID), { message: 'connection reset' });
+    });
+  }
 
   __setTestSession(undefined);
   __setTestAdminClient(undefined);

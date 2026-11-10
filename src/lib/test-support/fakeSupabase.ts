@@ -603,14 +603,14 @@ function failingChain(error: FakeError): Record<string, unknown> {
 }
 
 /** Wraps a client so one table's `method` resolves `{ data: null, error }` instead of landing —
- * simulating a write failure this fake's own builder has no way to produce on its own (its only
+ * simulating a read or write failure this fake's own builder has no way to produce on its own (its only
  * built-in error is `.insert()`'s primary-key collision — see this file's header). Every other
  * method on the same table, and every other table, still goes through the real builder, so chained
  * access that doesn't touch `method` keeps working. */
 export function clientFailingOn(
   client: SupabaseClient,
   table: string,
-  method: 'insert' | 'update' | 'upsert' | 'delete',
+  method: 'select' | 'insert' | 'update' | 'upsert' | 'delete',
   error: FakeError,
 ): SupabaseClient {
   return {

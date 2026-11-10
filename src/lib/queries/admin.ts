@@ -124,11 +124,15 @@ export async function getAdminPlayers(): Promise<Player[]> {
 // Admin check
 // ---------------------------------------------------------------------------
 
+/** Whether `playerId` is a site admin (`players.is_admin`); `false` for an unknown id. A failed read
+ *  throws rather than answering `false`, so every access gate built on it fails closed with a 500
+ *  instead of a misleading 403. */
 export async function isPlayerAdmin(playerId: number): Promise<boolean> {
   const { data } = await getAdminClient()
     .from('players')
     .select('is_admin')
     .eq('id', playerId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   return !!(data as { is_admin?: boolean } | null)?.is_admin;
 }
