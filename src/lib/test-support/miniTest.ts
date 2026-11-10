@@ -5,8 +5,9 @@
 
 import { test as vitestTest } from 'vitest';
 
-export function test(name: string, fn: () => void | Promise<void>): void {
-  vitestTest(name, fn);
+/** `timeoutMs` overrides Vitest's per-test timeout for a test whose work is genuinely long. */
+export function test(name: string, fn: () => void | Promise<void>, timeoutMs?: number): void {
+  vitestTest(name, fn, timeoutMs);
 }
 
 export function report(): void {}

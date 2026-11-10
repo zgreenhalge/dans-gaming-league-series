@@ -41,17 +41,30 @@ const BASE: SeasonFormatSettings = {
   seed: 1,
 };
 
-// Plans are deterministic and only read by the assertions, so tests share one build per input.
+// Plans are deterministic and only read by the assertions, so tests share one build per input,
+// keyed by the full settings. A case that needs its own plan gets its own test rather than sharing
+// one test's time budget (see PLAN_TIMEOUT_MS).
 const planCache = new Map<string, FormatPlan>();
 
 function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
-  const key = JSON.stringify({ roster, settings });
+  const full = { ...BASE, ...settings };
+  const key = JSON.stringify({ roster, settings: full });
   const cached = planCache.get(key);
   if (cached) return cached;
-  const result = buildFormatPlan(roster, { ...BASE, ...settings });
+  const result = buildFormatPlan(roster, full);
   if (!result.ok) throw new Error(`expected a plan, got issues: ${result.issues.join(' ')}`);
   planCache.set(key, result.plan);
   return result.plan;
+}
+
+// A plan is a simulated-annealing search of a few hundred thousand moves — up to about a second of
+// CPU on its own, and several times that when a full `npm test` run shares the machine with every
+// other worker. The search length is the planner's real setting, so a plan-building test gets a
+// longer budget than Vitest's 5s default rather than a cut-down search.
+const PLAN_TIMEOUT_MS = 30_000;
+
+function planTest(name: string, fn: () => void): void {
+  test(name, fn, PLAN_TIMEOUT_MS);
 }
 
 /** Each player's per-week game counts across a plan. */
@@ -147,23 +160,23 @@ test('formatIssues refuses a 4-player division two groups in one week', () => {
   assert.deepEqual(formatIssues(8, { ...BASE, weekShape: 'group', divisions: 2, weeks: 6 }), []);
 });
 
-test('one league, one match a week: equal games and everyone meets everyone', () => {
-  for (const n of [7, 13]) {
+for (const n of [7, 13]) {
+  planTest(`one league, one match a week: equal games and everyone meets everyone (n=${n})`, () => {
     const p = plan(n, {});
     assertSound(p, n, 8, 2);
     assert.equal(p.scorecard.pairsNeverMet, 0, `n=${n}: every pair meets`);
     assert.equal(p.halves.length, 1);
-  }
-});
+  });
+}
 
-test('one league, a group a week: groups of 4, everyone partners everyone at 10 players', () => {
+planTest('one league, a group a week: groups of 4, everyone partners everyone at 10 players', () => {
   const p = plan(10, { weekShape: 'group' });
   assertSound(p, 10, 16, 4);
   assertPods(p);
   assert.equal(p.scorecard.pairsPartnered, 45);
 });
 
-test('a doubleheader week never replays the same matchup in a 4-player division', () => {
+planTest('a doubleheader week never replays the same matchup in a 4-player division', () => {
   // 9 players in divisions of 5 and 4 over 6 weeks: 8 games each, so the 4-player division plays
   // both of a doubleheader week's matches with the same four players.
   const p = plan(9, { divisions: 2, weeks: 6 });
@@ -176,8 +189,9 @@ test('a doubleheader week never replays the same matchup in a 4-player division'
   }
 });
 
-test('every doubleheader pays back a bye, and the scorecard counts the weeks they fall in', () => {
-  for (const p of [plan(13, {}), plan(13, { weekShape: 'group' }), plan(13, { divisions: 2, halfwayShuffle: true })]) {
+for (const settings of [{}, { weekShape: 'group' as const }, { divisions: 2, halfwayShuffle: true }]) {
+  planTest(`every doubleheader pays back a bye, and the scorecard counts the weeks they fall in (${JSON.stringify(settings)})`, () => {
+    const p = plan(13, settings);
     const label = JSON.stringify(p.settings);
     const usual = WEEK_UNIT[p.settings.weekShape].games;
     const perPlayer = weeklyGames(p);
@@ -189,17 +203,17 @@ test('every doubleheader pays back a bye, and the scorecard counts the weeks the
     assert.equal(p.scorecard.doubleheaderWeeks, weeksWhere((c) => c > usual));
     assert.equal(p.scorecard.byeWeeks, weeksWhere((c) => c < usual));
     assert.equal(p.scorecard.maxGamesInAWeek, Math.max(...all.flat()));
-  }
-});
+  });
+}
 
-test('group seasons round to the group count nearest one a week', () => {
+planTest('group seasons round to the group count nearest one a week', () => {
   // 7 players can only split into whole groups at 4 or 8 groups each; over 5 weeks, 4 is nearer.
   const p = plan(7, { weekShape: 'group', weeks: 5 });
   assertSound(p, 7, 8, 4);
   assertPods(p);
 });
 
-test('a division that divides by 4 never seats the same four players in two groups of one week', () => {
+planTest('a division that divides by 4 never seats the same four players in two groups of one week', () => {
   // Divisions of 9 and 8 over 6 weeks need 8 groups each, so the 8-player division plays three groups
   // in some weeks — its third must mix players from both of the first two.
   const p = plan(17, { weekShape: 'group', divisions: 2, weeks: 6 });
@@ -215,16 +229,16 @@ test('a division that divides by 4 never seats the same four players in two grou
   }
 });
 
-test('group weeks give leftover players a bye, paid back by a second group another week', () => {
-  for (const n of [7, 13]) {
+for (const n of [7, 13]) {
+  planTest(`group weeks give leftover players a bye, paid back by a second group another week (n=${n})`, () => {
     const p = plan(n, { weekShape: 'group' });
     assertSound(p, n, 16, 4);
     assertPods(p);
     assert.ok(p.scorecard.byeWeeks > 0, `n=${n}: a roster not divisible by 4 has bye weeks`);
-  }
-});
+  });
+}
 
-test('two divisions with a halfway shuffle re-snake the second half', () => {
+planTest('two divisions with a halfway shuffle re-snake the second half', () => {
   const p = plan(13, { divisions: 2, halfwayShuffle: true });
   assertSound(p, 13, 8, 2);
   assert.equal(p.halves.length, 2);
@@ -239,7 +253,7 @@ test('two divisions with a halfway shuffle re-snake the second half', () => {
   assert.deepEqual(second.divisions.map((d) => d.length).sort(), [6, 7]);
 });
 
-test('a win-rate draft ranks by the supplied records, a player without one at 50%', () => {
+planTest('a win-rate draft ranks by the supplied records, a player without one at 50%', () => {
   // Reverse the EHOG order through records: player 8 has the best record, player 1 the worst.
   const roster = players(8).map((p) => ({ ...p, record: p.playerId === 4 ? null : { wins: p.playerId, losses: 8 - p.playerId } }));
   const p = plan(8, { divisions: 2, weeks: 4, draftBasis: 'win-rate', draftOrder: 'tiered' }, roster);
@@ -249,7 +263,7 @@ test('a win-rate draft ranks by the supplied records, a player without one at 50
   assert.equal(p.halves[0].records![8].wins, 8);
 });
 
-test('a tiered draft with a halfway shuffle promotes and relegates by first-half win rate', () => {
+planTest('a tiered draft with a halfway shuffle promotes and relegates by first-half win rate', () => {
   const p = plan(8, { divisions: 2, weeks: 4, draftOrder: 'tiered', halfwayShuffle: true });
   assertSound(p, 8, 4, 2);
   const second = p.halves[1];
@@ -258,13 +272,15 @@ test('a tiered draft with a halfway shuffle promotes and relegates by first-half
   assert.ok(Math.min(...top.map(rate)) >= Math.max(...bottom.map(rate)), 'division 1 holds the best first-half records');
 });
 
-test('a random draft is reproducible from the seed and still sound', () => {
+planTest('a random draft is reproducible from the seed and still sound', () => {
   const a = plan(10, { divisions: 2, draftBasis: 'random' });
   assertSound(a, 10, 8, 2);
-  assert.deepEqual(plan(10, { divisions: 2, draftBasis: 'random' }).halves, a.halves);
+  const again = buildFormatPlan(players(10), { ...BASE, divisions: 2, draftBasis: 'random' });
+  assert.ok(again.ok);
+  assert.deepEqual(again.plan.halves, a.halves);
 });
 
-test('tier sizes set each tiered division, and promotion keeps them', () => {
+planTest('tier sizes set each tiered division, and promotion keeps them', () => {
   const p = plan(13, { divisions: 2, draftOrder: 'tiered', tierSizes: [5, 8], halfwayShuffle: true });
   assertSound(p, 13, 8, 2);
   for (const half of p.halves) assert.deepEqual(half.divisions.map((d) => d.length), [5, 8]);
@@ -279,7 +295,7 @@ test('formatIssues checks tier sizes against the roster and the 4-player floor',
   assert.deepEqual(formatIssues(13, { ...tiered, tierSizes: [4, 9] }), []);
 });
 
-test('a balanced draft evens out division EHOG averages at least as well as a snake', () => {
+planTest('a balanced draft evens out division EHOG averages at least as well as a snake', () => {
   // Uneven gaps between ratings, so a plain snake isn't already the best split.
   const roster = players(12).map((p, i) => ({ ...p, ehogRating: [95, 90, 60, 58, 50, 49, 40, 30, 29, 20, 15, 12][i] }));
   const average = (ids: number[]) => ids.reduce((sum, id) => sum + roster[id - 1].ehogRating, 0) / ids.length;
@@ -291,7 +307,7 @@ test('a balanced draft evens out division EHOG averages at least as well as a sn
   assert.equal(formatIssues(12, { ...BASE, divisions: 3, draftOrder: 'balanced', draftBasis: 'random' }).length, 1);
 });
 
-test('a new-pairings re-draft brings more first-half strangers together than a win-rate re-draft', () => {
+planTest('a new-pairings re-draft brings more first-half strangers together than a win-rate re-draft', () => {
   const settings = { divisions: 2, halfwayShuffle: true };
   const fresh = plan(13, { ...settings, halfwayRedraft: 'new-pairings' });
   const byRate = plan(13, { ...settings, halfwayRedraft: 'win-rate' });
@@ -301,7 +317,7 @@ test('a new-pairings re-draft brings more first-half strangers together than a w
   assert.ok(fresh.scorecard.pairsNeverMet <= byRate.scorecard.pairsNeverMet, `${fresh.scorecard.pairsNeverMet} vs ${byRate.scorecard.pairsNeverMet}`);
 });
 
-test('players who miss someone counts the whole league, including other divisions', () => {
+planTest('players who miss someone counts the whole league, including other divisions', () => {
   // Two divisions with no halfway re-draft never meet across divisions, so every player misses
   // someone even though every reachable pair may meet.
   const p = plan(8, { divisions: 2, weeks: 4 });
@@ -309,13 +325,13 @@ test('players who miss someone counts the whole league, including other division
   assert.equal(plan(7, {}).scorecard.playersMissingSomeone, 0);
 });
 
-test('divisions without a shuffle keep one seeding all season', () => {
+planTest('divisions without a shuffle keep one seeding all season', () => {
   const p = plan(8, { divisions: 2, weeks: 4 });
   assertSound(p, 8, 4, 2);
   assert.equal(p.halves.length, 1);
 });
 
-test('the scorecard counts only pairs that share a division in some half', () => {
+planTest('the scorecard counts only pairs that share a division in some half', () => {
   const fixed = plan(12, { weeks: 4, divisions: 2 });
   assert.equal(fixed.scorecard.distinctTeammates.possible, 5);
   assert.equal(fixed.scorecard.pairs, 30);
@@ -337,20 +353,23 @@ test('the scorecard counts only pairs that share a division in some half', () =>
   assert.equal(single.scorecard.pairs, 66);
 });
 
-test('a plan survives a structured-clone round trip unchanged, as it does through the worker', () => {
+planTest('a plan survives a structured-clone round trip unchanged, as it does through the worker', () => {
   const roster = players(8);
   const settings = { ...BASE, weeks: 4 };
   const result = buildFormatPlan(structuredClone(roster), structuredClone(settings));
   assert.deepEqual(structuredClone(result), buildFormatPlan(roster, settings));
 });
 
-test('the same players, settings and seed produce the same plan', () => {
-  const a = plan(9, { weeks: 4 });
-  const b = plan(9, { weeks: 4 });
+planTest('the same players, settings and seed produce the same plan', () => {
+  // Built directly rather than through plan(), whose cache would hand back the same object twice.
+  const settings = { ...BASE, weeks: 4 };
+  const a = buildFormatPlan(players(9), settings);
+  const b = buildFormatPlan(players(9), settings);
+  assert.ok(a.ok && b.ok);
   assert.deepEqual(a, b);
 });
 
-test('a one-week plan: every player plays the same count, and a halfway shuffle has no second half', () => {
+planTest('a one-week plan: every player plays the same count, and a halfway shuffle has no second half', () => {
   const p = plan(6, { weeks: 1, divisions: 1 });
   assert.equal(p.weeks.length, 1);
   const counts = [...weeklyGames(p).values()].map((w) => w[0]);
