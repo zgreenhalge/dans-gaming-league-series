@@ -170,7 +170,7 @@ export async function queueScrimMatches(
     if (error.message.includes('unplayed-scrim-match')) {
       throw new ScrimMatchConflictError('Finish or discard the current match before making the next one.');
     }
-    throw error;
+    throw new Error(error.message);
   }
   return data as number[];
 }
@@ -178,7 +178,7 @@ export async function queueScrimMatches(
 /** Replaces a scrim match's lineup (`set_scrim_match_lineup()`, one transaction). */
 export async function setScrimMatchLineup(db: SupabaseClient, matchId: number, teams: ScrimTeams): Promise<void> {
   const { error } = await db.rpc('set_scrim_match_lineup', { p_match_id: matchId, p_shirts: teams.shirts, p_skins: teams.skins });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 /** Sets a scrim match's map. */
