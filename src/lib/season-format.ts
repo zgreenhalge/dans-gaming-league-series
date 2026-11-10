@@ -555,10 +555,22 @@ function searchHalf(
       games[p] += s;
       return WEIGHT.gameCount * (Math.abs(games[p] - gamesPerPlayer) - before);
     };
-    const player = (w: number, g: number, k: number) => slots[w][templates[w].games[g][SPLITS[splits[w][g]][k >> 1][k & 1]]];
+    /** Game `g` of week `w`'s players under its current split, team (0, 1) against team (2, 3) —
+     * written into one reused array, since this runs several times per move. */
+    const seated = [0, 0, 0, 0];
+    const seat = (w: number, g: number) => {
+      const week = slots[w];
+      const slot = templates[w].games[g];
+      const [t1, t2] = SPLITS[splits[w][g]];
+      seated[0] = week[slot[t1[0]]];
+      seated[1] = week[slot[t1[1]]];
+      seated[2] = week[slot[t2[0]]];
+      seated[3] = week[slot[t2[1]]];
+    };
     /** Adds (s = 1) or removes (s = -1) one game's contribution; returns the cost change. */
     const applyGame = (w: number, g: number, s: number) => {
-      const a = player(w, g, 0), b = player(w, g, 1), c = player(w, g, 2), d = player(w, g, 3);
+      seat(w, g);
+      const a = seated[0], b = seated[1], c = seated[2], d = seated[3];
       let delta = bump(mates, a, b, s) + bump(mates, c, d, s);
       delta += bump(opps, a, c, s) + bump(opps, a, d, s) + bump(opps, b, c, s) + bump(opps, b, d, s);
       delta += bumpGames(a, s) + bumpGames(b, s) + bumpGames(c, s) + bumpGames(d, s);
@@ -568,7 +580,30 @@ function searchHalf(
       }
       return delta;
     };
-    const gameKey = (w: number, g: number) => matchupKey(player(w, g, 0), player(w, g, 1), player(w, g, 2), player(w, g, 3), n);
+    const count = (counts: Int16Array, a: number, b: number, s: number) => {
+      counts[a * n + b] += s;
+      counts[b * n + a] += s;
+    };
+    /** `applyGame()`'s count changes without scoring them — for undoing a rejected move, whose cost
+     * change is already known. */
+    const countGame = (w: number, g: number, s: number) => {
+      seat(w, g);
+      const a = seated[0], b = seated[1], c = seated[2], d = seated[3];
+      count(mates, a, b, s);
+      count(mates, c, d, s);
+      count(opps, a, c, s);
+      count(opps, a, d, s);
+      count(opps, b, c, s);
+      count(opps, b, d, s);
+      games[a] += s;
+      games[b] += s;
+      games[c] += s;
+      games[d] += s;
+    };
+    const gameKey = (w: number, g: number) => {
+      seat(w, g);
+      return matchupKey(seated[0], seated[1], seated[2], seated[3], n);
+    };
     /** Exact rematches in week `w` — the same two teams twice: a group's two games, or two
      * matches or groups that seat the same four players in a doubleheader week. A week holds at
      * most a dozen or so games per division, so comparing all of them is cheap. */
@@ -579,6 +614,10 @@ function searchHalf(
       return WEIGHT.rematch * count;
     };
 
+    // Each week's current `rematches()`. Two games can only be the same matchup when they seat the
+    // same four slots with the same team split, so swapping two slots' players never changes a
+    // week's rematch count — only a split move recomputes it.
+    const weekRematches: number[] = [];
     let cost = 0;
     for (let i = 0; i < size; i++) {
       cost += WEIGHT.gameCount * gamesPerPlayer;
@@ -587,7 +626,8 @@ function searchHalf(
     for (let w = 0; w < weeks; w++) {
       const all = templates[w].games.map((_, gi) => gi);
       for (const g of all) cost += applyGame(w, g, 1);
-      cost += rematches(w);
+      weekRematches[w] = rematches(w);
+      cost += weekRematches[w];
     }
 
     // Cools geometrically from 20 to 0.01 over the run.
@@ -622,20 +662,22 @@ function searchHalf(
         touched = [g0];
       }
 
-      let delta = -rematches(w);
+      let delta = -weekRematches[w];
       for (const g of touched) delta += applyGame(w, g, -1);
       if (isSwap) swap(slots[w], x, y);
       else splits[w][g0] = newSplit;
       for (const g of touched) delta += applyGame(w, g, 1);
-      delta += rematches(w);
+      const rematchesAfter = isSwap ? weekRematches[w] : rematches(w);
+      delta += rematchesAfter;
 
       if (delta <= 0 || rand() < Math.exp(-delta / temperature)) {
         cost += delta;
+        weekRematches[w] = rematchesAfter;
       } else {
-        for (const g of touched) applyGame(w, g, -1);
+        for (const g of touched) countGame(w, g, -1);
         if (isSwap) swap(slots[w], x, y);
         else splits[w][g0] = oldSplit;
-        for (const g of touched) applyGame(w, g, 1);
+        for (const g of touched) countGame(w, g, 1);
       }
     }
 
