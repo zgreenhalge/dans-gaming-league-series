@@ -10,6 +10,7 @@ import { ScrimCommitmentButtons } from './ScrimCommitmentButtons';
 import { StatusPill } from './StatusPill';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
+import { useScrimSignupWrite } from './useScrimSignupWrite';
 import type { ScrimNightStatus } from '@/lib/scrim-night-page';
 
 const STATE_PILL = {
@@ -62,12 +63,12 @@ export function ScrimNightStatusBar({
 
 /** The viewer's own Check in / Check out for a night. */
 function ScrimCheckInButton({ nightId, playerId, checkedIn }: { nightId: number; playerId: number; checkedIn: boolean }) {
-  const { busy, error, act } = useRefreshingAction();
+  const { busy, error, setCheckIn } = useScrimSignupWrite(nightId);
   return (
     <span className="inline-flex flex-col items-start gap-1">
       <button
         type="button"
-        onClick={() => act(checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: playerId })}
+        onClick={() => setCheckIn(playerId, !checkedIn)}
         disabled={busy}
         className={`${checkedIn ? ADMIN_SMALL_BUTTON_CLS : ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
       >

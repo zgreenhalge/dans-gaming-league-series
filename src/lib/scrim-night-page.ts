@@ -1,6 +1,7 @@
 // What a scrim night's page (`/scrims/[id]`) shows for one viewer: the status bar over every tab, which
-// match the lobby holds, which wait behind it, who may act, and which tabs the page has, in order. Pure — the page fetches the
-// night and renders what this returns, so the rules are testable without rendering anything.
+// match the lobby holds, which wait behind it, who may act, and which tabs the page has, in order.
+// Pure — the page fetches the night and renders what this returns, so the rules are testable without
+// rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
 import { isScrimMatchListed, scrimMatchNeedsServer } from './scrim-matches';
@@ -48,7 +49,6 @@ export interface ScrimNightPageModel {
   /** Games over with no score — the demo is parsing, or the server stopped early. */
   awaitingScore: ScrimMatch[];
   scoredMatchIds: number[];
-  viewerCheckedIn: boolean;
   /** The viewer may make the next match: checked in, or an admin. */
   canMake: boolean;
   /** The viewer may end the night: it has started, and they're signed up or an admin. */
@@ -84,7 +84,6 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
     queued: waiting.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) })),
     awaitingScore: night.matches.filter((m) => !isPlayedScore(m.final_score) && !scrimMatchNeedsServer(m)),
     scoredMatchIds: night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id),
-    viewerCheckedIn,
     canMake,
     canEnd: night.started && (isAdmin || night.signups.some((s) => s.player_id === playerId)),
     offerRounds: night.checkInOpen && canMake && lobbyMatch == null && pool.length >= SCRIM_MATCH_SIZE,
