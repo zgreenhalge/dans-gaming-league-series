@@ -17,9 +17,9 @@ import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNi
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimNightStatsVersion, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
-import { SCRIM_CHECK_IN_LEAD_MS, hasScrimNightEnded } from '@/lib/scrim-schedule';
+import { hasScrimNightEnded, scrimNightBoundaries } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
-import { formatLeagueDate, formatLeagueDateTime, parseRouteId } from '@/lib/util';
+import { formatLeagueDate, formatLeagueDateTime, nextRefreshInstant, parseRouteId } from '@/lib/util';
 import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
 import SectionLabel from '@/components/SectionLabel';
 
@@ -50,8 +50,9 @@ const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'shor
 export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
   const nightId = parseRouteId((await params).id);
   if (nightId === null) notFound();
+  const now = new Date();
   const [night, session, playersById, maps, scheduled] = await Promise.all([
-    getScrimNight(nightId, new Date()),
+    getScrimNight(nightId, now),
     getSession(),
     getPlayersById(),
     getMapsForWorkshopPicker(),
@@ -131,6 +132,9 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     advanced: { label: 'Advanced Stats', content: <ScrimNightStats nightId={night.night.id} version={statsVersion} view="advanced" /> },
     h2h: { label: 'H2H', content: <ScrimNightH2H data={night.h2h} /> },
   };
+  // Check-in opening, the night starting and the night ending all happen on the clock, so the page
+  // refreshes itself at the next of them.
+  const refreshAt = nextRefreshInstant(scrimNightBoundaries(night.night), now.getTime());
   const tabs: ScrimNightTabSpec[] = scrimNightTabOrder(night, model, hasAdvancedStats).map((key) => ({ key, ...content[key] }));
 
   return (
@@ -155,8 +159,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           )}
         </div>
 
-        {/* Check-in opens on the clock, so the page refreshes itself when it does. */}
-        {night.current && !night.checkInOpen && <RefreshAt iso={new Date(Date.parse(night.night.startsAt) - SCRIM_CHECK_IN_LEAD_MS).toISOString()} />}
+        {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
 
         {/* The lobby match's game ending frees the next match, so the page follows its server state
             whichever tab is showing. */}

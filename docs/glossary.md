@@ -55,7 +55,7 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
     overwrite their faction's filled step. A map must be in the season's `map_pool` and not already
     used in this veto.
   - **Veto window** — a player can veto only once the match has a `scheduled_at`, and only from 10
-    minutes before it; an admin can act at any time and is the only one who can clear a step. No
+    minutes before it (`VETO_WINDOW_LEAD_MS`, `isVetoWindowOpen()` in `src/lib/veto.ts`); an admin can act at any time and is the only one who can clear a step. No
     step changes once the match has a played score. Completing the veto provisions the match server
     ([`hosting.md`](./hosting.md)).
   - **Effective played map** is `shirts_pick ?? skins_pick`, not `skins_pick` alone. When shirts

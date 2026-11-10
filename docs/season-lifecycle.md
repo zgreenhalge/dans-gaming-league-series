@@ -39,7 +39,7 @@ starts the next. The status transitions themselves are drawn in
 |---|---|---|---|
 | Create season | Admin | — | `POST /api/seasons` names it with `nextRegularSeasonName()` |
 | Configure | Admin | Season `UPCOMING` for map pool and buy-in | `PATCH /api/seasons/[id]/map-pool`, `/buy-in`, `/start-date` |
-| Roster signup | A player for themself, or an admin for anyone | Season `UPCOMING` | `POST`/`DELETE /api/seasons/[id]/players`, from `SeasonRosterPanel`: its Join / Leave Season button for any viewer signed in as a player, an admin included, and an admin's add and remove controls |
+| Roster signup | A player for themself, or an admin for anyone | Season `UPCOMING` | `POST`/`DELETE /api/seasons/[id]/players`, from `SeasonRosterPanel`: its Join / Leave Season button for any viewer signed in as a player, an admin included, and an admin's `AdminMenu`s for everyone else: Remove on each other player's row, Add player… on the roster header |
 | Schedule draft | Admin | Season `UPCOMING`; roster of `MIN_SEED_COUNT`–`MAX_SEED_COUNT` | `generateSeasonScheduleDraft()` → `buildRosterSchedule()`; hand-edits through `saveSeasonScheduleDraft()` |
 | Confirm (go live) | Admin | Map pool set; `validateDraftIntegrity()` and `validateDraftCompleteness()` pass | `confirmSeasonScheduleDraft()`, then `activateSeason()` → `tryBuildGauntletShape()` |
 
@@ -142,7 +142,7 @@ source of truth, and the owning doc has the detail.
 
 | Timer | Value | Defined by | Effect |
 |---|---|---|---|
-| Veto window | Opens 10 min before `scheduled_at` | `PATCH /api/matches/[id]/veto` | Players can't veto earlier |
+| Veto window | Opens 10 min before `scheduled_at` | `VETO_WINDOW_LEAD_MS` / `isVetoWindowOpen()` (`src/lib/veto.ts`) | Players can't veto earlier; the match page refreshes itself when it opens |
 | Match reminder | 1 hour before `scheduled_at` | `schedule_match_reminder()` (Postgres) | One Discord reminder per match whose time is set; a time synced from a Discord event reminds only a pod's Game 1 |
 | Server clash warning | Under 1 hour apart | `SCHEDULE_COLLISION_WINDOW_MS` | Warning only |
 | Pod Game 2 time | Game 1 + 30 min | `POD_GAME_GAP_MS` | Only for a time synced from a Discord event |
