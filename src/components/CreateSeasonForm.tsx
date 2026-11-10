@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useId, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { parseBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 import ErrorText from '@/components/ErrorText';
+import FieldLabel from './FieldLabel';
 
 interface Props {
   knownMaps: string[];
@@ -17,6 +18,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
   const router = useRouter();
   const selection = useMapPoolSelection();
   const [buyIn, setBuyIn] = useState('10');
+  const buyInFieldId = useId();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [submitting, setSubmitting] = useState(false);
@@ -50,16 +52,17 @@ export function CreateSeasonForm({ knownMaps }: Props) {
 
   return (
     <div className="flex flex-col gap-8">
-      <label className="flex flex-col gap-1.5 max-w-[200px]">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Buy-in ($)</span>
+      <div className="flex flex-col gap-1.5 max-w-[200px]">
+        <FieldLabel htmlFor={buyInFieldId}>Buy-in ($)</FieldLabel>
         <input
+          id={buyInFieldId}
           type="text"
           inputMode="decimal"
           value={buyIn}
           onChange={(e) => setBuyIn(e.target.value)}
           className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
         />
-      </label>
+      </div>
 
       <MapPoolPicker knownMaps={knownMaps} selection={selection} />
 

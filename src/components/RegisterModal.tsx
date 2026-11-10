@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useId, useState, useSyncExternalStore } from "react";
 import { useSession } from "next-auth/react";
 import { useHasMounted } from "./useHasMounted";
 import Modal from "./Modal";
 import ErrorText from '@/components/ErrorText';
+import FieldLabel from './FieldLabel';
 import { isValidPlayerName, normalizePlayerName, PLAYER_NAME_MAX_LENGTH, PLAYER_NAME_RULE } from "@/lib/util";
 
 const subscribeNever = () => () => {};
@@ -44,6 +45,7 @@ export default function RegisterModal() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const mounted = useHasMounted();
+  const newNameFieldId = useId();
 
   const show = !!session?.user && session.user.playerId == null;
   const claimToken = useClaimToken();
@@ -121,10 +123,9 @@ export default function RegisterModal() {
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label className="tracked text-[10px] text-[var(--color-text-secondary)]">
-            I&apos;m new — add me to the roster
-          </label>
+          <FieldLabel htmlFor={newNameFieldId}>I&apos;m new — add me to the roster</FieldLabel>
           <input
+            id={newNameFieldId}
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
