@@ -2,7 +2,8 @@
 // regardless of whether the workflow is currently disabled. GitHub's enable/disable toggle blocks
 // workflow_dispatch along with the schedule, so a disabled workflow can't normally be dispatched at
 // all — this captures the current state, enables it just long enough to dispatch, then restores
-// whatever it was before, so "paused" still means paused afterward.
+// whatever it was before, so "paused" still means paused afterward. A failed restore is reported as
+// a 502, since the workflow is then left enabled.
 
 import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
@@ -22,13 +23,22 @@ export async function POST() {
     if (!enabled.ok) return NextResponse.json({ error: enabled.error }, { status: 502 });
   }
 
-  try {
-    const dispatch = await dispatchWorkflow(WORKFLOW_FILE, { dry_run: 'false' });
-    if (!dispatch.ok) return NextResponse.json({ error: dispatch.error }, { status: 502 });
-    return NextResponse.json({ ok: true });
-  } finally {
-    // Always put it back, whether dispatch succeeded or not — a disabled workflow should stay
-    // disabled after a one-off manual run.
-    if (wasDisabled) await setWorkflowEnabled(WORKFLOW_FILE, false);
+  // Put it back whether the dispatch succeeded or not — a disabled workflow stays disabled after a
+  // one-off manual run. A thrown dispatch (network failure) still reaches the restore below.
+  const dispatch = await dispatchWorkflow(WORKFLOW_FILE, { dry_run: 'false' }).catch((err: unknown) => ({
+    ok: false,
+    error: err instanceof Error ? err.message : String(err),
+  }));
+  if (wasDisabled) {
+    const restored = await setWorkflowEnabled(WORKFLOW_FILE, false);
+    if (!restored.ok) {
+      const outcome = dispatch.ok ? 'The run was dispatched' : `The dispatch failed (${dispatch.error})`;
+      return NextResponse.json(
+        { error: `${outcome}, but re-disabling the workflow failed: ${restored.error}` },
+        { status: 502 },
+      );
+    }
   }
+  if (!dispatch.ok) return NextResponse.json({ error: dispatch.error }, { status: 502 });
+  return NextResponse.json({ ok: true });
 }
