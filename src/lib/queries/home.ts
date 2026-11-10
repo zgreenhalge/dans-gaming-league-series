@@ -8,7 +8,7 @@ import {
   getUpcomingGauntletGames,
 } from './gauntlet';
 import type { HomeSeasons } from './seasons';
-import { findCurrentWeek, getSeasonSchedule, getUpcomingGames, type UpcomingGameRow } from './schedule';
+import { currentWeekBoundaries, findCurrentWeek, getSeasonSchedule, getUpcomingGames, type UpcomingGameRow } from './schedule';
 
 // The home page's Upcoming Games data. Which season is current comes from `resolveHomeSeasons()`
 // (`queries/seasons.ts`); the signed-in player's My Stats panel is `getMyStats()`
@@ -26,6 +26,10 @@ export interface HomeGames {
   headingHref: string;
   /** The To Be Scheduled heading's target: the season hub's Schedule tab. */
   scheduleHref: string;
+  /** The instants (epoch ms) the current week changes (`currentWeekBoundaries()`), and with it the
+   *  To Be Scheduled list and the Upcoming Games heading. None for a gauntlet, whose current round
+   *  follows its scores rather than the clock. */
+  boundaries: number[];
 }
 
 /** `HomeGames` for an active regular season. */
@@ -37,6 +41,7 @@ export function buildRegularHomeGames(season: Pick<Season, 'id' | 'start_date'>,
     unscheduled,
     headingHref: week ? weekHref(season.id, week.id) : seasonHref(season.id),
     scheduleHref: seasonScheduleHref(season.id),
+    boundaries: currentWeekBoundaries(schedule, season.start_date),
   };
 }
 
@@ -50,6 +55,7 @@ export function buildGauntletHomeGames(hubSeasonId: number, rounds: GauntletRoun
     unscheduled: unscheduled.map(gauntletMatchToUpcomingGameRow),
     headingHref: round ? roundHref(hubSeasonId, round.round_number) : gauntletHref(hubSeasonId),
     scheduleHref: gauntletScheduleHref(hubSeasonId),
+    boundaries: [],
   };
 }
 

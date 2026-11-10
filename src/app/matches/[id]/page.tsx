@@ -2,13 +2,13 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchIdsForMap, getMatchServerState, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchIdsForMap, getMatchServerState, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, getSeasonScope, isWeekComplete, isMatchCurrentlyLive, weekWindowBoundaries, weekWindowMs } from '@/lib/queries';
 import { loadMatchPageFacts, matchMvpPlayerId, shirtsFaction } from '@/lib/match-page-data';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
-import { isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
+import { isPlayedScore, nextRefreshInstant, parseRouteId, parseScore } from '@/lib/util';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -31,7 +31,8 @@ import { getPlayersById } from '@/lib/queries';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
-import { isVetoComplete, effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
+import { isVetoComplete, isVetoWindowOpen, vetoWindowOpensAt, effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
+import { RefreshAt } from '@/components/RefreshAt';
 import SectionLabel from '@/components/SectionLabel';
 
 export async function generateMetadata({
@@ -115,11 +116,11 @@ export default async function MatchPage({
   // Rating projections/win-probability render for an unplayed match either in its own week's date
   // window, or — if that window hasn't opened yet — once the previous week is fully scored (a
   // league that wraps a week up early shouldn't have to wait on the calendar for predictions).
-  const matchWindow = matchWeekWindow(season.start_date, week.week_number);
-  const today = new Date().toISOString().slice(0, 10);
-  const isCurrentWeek = matchWindow != null && today >= matchWindow.weekStart && today <= matchWindow.weekEnd;
+  const now = new Date().getTime();
+  const matchWindow = season.start_date ? weekWindowMs(season.start_date, week.week_number) : null;
+  const isCurrentWeek = matchWindow != null && now >= matchWindow.start && now <= matchWindow.end;
   const needsPreviousWeekCheck =
-    showPreMatchScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
+    showPreMatchScouting && week.week_number > 1 && matchWindow != null && now < matchWindow.start;
 
   // A pod's sibling lookup needs the pod itself first — chained rather than a second query, since
   // both games share one `gauntlet_pods` row.
@@ -191,10 +192,19 @@ export default async function MatchPage({
 
   const currentPlayerId = session?.user?.playerId ?? null;
 
-  // Veto window: open only when a scheduled time exists and we're within 10 minutes of it
-  const scheduledTime = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
-  // eslint-disable-next-line react-hooks/purity
-  const vetoWindowOpen = !!scheduledTime && Date.now() >= scheduledTime - 10 * 60 * 1000;
+  // Veto window: open only once a scheduled time exists and `VETO_WINDOW_LEAD_MS` before it has passed
+  const vetoWindowOpen = isVetoWindowOpen(match.scheduled_at, now);
+  // The veto window opening, and the week window opening or closing (which gates the projections
+  // above), happen on the clock, so an unplayed match's page refreshes itself at the next of them.
+  const refreshAt = played
+    ? null
+    : nextRefreshInstant(
+        [
+          ...(match.scheduled_at ? [vetoWindowOpensAt(match.scheduled_at)] : []),
+          ...(showPreMatchScouting && season.start_date ? weekWindowBoundaries(season.start_date, week.week_number) : []),
+        ],
+        now,
+      );
 
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
@@ -278,6 +288,7 @@ export default async function MatchPage({
           under the topbar on exactly the page most likely to be watched live. */}
       {isLiveNow && <style>{':root{--ticker-h:0px !important}'}</style>}
       <JsonLd data={matchJsonLd} />
+      {refreshAt && <RefreshAt iso={refreshAt} />}
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
         {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}

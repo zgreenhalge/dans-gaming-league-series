@@ -309,6 +309,36 @@ user's browser — React will either warn or silently show the wrong value until
 - Server components (e.g. `page.tsx`) using `toLocaleDateString` with `timeZone: 'UTC'` — safe
   because server components never hydrate.
 
+## Server pages that change on the clock refresh themselves at the boundary
+
+A server-rendered check against the current time (check-in is open, the veto window has opened, this
+is the current week) is decided once, when the page renders. Nothing re-renders it when the instant
+passes, so a viewer with the page open sees the old answer until they reload. A page with such a
+check renders `<RefreshAt iso={…} />` (`src/components/RefreshAt.tsx`), which calls
+`router.refresh()` once that instant arrives.
+
+- **Compute the instant from the helpers the check uses.** Each check has a helper that returns where
+  it flips — `scrimNightBoundaries()` for `isScrimCheckInOpen()` / `hasScrimNightStarted()` /
+  `hasScrimNightEnded()`, `vetoWindowOpensAt()` for `isVetoWindowOpen()`, `weekWindowBoundaries()` /
+  `currentWeekBoundaries()` for a `weekWindowMs()` / `findCurrentWeek()` check — and a test pins the
+  check to flip exactly there. A refresh computed some other way can land on the wrong side of it.
+- **One `RefreshAt` per page, at the next boundary.** Pass every instant the page's checks compare
+  against to `nextRefreshInstant()` (`src/lib/util.ts`): it returns the earliest one still ahead, or
+  `null` when there is none, and the page renders `RefreshAt` only when it isn't `null`. After the
+  refresh the page renders the following boundary. Past instants are dropped, so it never fires
+  straight away, and a refresh that renders the same instant doesn't re-arm the timer.
+- **A boundary more than about 24.8 days out never fires** (`setTimeout`'s limit). Nobody keeps a tab
+  open that long, and the page renders a nearer one when it next loads.
+- **It is hydration-safe.** The instant is computed on the server and passed as a prop; the client
+  reads the clock only inside the effect.
+
+`RefreshAt` is for the clock only. A page that changes when the database does (a match is scored, a
+server starts) needs Realtime or its own polling instead — `RefreshOnServerState` on the scrim night
+page, or a client component such as `MatchServerPanel` that follows its own row. Each
+`router.refresh()` re-runs the whole server page, so a state-driven refresh on a heavy page (the
+season hub, statistics) needs a narrow Realtime filter, no polling fallback, and the owner's approval
+for that page.
+
 ## Identifiers vs. display names
 
 Use `id` for routing, queries, and props; treat `name` as display-only. Don't key logic off a
