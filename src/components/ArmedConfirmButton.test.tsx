@@ -48,18 +48,21 @@ describe('ArmedConfirmButton (uncontrolled)', () => {
     // The button doesn't swallow the rejection: it still propagates out of the click handler.
     const onUnhandled = vi.fn();
     process.on('unhandledRejection', onUnhandled);
-    const { rerender } = render(<ArmedConfirmButton onConfirm={() => d.promise} busy={false} {...LABELS} />);
-    fireEvent.click(screen.getByText('Delete'));
-    fireEvent.click(screen.getByText('Confirm Delete'));
-    await act(async () => {
-      d.reject(new Error('boom'));
-      await d.promise.catch(() => {});
-    });
-    rerender(<ArmedConfirmButton onConfirm={() => d.promise} busy={false} error="Failed to delete." {...LABELS} />);
-    expect(screen.getByText('Delete')).toBeInTheDocument();
-    expect(screen.getByText('Failed to delete.')).toBeInTheDocument();
-    await new Promise((r) => setTimeout(r, 0));
-    process.off('unhandledRejection', onUnhandled);
+    try {
+      const { rerender } = render(<ArmedConfirmButton onConfirm={() => d.promise} busy={false} {...LABELS} />);
+      fireEvent.click(screen.getByText('Delete'));
+      fireEvent.click(screen.getByText('Confirm Delete'));
+      await act(async () => {
+        d.reject(new Error('boom'));
+        await d.promise.catch(() => {});
+      });
+      rerender(<ArmedConfirmButton onConfirm={() => d.promise} busy={false} error="Failed to delete." {...LABELS} />);
+      expect(screen.getByText('Delete')).toBeInTheDocument();
+      expect(screen.getByText('Failed to delete.')).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 0));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
     expect(onUnhandled).toHaveBeenCalledTimes(1);
   });
 

@@ -27,6 +27,11 @@ const TRIGGER_STYLE: Record<'bordered' | 'link', string> = {
   link: 'font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted',
 };
 
+/** Leave all three unset to let the button own its armed state, or pass all three to control it. */
+type ArmedControl =
+  | { armed: boolean; onArm: () => void; onCancel: () => void }
+  | { armed?: undefined; onArm?: undefined; onCancel?: undefined };
+
 export function ArmedConfirmButton({
   armed,
   onArm,
@@ -39,11 +44,7 @@ export function ArmedConfirmButton({
   confirmLabel,
   busyLabel,
   variant,
-}: {
-  /** Controls the armed state from outside; leave unset to let the button own it. */
-  armed?: boolean;
-  onArm?: () => void;
-  onCancel?: () => void;
+}: ArmedControl & {
   onConfirm: () => void | Promise<unknown>;
   busy: boolean;
   error?: string | null;
