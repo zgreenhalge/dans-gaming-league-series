@@ -16,16 +16,23 @@ async function ghApi(
   if (!token || !repo) {
     return { status: 0, ok: false, text: 'GITHUB_DISPATCH_TOKEN / GITHUB_REPO not set', json: null };
   }
-  const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
-    method,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+      method,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    // A network failure is reported like an HTTP one, so every helper here returns `{ ok: false }`
+    // rather than rejecting — the same contract as `dispatchWorkflow()`.
+    return { status: 0, ok: false, text: `network error: ${(err as Error).message}`, json: null };
+  }
   const text = await res.text().catch(() => '');
   let json: unknown = null;
   try {
