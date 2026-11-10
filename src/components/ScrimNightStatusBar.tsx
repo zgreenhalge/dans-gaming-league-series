@@ -53,8 +53,9 @@ export function ScrimNightStatusBar({
       </div>
       {(commitment || checkIn) && (
         <div className="flex flex-wrap items-start gap-2">
-          {commitment && <ScrimCommitmentButtons nightId={nightId} {...commitment} />}
+          {/* Check in leads, so Drop out (which has no confirm) isn't the button beside it. */}
           {checkIn && <ScrimCheckInButton nightId={nightId} {...checkIn} />}
+          {commitment && <ScrimCommitmentButtons nightId={nightId} {...commitment} />}
         </div>
       )}
     </div>

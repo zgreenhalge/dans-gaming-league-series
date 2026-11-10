@@ -77,11 +77,12 @@ test('making matches: a checked-in player or an admin; Generate Rounds only with
   assert.equal(buildScrimNightPageModel(night({ checkInOpen: false }), ADMIN).offerRounds, false);
 });
 
-test('ending the night: once started, for anyone signed up or an admin', () => {
+test('ending the night: while it runs, for anyone signed up or an admin', () => {
   assert.equal(buildScrimNightPageModel(night(), PLAYER(1)).canEnd, true);
   assert.equal(buildScrimNightPageModel(night(), PLAYER(7)).canEnd, false);
   assert.equal(buildScrimNightPageModel(night(), ADMIN).canEnd, true);
   assert.equal(buildScrimNightPageModel(night({ started: false }), ADMIN).canEnd, false);
+  assert.equal(buildScrimNightPageModel(night({ current: false, checkInOpen: false }), ADMIN).canEnd, false, 'once it is over');
 });
 
 test('the status bar: the night\'s state, and the checked-in count while check-in is open', () => {
@@ -146,8 +147,8 @@ test('tabs: a lobby leads with the standings under it; an ended night leads with
   const played = [match(1, '13-9', 'done')];
   assert.deepEqual(order(night({ matches: played, leaderboard: standings }), true), ['lobby', 'roster', 'matches', 'stats', 'advanced']);
   const ended = night({ current: false, checkInOpen: false, matches: played, leaderboard: standings, h2h: { ...NO_H2H, duos: [{} as H2HData['duos'][number]] } });
-  assert.deepEqual(order(ended), ['leaderboard', 'matches', 'stats', 'h2h', 'roster'], 'Roster goes last once the night is over');
-  assert.deepEqual(order(night({ checkInOpen: false, matches: played, leaderboard: standings })), ['roster', 'matches', 'leaderboard', 'stats'], 'a running night with nobody checked in');
+  assert.deepEqual(order(ended), ['leaderboard', 'matches', 'stats', 'h2h', 'roster'], 'Roster goes last with no lobby');
+  assert.deepEqual(order(night({ checkInOpen: false, matches: played, leaderboard: standings })), ['matches', 'leaderboard', 'stats', 'roster'], 'a running night with nobody checked in: results first');
 });
 
 report();

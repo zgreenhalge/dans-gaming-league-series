@@ -51,7 +51,7 @@ export interface ScrimNightPageModel {
   scoredMatchIds: number[];
   /** The viewer may make the next match: checked in, or an admin. */
   canMake: boolean;
-  /** The viewer may end the night: it has started, and they're signed up or an admin. */
+  /** The viewer may end the night: it has started and isn't over, and they're signed up or an admin. */
   canEnd: boolean;
   /** Generate Rounds is offered where Next Match is: check-in open, no match waiting, four checked in. */
   offerRounds: boolean;
@@ -85,7 +85,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
     awaitingScore: night.matches.filter((m) => !isPlayedScore(m.final_score) && !scrimMatchNeedsServer(m)),
     scoredMatchIds: night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id),
     canMake,
-    canEnd: night.started && (isAdmin || night.signups.some((s) => s.player_id === playerId)),
+    canEnd: night.started && night.current && (isAdmin || mine != null),
     offerRounds: night.checkInOpen && canMake && lobbyMatch == null && pool.length >= SCRIM_MATCH_SIZE,
     hasLobby,
   };
@@ -96,22 +96,21 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
  *  Roster shows once anyone has signed up, Matches once a match has started (`isScrimMatchListed()`),
  *  Leaderboard once there are standings. With a lobby, the standings sit under it condensed rather than
  *  in a tab of their own; once the night is over (and there's no lobby), they are the headline, so they
- *  lead. Roster follows the Lobby while the night is on and goes last once it's over, when the results
- *  come first. */
+ *  lead. Roster follows the Lobby; with no lobby it goes last, after any results. */
 export function scrimNightTabOrder(night: ScrimNightView, model: ScrimNightPageModel, hasAdvancedStats: boolean): ScrimNightTab[] {
   const hasStandings = night.leaderboard.length > 0;
   const leaderboardFirst = !night.current && !model.hasLobby && hasStandings;
   const hasRoster = night.signups.length > 0;
   const tabs: ScrimNightTab[] = [];
   if (model.hasLobby) tabs.push('lobby');
-  if (hasRoster && night.current) tabs.push('roster');
+  if (hasRoster && model.hasLobby) tabs.push('roster');
   if (leaderboardFirst) tabs.push('leaderboard');
   if (night.matches.some(isScrimMatchListed)) tabs.push('matches');
   if (hasStandings && !model.hasLobby && !leaderboardFirst) tabs.push('leaderboard');
   if (hasStandings) tabs.push('stats');
   if (hasAdvancedStats) tabs.push('advanced');
   if (night.h2h.duos.length > 0 || night.h2h.rivals.length > 0) tabs.push('h2h');
-  if (hasRoster && !night.current) tabs.push('roster');
+  if (hasRoster && !model.hasLobby) tabs.push('roster');
   return tabs;
 }
 

@@ -88,19 +88,19 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
           )}
           {queued.length > 0 && <UpNext queued={queued} names={names} />}
         </>
-      ) : (
-        canMake && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
-              {busy ? '…' : 'Next Match'}
+      ) : canMake ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
+            {busy ? '…' : 'Next Match'}
+          </button>
+          {rounds && (
+            <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
+              Generate Rounds
             </button>
-            {rounds && (
-              <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
-                Generate Rounds
-              </button>
-            )}
-          </div>
-        )
+          )}
+        </div>
+      ) : (
+        <p className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match yet. A checked-in player makes the next one.</p>
       )}
       <ErrorText error={error} size={12} />
       {generating && rounds && !match && (

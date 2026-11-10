@@ -270,6 +270,7 @@ test.describe('the lobby', () => {
     await expect(page.getByText('4 checked in', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Check in', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Next Match' })).toHaveCount(0);
+    await expect(page.getByText('No match yet. A checked-in player makes the next one.')).toBeVisible();
 
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
     await expect(page.getByRole('button', { name: 'Check in', exact: true })).toBeVisible();
