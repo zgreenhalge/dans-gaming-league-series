@@ -39,7 +39,7 @@ starts the next. The status transitions themselves are drawn in
 |---|---|---|---|
 | Create season | Admin | — | `POST /api/seasons` names it with `nextRegularSeasonName()` |
 | Configure | Admin | Season `UPCOMING` for map pool and buy-in | `PATCH /api/seasons/[id]/map-pool`, `/buy-in`, `/start-date` |
-| Roster signup | A player for themself, or an admin for anyone | Season `UPCOMING` | `POST`/`DELETE /api/seasons/[id]/players` |
+| Roster signup | A player for themself, or an admin for anyone | Season `UPCOMING` | `POST`/`DELETE /api/seasons/[id]/players`, from `SeasonRosterPanel`: its Join / Leave Season button for any viewer signed in as a player, an admin included, and an admin's add and remove controls |
 | Schedule draft | Admin | Season `UPCOMING`; roster of `MIN_SEED_COUNT`–`MAX_SEED_COUNT` | `generateSeasonScheduleDraft()` → `buildRosterSchedule()`; hand-edits through `saveSeasonScheduleDraft()` |
 | Confirm (go live) | Admin | Map pool set; `validateDraftIntegrity()` and `validateDraftCompleteness()` pass | `confirmSeasonScheduleDraft()`, then `activateSeason()` → `tryBuildGauntletShape()` |
 

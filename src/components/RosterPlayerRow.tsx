@@ -36,13 +36,14 @@ export function RosterPlayerRow({
   );
 }
 
-/** A row's admin "Remove" action. */
-export function RosterRemoveButton({ onClick, pending }: { onClick: () => void; pending: boolean }) {
+/** A row's admin "Remove" action: `pending` shows this row's write in flight, `disabled` holds it
+ *  while another one is. */
+export function RosterRemoveButton({ onClick, pending, disabled = false }: { onClick: () => void; pending: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={pending}
+      disabled={pending || disabled}
       className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg,#f87171)] transition-colors disabled:opacity-40"
     >
       {pending ? '…' : 'Remove'}
