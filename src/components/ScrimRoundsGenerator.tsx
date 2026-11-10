@@ -6,6 +6,7 @@ import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminBut
 import { useRefreshingAction } from './useRefreshingAction';
 import type { ScheduleLabPlayer, ScheduleLabRoster } from '@/lib/queries';
 import type { FormatPlan, FormatRecord } from '@/lib/season-format';
+import SectionLabel from './SectionLabel';
 
 const ROUND: PlanPeriod = { one: 'round', many: 'rounds', span: 'night' };
 
@@ -36,7 +37,7 @@ export function ScrimRoundsGenerator({
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Generate rounds</div>
+        <SectionLabel>Generate rounds</SectionLabel>
         <button type="button" onClick={onClose} className={ADMIN_SMALL_BUTTON_CLS}>
           Close
         </button>

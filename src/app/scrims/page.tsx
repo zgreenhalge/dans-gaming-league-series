@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { getPastScrimNights, getPlayersById, getUpcomingScrimNights } from '@/lib/queries';
 import { ScrimCalendar } from '@/components/ScrimCalendar';
 import { ScrimPastNights } from '@/components/ScrimPastNights';
+import SectionLabel from '@/components/SectionLabel';
 
 export const metadata: Metadata = {
   title: 'Scrims',
@@ -12,8 +13,6 @@ export const metadata: Metadata = {
 
 // Which nights are upcoming, and whether they've started, depend on the current time.
 export const dynamic = 'force-dynamic';
-
-const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
 
 export default async function ScrimsPage() {
   const now = new Date();
@@ -35,7 +34,7 @@ export default async function ScrimsPage() {
         <div className="flex flex-col gap-6">
           <ScrimCalendar upcoming={upcoming} past={pastNights} currentPlayerId={currentPlayerId} isAdmin={isAdmin} allPlayers={allPlayers} />
           <section>
-            <div className={SECTION_LABEL_CLS}>Past nights</div>
+            <SectionLabel className="mb-2">Past nights</SectionLabel>
             <ScrimPastNights nights={pastNights} />
           </section>
         </div>

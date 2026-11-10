@@ -17,6 +17,7 @@ import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { StatusPill } from '@/components/StatusPill';
 import { seasonTitle, extractSeasonNumber, canonicalSort } from '@/lib/util';
+import SectionLabel from '@/components/SectionLabel';
 
 export const metadata = {
   title: 'Seasons',
@@ -249,7 +250,7 @@ export default async function SeasonsPage() {
 
         {active.length > 0 && (
           <>
-            <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Active</div>
+            <SectionLabel className="mb-3">Active</SectionLabel>
             <div className="flex flex-col gap-4 mb-10">
               {active.map((s) => (
                 <ActiveSeasonRow
@@ -264,7 +265,7 @@ export default async function SeasonsPage() {
 
         {upcoming.length > 0 && (
           <>
-            <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Upcoming</div>
+            <SectionLabel className="mb-3">Upcoming</SectionLabel>
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-10">
               {upcoming.map((s) => (
                 <UpcomingSeasonRow
@@ -280,7 +281,7 @@ export default async function SeasonsPage() {
 
         {pastGroups.length > 0 && (
           <>
-            <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Past</div>
+            <SectionLabel className="mb-3">Past</SectionLabel>
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
               {pastGroups.map(({ num, regular, gauntlet }) => (
                 <PastSeasonRow

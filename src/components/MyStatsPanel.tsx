@@ -9,8 +9,8 @@ import { WLChip } from './WLChip';
 import { PlayerSummaryBlock } from './PlayerSummaryBlock';
 import { PanelLink } from './PanelHeader';
 import StatTileGrid from './StatTileGrid';
+import SectionLabel from './SectionLabel';
 
-const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 const PANEL_CLS = 'border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] p-5';
 const PANEL_STYLE = { borderTopColor: 'var(--color-site-accent)', borderTopWidth: '3px' };
 
@@ -48,7 +48,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
 
   return (
     <div className={PANEL_CLS} style={PANEL_STYLE}>
-      <div className={LABEL_CLS}>My Stats</div>
+      <SectionLabel>My Stats</SectionLabel>
       <div className="mt-2">
         <PlayerSummaryBlock summary={stats} isMe />
       </div>
@@ -80,7 +80,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
 
       <div className="mt-4 border-t border-[var(--color-border-secondary)] pt-3">
         <div className="flex items-baseline justify-between mb-2">
-          <span className={LABEL_CLS}>Match history</span>
+          <SectionLabel as="span">Match history</SectionLabel>
           <PanelLink href={`${playerHref(playerId)}?tab=matches`}>View all →</PanelLink>
         </div>
         {recent.length === 0 ? (
@@ -111,7 +111,7 @@ export function MyStatsPanel({ stats }: { stats: MyStats }) {
 export function MyStatsLockedPanel() {
   return (
     <div className={PANEL_CLS} style={PANEL_STYLE}>
-      <div className={LABEL_CLS}>My Stats</div>
+      <SectionLabel>My Stats</SectionLabel>
       <div className="select-none opacity-70 blur-[5px]" aria-hidden>
         <div className="flex items-center justify-between gap-3 mt-2 mb-3">
           <span className="font-display text-[24px] font-bold">Your Name</span>

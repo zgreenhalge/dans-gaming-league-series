@@ -95,6 +95,11 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - **`.font-display`** / **`.font-mono`** — the two custom font families
 - **`.tracked`** / **`.tracked-wide`** — uppercase, letter-spaced "broadcast label" styling for
   small section headers/eyebrows. Table header cells are plain sans instead (see Table header cells)
+- **`SectionLabel`** (`src/components/SectionLabel.tsx`) — the small section label: `.tracked` at
+  10px in secondary text, naming a section of a page, panel or form. Use it rather than typing the
+  classes out. Spacing goes in `className` (`<SectionLabel className="mb-3">`); `as="span"` keeps it
+  inline inside a heading row, link or button. A form field's own label (tied to its input) is not a
+  section label and stays a plain `<label>`/`<span>`
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for

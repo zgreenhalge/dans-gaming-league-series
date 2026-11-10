@@ -48,12 +48,12 @@ export function GauntletPreviewView({ seasons }: { seasons: GauntletPreviewSeaso
       </section>
 
       <section>
-        <SectionLabel>Bracket</SectionLabel>
+        <SectionLabel className="mb-2">Bracket</SectionLabel>
         <GauntletBracketDiagram pods={preview.pods} currentPlayerId={null} seedNames={preview.seedNames} />
       </section>
 
       <section>
-        <SectionLabel>Seeds</SectionLabel>
+        <SectionLabel className="mb-2">Seeds</SectionLabel>
         <StatTable>
           <thead>
             <tr>

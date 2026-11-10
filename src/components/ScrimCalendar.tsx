@@ -13,6 +13,7 @@ import { dayNightFill } from '@/lib/scrim-seats';
 import { addMonths, localDayKey, monthGrid } from '@/lib/calendar-month';
 import { SCRIM_MAX_DAYS_AHEAD } from '@/lib/scrim-schedule';
 import type { PastScrimNight, UpcomingScrimNight } from '@/lib/queries';
+import SectionLabel from './SectionLabel';
 
 interface Props {
   upcoming: UpcomingScrimNight[];
@@ -23,7 +24,6 @@ interface Props {
 }
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The scrims calendar: a month grid in the viewer's own timezone where each day shows its nights —
@@ -78,7 +78,7 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
         </div>
         <div className="grid grid-cols-7 gap-1">
           {WEEKDAYS.map((w, i) => (
-            <div key={i} className={`${LABEL_CLS} text-center pb-1`}>
+            <div key={i} className="tracked text-[10px] text-[var(--color-text-secondary)] text-center pb-1">
               {w}
             </div>
           ))}
@@ -89,9 +89,9 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
       </div>
 
       <section className="flex flex-col gap-4">
-        <div className={LABEL_CLS}>
+        <SectionLabel>
           {new Date(`${selected}T00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </div>
+        </SectionLabel>
         {day.upcoming.map((u) => (
           <ScrimNightPanel key={u.night.id} upcoming={u} currentPlayerId={currentPlayerId} isAdmin={isAdmin} allPlayers={allPlayers} showNightLink />
         ))}

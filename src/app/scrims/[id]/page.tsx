@@ -21,6 +21,7 @@ import { SCRIM_CHECK_IN_LEAD_MS, hasScrimNightEnded, leagueMatchesDuring } from 
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { formatLeagueDate, formatLeagueDateTime, parseRouteId } from '@/lib/util';
 import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
+import SectionLabel from '@/components/SectionLabel';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
@@ -44,7 +45,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-const SECTION_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)] mb-2';
 const START_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
 
 export default async function ScrimNightPage({ params }: { params: Promise<{ id: string }> }) {
@@ -94,7 +94,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           />
           {night.leaderboard.length > 0 && (
             <section className="mt-8">
-              <div className={SECTION_LABEL_CLS}>Leaderboard</div>
+              <SectionLabel className="mb-2">Leaderboard</SectionLabel>
               <ScrimNightLeaderboard rows={night.leaderboard} condensed />
             </section>
           )}

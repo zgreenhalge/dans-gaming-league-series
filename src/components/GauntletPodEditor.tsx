@@ -20,6 +20,7 @@ import {
   draftToPreviewPods,
 } from '@/lib/gauntlet-draft';
 import ErrorText from '@/components/ErrorText';
+import SectionLabel from './SectionLabel';
 
 interface Player {
   id: number;
@@ -250,9 +251,9 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">
+        <SectionLabel className="mb-2">
           Roster — mark anyone sitting out this gauntlet
-        </div>
+        </SectionLabel>
         <div className="flex flex-wrap gap-2">
           {players.map((p) => {
             const dropped = droppedIds.has(p.id);
@@ -284,7 +285,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Pods</div>
+        <SectionLabel>Pods</SectionLabel>
         {pods.length === 0 && <EmptyState message="No pods yet." />}
         {pods.map((pod) => (
           <PodCard

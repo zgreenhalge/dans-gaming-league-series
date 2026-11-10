@@ -30,6 +30,7 @@ import SortableTh from './SortableTh';
 import { CompactTable, CompactTh, CompactTr, CompactTd } from './CompactTable';
 import { StatTable, Tr, Td, NameTd, MapCell } from './StatTable';
 import { PanelLink } from './PanelHeader';
+import SectionLabel from './SectionLabel';
 
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
@@ -78,14 +79,6 @@ function PctRow({ label, pct, value }: { label: string; pct: number; value: stri
         <span className="absolute left-1/2 -top-0.5 -bottom-0.5 w-px bg-[rgba(255,255,255,0.25)]" />
       </div>
       <span className="font-mono text-[10px] text-right text-[var(--color-text-primary)]">{value}</span>
-    </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-10 mb-3">
-      {children}
     </div>
   );
 }
@@ -324,7 +317,7 @@ export default function PlayerView({
           onClick={() => setTab('trophies')}
           className="mb-3 flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
-          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Trophies</span>
+          <SectionLabel as="span">Trophies</SectionLabel>
           <div className="flex items-center gap-3 font-mono text-[12px]">
             {([1, 2, 3] as const).map((rank) => (
               <span key={rank} className="flex items-center gap-1" style={{ color: MEDAL_COLORS[rank] }}>
@@ -338,7 +331,7 @@ export default function PlayerView({
 
       {/* Last 5 — above tabs */}
       <div className="mb-4 flex items-center gap-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
+        <SectionLabel as="span">Last 5</SectionLabel>
         <div className="flex items-center gap-2">
           {last5.length === 0 ? (
             <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
@@ -395,9 +388,9 @@ export default function PlayerView({
       {tab === 'stats' && (
         <>
           <div className="flex items-baseline justify-between mb-3">
-            <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
+            <SectionLabel as="span">
               {isCareer ? 'Career' : 'Season'} stats
-            </span>
+            </SectionLabel>
             <PanelLink href="/statistics" hover="primary">
               View all →
             </PanelLink>
@@ -420,7 +413,7 @@ export default function PlayerView({
 
           {isCareer && activeSeasons.length > 0 && (
             <>
-              <SectionLabel>Season history</SectionLabel>
+              <SectionLabel className="mt-10 mb-3">Season history</SectionLabel>
               <LeaderboardTable
                 firstColMode="season"
                 stickyNameCol={false}
@@ -432,7 +425,7 @@ export default function PlayerView({
           {filteredEhog.length > 1 && (
             <div className="mt-8">
               <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG timeline</span>
+                <SectionLabel as="span">EHOG timeline</SectionLabel>
                 <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{filteredEhog.length} matches</span>
               </div>
               <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-2 py-3">
@@ -445,7 +438,7 @@ export default function PlayerView({
             {/* Pick/Ban Stats */}
             <div>
               <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Pick/ban stats</span>
+                <SectionLabel as="span">Pick/ban stats</SectionLabel>
               </div>
               {playerMapStats.length === 0 ? (
                 <EmptyState message="No map data." />
@@ -488,7 +481,7 @@ export default function PlayerView({
             {/* Side Stats */}
             <div>
               <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Side stats</span>
+                <SectionLabel as="span">Side stats</SectionLabel>
               </div>
               {playerSideStats.every((s) => s.played === 0) ? (
                 <EmptyState message="No side data." />
@@ -519,7 +512,7 @@ export default function PlayerView({
             </div>
           </div>
 
-          <SectionLabel>Map stats</SectionLabel>
+          <SectionLabel className="mt-10 mb-3">Map stats</SectionLabel>
           {maps.length === 0 ? (
             <EmptyState message="No map data." />
           ) : (
@@ -567,7 +560,7 @@ export default function PlayerView({
           {adrSeries.length > 1 && (
           <DevGate className="mt-10">
               <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">ADR over time</span>
+                <SectionLabel as="span">ADR over time</SectionLabel>
                 <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{adrSeries.length} matches</span>
               </div>
               <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 text-[var(--color-site-accent)]">
@@ -586,7 +579,7 @@ export default function PlayerView({
 
           <DevGate className="mt-10">
               <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Percentile vs league</span>
+                <SectionLabel as="span">Percentile vs league</SectionLabel>
                 <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">median = midline</span>
               </div>
               <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
@@ -682,7 +675,7 @@ export default function PlayerView({
       {/* Trophy Case tab */}
       {tab === 'trophies' && (
         <>
-          <SectionLabel>Trophy case</SectionLabel>
+          <SectionLabel className="mt-10 mb-3">Trophy case</SectionLabel>
           {filteredTrophies.length === 0 ? (
             <EmptyState message="No trophies for the current filter." />
           ) : (

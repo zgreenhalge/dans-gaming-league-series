@@ -14,6 +14,7 @@ import SortableTh from './SortableTh';
 import { StatTable, Tr, Td, NameTd, PlayerCell, MapCell } from './StatTable';
 import PerSideStatsTable from './PerSideStatsTable';
 import { CONDITION_LABEL } from './icons/ConditionIcons';
+import SectionLabel from './SectionLabel';
 
 
 interface RowWithStats {
@@ -300,7 +301,7 @@ function DistributionTable({ title, emptyMessage, categoryLabel, total, buckets 
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">{title}</span>
+        <SectionLabel as="span">{title}</SectionLabel>
       </div>
       {total === 0 ? (
         <EmptyState message={emptyMessage} />
@@ -382,7 +383,7 @@ function MapPickBanTable({ mapPickBanStats, perSideStats }: { mapPickBanStats: M
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
+        <SectionLabel as="span">Map pick/ban stats</SectionLabel>
       </div>
       {mapPickBanStats.length === 0 ? (
         <EmptyState message="No map data." />

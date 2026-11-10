@@ -123,7 +123,7 @@ export function MatchManager({
                   <div className="px-3 py-4 flex flex-col gap-5 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]">
                     {!played && (
                       <section>
-                        <SectionLabel>Schedule</SectionLabel>
+                        <SectionLabel className="mb-2">Schedule</SectionLabel>
                         <div className="flex items-center gap-2 flex-wrap">
                           <ScheduleEditor
                             matchId={m.match.id}
@@ -146,7 +146,7 @@ export function MatchManager({
                     )}
 
                     <section>
-                      <SectionLabel>Pick / Ban</SectionLabel>
+                      <SectionLabel className="mb-2">Pick / Ban</SectionLabel>
                       <VetoSequence
                         match={m.match}
                         mapPool={m.mapPool}
@@ -158,13 +158,13 @@ export function MatchManager({
                     </section>
 
                     <section>
-                      <SectionLabel>Feature match</SectionLabel>
+                      <SectionLabel className="mb-2">Feature match</SectionLabel>
                       <FeatureMatchToggle matchId={m.match.id} isFeature={m.match.is_feature_match} />
                     </section>
 
                     {demoMatchIds?.has(m.match.id) && (
                       <section>
-                        <SectionLabel>Demo</SectionLabel>
+                        <SectionLabel className="mb-2">Demo</SectionLabel>
                         <ReparseDemoButton matchId={m.match.id} />
                       </section>
                     )}
