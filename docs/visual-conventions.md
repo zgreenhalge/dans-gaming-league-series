@@ -363,6 +363,21 @@ conventions, distinct from the content-page patterns above:
   menu and its Add player… picker leaves them out. `ScrimNightRoster` keeps the admin's own row menu,
   since check in / out is there and not among the player's own controls. `ScrimNightRoster` and
   `SeasonRosterPanel` are the worked examples.
+- **The same header menu carries a section's setup on a player-facing page.** When several read-only
+  lines each grew their own admin Edit button, the lines stay as every viewer sees them and the
+  edits move into one `AdminMenu` beside them. An item whose editor needs the page's width is
+  one-click and opens that editor in place of its line; a one-way action expands (`content`) into
+  its confirm, which stands in for `ArmedConfirmButton`'s arming step. `SeasonSetupDetails` (an
+  UPCOMING season's start date, map pool, buy-in and **Mark active…**) is the worked example.
+- **A lone admin control stays inline.** A menu that would hold one item adds a click without
+  removing anything, so a single admin link or button on a section stays where it is: a tab's
+  **Manage →** link to its admin page (the season Survey and Superlatives tabs), the Gauntlet tab's
+  **Manage Bracket →**, the seasons list's **+ Create Season**, and the season page's schedule entry
+  point (`SeasonScheduleEntryPoint`, the primary next step while a season is UPCOMING). So does a
+  control any match player has too (`MatchHeaderSection`'s schedule edit, the match server and
+  demo review panels, the results and recording forms): it isn't an admin power. `VetoSequence`'s
+  per-step ✕ and **Clear all pick/bans** stay on the pick/ban strip, where a per-tile menu would be
+  the same ink and the steps share labels.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
