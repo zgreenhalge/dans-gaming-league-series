@@ -2,9 +2,8 @@
  * Covers `requireMatchAccess()`'s outcomes: site admin, in-match player, out-of-match player, no
  * session, and a failed read (which throws rather than denying with a 403). Uses the shared `test-support/fixtures.ts` `PLAYERS` list (Alice, id 1,
  * `is_admin: true`; everyone else `is_admin: false`) for the admin-vs-non-admin distinction, plus a
- * small local `player_match_stats` roster for one match — both read through the admin client, since
- * `requireMatchAccess()` reads `players`/`player_match_stats` via `getAdminClient()` directly rather
- * than `isPlayerAdmin()`.
+ * small local `player_match_stats` roster for one match — both read through the admin client
+ * (`players` via `isPlayerAdmin()`, `player_match_stats` directly).
  *
  * Run:  npx vitest run src/lib/match-access.test.ts
  */

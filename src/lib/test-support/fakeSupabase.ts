@@ -606,7 +606,9 @@ function failingChain(error: FakeError): Record<string, unknown> {
  * simulating a read or write failure this fake's own builder has no way to produce on its own (its only
  * built-in error is `.insert()`'s primary-key collision — see this file's header). Every other
  * method on the same table, and every other table, still goes through the real builder, so chained
- * access that doesn't touch `method` keeps working. */
+ * access that doesn't touch `method` keeps working. A failing `'select'` also fails a write that
+ * chains `.select()` on the same table (`.insert(...).select('id')`), since the write returns the
+ * same builder. */
 export function clientFailingOn(
   client: SupabaseClient,
   table: string,
