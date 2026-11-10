@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useDismissOnOutsidePress } from './useDismissOnOutsidePress';
 import { ThemeToggle } from './ThemeToggle';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
@@ -22,14 +23,7 @@ function DevToggle() {
   const ref = useRef<HTMLDivElement>(null);
   const currentPlayerId = session?.user?.playerId ?? null;
 
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
+  useDismissOnOutsidePress(ref, open, setOpen);
 
   async function select(u: typeof DEV_USERS[number]) {
     setOpen(false);
