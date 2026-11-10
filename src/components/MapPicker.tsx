@@ -9,6 +9,7 @@ import ErrorText from '@/components/ErrorText';
 export const CUSTOM_MAP_CHOICE = '__custom__';
 
 export function MapPicker({
+  id,
   maps,
   value,
   onChange,
@@ -17,6 +18,8 @@ export function MapPicker({
   customInvalid,
   disabled,
 }: {
+  /** The select's id, for a `<label htmlFor>` naming it. */
+  id?: string;
   maps: WorkshopMapOption[];
   value: string;
   onChange: (value: string) => void;
@@ -28,6 +31,7 @@ export function MapPicker({
   return (
     <>
       <select
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
