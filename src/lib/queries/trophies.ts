@@ -1,10 +1,9 @@
-import { getAdminClient } from '../supabase-admin';
 import type { LeaderboardRowWithId } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRwr, deriveAdr } from '../util';
 import { getSeasons } from './seasons';
 import { getAllLeaderboards } from './leaderboard';
 import { getGauntletSeasonLeaderboard } from './gauntlet';
-import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import { batchedIn, getWeekLookup, weekRowsFromLookup } from './_shared';
 import { persistentQuery } from './_persistentCache';
 
 
@@ -92,17 +91,20 @@ export const getAllSeasonMedalists = persistentQuery('getAllSeasonMedalists', as
 
     if (weekRows.length > 0) {
       const weekIds = weekRows.map((w) => w.id);
-      const { data: matchData } = await getAdminClient()
-        .from('matches')
-        .select('id, week_id, final_score')
-        .in('week_id', weekIds);
-      const matchRows = (matchData ?? []) as { id: number; week_id: number; final_score: string | null }[];
+      const matchRows = await batchedIn<{ id: number; week_id: number; final_score: string | null }>(
+        'matches',
+        'week_id',
+        weekIds,
+        'id, week_id, final_score',
+      );
 
       const matchIds = matchRows.map((m) => m.id);
-      const { data: statData } = matchIds.length
-        ? await getAdminClient().from('player_match_stats').select('match_id, player_id, is_win, rounds_won, rounds_played, adr').in('match_id', matchIds)
-        : { data: [] as { match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }[] };
-      const statRows = (statData ?? []) as { match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }[];
+      const statRows = await batchedIn<{ match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }>(
+        'player_match_stats',
+        'match_id',
+        matchIds,
+        'match_id, player_id, is_win, rounds_won, rounds_played, adr',
+      );
 
       const matchesByWeek = new Map<number, { id: number; final_score: string | null }[]>();
       for (const m of matchRows) {

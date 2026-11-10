@@ -11,6 +11,7 @@
 // one-time seed input (`scripts/seed-config-set.ts`) and a disaster-recovery snapshot only.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { asPage, fetchAllPages } from './queries/_paging';
 import { request } from './dathost';
 
 export interface ConfigSetOption {
@@ -36,9 +37,13 @@ interface ConfigSetRow {
 
 /** For UI pickers (e.g. the admin server console) — key/label pairs, insertion order. */
 export async function listConfigSets(supabaseAdmin: SupabaseClient): Promise<ConfigSetOption[]> {
-  const { data, error } = await supabaseAdmin.from('config_sets').select('key, label').order('id');
-  if (error) throw new Error(`Could not list config sets: ${error.message}`);
-  return (data ?? []) as ConfigSetOption[];
+  try {
+    return await fetchAllPages<ConfigSetOption>((from, to) =>
+      asPage(supabaseAdmin.from('config_sets').select('key, label').order('id').range(from, to)),
+    );
+  } catch (err) {
+    throw new Error(`Could not list config sets: ${(err as { message: string }).message}`);
+  }
 }
 
 /** One config set's full settings + cfg files, by key. Throws if the key doesn't exist. */

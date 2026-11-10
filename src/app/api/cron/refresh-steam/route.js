@@ -1,4 +1,5 @@
 import { getAdminClient } from "@/lib/supabase-admin";
+import { fetchAllPages } from "@/lib/queries/_paging";
 
 export async function GET(request) {
   const auth = request.headers.get("authorization");
@@ -10,16 +11,16 @@ export async function GET(request) {
   // sandbox with no Supabase credentials falls back to fixture data (see dev-fallback-supabase.ts).
   const supabase = getAdminClient();
 
-  const { data: players, error: fetchError } = await supabase
-    .from("players")
-    .select("id, steam_id")
-    .not("steam_id", "is", null);
-
-  if (fetchError) {
+  let players;
+  try {
+    players = await fetchAllPages((from, to) =>
+      supabase.from("players").select("id, steam_id").not("steam_id", "is", null).order("id").range(from, to),
+    );
+  } catch (fetchError) {
     return Response.json({ error: fetchError.message }, { status: 500 });
   }
 
-  if (!players?.length) {
+  if (!players.length) {
     return Response.json({ updated: 0 });
   }
 

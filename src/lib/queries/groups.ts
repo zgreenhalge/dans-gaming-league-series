@@ -1,5 +1,5 @@
 import { getAdminClient } from '../supabase-admin';
-import { getWeekLookup } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { getSeasonSchedule, getSeasonWeekNav } from './schedule';
 import { getSeason, getSeasons, getSeasonScope, hubIdsBySeason, type SeasonScope } from './seasons';
 import { getSeasonStandingNames } from './leaderboard';
@@ -94,12 +94,14 @@ export const getPodSeasonId = persistentQuery('getPodSeasonId', async (podId: nu
  *  pages live under its paired regular season's id; an unpaired gauntlet is its own hub. A gauntlet's
  *  rounds are the bracket's and any round that already has games. */
 export const getStagePagePaths = persistentQuery('getStagePagePaths', async (): Promise<string[]> => {
-  const [seasons, weekLookup, podsRes] = await Promise.all([
+  type PodRow = { id: number; season_id: number; round_number: number };
+  const [seasons, weekLookup, pods] = await Promise.all([
     getSeasons(),
     getWeekLookup(),
-    getAdminClient().from('gauntlet_pods').select('id, season_id, round_number'),
+    fetchAllPages<PodRow>((from, to) =>
+      asPage(getAdminClient().from('gauntlet_pods').select('id, season_id, round_number').order('id').range(from, to)),
+    ),
   ]);
-  if (podsRes.error) throw podsRes.error;
 
   const byId = new Map(seasons.map((s) => [s.id, s]));
   const hubs = hubIdsBySeason(seasons);
@@ -110,7 +112,7 @@ export const getStagePagePaths = persistentQuery('getStagePagePaths', async (): 
     if (hub == null) continue;
     paths.add(byId.get(w.season_id)?.is_gauntlet ? roundHref(hub, w.week_number) : weekHref(hub, weekId));
   }
-  for (const pod of (podsRes.data ?? []) as { id: number; season_id: number; round_number: number }[]) {
+  for (const pod of pods) {
     const hub = hubs.get(pod.season_id);
     if (hub == null) continue;
     paths.add(roundHref(hub, pod.round_number));

@@ -54,7 +54,7 @@ function joinDamageRows(rows: RawDamageRow[], pmsLookup: Map<number, PmsRow>): M
 export const getMatchDamageEvents = persistentQuery('getMatchDamageEvents', async (matchId: number): Promise<MatchDamageEventRow[]> => {
   const [rows, pmsLookup] = await Promise.all([
     fetchAllPages<RawDamageRow>((from, to) =>
-      getAdminClient().from('match_damage_events').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('match_damage_events').select('*').eq('match_id', matchId).order('id').range(from, to),
     ),
     fetchPmsLookup(matchId),
   ]);

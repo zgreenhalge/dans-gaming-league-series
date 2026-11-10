@@ -58,7 +58,7 @@ async function getAllJoinedStats<Raw extends { player_match_stats_id: number }>(
     // `asPage()` erases the union `table` string can't otherwise resolve `Raw` against (same
     // reasoning `replaceMatchRows()` in `demo/factTables.ts` gives for its own untyped view) —
     // callers stay fully typed since `Raw` is always a fixed type argument, not inferred here.
-    fetchAllPages<Raw>((from, to) => asPage(getAdminClient().from(table).select('*').range(from, to))),
+    fetchAllPages<Raw>((from, to) => asPage(getAdminClient().from(table).select('*').order('id').range(from, to))),
     fetchPmsLookup(undefined, pmsRows),
     resolveMatchSeasons(),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -131,7 +131,7 @@ async function getEconomyRoundWins(
     fetchAllPages<RawRoundEconomyRow>((from, to) => {
       let q = getAdminClient().from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type');
       if (matchId != null) q = q.eq('match_id', matchId);
-      return asPage(q.range(from, to));
+      return asPage(q.order('id').range(from, to));
     }),
     getRoundSides(matchId),
     pmsFactionLookup ? Promise.resolve(pmsFactionLookup) : fetchPmsFactionLookup(matchId),
@@ -186,7 +186,7 @@ export const getMatchWeaponClassStats = persistentQuery('getMatchWeaponClassStat
 ): Promise<WeaponClassMatchRow[]> => {
   const [rows, pmsLookup, resolvedPlayersById] = await Promise.all([
     fetchAllPages<PlayerMatchWeaponStat>((from, to) =>
-      getAdminClient().from('player_match_weapon_stats').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('player_match_weapon_stats').select('*').eq('match_id', matchId).order('id').range(from, to),
     ),
     fetchPmsLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -226,7 +226,7 @@ export const getMatchEconomyStats = persistentQuery('getMatchEconomyStats', asyn
   // one `player_match_stats` read without a local promise to thread between them.
   const [rows, pmsLookup, resolvedPlayersById, roundWins] = await Promise.all([
     fetchAllPages<PlayerMatchEconomyStat>((from, to) =>
-      getAdminClient().from('player_match_economy_stats').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('player_match_economy_stats').select('*').eq('match_id', matchId).order('id').range(from, to),
     ),
     fetchPmsFactionLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -447,13 +447,13 @@ export async function deriveAccuracyTotals(
         let q = getAdminClient().from('player_match_weapon_stats')
           .select('player_match_stats_id, shots_fired, shots_hit, headshot_hits');
         if (matchId != null) q = q.eq('match_id', matchId);
-        return asPage(q.range(from, to));
+        return asPage(q.order('id').range(from, to));
       },
     ),
     pmsRows ?? fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) => {
       let q = getAdminClient().from('player_match_stats').select('id, player_id, match_id');
       if (matchId != null) q = q.eq('match_id', matchId);
-      return asPage(q.range(from, to));
+      return asPage(q.order('id').range(from, to));
     }),
   ]);
 

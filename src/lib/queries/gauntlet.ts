@@ -818,12 +818,8 @@ export type GauntletSummary = {
  * Champion = the player who won both matches in the final round.
  */
 export const getAllGauntletSummaries = persistentQuery('getAllGauntletSummaries', async (): Promise<Map<number, GauntletSummary>> => {
-  const { data: gauntletSeasons } = await getAdminClient()
-    .from('seasons')
-    .select('id')
-    .eq('is_gauntlet', true);
-  if (!gauntletSeasons || gauntletSeasons.length === 0) return new Map();
-  const seasonIds = (gauntletSeasons as { id: number }[]).map((s) => s.id);
+  const seasonIds = (await getSeasons()).filter((s) => s.is_gauntlet).map((s) => s.id);
+  if (seasonIds.length === 0) return new Map();
 
   const [weekLookup, players] = await Promise.all([
     getWeekLookup(seasonIds),
@@ -833,19 +829,21 @@ export const getAllGauntletSummaries = persistentQuery('getAllGauntletSummaries'
   if (weekRows.length === 0) return new Map();
 
   const weekIds = weekRows.map((w) => w.id);
-  const { data: matchData } = await getAdminClient()
-    .from('matches')
-    .select('id, week_id, final_score')
-    .in('week_id', weekIds);
-  const matchRows = (matchData ?? []) as { id: number; week_id: number; final_score: string | null }[];
+  const matchRows = await batchedIn<{ id: number; week_id: number; final_score: string | null }>(
+    'matches',
+    'week_id',
+    weekIds,
+    'id, week_id, final_score',
+  );
   if (matchRows.length === 0) return new Map();
 
   const matchIds = matchRows.map((m) => m.id);
-  const { data: statData } = await getAdminClient()
-    .from('player_match_stats')
-    .select('match_id, player_id, is_win')
-    .in('match_id', matchIds);
-  const statRows = (statData ?? []) as { match_id: number; player_id: number; is_win: boolean }[];
+  const statRows = await batchedIn<{ match_id: number; player_id: number; is_win: boolean }>(
+    'player_match_stats',
+    'match_id',
+    matchIds,
+    'match_id, player_id, is_win',
+  );
 
   // Build lookup maps
   const matchesByWeek = new Map<number, { id: number; final_score: string | null }[]>();

@@ -13,6 +13,7 @@
 // being kicked; it does not cover spectators outside the player roster.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getPlayersById } from './queries/player';
 import { getReplayInputs } from './replay/inputs';
 import type { RosterEntry } from './demoParser';
 import { mapSlug } from './maps';
@@ -125,9 +126,9 @@ export async function buildMatchzyConfig(
   const team2Players = playersOf(inputs.roster, 'SKINS');
   const rosteredSteamIds = new Set([...Object.keys(team1Players), ...Object.keys(team2Players)]);
 
-  const { data: allPlayers } = await supabaseAdmin.from('players').select('steam_id, steam_nickname, name');
+  const allPlayers = await getPlayersById(supabaseAdmin);
   const spectators: Record<string, string> = {};
-  for (const p of allPlayers ?? []) {
+  for (const p of allPlayers.values()) {
     if (!p.steam_id || rosteredSteamIds.has(p.steam_id)) continue;
     spectators[p.steam_id] = p.steam_nickname || p.name;
   }
