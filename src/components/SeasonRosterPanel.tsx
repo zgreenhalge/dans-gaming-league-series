@@ -3,7 +3,11 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from './EmptyState';
-import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPlayerRow';
+import { AddPlayerSelect, RosterPlayerRow } from './RosterPlayerRow';
+import { AdminMenu, type AdminMenuItem } from './AdminMenu';
+import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { sendJsonRequest } from './sendJsonRequest';
+import { useAsyncAction } from './useAsyncAction';
 import { formatBuyIn } from '@/lib/season-buy-in';
 import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
 import ErrorText from '@/components/ErrorText';
@@ -29,76 +33,93 @@ interface Props {
   buyInAmount: number | null;
 }
 
-const GREEN_BTN_CLS = 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110';
-
 /** Roster editor for an UPCOMING season's `season_players` — every viewer signed in as a
- * player, an admin included, gets the same Join / Leave Season button for themselves, and an admin
- * also manages the full roster. Only rendered while the season is UPCOMING (the API enforces the same gate
- * server-side). The season's buy-in, when set, shows in the header so players see the cost before
- * joining. */
+ * player, an admin included, gets the same Join / Leave Season button for themselves. An admin
+ * manages everyone else from `AdminMenu`s: one on each other player's row (Remove) and one on the
+ * roster header (Add player…). Only rendered while the season is UPCOMING (the API enforces the same
+ * gate server-side). The season's buy-in, when set, shows in the header so players see the cost
+ * before joining. */
 export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, currentPlayerId, buyInAmount }: Props) {
   const router = useRouter();
-  const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null);
-  const [addPlayerId, setAddPlayerId] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const { busy: writing, error, run } = useAsyncAction();
   const [refreshing, startTransition] = useTransition();
   // One gate for every control: nothing else can start while a roster write or the refresh after
-  // it is in flight, so the single `pendingPlayerId` slot always names the one running write.
-  const busy = pendingPlayerId != null || refreshing;
+  // it is in flight, so `target` always names the one running write.
+  const busy = writing || refreshing;
+  // The player whose write is running, held through the refresh so their label doesn't flip back early.
+  const [target, setTarget] = useState<number | null>(null);
+  const pending = busy ? target : null;
 
   const rosterIds = new Set(roster.map((r) => r.player_id));
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
+  // The viewer's own place on the roster is the Join / Leave Season button's, so the picker leaves them out.
+  const pickerExcludeIds = currentPlayerId == null ? rosterIds : new Set([...rosterIds, currentPlayerId]);
+  const [pickedPlayerId, setPickedPlayerId] = useState('');
+  // The picker keeps its pick while the menu is closed, until that player joins some other way.
+  const addPlayerId = pickerExcludeIds.has(Number(pickedPlayerId)) ? '' : pickedPlayerId;
   // Admin-only: players joining/leaving don't need to see gauntlet-planning warnings.
   const gauntletSizeUnsupported =
     isAdmin && roster.length > 0 && (roster.length < GAUNTLET_MIN_QUALIFIERS || roster.length > GAUNTLET_MAX_QUALIFIERS);
 
-  async function mutate(playerId: number, method: 'POST' | 'DELETE') {
-    setError(null);
-    setPendingPlayerId(playerId);
-    try {
-      let res: Response;
-      try {
-        res = await fetch(`/api/seasons/${seasonId}/players`, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ player_id: playerId }),
-        });
-      } catch {
-        setError('Network error — roster update failed.');
-        return;
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Roster update failed.');
-        return;
-      }
+  function mutate(playerId: number, method: 'POST' | 'DELETE') {
+    setTarget(playerId);
+    return run(async () => {
+      await sendJsonRequest(method, `/api/seasons/${seasonId}/players`, { player_id: playerId });
       startTransition(() => router.refresh());
-    } finally {
-      setPendingPlayerId(null);
-    }
+    });
   }
+
+  /** The roster's admin actions: Add player… opens the player picker in the menu. */
+  const rosterItems: AdminMenuItem[] = [
+    {
+      label: 'Add player…',
+      content: (close) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <AddPlayerSelect
+            players={allPlayers}
+            excludeIds={pickerExcludeIds}
+            value={addPlayerId}
+            onChange={setPickedPlayerId}
+            placeholder="Add a player…"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const playerId = Number(addPlayerId);
+              setPickedPlayerId('');
+              close();
+              mutate(playerId, 'POST');
+            }}
+            disabled={!addPlayerId || busy}
+            className={`${addPlayerId ? ADMIN_SMALL_GREEN_BUTTON_CLS : ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}
+          >
+            Add
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex flex-wrap items-center justify-between gap-3">
         <SectionLabel>
           Roster · {roster.length} {roster.length === 1 ? 'player' : 'players'}
           {buyInAmount != null && <> · Buy-in {formatBuyIn(buyInAmount)}</>}
         </SectionLabel>
-        {currentPlayerId != null && (
-          <button
-            type="button"
-            onClick={() => mutate(currentPlayerId, selfOnRoster ? 'DELETE' : 'POST')}
-            disabled={busy}
-            className={`tracked text-[10px] font-semibold px-2 py-1 border transition-colors disabled:opacity-40 ${
-              selfOnRoster
-                ? 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]'
-                : GREEN_BTN_CLS
-            }`}
-          >
-            {pendingPlayerId === currentPlayerId ? '…' : selfOnRoster ? 'Leave Season' : 'Join Season'}
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {currentPlayerId != null && (
+            <button
+              type="button"
+              onClick={() => mutate(currentPlayerId, selfOnRoster ? 'DELETE' : 'POST')}
+              disabled={busy}
+              className={`${selfOnRoster ? ADMIN_SMALL_BUTTON_CLS : ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
+            >
+              {pending === currentPlayerId ? '…' : selfOnRoster ? 'Leave Season' : 'Join Season'}
+            </button>
+          )}
+          {isAdmin && <AdminMenu label="Roster admin actions" items={rosterItems} />}
+        </div>
       </div>
 
       {gauntletSizeUnsupported && (
@@ -112,46 +133,23 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
       {roster.length === 0 ? (
         <EmptyState message="No players on the roster yet." className="px-4 py-3" />
       ) : (
-        roster.map((r) => (
-          <RosterPlayerRow
-            key={r.player_id}
-            playerId={r.player_id}
-            name={r.player_name}
-            avatarUrl={r.steam_avatar_url}
-            isMe={currentPlayerId !== null && r.player_id === currentPlayerId}
-          >
-            {isAdmin && <RosterRemoveButton onClick={() => mutate(r.player_id, 'DELETE')} pending={pendingPlayerId === r.player_id} disabled={busy} />}
-          </RosterPlayerRow>
-        ))
-      )}
-
-      {isAdmin && (
-        <div className="px-4 py-3 flex items-center gap-2">
-          <AddPlayerSelect
-            players={allPlayers}
-            excludeIds={rosterIds}
-            value={addPlayerId}
-            onChange={setAddPlayerId}
-            placeholder="Add a player…"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const id = Number(addPlayerId);
-              if (!Number.isFinite(id)) return;
-              setAddPlayerId('');
-              mutate(id, 'POST');
-            }}
-            disabled={!addPlayerId || busy}
-            className={`tracked text-[10px] font-semibold px-3 py-2 border transition-colors disabled:opacity-40 ${
-              addPlayerId
-                ? GREEN_BTN_CLS
-                : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
-            }`}
-          >
-            Add
-          </button>
-        </div>
+        roster.map((r) => {
+          const isMe = r.player_id === currentPlayerId;
+          return (
+            <RosterPlayerRow key={r.player_id} playerId={r.player_id} name={r.player_name} avatarUrl={r.steam_avatar_url} isMe={isMe}>
+              {/* An admin's own row has no menu: their Leave Season button covers it. */}
+              {isAdmin && !isMe && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {pending === r.player_id && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">…</span>}
+                  <AdminMenu
+                    label={`Admin actions for ${r.player_name}`}
+                    items={[{ label: 'Remove', onSelect: () => mutate(r.player_id, 'DELETE'), disabled: busy, danger: true }]}
+                  />
+                </div>
+              )}
+            </RosterPlayerRow>
+          );
+        })
       )}
       <ErrorText error={error} size={12} className="px-4 pb-3" />
     </div>

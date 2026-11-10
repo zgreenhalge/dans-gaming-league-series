@@ -3,7 +3,7 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { accessDenied } from '@/lib/access-control';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { isVetoComplete, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, isVetoWindowOpen, type VetoFields } from '@/lib/veto';
 import {
   provisionMatchServer,
   matchzyConfigContext,
@@ -94,13 +94,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Match already played' }, { status: 403 });
   }
 
-  // Non-admins need a scheduled time and must be within 10 minutes of it
+  // Non-admins need a scheduled time and an open veto window (`isVetoWindowOpen()`)
   if (!isAdmin) {
     if (!m.scheduled_at) {
       return NextResponse.json({ error: 'Match not yet scheduled' }, { status: 403 });
     }
-    const windowStart = new Date(m.scheduled_at).getTime() - 10 * 60 * 1000;
-    if (Date.now() < windowStart) {
+    if (!isVetoWindowOpen(m.scheduled_at, Date.now())) {
       return NextResponse.json({ error: 'Veto window not open yet' }, { status: 403 });
     }
   }
