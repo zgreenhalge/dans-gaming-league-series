@@ -2,6 +2,7 @@ import { getAdminClient } from '../supabase-admin';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics, Faction } from '../types';
 import { addNumericFields } from '../util';
 import { getPlayersById } from './player';
+import { getSeasons } from './seasons';
 import { resolveMatchSeasons, matchIdsForSeasons, fetchAllPages, asPage, batchedIn } from './_shared';
 import {
   getAllKillCreditFlags, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
@@ -51,14 +52,14 @@ export const getAllSabremetrics = persistentQuery('getAllSabremetrics', async (s
     { id: number; player_id: number; match_id: number; rounds_played: number; faction: Faction }
   >(
     (from, to) => asPage(
-      getAdminClient().from('player_match_stats').select('id, player_id, match_id, rounds_played, faction').range(from, to),
+      getAdminClient().from('player_match_stats').select('id, player_id, match_id, rounds_played, faction').order('id').range(from, to),
     ),
   );
 
   const [
     sabRows,
     pmsRows,
-    { data: seasonRows, error: seasonErr },
+    seasons,
     matchSeason,
     playersById,
     kills,
@@ -67,10 +68,10 @@ export const getAllSabremetrics = persistentQuery('getAllSabremetrics', async (s
     throws,
   ] = await Promise.all([
     fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
-      getAdminClient().from('player_match_sabremetrics').select('*').range(from, to),
+      getAdminClient().from('player_match_sabremetrics').select('*').order('player_match_stats_id').range(from, to),
     ),
     pmsRowsPromise,
-    getAdminClient().from('seasons').select('id, is_gauntlet'),
+    getSeasons(),
     resolveMatchSeasons(),
     getPlayersById(),
     getAllKillCreditFlags(pmsRowsPromise),
@@ -78,11 +79,9 @@ export const getAllSabremetrics = persistentQuery('getAllSabremetrics', async (s
     getRoundSides(),
     getAllUtilityThrows(undefined, pmsRowsPromise),
   ]);
-  if (seasonErr) throw seasonErr;
 
   const seasonIsGauntlet = new Map<number, boolean>();
-  for (const s of (seasonRows ?? []) as { id: number; is_gauntlet: boolean }[])
-    seasonIsGauntlet.set(s.id, s.is_gauntlet);
+  for (const s of seasons) seasonIsGauntlet.set(s.id, s.is_gauntlet);
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
   for (const r of pmsRows) pmsLookup.set(r.id, r);

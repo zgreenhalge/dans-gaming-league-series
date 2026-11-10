@@ -1,7 +1,7 @@
 import { getAdminClient } from '../supabase-admin';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
-import { batchedIn, chunk, SUPABASE_IN_BATCH, matchIdsForSeasons } from './_shared';
+import { asPage, batchedIn, chunk, fetchAllPages, SUPABASE_IN_BATCH, matchIdsForSeasons } from './_shared';
 import { persistentQuery } from './_persistentCache';
 
 
@@ -118,13 +118,19 @@ export interface EhogSnapshotRow {
 }
 
 export const getAllEhogSnapshots = persistentQuery('getAllEhogSnapshots', async (): Promise<EhogSnapshotRow[]> => {
-  const { data, error } = await getAdminClient()
-    .from('player_rating_history')
-    .select('player_id, ehog_rating, sequence_index, match_id')
-    .eq('formula_version', 'ehog_v1')
-    .order('sequence_index', { ascending: true });
-  if (error) throw error;
-  if (!data || data.length === 0) return [];
+  type Row = { player_id: number; ehog_rating: number; sequence_index: number; match_id: number };
+  const data = await fetchAllPages<Row>((from, to) =>
+    asPage(
+      getAdminClient()
+        .from('player_rating_history')
+        .select('player_id, ehog_rating, sequence_index, match_id')
+        .eq('formula_version', 'ehog_v1')
+        .order('sequence_index', { ascending: true })
+        .order('id')
+        .range(from, to),
+    ),
+  );
+  if (data.length === 0) return [];
 
   const matchIds = Array.from(new Set(data.map((r) => r.match_id)));
   const ctx = await resolveMatchContext(matchIds);

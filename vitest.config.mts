@@ -14,6 +14,6 @@ export default defineConfig({
     // (`.test.tsx`) opt into jsdom per-file via a `// @vitest-environment jsdom` comment, so the two
     // suites don't pay for each other's setup cost.
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-    setupFiles: ['./src/lib/test-support/setupRtl.ts'],
+    setupFiles: ['./src/lib/test-support/setupRtl.ts', './src/lib/test-support/setupPaging.ts'],
   },
 });

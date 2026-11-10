@@ -3,7 +3,7 @@ import type { Match, Player } from '../types';
 import { matchLabel, extractSeasonNumber, compareMatchRefDesc, weekWindow } from '../util';
 import { podGames } from '../gauntlet-pod';
 import { getLinkedRegularSeason } from './seasons';
-import { onlyLeagueMatches } from './_shared';
+import { asPage, fetchAllPages, onlyLeagueMatches } from './_shared';
 
 
 /** One row of the admin match-management console (#144) — a full match plus the context its editors
@@ -38,21 +38,6 @@ export interface AdminMatchRow {
  * the site. Admin-only surface; the page gates access.
  */
 export async function getAdminMatches(): Promise<AdminMatchRow[]> {
-  const [{ data, error }, { data: podRows }] = await Promise.all([
-    onlyLeagueMatches(getAdminClient().from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))')),
-    getAdminClient().from('gauntlet_pods').select('match1_id, match2_id'),
-  ]);
-  if (error || !data) return [];
-
-  const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
-  for (const p of (podRows ?? []) as { match1_id: number | null; match2_id: number | null }[]) {
-    if (p.match1_id != null && p.match2_id != null) {
-      for (const g of podGames({ match1_id: p.match1_id, match2_id: p.match2_id })) {
-        podInfoByMatchId.set(g.matchId, { siblingId: g.siblingId, gameNumber: g.gameNumber });
-      }
-    }
-  }
-
   type Row = Match & {
     weeks: {
       week_number: number | null;
@@ -64,9 +49,30 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
       } | null;
     } | null;
   };
-  // Supabase types embedded to-one relations as arrays but returns objects at runtime (same cast as
-  // getOtherScheduledMatches above).
-  const rows = data as unknown as Row[];
+  type PodRow = { match1_id: number | null; match2_id: number | null };
+  // `asPage()` also covers the embedded to-one relations, which Supabase types as arrays but
+  // returns as objects at runtime (the same cast `getScheduledUnplayedMatches()` in match.ts makes).
+  const [rows, podRows] = await Promise.all([
+    fetchAllPages<Row>((from, to) =>
+      asPage(
+        onlyLeagueMatches(getAdminClient().from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'))
+          .order('id')
+          .range(from, to),
+      ),
+    ),
+    fetchAllPages<PodRow>((from, to) =>
+      asPage(getAdminClient().from('gauntlet_pods').select('match1_id, match2_id').order('id').range(from, to)),
+    ),
+  ]);
+
+  const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
+  for (const p of podRows) {
+    if (p.match1_id != null && p.match2_id != null) {
+      for (const g of podGames({ match1_id: p.match1_id, match2_id: p.match2_id })) {
+        podInfoByMatchId.set(g.matchId, { siblingId: g.siblingId, gameNumber: g.gameNumber });
+      }
+    }
+  }
 
   const out = await Promise.all(rows.map(async (r): Promise<AdminMatchRow> => {
     const { weeks, ...match } = r;
@@ -115,9 +121,9 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
  * row (name, `is_admin`, and the steam-link fields) so the console can edit them in place.
  */
 export async function getAdminPlayers(): Promise<Player[]> {
-  const { data, error } = await getAdminClient().from('players').select('*').order('name');
-  if (error || !data) return [];
-  return data as Player[];
+  return fetchAllPages<Player>((from, to) =>
+    asPage(getAdminClient().from('players').select('*').order('name').order('id').range(from, to)),
+  );
 }
 
 // ---------------------------------------------------------------------------
