@@ -357,7 +357,12 @@ conventions, distinct from the content-page patterns above:
   focuses the first item, arrow keys move between items, and Escape, a press outside or tabbing away
   closes it, with Escape and a pick returning focus to the trigger. The popup anchors to the trigger's
   right edge and is capped to the viewport width, so it fits at phone width. An action any player may
-  take (a scrim night's End night) stays out of it. `ScrimNightPanel` is the worked example.
+  take (a scrim night's End night, a season's Join / Leave Season) stays out of it. Where the player's
+  own controls already cover every admin action on their own row, that row gets no menu:
+  `SeasonRosterPanel`'s Join / Leave Season button covers Remove and Add, so an admin's own row has no
+  menu and its Add player… picker leaves them out. `ScrimNightPanel` keeps the admin's own row menu,
+  since check in / out is there and not among the player's own controls. `ScrimNightPanel` and
+  `SeasonRosterPanel` are the worked examples.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
