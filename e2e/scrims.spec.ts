@@ -1,8 +1,8 @@
 /**
  * E2E coverage for scrim nights (`/scrims`, `/scrims/[id]`, `/scrims/matches/[id]`), through the real
  * UI: the calendar signed out and signed in, starting a night on a picked day, the overlap refusal,
- * signing up / switching / dropping out (the last player out removes the night), the admin menus,
- * the lobby's check-in, Next Match (make, change the side, discard), Generate Rounds (preview,
+ * signing up / switching / dropping out (the last player out removes the night), the night page's
+ * status bar and Roster tab, the admin menus, checking in, Next Match (make, change the side, discard), Generate Rounds (preview,
  * Details, queue), a night on the home page's Upcoming panel, and a past night's results and match
  * page. Each test starts from no scrim nights
  * and seeds its own (`e2e/support/db.ts`); see docs/e2e.md.
@@ -155,6 +155,23 @@ test.describe('calendar and signups', () => {
     expect(await scrimNightExists(nightId)).toBe(true);
   });
 
+  test("an upcoming night's page has the status bar over a Roster tab, and a stale ?tab= link opens on it", async ({ page }) => {
+    const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }, { playerId: DREW, commitment: 'maybe' }]);
+    await page.goto(`/scrims/${nightId}?tab=lobby`);
+    const main = page.getByRole('main');
+    await expect(main.getByText('Upcoming', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Roster' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Lobby' })).toHaveCount(0);
+    await expect(page.getByText('Definite · 1')).toBeVisible();
+    await expect(page.getByText('Maybe · 1')).toBeVisible();
+    // Signed out, and check-in isn't open yet: no commitment or Check in.
+    await expect(page.getByRole('button', { name: 'Maybe', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Check in', exact: true })).toHaveCount(0);
+
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
+    await expect(page.getByRole('button', { name: 'Check in', exact: true })).toHaveCount(0);
+  });
+
   test('an admin adds a player from the Attendance menu and removes one from their row; a non-admin has no menus', async ({ page }) => {
     const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }]);
 
@@ -228,13 +245,17 @@ test.describe('the lobby', () => {
     expect(await scrimMatchesOf(nightId)).toHaveLength(0);
   });
 
-  test('with nobody checked in there is no lobby, only Check in; checking in opens it', async ({ page }) => {
+  test("with nobody checked in there is no lobby; the status bar's Check in opens it", async ({ page }) => {
     const nightId = await seedScrimNight(10 * MINUTE, [{ playerId: CASEY }]);
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
-    await expect(page.getByRole('main').getByText('Lobby', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Lobby' })).toHaveCount(0);
+    await expect(page.getByText('0 checked in', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Check in', exact: true }).click();
-    await expect(page.getByRole('main').getByText('Lobby', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Lobby' })).toBeVisible();
     await expect(page.getByText('1 checked in', { exact: true })).toBeVisible();
+    // Checking in signed Dan up, so the Roster tab lists him.
+    await page.getByRole('tab', { name: 'Roster' }).click();
+    await expect(page.getByText('Definite · 2')).toBeVisible();
   });
 
   test('a player who has not checked in can check in but not make matches; signed out sees only the count', async ({ page }) => {
@@ -307,6 +328,9 @@ test('a past night lists under Past nights, with its leaderboard and a working m
   await expect(page.getByRole('main').getByText('Final', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('main').getByText('Leaderboard', { exact: true })).toBeVisible();
   await expect(page.getByRole('main').getByText('Casey').first()).toBeVisible();
+  // Attendance comes last once the night is over, read-only.
+  await page.getByRole('tab', { name: 'Roster' }).click();
+  await expect(page.getByText('Definite · 4')).toBeVisible();
 
   // A league match URL for a scrim match redirects to its scrim page.
   await page.goto(`/matches/${matchId}`);
