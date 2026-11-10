@@ -561,11 +561,11 @@ function searchHalf(
     const seat = (w: number, g: number) => {
       const week = slots[w];
       const slot = templates[w].games[g];
-      const [t1, t2] = SPLITS[splits[w][g]];
-      seated[0] = week[slot[t1[0]]];
-      seated[1] = week[slot[t1[1]]];
-      seated[2] = week[slot[t2[0]]];
-      seated[3] = week[slot[t2[1]]];
+      const split = SPLITS[splits[w][g]];
+      seated[0] = week[slot[split[0][0]]];
+      seated[1] = week[slot[split[0][1]]];
+      seated[2] = week[slot[split[1][0]]];
+      seated[3] = week[slot[split[1][1]]];
     };
     /** Adds (s = 1) or removes (s = -1) one game's contribution; returns the cost change. */
     const applyGame = (w: number, g: number, s: number) => {
@@ -584,8 +584,8 @@ function searchHalf(
       counts[a * n + b] += s;
       counts[b * n + a] += s;
     };
-    /** `applyGame()`'s count changes without scoring them — for undoing a rejected move, whose cost
-     * change is already known. */
+    /** Exactly `applyGame()`'s count changes, without scoring them — for undoing a rejected move,
+     * whose cost change is already known. A count `applyGame()` changes must change here too. */
     const countGame = (w: number, g: number, s: number) => {
       seat(w, g);
       const a = seated[0], b = seated[1], c = seated[2], d = seated[3];
@@ -614,9 +614,9 @@ function searchHalf(
       return WEIGHT.rematch * count;
     };
 
-    // Each week's current `rematches()`. Two games can only be the same matchup when they seat the
-    // same four slots with the same team split, so swapping two slots' players never changes a
-    // week's rematch count — only a split move recomputes it.
+    // Each week's current `rematches()`. A week's slots hold distinct players (a permutation of the
+    // division), so swapping two slots' players only relabels them: whether two games seat the same
+    // two teams depends on the slots and splits alone. Only a split move recomputes it.
     const weekRematches: number[] = [];
     let cost = 0;
     for (let i = 0; i < size; i++) {

@@ -42,8 +42,8 @@ const BASE: SeasonFormatSettings = {
 };
 
 // Plans are deterministic and only read by the assertions, so tests share one build per input,
-// keyed by the full settings. A plan costs a few hundred milliseconds of search, so a case that
-// needs its own plan gets its own test rather than sharing one test's time budget.
+// keyed by the full settings. A case that needs its own plan gets its own test rather than sharing
+// one test's time budget (see PLAN_TIMEOUT_MS).
 const planCache = new Map<string, FormatPlan>();
 
 function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
@@ -363,7 +363,10 @@ planTest('a plan survives a structured-clone round trip unchanged, as it does th
 planTest('the same players, settings and seed produce the same plan', () => {
   // Built directly rather than through plan(), whose cache would hand back the same object twice.
   const settings = { ...BASE, weeks: 4 };
-  assert.deepEqual(buildFormatPlan(players(9), settings), buildFormatPlan(players(9), settings));
+  const a = buildFormatPlan(players(9), settings);
+  const b = buildFormatPlan(players(9), settings);
+  assert.ok(a.ok && b.ok);
+  assert.deepEqual(a, b);
 });
 
 planTest('a one-week plan: every player plays the same count, and a halfway shuffle has no second half', () => {
