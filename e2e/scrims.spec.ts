@@ -9,6 +9,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertNoErrorBoundary } from './support/assertions';
 import { loginAs, DEV_USER_PLAYER_ID } from './support/auth';
 import {
   clearMapWorkshopUrls,
@@ -37,6 +38,12 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   await teardownScrims();
 });
+
+/** The page's visible `<main>`: text and label locators go through it, since just after a load React
+ *  can still hold a hidden copy of the page beside it (docs/e2e.md, "Locators"). */
+function main(page: Page) {
+  return page.getByRole('main');
+}
 
 /** The viewer's calendar day `daysAhead` from now (`YYYY-MM-DD`), and the instant that day's `time`
  *  is — both in the browser's timezone, which is what the calendar and the start form use. */
@@ -68,7 +75,7 @@ async function openScrimsAs(page: Page, user: 'Dan' | 'Zach'): Promise<void> {
   await loginAs(page, user, '/maps');
   await expect(async () => {
     await page.goto('/scrims');
-    await expect(page.getByText('Start a night this day')).toBeVisible({ timeout: 3_000 });
+    await expect(main(page).getByText('Start a night this day')).toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 45_000, intervals: [1_000] });
 }
 
@@ -90,9 +97,9 @@ test.describe('calendar and signups', () => {
   test('signed out, the calendar shows today with a login prompt instead of the start form', async ({ page }) => {
     await page.goto('/scrims');
     await expect(page.getByRole('button', { name: 'Previous month' })).toBeVisible();
-    await expect(page.getByText('No scrims this day yet.')).toBeVisible();
+    await expect(main(page).getByText('No scrims this day yet.')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/api/auth/steam');
-    await expect(page.getByText('Start a night this day')).toHaveCount(0);
+    await expect(main(page).getByText('Start a night this day')).toHaveCount(0);
   });
 
   test('a player starts a night on a picked day and lands on its page as the first signup', async ({ page }) => {
@@ -100,13 +107,13 @@ test.describe('calendar and signups', () => {
     const { day, startsAt } = await browserDay(page, 2);
     await pickDay(page, day);
 
-    await expect(page.getByText('Start a night this day')).toBeVisible();
-    await page.getByLabel('Night start time').fill('20:00');
+    await expect(main(page).getByText('Start a night this day')).toBeVisible();
+    await main(page).getByLabel('Night start time').fill('20:00');
     await page.getByRole('button', { name: "I'm in" }).click();
 
     await expect(page).toHaveURL(/\/scrims\/\d+$/, { timeout: 30_000 });
-    await expect(page.getByText('Definite · 1')).toBeVisible();
-    await expect(page.getByRole('main').getByText('Dan', { exact: true }).first()).toBeVisible();
+    await expect(main(page).getByText('Definite · 1')).toBeVisible();
+    await expect(main(page).getByText('Dan', { exact: true }).first()).toBeVisible();
     expect(await scrimNightIdsStartingAt(startsAt)).toHaveLength(1);
 
     // The calendar day now shows the signup count, and the night's time links to its page.
@@ -114,7 +121,7 @@ test.describe('calendar and signups', () => {
     const cell = await dayCell(page, day);
     await expect(cell).toHaveAttribute('aria-label', /1 definite, 0 maybe/);
     await cell.click();
-    await page.getByRole('main').getByRole('link').filter({ hasText: /\d:\d\d/ }).first().click();
+    await main(page).getByRole('link').filter({ hasText: /\d:\d\d/ }).first().click();
     await expect(page).toHaveURL(/\/scrims\/\d+$/);
   });
 
@@ -125,9 +132,9 @@ test.describe('calendar and signups', () => {
 
     await openScrimsAs(page, 'Dan');
     await pickDay(page, existing.day);
-    await page.getByLabel('Night start time').fill('20:00');
+    await main(page).getByLabel('Night start time').fill('20:00');
     await page.getByRole('button', { name: "I'm in" }).click();
-    await expect(page.getByText(/Another scrim night overlaps that time/)).toBeVisible();
+    await expect(main(page).getByText(/Another scrim night overlaps that time/)).toBeVisible();
   });
 
   test('switching to maybe, then dropping out as the last player, removes the night', async ({ page }) => {
@@ -135,8 +142,8 @@ test.describe('calendar and signups', () => {
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
     await page.getByRole('button', { name: 'Maybe', exact: true }).click();
-    await expect(page.getByText('Maybe · 1')).toBeVisible();
-    await expect(page.getByText('Definite · 0')).toBeVisible();
+    await expect(main(page).getByText('Maybe · 1')).toBeVisible();
+    await expect(main(page).getByText('Definite · 0')).toBeVisible();
 
     await page.getByRole('button', { name: 'Drop out' }).click();
     await expect(page).toHaveURL(/\/scrims$/, { timeout: 30_000 });
@@ -148,9 +155,9 @@ test.describe('calendar and signups', () => {
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
     await page.getByRole('button', { name: 'Definite', exact: true }).click();
-    await expect(page.getByText('Definite · 2')).toBeVisible();
+    await expect(main(page).getByText('Definite · 2')).toBeVisible();
     await page.getByRole('button', { name: 'Drop out' }).click();
-    await expect(page.getByText('Definite · 1')).toBeVisible();
+    await expect(main(page).getByText('Definite · 1')).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/scrims/${nightId}$`));
     expect(await scrimNightExists(nightId)).toBe(true);
   });
@@ -159,25 +166,25 @@ test.describe('calendar and signups', () => {
     const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }]);
 
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
-    await expect(page.getByText('Definite · 1')).toBeVisible();
+    await expect(main(page).getByText('Definite · 1')).toBeVisible();
     await expect(page.getByRole('button', { name: /admin actions/i })).toHaveCount(0);
 
     await openNightAs(page, 'Zach', `/scrims/${nightId}`);
     const nightMenu = page.getByRole('button', { name: 'Attendance admin actions' });
     await expect(nightMenu).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByLabel('Sign up a player…')).toHaveCount(0);
+    await expect(main(page).getByLabel('Sign up a player…')).toHaveCount(0);
     await expect(page.getByRole('menuitem', { name: 'Remove' })).toHaveCount(0);
 
     await nightMenu.click();
     await page.getByRole('menuitem', { name: 'Add player…' }).click();
-    await page.getByLabel('Sign up a player…').selectOption({ label: 'Drew' });
+    await main(page).getByLabel('Sign up a player…').selectOption({ label: 'Drew' });
     await page.getByRole('button', { name: 'Add as maybe' }).click();
-    await expect(page.getByText('Maybe · 1')).toBeVisible();
-    await expect(page.getByRole('main').getByText('Drew', { exact: true }).first()).toBeVisible();
+    await expect(main(page).getByText('Maybe · 1')).toBeVisible();
+    await expect(main(page).getByText('Drew', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Admin actions for Drew' }).click();
     await page.getByRole('menuitem', { name: 'Remove' }).click();
-    await expect(page.getByText('Maybe · 0')).toBeVisible();
+    await expect(main(page).getByText('Maybe · 0')).toBeVisible();
   });
 });
 
@@ -199,28 +206,32 @@ test.describe('the lobby', () => {
     ]);
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
 
-    await expect(page.getByText('3 checked in', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('3 checked in', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Check in', exact: true }).click();
-    await expect(page.getByText('4 checked in', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('4 checked in', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Check out', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Next Match' }).click();
     await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
-    await expect(page.getByText('Pending', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Starting side')).toHaveCount(0);
-    const [match] = await scrimMatchesOf(nightId);
+    await expect(main(page).getByText('Pending', { exact: true })).toBeVisible();
+    await expect(main(page).getByLabel('Starting side')).toHaveCount(0);
+    const matches = await scrimMatchesOf(nightId);
+    expect(matches).toHaveLength(1);
+    const [match] = matches;
     expect(match.players.sort((a, b) => a - b)).toEqual([CASEY, DREW, SAM, DAN].sort((a, b) => a - b));
     expect(match.scrim_side_choice).toBe('knife');
 
     await openNightAs(page, 'Zach', `/scrims/${nightId}`);
-    const configure = page.getByText('Configure', { exact: true });
-    await expect(page.getByLabel('Starting side')).toBeHidden();
+    const configure = main(page).getByText('Configure', { exact: true });
+    const side = main(page).getByLabel('Starting side');
+    await expect(configure).toBeVisible();
+    await expect(side).toBeHidden();
     await configure.click();
-    await page.getByLabel('Starting side').selectOption('random');
+    await side.selectOption('random');
     await expect.poll(async () => (await scrimMatchesOf(nightId))[0]?.scrim_side_choice).toBe('random');
     await page.reload();
-    await page.getByText('Configure', { exact: true }).click();
-    await expect(page.getByLabel('Starting side')).toHaveValue('random');
+    await configure.click();
+    await expect(side).toHaveValue('random');
 
     await page.getByRole('button', { name: 'Discard' }).click();
     await page.getByRole('button', { name: 'Confirm discard' }).click();
@@ -231,10 +242,10 @@ test.describe('the lobby', () => {
   test('with nobody checked in there is no lobby, only Check in; checking in opens it', async ({ page }) => {
     const nightId = await seedScrimNight(10 * MINUTE, [{ playerId: CASEY }]);
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
-    await expect(page.getByRole('main').getByText('Lobby', { exact: true })).toHaveCount(0);
+    await expect(main(page).getByText('Lobby', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Check in', exact: true }).click();
-    await expect(page.getByRole('main').getByText('Lobby', { exact: true })).toBeVisible();
-    await expect(page.getByText('1 checked in', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Lobby', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('1 checked in', { exact: true })).toBeVisible();
   });
 
   test('a player who has not checked in can check in but not make matches; signed out sees only the count', async ({ page }) => {
@@ -246,7 +257,7 @@ test.describe('the lobby', () => {
     ]);
 
     await page.goto(`/scrims/${nightId}`);
-    await expect(page.getByText('4 checked in', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('4 checked in', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Check in', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Next Match' })).toHaveCount(0);
 
@@ -268,10 +279,10 @@ test.describe('the lobby', () => {
     await page.getByRole('button', { name: 'Generate Rounds' }).click();
     await page.getByRole('button', { name: 'Generate', exact: true }).click();
 
-    await expect(page.getByText('Matchups', { exact: true })).toBeVisible({ timeout: 30_000 });
-    const gamesEach = page.getByText('Games each', { exact: true });
+    await expect(main(page).getByText('Matchups', { exact: true })).toBeVisible({ timeout: 30_000 });
+    const gamesEach = main(page).getByText('Games each', { exact: true });
     await expect(gamesEach).toBeHidden();
-    await page.getByText('Details', { exact: true }).click();
+    await main(page).getByText('Details', { exact: true }).click();
     await expect(gamesEach).toBeVisible();
 
     const queue = page.getByRole('button', { name: /Queue these \d+ matches/ });
@@ -280,7 +291,7 @@ test.describe('the lobby', () => {
     await queue.click();
 
     await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible({ timeout: 30_000 });
-    if (count > 1) await expect(page.getByText(`Up next · ${count - 1}`)).toBeVisible();
+    if (count > 1) await expect(main(page).getByText(`Up next · ${count - 1}`)).toBeVisible();
     const matches = await scrimMatchesOf(nightId);
     expect(matches.map((m) => m.match_number)).toEqual(Array.from({ length: count }, (_, i) => i + 1));
   });
@@ -289,7 +300,7 @@ test.describe('the lobby', () => {
 test("an upcoming night joins the home page's Upcoming panel, linking to its night page", async ({ page }) => {
   const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }, { playerId: DREW, commitment: 'maybe' }]);
   await page.goto('/');
-  const row = page.getByRole('main').locator(`a[href="/scrims/${nightId}"]`);
+  const row = main(page).locator(`a[href="/scrims/${nightId}"]`);
   await expect(row).toBeVisible();
   await expect(row).toContainText('Scrim night');
   await expect(row).toContainText('1 in · 1 maybe');
@@ -304,12 +315,12 @@ test('a past night lists under Past nights, with its leaderboard and a working m
   await page.goto('/scrims');
   await page.getByRole('link', { name: /1 match · 4 players/ }).first().click();
   await expect(page).toHaveURL(new RegExp(`/scrims/${nightId}$`));
-  await expect(page.getByRole('main').getByText('Final', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('main').getByText('Leaderboard', { exact: true })).toBeVisible();
-  await expect(page.getByRole('main').getByText('Casey').first()).toBeVisible();
+  await expect(main(page).getByText('Final', { exact: true }).first()).toBeVisible();
+  await expect(main(page).getByText('Leaderboard', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Casey').first()).toBeVisible();
 
   // A league match URL for a scrim match redirects to its scrim page.
   await page.goto(`/matches/${matchId}`);
   await expect(page).toHaveURL(new RegExp(`/scrims/matches/${matchId}$`), { timeout: 30_000 });
-  await expect(page.getByText('Something went wrong')).toHaveCount(0);
+  await assertNoErrorBoundary(page);
 });
