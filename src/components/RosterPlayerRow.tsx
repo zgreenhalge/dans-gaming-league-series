@@ -5,8 +5,8 @@ import { PlayerName } from './PlayerName';
 import { SELECT_CLS } from './formStyles';
 
 // The pieces a signup list is built from — a season roster (`SeasonRosterPanel`) and a scrim night's
-// signups (`ScrimNightPanel`): a player row with room for row actions, the row's Remove button, and
-// the admin's "add a player" select.
+// signups (`ScrimNightPanel`): a player row with room for row actions, the season roster's Remove
+// button, and the admin's "add a player" select (in `ScrimNightPanel`, inside an `AdminMenu`).
 
 /** One player in a signup list: avatar + name linking to their profile, then `children` (row actions)
  *  on the right. */

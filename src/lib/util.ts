@@ -882,3 +882,8 @@ export function shortCountPlayerIds(appearances: Map<number, number>): number[] 
   if (min === Math.max(...counts)) return [];
   return [...appearances].filter(([, n]) => n === min).map(([id]) => id);
 }
+
+/** A failed API route response's `{ error }` message, or `fallback` when its body carries none. */
+export async function routeError(res: Response, fallback: string): Promise<string> {
+  return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? fallback;
+}

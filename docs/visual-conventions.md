@@ -98,8 +98,16 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - **`SectionLabel`** (`src/components/SectionLabel.tsx`) — the small section label: `.tracked` at
   10px in secondary text, naming a section of a page, panel or form. Use it rather than typing the
   classes out. Spacing goes in `className` (`<SectionLabel className="mb-3">`); `as="span"` keeps it
-  inline inside a heading row, link or button. A form field's own label (tied to its input) is not a
-  section label and stays a plain `<label>`/`<span>`
+  inline inside a heading row, link or button. It names a section or a group of controls (a team's
+  two lineup selects), never a single input
+- **`FieldLabel`** (`src/components/FieldLabel.tsx`) — a form field's own label, in the same look as
+  `SectionLabel`: a real `<label htmlFor>` naming one input, select or textarea. Give the control an
+  id from `useId()` and pass it as `htmlFor`, so a click focuses the control and screen readers and
+  label queries (Playwright `getByLabel`, Testing Library `getByLabelText`) find it by that text. It
+  renders as a block above its control; spacing goes in `className`. Use `FieldLabel` when the text
+  names one control and `SectionLabel` when it heads a section or a group. Labels with a
+  deliberately different look (amber callouts, faction-coloured team labels, mono checkbox captions)
+  stay hand-styled
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for
@@ -339,6 +347,17 @@ conventions, distinct from the content-page patterns above:
   toggle already uses, driven by Tailwind's `group-open:` on the native `open` state, no JS) and a
   `preview` slot for a live status summary that stays visible while collapsed, so a problem inside
   still reads at a glance without expanding.
+- **Admin powers on a player-facing list sit behind an `AdminMenu`** (`src/components/AdminMenu.tsx`),
+  not a mode toggle: a ⋯ button, rendered only for an admin, that opens a menu of the actions on what
+  it sits on — one on each row for that row's actions, one on the section header for the list's own
+  (adding an entry). The list reads the same for an admin as for a player until the menu opens. An
+  item is one-click (`onSelect`, run after the menu closes) or expands in place of the list
+  (`content`, rendered with a `close` callback — `ScrimNightPanel`'s **Add player…** opens
+  `AddPlayerSelect` that way). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
+  focuses the first item, arrow keys move between items, and Escape, a press outside or tabbing away
+  closes it, with Escape and a pick returning focus to the trigger. The popup anchors to the trigger's
+  right edge and is capped to the viewport width, so it fits at phone width. An action any player may
+  take (a scrim night's End night) stays out of it. `ScrimNightPanel` is the worked example.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
