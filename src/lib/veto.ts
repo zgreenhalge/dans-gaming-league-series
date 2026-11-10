@@ -1,5 +1,6 @@
-// Pick/ban completion check, shared by the match page (rendering) and the veto route (which uses it
-// to detect the incomplete→complete transition that fires server provisioning).
+// Pick/ban completion check and veto window, shared by the match page (rendering) and the veto route
+// (which uses the completion check to detect the incomplete→complete transition that fires server
+// provisioning, and the window to refuse a non-admin's step before it opens).
 //
 // Gauntlet = playoffs, so the season's `is_gauntlet` is all this needs to pick the veto shape — see
 // docs/glossary.md's Gauntlet entry.
@@ -23,6 +24,20 @@ export function isVetoComplete(m: VetoFields, isGauntlet: boolean): boolean {
   return isGauntlet
     ? !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2)
     : !!(m.shirts_ban && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
+}
+
+/** How long before a match's scheduled time its players can start the pick/ban. An admin can at any time. */
+export const VETO_WINDOW_LEAD_MS = 10 * 60 * 1000;
+
+/** The instant, in epoch ms, the veto window opens for a match scheduled at `scheduledAt`. */
+export function vetoWindowOpensAt(scheduledAt: string): number {
+  return Date.parse(scheduledAt) - VETO_WINDOW_LEAD_MS;
+}
+
+/** Whether a match's players can work its pick/ban at `now` (epoch ms): it has a scheduled time and
+ *  `vetoWindowOpensAt()` has passed. */
+export function isVetoWindowOpen(scheduledAt: string | null, now: number): boolean {
+  return scheduledAt != null && now >= vetoWindowOpensAt(scheduledAt);
 }
 
 /**

@@ -142,7 +142,7 @@ source of truth, and the owning doc has the detail.
 
 | Timer | Value | Defined by | Effect |
 |---|---|---|---|
-| Veto window | Opens 10 min before `scheduled_at` | `PATCH /api/matches/[id]/veto` | Players can't veto earlier |
+| Veto window | Opens 10 min before `scheduled_at` | `VETO_WINDOW_LEAD_MS` / `isVetoWindowOpen()` (`src/lib/veto.ts`) | Players can't veto earlier; the match page refreshes itself when it opens |
 | Match reminder | 1 hour before `scheduled_at` | `schedule_match_reminder()` (Postgres) | One Discord reminder per match whose time is set; a time synced from a Discord event reminds only a pod's Game 1 |
 | Server clash warning | Under 1 hour apart | `SCHEDULE_COLLISION_WINDOW_MS` | Warning only |
 | Pod Game 2 time | Game 1 + 30 min | `POD_GAME_GAP_MS` | Only for a time synced from a Discord event |

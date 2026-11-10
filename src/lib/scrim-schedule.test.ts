@@ -13,6 +13,7 @@ import {
   isScrimCheckInOpen,
   leagueMatchesDuring,
   parseCommitment,
+  scrimNightBoundaries,
   scrimNightEnd,
   SCRIM_LEAGUE_CLEARANCE_MS,
   parseNightStart,
@@ -47,6 +48,20 @@ test('isScrimCheckInOpen: from SCRIM_CHECK_IN_LEAD_MS before the start until the
   assert.equal(isScrimCheckInOpen(NIGHT, at(-SCRIM_CHECK_IN_LEAD_MS)), true);
   assert.equal(isScrimCheckInOpen(NIGHT, at(SCRIM_NIGHT_LENGTH_MS - 1)), true);
   assert.equal(isScrimCheckInOpen(NIGHT, at(SCRIM_NIGHT_LENGTH_MS)), false);
+});
+
+test('scrimNightBoundaries: each instant is exactly where its clock check flips', () => {
+  const [checkIn, start, end] = scrimNightBoundaries(NIGHT);
+  const before = (t: number) => new Date(t - 1);
+  assert.equal(isScrimCheckInOpen(NIGHT, before(checkIn)), false);
+  assert.equal(isScrimCheckInOpen(NIGHT, new Date(checkIn)), true);
+  assert.equal(hasScrimNightStarted(NIGHT, before(start)), false);
+  assert.equal(hasScrimNightStarted(NIGHT, new Date(start)), true);
+  assert.equal(hasScrimNightEnded(NIGHT, before(end)), false);
+  assert.equal(hasScrimNightEnded(NIGHT, new Date(end)), true);
+  // A night ended by hand ends at that instant, so nothing is left to refresh for afterward.
+  const ended = { ...NIGHT, endedAt: at(HOUR).toISOString() };
+  assert.equal(scrimNightBoundaries(ended)[2], at(HOUR).getTime());
 });
 
 test('upcomingScrimNights: drops ended nights, soonest first', () => {

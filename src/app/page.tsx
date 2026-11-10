@@ -19,7 +19,9 @@ import {
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { gauntletHref, seasonHref } from '@/lib/crumbs';
 import { TopbarShell } from '@/components/TopbarShell';
-import { seasonTitle } from '@/lib/util';
+import { nextRefreshInstant, seasonTitle } from '@/lib/util';
+import { scrimNightEnd } from '@/lib/scrim-schedule';
+import { RefreshAt } from '@/components/RefreshAt';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { UpcomingGamesPanel } from '@/components/UpcomingGamesPanel';
@@ -70,13 +72,14 @@ function UpcomingSeasonRow({
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
+  const now = new Date();
   const [seasons, leaderboards, rosterSeasonIds, h2h, openFeedbackIds, scrims] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     currentPlayerId != null ? getPlayerRosterSeasonIds(currentPlayerId) : new Set<number>(),
     getCareerH2HDataCached(),
     currentPlayerId != null ? getOpenFeedbackSeasonIds().then((ids) => new Set(ids)) : new Set<number>(),
-    getUpcomingScrimNights(new Date()),
+    getUpcomingScrimNights(now),
   ]);
 
   const upcoming = seasons
@@ -96,7 +99,7 @@ export default async function Home() {
 
   const [myStats, games, form, rankChanges, feedbackViews] = await Promise.all([
     currentPlayerId != null ? getMyStats(currentPlayerId, h2h) : null,
-    getHomeGames(home),
+    getHomeGames(home, now.getTime()),
     standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
     standings?.live ? getSeasonSchedule(standings.season.id).then(rankChangesSinceLastWeek) : undefined,
     Promise.all(
@@ -110,10 +113,14 @@ export default async function Home() {
     ),
   ]);
   const feedbackBanners = feedbackViews.filter((b) => b.survey || b.superlatives?.mode === 'ballot');
+  // The clock decides which scrim nights are still listed and which week is current, so the page
+  // refreshes itself when the next of those flips.
+  const refreshAt = nextRefreshInstant([...scrims.map((u) => scrimNightEnd(u.night)), ...(games?.boundaries ?? [])], now.getTime());
 
   return (
     <div className="min-h-screen">
       <HomeTopbar />
+      {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
       <main className="max-w-[1080px] mx-auto px-6 pt-6 pb-16">
         {feedbackBanners.map((b) => (
           <FeedbackBanner

@@ -13,7 +13,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasonSchedule, getOtherScheduledMatches, findCurrentWeek, findNextUnplayedWeek, getUpcomingGames, weekWindowMs, type WeekWithMatches, type MatchWithRoster } from './queries';
+import { getSeasonSchedule, getOtherScheduledMatches, currentWeekBoundaries, findCurrentWeek, findNextUnplayedWeek, getUpcomingGames, weekWindowBoundaries, weekWindowMs, type WeekWithMatches, type MatchWithRoster } from './queries';
 import { test, report } from './test-support/miniTest';
 
 /** Minimal WeekWithMatches stand-ins — findCurrentWeek/weekWindowMs only read week_number and
@@ -115,6 +115,29 @@ async function main() {
     const startDate = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
     const schedule = [week(1), week(2)];
     assert.equal(findCurrentWeek(schedule, startDate)?.week_number, 2);
+  });
+
+  await test('weekWindowBoundaries: the week window flips exactly at its start and the instant after its end', () => {
+    const [start, after] = weekWindowBoundaries('2026-01-01', 2);
+    assert.equal(new Date(start).toISOString(), '2026-01-08T00:00:00.000Z');
+    assert.equal(new Date(after).toISOString(), '2026-01-15T00:00:00.000Z');
+    const win = weekWindowMs('2026-01-01', 2);
+    const inWindow = (t: number) => t >= win.start && t <= win.end;
+    assert.deepEqual([inWindow(start - 1), inWindow(start), inWindow(after - 1), inWindow(after)], [false, true, true, false]);
+  });
+
+  await test('currentWeekBoundaries: findCurrentWeek changes only at one of them', () => {
+    const startDate = '2026-01-01';
+    const schedule = [week(1), week(2), week(3)];
+    const boundaries = currentWeekBoundaries(schedule, startDate);
+    assert.equal(boundaries.length, 6);
+    for (const t of boundaries) {
+      // Just before a boundary and at it can differ; between boundaries the answer holds.
+      assert.equal(findCurrentWeek(schedule, startDate, t), findCurrentWeek(schedule, startDate, t + 86_400_000 - 1));
+    }
+    assert.equal(findCurrentWeek(schedule, startDate, boundaries[2] - 1)?.week_number, 1);
+    assert.equal(findCurrentWeek(schedule, startDate, boundaries[2])?.week_number, 2);
+    assert.deepEqual(currentWeekBoundaries(schedule, null), []);
   });
 
   await test('findNextUnplayedWeek: empty schedule returns null', () => {
