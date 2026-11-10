@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
+import { createFakeSupabaseClient, FakeRpcError, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
@@ -105,6 +105,21 @@ async function main() {
     installFixture({ scrim_nights: [running] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 409);
+  });
+
+  await test('500 carrying the database message when the start fails for any other reason', async () => {
+    const db = installFixture();
+    __setTestAdminClient(
+      createFakeSupabaseClient(db, {
+        start_scrim_night: () => {
+          throw new FakeRpcError('insert or update on table "scrim_signups" violates foreign key constraint');
+        },
+      }),
+    );
+    __setTestSession(sessionFor(PLAYER_ID));
+    const res = await start({ player_id: PLAYER_ID, startsAt: inHours(48), commitment: 'definite' });
+    assert.equal(res.status, 500);
+    assert.match(((await res.json()) as { error: string }).error, /violates foreign key constraint/);
   });
 
   report();

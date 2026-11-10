@@ -158,6 +158,50 @@ in.
    snapshot and fails (a read filtered only on a column most rows share isn't capped, so check
    those by eye). The fake also rejects a `.range()` with no `.order()`.
 
+## Recipe: Add a mutation route
+
+A new `src/app/api/**/route.ts` that changes data doesn't write inline: it calls a named write
+function that throws on failure, so a failed write can't pass for one that landed (AGENTS.md's
+"Never swallow a write's outcome"). The scrim routes are the model — `src/app/api/scrims/route.ts`
+and `src/app/api/scrims/matches/[id]/route.ts`, writing through `src/lib/scrim-nights.ts` and
+`src/lib/scrim-matches.ts`.
+
+1. **Put each write in a lib write module** — `src/lib/<domain>.ts`, beside the domain's pure rules,
+   one exported function per write, taking the client first (`db: SupabaseClient`). Page and view
+   reads stay in `src/lib/queries/`; a read the write itself depends on sits beside it
+   (`applyScrimSideChoice()`).
+   - A table write ends its chain with `.throwOnError()` (`setScrimSignup()`, `deleteScrimMatch()`).
+   - An RPC call checks its `{ error }` and throws `new Error(error.message)`
+     (`leaveScrimNight()`, `setScrimMatchLineup()`). Supabase returns that `error` as a plain
+     object, not an `Error`, so rethrowing it as-is loses its message at the route's catch.
+   - Rows that must change together are one Postgres function called through `.rpc()`
+     (`start_scrim_night()` behind `startScrimNight()`, `queue_scrim_matches()` behind
+     `queueScrimMatches()`), not a sequence of writes from the route.
+   - `.throwOnError()` doesn't flag an update or delete that matched no row. When matching nothing
+     means the write didn't happen, make the write say so: chain `.select()` and treat no row as a
+     refusal, or have the RPC return whether it wrote, as `replace_survey_questions()` does.
+2. **Turn an expected conflict into a typed error.** When the write is refused for a reason the
+   user can act on, the function throws a named `Error` subclass whose message is the user-facing
+   one, and throws anything else as a plain `Error`. `startScrimNight()` throws
+   `OverlappingScrimNightError` when its RPC raises `overlapping-scrim-night`; `queueScrimMatches()`
+   throws `ScrimMatchConflictError` for a night that still has an unplayed match or no map to start
+   one on. A refusal decided by state another request can change is checked inside the write (the
+   RPC, or a filter on the write such as `endScrimNight()`'s `.is('ended_at', null)`), not only
+   from what the route read beforehand.
+3. **Keep the route thin:** gate, parse, call the write. The gate is an access helper answered with
+   `accessDenied()` (`requireScrimSignupTarget()`, `requireScrimMatchAccess()`); a bad body is a 400;
+   a refusal the route can already see from what the gate read is a 409 before any write
+   (`isScrimMatchEditable()`). The write runs inside one `try/catch` that maps each typed error to a
+   409 and anything else to a 500 carrying the error's message — see `POST` in
+   `src/app/api/scrims/route.ts`. Writes that each stand on their own can run in sequence inside
+   that one `try/catch`, as the scrim match `PATCH` sets the map, side and lineup.
+4. **Test it.** The route gets a colocated `route.test.ts` (next recipe). To reach an error raised
+   inside an RPC, the test's fake RPC handler throws `FakeRpcError`
+   (`src/lib/test-support/fakeSupabase.ts`): `src/app/api/scrims/route.test.ts` covers both the
+   overlapping-night 409 (through `scrimNightRpcs`, `src/lib/test-support/scrimNightRpcs.ts`) and
+   the 500 for any other failure. A write function that branches on what it reads gets its own test
+   in `src/lib/<domain>.test.ts`, as `applyScrimSideChoice()` does in `src/lib/scrim-matches.test.ts`.
+
 ## Recipe: Test a route handler
 
 `route.ts` handlers can be called directly in a test — no running server needed — using the same
@@ -189,8 +233,10 @@ and its `UPCOMING`-only status gate.
 4. **Mutations are supported** — `fakeSupabase.ts`'s `.insert()`/`.delete()` push/remove rows in the
    `FakeDb` object directly, so assert on the outcome either from the handler's `NextResponse` (status
    code, JSON body) or by re-reading the same `FakeDb` object the test built. It doesn't emulate
-   unique/FK constraints or return errors — a route whose behavior depends on the database rejecting
-   a write needs its own targeted case.
+   unique/FK constraints or fail a write on its own. To reach a route's error path, throw
+   `FakeRpcError` from a fake RPC handler, or wrap the client in `clientFailingOn()` (one table's
+   write resolves `{ error }`) or `clientThrowingOn()` (touching a table throws), all in
+   `fakeSupabase.ts`.
 5. **Reset shared state between tests.** The `__setTest*` functions install process-global overrides,
    so build a fresh `FakeDb`/fake client per `test()` block (a small `installFixture()` helper that
    both installs it and returns the `db` for later assertions, called at the top of each test, works
