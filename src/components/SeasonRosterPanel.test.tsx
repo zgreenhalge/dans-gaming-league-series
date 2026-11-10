@@ -141,11 +141,13 @@ describe('SeasonRosterPanel admin menus', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
     expect(screen.getByRole('button', { name: 'Leave Season' })).toBeDisabled();
+    expect(screen.getByText('…')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: `Admin actions for Player ${PLAYER_ID}` }));
     expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeDisabled();
 
     finish(new Response(JSON.stringify({ ok: true })));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Leave Season' })).toBeEnabled());
     expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeEnabled();
+    expect(screen.queryByText('…')).toBeNull();
   });
 });

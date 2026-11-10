@@ -46,8 +46,9 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
   // One gate for every control: nothing else can start while a roster write or the refresh after
   // it is in flight, so `target` always names the one running write.
   const busy = writing || refreshing;
+  // The player whose write is running, held through the refresh so their label doesn't flip back early.
   const [target, setTarget] = useState<number | null>(null);
-  const pending = writing ? target : null;
+  const pending = busy ? target : null;
 
   const rosterIds = new Set(roster.map((r) => r.player_id));
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
@@ -101,7 +102,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex flex-wrap items-center justify-between gap-3">
         <SectionLabel>
           Roster · {roster.length} {roster.length === 1 ? 'player' : 'players'}
           {buyInAmount != null && <> · Buy-in {formatBuyIn(buyInAmount)}</>}
@@ -138,10 +139,13 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
             <RosterPlayerRow key={r.player_id} playerId={r.player_id} name={r.player_name} avatarUrl={r.steam_avatar_url} isMe={isMe}>
               {/* An admin's own row has no menu: their Leave Season button covers it. */}
               {isAdmin && !isMe && (
-                <AdminMenu
-                  label={`Admin actions for ${r.player_name}`}
-                  items={[{ label: 'Remove', onSelect: () => mutate(r.player_id, 'DELETE'), disabled: busy, danger: true }]}
-                />
+                <div className="flex items-center gap-2 shrink-0">
+                  {pending === r.player_id && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">…</span>}
+                  <AdminMenu
+                    label={`Admin actions for ${r.player_name}`}
+                    items={[{ label: 'Remove', onSelect: () => mutate(r.player_id, 'DELETE'), disabled: busy, danger: true }]}
+                  />
+                </div>
               )}
             </RosterPlayerRow>
           );
