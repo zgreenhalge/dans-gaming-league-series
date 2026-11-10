@@ -5,7 +5,7 @@ import type { Player, Season } from '../types';
 import { allMatchesPlayed, extractSeasonNumber, findPairedSeason } from '../util';
 import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { batchedIn, matchIdsForSeasons, resolveAllMatches } from './_shared';
+import { asPage, batchedIn, fetchAllPages, matchIdsForSeasons, resolveAllMatches } from './_shared';
 import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, hasSeasonSabremetrics, type SabremetricMatchRow } from './sabremetrics';
@@ -26,12 +26,7 @@ export interface SeasonRosterEntry {
  *  Supabase read — same reasoning as `getSeason()` below. */
 export const getSeasons = persistentQuery('getSeasons', async (client?: SupabaseClient): Promise<Season[]> => {
   const db = client ?? getAdminClient();
-  const { data, error } = await db
-    .from('seasons')
-    .select('*')
-    .order('id');
-  if (error) throw error;
-  return (data ?? []) as Season[];
+  return fetchAllPages<Season>((from, to) => asPage(db.from('seasons').select('*').order('id').range(from, to)));
 });
 
 /** The current regular (non-gauntlet) `ACTIVE` season, or `null` if none is — a gauntlet can also be

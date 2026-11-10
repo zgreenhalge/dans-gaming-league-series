@@ -165,19 +165,18 @@ const fetchMapRawData = persistentQuery('fetchMapRawData', async (): Promise<{
   weeks: RawWeek[];
   seasons: RawSeason[];
 }> => {
-  const [matches, weekLookup, { data: seasons, error: sErr }] =
+  const [matches, weekLookup, seasons] =
     await Promise.all([
       fetchAllPages<RawMatch>((from, to) =>
-        asPage(onlyLeagueMatches(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, skins_starting_side')).range(from, to)),
+        asPage(onlyLeagueMatches(getAdminClient().from('matches').select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, skins_starting_side')).order('id').range(from, to)),
       ),
       getWeekLookup(),
-      getAdminClient().from('seasons').select('id, name, is_gauntlet, map_pool'),
+      getSeasons(),
     ]);
-  if (sErr) throw sErr;
   return {
     matches,
     weeks: weekRowsFromLookup(weekLookup),
-    seasons: (seasons ?? []) as RawSeason[],
+    seasons: seasons.map(({ id, name, is_gauntlet, map_pool }): RawSeason => ({ id, name, is_gauntlet, map_pool })),
   };
 });
 
@@ -274,16 +273,18 @@ export const getMapIndex = persistentQuery('getMapIndex', async (): Promise<MapI
   }
 
   if (playedMatchIds.length > 0) {
-    const { data: statsData } = await getAdminClient()
-      .from('player_match_stats')
-      .select('match_id, kills, assists, faction, is_win')
-      .in('match_id', playedMatchIds);
+    const statsData = await batchedIn<{ match_id: number; kills: number; assists: number; faction: string; is_win: boolean }>(
+      'player_match_stats',
+      'match_id',
+      playedMatchIds,
+      'match_id, kills, assists, faction, is_win',
+    );
 
     // First pass: per-match totals
     const matchKills = new Map<number, number>();
     const matchAssists = new Map<number, number>();
     const shirtsWon = new Map<number, boolean>();
-    for (const s of (statsData ?? []) as { match_id: number; kills: number; assists: number; faction: string; is_win: boolean }[]) {
+    for (const s of statsData) {
       matchKills.set(s.match_id, (matchKills.get(s.match_id) ?? 0) + s.kills);
       matchAssists.set(s.match_id, (matchAssists.get(s.match_id) ?? 0) + (s.assists ?? 0));
       if (s.faction === 'SHIRTS') {
@@ -431,12 +432,10 @@ export const getMapDetail = persistentQuery('getMapDetail', async (slug: string)
   }
 
   const matchIds = playedMatches.map((m) => m.id);
-  const [{ data: statsData, error: sErr }, players] = await Promise.all([
-    getAdminClient().from('player_match_stats').select('*').in('match_id', matchIds),
+  const [statRows, players] = await Promise.all([
+    batchedIn<PlayerMatchStat>('player_match_stats', 'match_id', matchIds, '*'),
     getPlayersById(),
   ]);
-  if (sErr) throw sErr;
-  const statRows = (statsData ?? []) as PlayerMatchStat[];
 
   const rosterByMatch = new Map<number, { shirts: MapPlayerStat[]; skins: MapPlayerStat[] }>();
   for (const s of statRows) {
@@ -578,10 +577,9 @@ export type MapRow = {
  *  read of the same table share one Supabase read — same reasoning as `getMapDetail()` below. */
 export const getMapLookup = persistentQuery('getMapLookup', async (client?: SupabaseClient): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
   const db = client ?? getAdminClient();
-  const { data, error } = await db.from('maps').select('*');
-  if (error) throw error;
+  const rows = await fetchAllPages<MapRow>((from, to) => asPage(db.from('maps').select('*').order('id').range(from, to)));
   const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
-  for (const row of (data ?? []) as MapRow[]) {
+  for (const row of rows) {
     lookup[row.slug] = { image_url: row.image_url, workshop_url: row.workshop_url };
   }
   return lookup;
@@ -605,9 +603,10 @@ export interface WorkshopMapOption {
 
 /** Maps with a resolvable workshop id, for a workshop-map picker (e.g. the admin server console). */
 export async function getMapsForWorkshopPicker(): Promise<WorkshopMapOption[]> {
-  const { data, error } = await getAdminClient().from('maps').select('name, workshop_url').order('name');
-  if (error) throw error;
-  const rows = (data ?? []) as { name: string; workshop_url: string | null }[];
+  type Row = { name: string; workshop_url: string | null };
+  const rows = await fetchAllPages<Row>((from, to) =>
+    asPage(getAdminClient().from('maps').select('name, workshop_url').order('name').order('id').range(from, to)),
+  );
   const options: WorkshopMapOption[] = [];
   for (const row of rows) {
     const workshopId = workshopIdFromUrl(row.workshop_url);
@@ -741,7 +740,7 @@ export const getMatchIdsForMap = persistentQuery('getMatchIdsForMap', async (map
   if (!nameLower) return [];
   type Row = { id: number; shirts_pick: string | null; skins_pick: string | null; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    onlyLeagueMatches(db.from('matches').select('id, shirts_pick, skins_pick, final_score')).range(from, to),
+    onlyLeagueMatches(db.from('matches').select('id, shirts_pick, skins_pick, final_score')).order('id').range(from, to),
   );
   return rows
     .filter(
@@ -756,7 +755,7 @@ export const getMatchIdsForMap = persistentQuery('getMatchIdsForMap', async (map
 export async function getAllPlayedMatchIds(): Promise<number[]> {
   type Row = { id: number; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    onlyLeagueMatches(getAdminClient().from('matches').select('id, final_score')).range(from, to),
+    onlyLeagueMatches(getAdminClient().from('matches').select('id, final_score')).order('id').range(from, to),
   );
   return rows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
 }

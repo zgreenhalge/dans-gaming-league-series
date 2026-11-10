@@ -1,6 +1,6 @@
 // Barrel — re-exports every domain module so `@/lib/queries` keeps resolving unchanged for all
-// existing callers. `_shared.ts` (fetchAllPages, SUPABASE_PAGE_SIZE) is intentionally not
-// re-exported here — it's private plumbing used only by the domain files themselves.
+// existing callers. `_shared.ts` (batchedIn, …) and `_paging.ts` (fetchAllPages, asPage) are
+// intentionally not re-exported here — they're plumbing imported directly by the code that pages a read.
 export * from './seasons';
 export * from './feedback';
 export * from './season-schedule-draft';

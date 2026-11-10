@@ -85,10 +85,10 @@ function toRoundOutcomes(roundRows: RawRoundRow[], killRows: RawKillVictimRow[],
  *  scan. */
 const fetchAllMatchRoundRows = persistentQuery('fetchAllMatchRoundRows', async (): Promise<MatchRoundRow[]> => {
   const [roundRows, matchSeason, killRows, pmsFactionLookup] = await Promise.all([
-    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').range(from, to)),
+    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').order('id').range(from, to)),
     resolveMatchSeasons(),
     fetchAllPages<RawKillVictimRow>((from, to) =>
-      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').range(from, to)),
+      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').order('id').range(from, to)),
     ),
     fetchPmsFactionLookup(),
   ]);
@@ -106,9 +106,9 @@ const fetchAllMatchRoundRows = persistentQuery('fetchAllMatchRoundRows', async (
 export async function getMatchRoundOutcomes(matchIds: number[]): Promise<RoundOutcomeRow[]> {
   if (matchIds.length === 0) return [];
   const [roundRows, killRows, pmsFactionLookups] = await Promise.all([
-    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').in('match_id', matchIds).range(from, to)),
+    fetchAllPages<RawRoundRow>((from, to) => getAdminClient().from('match_rounds').select('*').in('match_id', matchIds).order('id').range(from, to)),
     fetchAllPages<RawKillVictimRow>((from, to) =>
-      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').in('match_id', matchIds).range(from, to)),
+      asPage(getAdminClient().from('match_kills').select('match_id, round_number, victim_player_match_stats_id').in('match_id', matchIds).order('id').range(from, to)),
     ),
     Promise.all(matchIds.map((id) => fetchPmsFactionLookup(id))),
   ]);
