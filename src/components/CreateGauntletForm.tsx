@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
@@ -8,6 +8,7 @@ import EmptyState from './EmptyState';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import type { BracketPod } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
+import FieldLabel from './FieldLabel';
 
 interface Props {
   seasons: { id: number; name: string }[];
@@ -18,6 +19,8 @@ type BuildResult = { shape: Shape; pods: BracketPod[] };
 
 export function CreateGauntletForm({ seasons }: Props) {
   const router = useRouter();
+  const seasonFieldId = useId();
+  const startDateFieldId = useId();
   const [seasonId, setSeasonId] = useState<number | ''>(seasons[0]?.id ?? '');
   const [startDate, setStartDate] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -134,8 +137,9 @@ export function CreateGauntletForm({ seasons }: Props) {
     <div className="flex flex-col gap-6">
       {seasons.length > 1 && (
         <div>
-          <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">Season</div>
+          <FieldLabel htmlFor={seasonFieldId} className="mb-2">Season</FieldLabel>
           <select
+            id={seasonFieldId}
             value={selectedSeasonId}
             onChange={(e) => setSeasonId(Number(e.target.value))}
             className="w-full font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
@@ -150,8 +154,9 @@ export function CreateGauntletForm({ seasons }: Props) {
       )}
 
       <div>
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">Start Date (optional)</div>
+        <FieldLabel htmlFor={startDateFieldId} className="mb-2">Start Date (optional)</FieldLabel>
         <input
+          id={startDateFieldId}
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}

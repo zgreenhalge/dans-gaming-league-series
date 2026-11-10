@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useDismissOnOutsidePress } from './useDismissOnOutsidePress';
 import { useHasMounted } from './useHasMounted';
 
 type Pref = 'system' | 'light' | 'dark';
@@ -88,14 +89,7 @@ export function ThemeToggle() {
     return () => window.removeEventListener('storage', handler);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
+  useDismissOnOutsidePress(ref, open, setOpen);
 
   function select(next: Pref) {
     setPref(next);
