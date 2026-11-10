@@ -9,7 +9,7 @@ follow the link that matches what you're doing. New to the codebase? Read
 | [`glossary.md`](./glossary.md) | DGLS-specific domain terms (gauntlet, H2H, faction, RWR, veto, …) + a map of where each concept lives in the code |
 | [`season-lifecycle.md`](./season-lifecycle.md) | How a season runs end to end: each stage in order, who acts, what gates it, the code behind it, and the timers along the way |
 | [`patterns.md`](./patterns.md) | Cross-cutting conventions every change should follow |
-| [`recipes.md`](./recipes.md) | Step-by-step patterns for common changes (new stat, page, query helper, map) |
+| [`recipes.md`](./recipes.md) | Step-by-step patterns for common changes (new stat, page, query helper, mutation route, route test, table, map, season-scoped view, hoverable surface) |
 | [`architecture.md`](./architecture.md) | Routes, auth, the mutation API, database schema, deployment |
 | [`calculations.md`](./calculations.md) | Formulas behind every stat and ranking (sabremetrics, canonical sorts, narrative metrics) |
 | [`visual-conventions.md`](./visual-conventions.md) | The shared CSS hover/glow/accent system and UI primitives |

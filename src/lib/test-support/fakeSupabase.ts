@@ -279,7 +279,8 @@ export function setFakeRowCap(n: number | null): void {
   unboundedRowCap = n;
 }
 
-/** Shape of the one error this fake ever surfaces — an `.insert()` primary-key collision. */
+/** Shape of the error a failing read or write resolves with — this fake's own builder never produces
+ *  one; `clientFailingOn()` injects it. */
 export interface FakeError {
   code: string;
   message: string;
@@ -635,8 +636,8 @@ function failingChain(error: FakeError): Record<string, unknown> {
 }
 
 /** Wraps a client so one table's `method` resolves `{ data: null, error }` instead of landing —
- * simulating a read or write failure this fake's own builder has no way to produce on its own (its only
- * built-in error is `.insert()`'s primary-key collision — see this file's header). Every other
+ * simulating a read or write failure this fake's own builder has no way to produce on its own (it
+ * emulates no constraints — see this file's header). Every other
  * method on the same table, and every other table, still goes through the real builder, so chained
  * access that doesn't touch `method` keeps working. A failing `'select'` also fails a write that
  * chains `.select()` on the same table (`.insert(...).select('id')`), since the write returns the

@@ -6,6 +6,7 @@
 
 import { useCallback, useState } from 'react';
 import type { DemoConfirmPayload } from '@/lib/demo/ingestResult';
+import { routeError } from '@/lib/util';
 
 interface Options {
   /** Called after any action succeeds — e.g. `router.refresh()` and/or clearing local state. */
@@ -45,8 +46,7 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
   const clearResult = useCallback(
     async (disposition: 'confirmed' | 'dismissed'): Promise<string | null> => {
       const res = await fetch(`/api/matches/${matchId}/demo/result?disposition=${disposition}`, { method: 'DELETE' });
-      if (res.ok) return null;
-      return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not clear the parsed result';
+      return res.ok ? null : routeError(res, 'Could not clear the parsed result');
     },
     [matchId],
   );
@@ -61,11 +61,10 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
         // Fetch the staged result if the caller didn't hand us the payload/warnings (dashboard rows).
         if (!p || !w) {
           const r = await fetch(`/api/matches/${matchId}/demo/result`);
-          if (r.ok) {
-            const j = (await r.json()) as { result?: { payload?: DemoConfirmPayload | null; warnings?: string[] } };
-            p = p ?? j?.result?.payload ?? null;
-            w = w ?? j?.result?.warnings ?? null;
-          }
+          if (!r.ok) return routeError(r, 'Could not load the parsed result');
+          const j = (await r.json()) as { result?: { payload?: DemoConfirmPayload | null; warnings?: string[] } };
+          p = p ?? j?.result?.payload ?? null;
+          w = w ?? j?.result?.warnings ?? null;
         }
         if (!p) return 'No derivable score to confirm — re-parse or enter the score manually.';
         const res = await fetch(`/api/matches/${matchId}/score`, {
@@ -74,7 +73,7 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
           // Forward warnings so the score route can learn steam ids from elimination matches.
           body: JSON.stringify({ ...p, warnings: w ?? [] }),
         });
-        if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not save the score';
+        if (!res.ok) return routeError(res, 'Could not save the score');
         const cleared = await clearResult('confirmed');
         return cleared && `Score saved, but clearing the parsed result failed: ${cleared}`;
       }),
@@ -94,7 +93,7 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
     () =>
       run(async () => {
         const res = await fetch(`/api/matches/${matchId}/demo/dispatch`, { method: 'POST' });
-        if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not start a re-parse';
+        if (!res.ok) return routeError(res, 'Could not start a re-parse');
         return null;
       }),
     [matchId, run],
