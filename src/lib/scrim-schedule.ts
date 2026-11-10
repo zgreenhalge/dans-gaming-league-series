@@ -47,10 +47,21 @@ export function hasScrimNightStarted(night: ScrimNight, now: Date): boolean {
   return Date.parse(night.startsAt) <= now.getTime();
 }
 
-/** Whether players can check in to `night`: from `SCRIM_CHECK_IN_LEAD_MS` before it starts until it
- *  ends. */
+/** The instant check-in opens for `night`, in epoch ms: `SCRIM_CHECK_IN_LEAD_MS` before it starts. */
+export function scrimCheckInOpensAt(night: ScrimNight): number {
+  return Date.parse(night.startsAt) - SCRIM_CHECK_IN_LEAD_MS;
+}
+
+/** Whether players can check in to `night`: from `scrimCheckInOpensAt()` until it ends. */
 export function isScrimCheckInOpen(night: ScrimNight, now: Date): boolean {
-  return Date.parse(night.startsAt) - SCRIM_CHECK_IN_LEAD_MS <= now.getTime() && !hasScrimNightEnded(night, now);
+  return scrimCheckInOpensAt(night) <= now.getTime() && !hasScrimNightEnded(night, now);
+}
+
+/** The instants, in epoch ms, where `night`'s clock checks flip: check-in opens
+ *  (`isScrimCheckInOpen()`), it starts (`hasScrimNightStarted()`) and it ends (`hasScrimNightEnded()`).
+ *  A page that renders those checks refreshes at the next one (`nextRefreshInstant()`, `util.ts`). */
+export function scrimNightBoundaries(night: ScrimNight): number[] {
+  return [scrimCheckInOpensAt(night), Date.parse(night.startsAt), scrimNightEnd(night)];
 }
 
 /** How far from a scheduled league match a scrim match can't start: a DGLS wingman game runs about

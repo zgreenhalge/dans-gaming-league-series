@@ -169,16 +169,22 @@ export function weekWindowMs(startDate: string, weekNumber: number): { start: nu
   return { start: win.start.getTime(), end: win.end.getTime() + 86_399_999 };
 }
 
+/** The instants, in epoch ms, where `weekWindowMs()`'s window flips for a `now >= start && now <= end`
+ *  check: its start, and the instant after its inclusive end. */
+export function weekWindowBoundaries(startDate: string, weekNumber: number): number[] {
+  const win = weekWindowMs(startDate, weekNumber);
+  return [win.start, win.end + 1];
+}
+
 /** Whichever week "today" falls in, from an already-fetched schedule — the week whose window
- *  contains now, else the next upcoming week, else the last week if every window is past. Falls
- *  back to the first week with any matches when the season has no `start_date` yet. Shared by
- *  `getUpcomingGames()` (below) and the `/scheduled` Discord command (#396) so they can't drift on
- *  what "current week" means. */
-export function findCurrentWeek(schedule: WeekWithMatches[], startDate: string | null): WeekWithMatches | null {
+ *  contains `now` (epoch ms, the current time by default), else the next upcoming week, else the
+ *  last week if every window is past. Falls back to the first week with any matches when the season
+ *  has no `start_date` yet. Shared by `getUpcomingGames()` (below) and the `/scheduled` Discord
+ *  command (#396) so they can't drift on what "current week" means. */
+export function findCurrentWeek(schedule: WeekWithMatches[], startDate: string | null, now: number = Date.now()): WeekWithMatches | null {
   if (schedule.length === 0) return null;
 
   if (startDate) {
-    const now = Date.now();
     const current = schedule.find((w) => {
       const win = weekWindowMs(startDate, w.week_number);
       return now >= win.start && now <= win.end;
@@ -193,6 +199,12 @@ export function findCurrentWeek(schedule: WeekWithMatches[], startDate: string |
   }
 
   return schedule[0];
+}
+
+/** The instants, in epoch ms, where `findCurrentWeek()`'s answer can change: every week's
+ *  `weekWindowBoundaries()`. None without a `start_date`, since the answer doesn't depend on the clock then. */
+export function currentWeekBoundaries(schedule: WeekWithMatches[], startDate: string | null): number[] {
+  return startDate ? schedule.flatMap((w) => weekWindowBoundaries(startDate, w.week_number)) : [];
 }
 
 /** The first week (by `week_number`) with no played matches yet — what "publish next week's match

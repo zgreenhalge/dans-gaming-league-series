@@ -214,6 +214,15 @@ export function formatCountdownClock(ms: number): string {
   return hms;
 }
 
+/** The earliest of `instants` (epoch ms) strictly after `now`, as an ISO 8601 string, or `null` when
+ *  none is — the `iso` a server page hands `<RefreshAt>` so it re-renders when its next clock check
+ *  flips. A page passes every instant its own checks compare `now` against; past ones and `NaN` are
+ *  skipped, so the refresh can't fire straight away and loop. */
+export function nextRefreshInstant(instants: number[], now: number): string | null {
+  const future = instants.filter((t) => t > now);
+  return future.length > 0 ? new Date(Math.min(...future)).toISOString() : null;
+}
+
 /** Relative countdown to (or since) an instant: `in 2d 3h 4m 5s`, or `2d 3h 4m 5s ago` once past.
  *  `now` defaults to the current time. */
 export function formatCountdownRelative(iso: string, now: number = Date.now()): string {
