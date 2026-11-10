@@ -4,12 +4,13 @@
 
 export default function SectionLabel({
   children,
-  className = '',
+  className,
   as: Tag = 'div',
 }: {
   children: React.ReactNode;
   className?: string;
   as?: 'div' | 'span';
 }) {
-  return <Tag className={`tracked text-[10px] text-[var(--color-text-secondary)] ${className}`}>{children}</Tag>;
+  const cls = 'tracked text-[10px] text-[var(--color-text-secondary)]';
+  return <Tag className={className ? `${cls} ${className}` : cls}>{children}</Tag>;
 }
