@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { effectiveSkinsStartingSide, isVetoComplete, type VetoFields } from './veto';
+import { effectiveSkinsStartingSide, isVetoComplete, isVetoWindowOpen, vetoWindowOpensAt, VETO_WINDOW_LEAD_MS, type VetoFields } from './veto';
 import { test, report } from './test-support/miniTest';
 
 const full: VetoFields = {
@@ -85,6 +85,15 @@ test('effectiveSkinsStartingSide: derives the side from the first recorded round
 test('effectiveSkinsStartingSide: null when nothing is stored or recorded', () => {
   assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: null }), null);
   assert.equal(effectiveSkinsStartingSide({ skins_starting_side: null, round_history: [] }), null);
+});
+
+test('isVetoWindowOpen: opens exactly at vetoWindowOpensAt(), VETO_WINDOW_LEAD_MS before the scheduled time', () => {
+  const scheduledAt = '2026-11-06T01:00:00.000Z';
+  const opensAt = vetoWindowOpensAt(scheduledAt);
+  assert.equal(opensAt, Date.parse(scheduledAt) - VETO_WINDOW_LEAD_MS);
+  assert.equal(isVetoWindowOpen(scheduledAt, opensAt - 1), false);
+  assert.equal(isVetoWindowOpen(scheduledAt, opensAt), true);
+  assert.equal(isVetoWindowOpen(null, opensAt), false);
 });
 
 report();
