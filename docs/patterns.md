@@ -193,6 +193,35 @@ or a speculative read is declined for that reason, not for its size.
 - **Truly dependent steps stay sequential.** Don't fire reads whose results may be thrown away just
   to look parallel.
 
+## Adopt a cheap safeguard before the failure it prevents shows up
+
+When a best practice costs no more than the code it replaces and its only payoff is future-proofing,
+adopt it now. Don't wait for the failure it prevents to show up and justify it. These failures are
+usually silent, so by the time one is noticed it has already produced wrong data, far from its cause.
+
+This can look like it contradicts YAGNI, but the two cover different things. YAGNI rejects
+speculative *features and abstractions*: a flag, a parameter or a layer built for a caller that
+doesn't exist. This principle covers *known failure modes of the tools we already use*: PostgREST's
+row cap, timezone drift between server and browser, an unchecked write. Each one is certain to bite
+as the data and the audience grow; only the date is unknown. As with the performance rule above, the
+safeguard still has to be as clear and simple as the code it replaces. One that needs obtuse code or
+a clever abstraction is declined for that reason.
+
+- **Page every unbounded read.** PostgREST returns at most 1,000 rows per request and drops the rest
+  without an error. A read with nothing bounding it to a small set (no `eq` on an id or a parent)
+  goes through `fetchAllPages()` (`queries/_paging.ts`), ordered by a unique key, even while the
+  table holds a dozen rows; a long id list goes through `batchedIn()` (`queries/_shared.ts`). Paging
+  a small table costs the same one request as not paging it. `getScrimNightRows()`
+  (`queries/scrims.ts`) is the shape to copy. An `eq` on a column most rows share (a
+  `formula_version`, a status) doesn't bound a read either. Every test runs with the fake client
+  capping reads that have no `.eq()`/`.in()` filter at two rows (`test-support/setupPaging.ts`), so
+  an unfiltered read that skips `fetchAllPages()` fails its test; a read filtered that loosely is
+  caught only in review.
+- **Check every write's outcome** (AGENTS.md's "Never swallow a write's outcome"), not just the ones
+  that have failed before.
+- **Format a time of day on the client** (**Client-only values** below), whatever timezone today's
+  players are in.
+
 ## Gate a tab on data, not "always render it"
 
 A tab or sub-tab (`TabBar`/`tabCls` navigation) shouldn't render for a viewer who can only ever see
