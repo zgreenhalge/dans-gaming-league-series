@@ -5,6 +5,7 @@ import { toSentenceCase } from '@/lib/maps';
 import { MAP_POOL_SIZE, WORKSHOP_URL_HINT, isValidNewMap, type NewMap } from '@/lib/season-map-pool';
 import { isValidWorkshopUrl } from '@/lib/workshop';
 import EmptyState from './EmptyState';
+import SectionLabel from './SectionLabel';
 
 /** Selection state for `MapPoolPicker`, owned by the parent so it can submit it. `newMaps` only
  * includes maps that are still selected. */
@@ -75,7 +76,7 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
     <div className="flex flex-col gap-8">
       {/* Map pool */}
       <div>
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Map Pool</div>
+        <SectionLabel className="mb-3">Map Pool</SectionLabel>
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
           {allMaps.map((map) => (
             <label
@@ -99,7 +100,7 @@ export function MapPoolPicker({ knownMaps, selection }: Props) {
 
       {/* Add new map */}
       <div>
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Add New Map</div>
+        <SectionLabel className="mb-3">Add New Map</SectionLabel>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <input

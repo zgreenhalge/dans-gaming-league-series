@@ -17,6 +17,7 @@ import {
 } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
 import Th from '@/components/Th';
+import SectionLabel from './SectionLabel';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -547,9 +548,9 @@ export default function DemoUploadModal({
 
                 {/* Score */}
                 <div>
-                  <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">
+                  <SectionLabel className="mb-2">
                     Final Score
-                  </div>
+                  </SectionLabel>
                   <div className="flex items-center gap-3">
                     {(['SHIRTS', 'SKINS'] as const).map((faction) => {
                       const score = faction === 'SHIRTS' ? shirtsScore : skinsScore;

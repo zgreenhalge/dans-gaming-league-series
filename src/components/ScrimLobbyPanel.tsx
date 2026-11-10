@@ -23,6 +23,7 @@ import { SCRIM_SIDE_CHOICES, isScrimMatchDiscardable, isScrimMatchEditable, scri
 import { toSentenceCase } from '@/lib/maps';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
+import SectionLabel from './SectionLabel';
 
 interface Props {
   nightId: number;
@@ -53,7 +54,7 @@ interface Props {
 
 const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
 const GO_BTN_CLS = `${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`;
-const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
+const FIELD_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 
 const SIDE_LABEL: Record<ScrimSideChoice, string> = {
   skins_t: 'Skins start T',
@@ -234,14 +235,14 @@ function LobbyMatchConfig({
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-4 py-3 flex items-center justify-between gap-3">
-        <span className={LABEL_CLS}>Match {match.match_number}</span>
+        <SectionLabel as="span">Match {match.match_number}</SectionLabel>
         <ScrimDiscardButton matchId={match.id} />
       </div>
       {editable && (
         <CollapsiblePanel title="Configure" className="mx-4 mb-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <span className={LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
+              <span className={FIELD_LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
               <MapPicker
                 maps={maps}
                 value={mapChoice}
@@ -261,7 +262,7 @@ function LobbyMatchConfig({
               )}
             </div>
             <label className="flex flex-col gap-1">
-              <span className={LABEL_CLS}>Starting side</span>
+              <span className={FIELD_LABEL_CLS}>Starting side</span>
               <select
                 value={match.side_choice}
                 disabled={busy}
@@ -274,12 +275,12 @@ function LobbyMatchConfig({
               </select>
             </label>
             <div className="flex flex-col gap-1">
-              <span className={LABEL_CLS}>Shirts</span>
+              <span className={FIELD_LABEL_CLS}>Shirts</span>
               {slot(0)}
               {slot(1)}
             </div>
             <div className="flex flex-col gap-1">
-              <span className={LABEL_CLS}>Skins</span>
+              <span className={FIELD_LABEL_CLS}>Skins</span>
               {slot(2)}
               {slot(3)}
             </div>
@@ -313,7 +314,7 @@ function LobbyMatchConfig({
 function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className={`px-4 py-2 border-b border-[var(--color-border-tertiary)] ${LABEL_CLS}`}>Up next · {queued.length}</div>
+      <SectionLabel className="px-4 py-2 border-b border-[var(--color-border-tertiary)]">Up next · {queued.length}</SectionLabel>
       {queued.map(({ match, canDiscard }) => (
         <div key={match.id} className="px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 flex items-center justify-between gap-3 font-mono text-[12px]">
           <span className="min-w-0">

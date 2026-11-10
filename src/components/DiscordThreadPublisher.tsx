@@ -20,6 +20,7 @@
 import { useState } from 'react';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
+import SectionLabel from './SectionLabel';
 
 interface ThreadResult {
   matchId: number;
@@ -75,7 +76,7 @@ export function DiscordThreadPublisher({ seasonId, periodLabel = 'Week' }: { sea
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Discord {periodLabel === 'Round' ? 'Pod' : 'Match'} Threads</div>
+      <SectionLabel>Discord {periodLabel === 'Round' ? 'Pod' : 'Match'} Threads</SectionLabel>
 
       <div className="flex flex-wrap items-center gap-3">
         <button

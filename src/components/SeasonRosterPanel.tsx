@@ -7,6 +7,7 @@ import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPl
 import { formatBuyIn } from '@/lib/season-buy-in';
 import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
 import ErrorText from '@/components/ErrorText';
+import SectionLabel from './SectionLabel';
 
 interface RosterEntry {
   player_id: number;
@@ -76,10 +77,10 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-4 py-3 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)]">
+        <SectionLabel>
           Roster · {roster.length} {roster.length === 1 ? 'player' : 'players'}
           {buyInAmount != null && <> · Buy-in {formatBuyIn(buyInAmount)}</>}
-        </div>
+        </SectionLabel>
         {!isAdmin && currentPlayerId != null && (
           <button
             type="button"

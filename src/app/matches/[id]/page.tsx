@@ -32,6 +32,7 @@ import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
 import { isVetoComplete, effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
+import SectionLabel from '@/components/SectionLabel';
 
 export async function generateMetadata({
   params,
@@ -323,7 +324,7 @@ export default async function MatchPage({
           {(played || vetoIsAdmin || vetoWindowOpen) && (
             <>
               <div className="mb-3">
-                <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban</span>
+                <SectionLabel as="span" className="map-text-scrim">Map pick/ban</SectionLabel>
               </div>
               <div className="pb-6">
                 <VetoSequence

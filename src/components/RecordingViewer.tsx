@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./Modal";
 import ErrorText from '@/components/ErrorText';
+import SectionLabel from './SectionLabel';
 
 // Parse a YouTube video ID out of the URL a user pastes from the browser bar or the
 // "Share" button. Returns null for anything that isn't a recognizable YouTube URL, so
@@ -170,9 +171,9 @@ export function RecordingUrlForm({ matchId, videoId }: { matchId: number; videoI
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="tracked text-[10px] text-[var(--color-text-secondary)]">
+      <SectionLabel>
         {hasRecording ? "Replace Recording" : "Add Recording"}
-      </div>
+      </SectionLabel>
       <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
         <input
           id="match-recording"

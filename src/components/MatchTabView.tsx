@@ -21,6 +21,7 @@ import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived, RoundHistoryEntry } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { DEFAULT_OT_ROUNDS_PER_HALF, roundsPlayedBySide } from '@/lib/parsers/roundSides';
+import SectionLabel from './SectionLabel';
 
 type Faction = 'CT' | 'T' | null;
 type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'h2h' | 'recap';
@@ -249,7 +250,7 @@ export function RatingProjectionTable({
   return (
     <div className="mt-8">
       <div className="mb-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG rating projections</span>
+        <SectionLabel as="span">EHOG rating projections</SectionLabel>
       </div>
       <StatTable>
         <thead>

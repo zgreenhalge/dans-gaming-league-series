@@ -7,8 +7,7 @@ import { SkeletonBar } from './Skeleton';
 import { PlayerName } from './PlayerName';
 import StatTileGrid from './StatTileGrid';
 import { WLChip } from './WLChip';
-
-const LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
+import SectionLabel from './SectionLabel';
 
 /**
  * A player's career snapshot: avatar and name beside the EHOG badge (the one on the player page),
@@ -63,7 +62,7 @@ export function PlayerSummaryBlock({
 
       {showForm && (
         <div className="mt-2.5 flex items-center gap-3">
-          <span className={LABEL_CLS}>Form</span>
+          <SectionLabel as="span">Form</SectionLabel>
           {recent.length === 0 ? (
             <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
           ) : (
@@ -104,7 +103,7 @@ export function PlayerSummaryBlockSkeleton({ compact = false }: { compact?: bool
       />
 
       <div className="mt-2.5 flex items-center gap-3">
-        <span className={LABEL_CLS}>Form</span>
+        <SectionLabel as="span">Form</SectionLabel>
         <div className="flex items-center gap-2">
           {[1, 2, 3, 4, 5].map((i) => <span key={i}>{bar('w-[1.4rem] h-[1.4rem] rounded-md')}</span>)}
         </div>

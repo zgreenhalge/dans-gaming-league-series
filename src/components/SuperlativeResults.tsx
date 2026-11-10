@@ -4,6 +4,7 @@
 
 import { PlayerLink } from './PlayerLink';
 import type { SuperlativeResults } from '@/lib/queries';
+import SectionLabel from './SectionLabel';
 
 export function SuperlativeResultsPanel({ results }: { results: SuperlativeResults }) {
   const withVotes = results.superlatives.filter((s) => s.totalVotes > 0);
@@ -17,7 +18,7 @@ export function SuperlativeResultsPanel({ results }: { results: SuperlativeResul
           const top = s.nominees[0].votes;
           return (
             <div key={s.id} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-4 flex flex-col gap-3">
-              <div className="tracked text-[10px] text-[var(--color-text-secondary)]">{s.title}</div>
+              <SectionLabel>{s.title}</SectionLabel>
               <ol className="flex flex-col gap-1.5">
                 {s.nominees.map((n) => (
                   <li key={n.player_id} className={`flex items-baseline justify-between gap-3 ${n.votes === top ? '' : 'text-[var(--color-text-secondary)]'}`}>

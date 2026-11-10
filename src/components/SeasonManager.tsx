@@ -19,6 +19,7 @@ import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
+import SectionLabel from './SectionLabel';
 
 export interface SeasonSummary {
   id: number;
@@ -82,7 +83,7 @@ export function SeasonManager({
       <OpsErrorList items={seasonOpsErrors} />
 
       <div>
-        <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Seasons</div>
+        <SectionLabel className="mb-3">Seasons</SectionLabel>
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden">
           {allSeasons.map((s) => {
             const isOpen = openId === s.id;
