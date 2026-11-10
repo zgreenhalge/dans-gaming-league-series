@@ -1,9 +1,15 @@
-// Shared small mono uppercase label for a subsection within a bordered panel or list.
+// The small section label: the `.tracked` broadcast label at 10px in secondary text, naming a
+// section of a page, panel or form. Spacing comes from `className` (e.g. `mb-3`); `as="span"`
+// keeps it inline where a block element doesn't belong (a heading row's flex child, a button).
 
-export default function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] mb-2">
-      {children}
-    </div>
-  );
+export default function SectionLabel({
+  children,
+  className = '',
+  as: Tag = 'div',
+}: {
+  children: React.ReactNode;
+  className?: string;
+  as?: 'div' | 'span';
+}) {
+  return <Tag className={`tracked text-[10px] text-[var(--color-text-secondary)] ${className}`}>{children}</Tag>;
 }

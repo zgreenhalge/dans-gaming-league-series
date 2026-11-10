@@ -83,7 +83,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <SectionLabel>Questions (asked in this order — add your own, drag to reorder)</SectionLabel>
+        <SectionLabel className="mb-2">Questions (asked in this order — add your own, drag to reorder)</SectionLabel>
         <SortableList
           className="flex flex-col gap-2"
           items={drafts}

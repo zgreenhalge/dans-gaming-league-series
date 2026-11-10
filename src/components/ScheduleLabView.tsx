@@ -284,7 +284,7 @@ export function ScheduleLabView({
     <div className="flex flex-col gap-10">
       {!fixedRoster && <section>
         <div className="flex flex-wrap items-center gap-3 mb-3">
-          <SectionLabel>Roster · {selected.size} selected</SectionLabel>
+          <SectionLabel className="mb-2">Roster · {selected.size} selected</SectionLabel>
           <select
             aria-label="Load a season's roster"
             className={`${SELECT_CLS} mb-2`}
@@ -331,7 +331,7 @@ export function ScheduleLabView({
       </section>}
 
       <section className="flex flex-col gap-5">
-        <SectionLabel>Format</SectionLabel>
+        <SectionLabel className="mb-2">Format</SectionLabel>
         <div className="flex flex-wrap items-end gap-x-8 gap-y-5">
           <Stepper label={cap(period.many)} value={settings.weeks} min={FORMAT_MIN_WEEKS} max={FORMAT_MAX_WEEKS} onChange={(weeks) => update({ weeks })} />
           <Choice label={`Each ${period.one}`} options={WEEK_SHAPES} value={settings.weekShape} onChange={(weekShape) => update({ weekShape })} />
@@ -410,7 +410,7 @@ export function ScheduleLabView({
       </section>
 
       {comparePreviews && <section>
-        <SectionLabel>Compare</SectionLabel>
+        <SectionLabel className="mb-2">Compare</SectionLabel>
         {previews.length === 0 ? (
           <EmptyState size="sm" message="No previews yet." />
         ) : (
@@ -516,7 +516,7 @@ const PlanSchedule = memo(function PlanSchedule({
   return (
     <section className="flex flex-col gap-8">
       <div>
-        <SectionLabel>{title ?? `Preview ${previewLetter(preview)} schedule`}</SectionLabel>
+        <SectionLabel className="mb-2">{title ?? `Preview ${previewLetter(preview)} schedule`}</SectionLabel>
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">{previewSummary(preview, period)}</div>
       </div>
       {plan.halves.map((half) => (

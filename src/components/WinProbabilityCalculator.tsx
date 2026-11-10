@@ -44,7 +44,7 @@ export function WinProbabilityCalculator({ players }: { players: RatedPlayer[] }
 
       {matchup && four && (
         <section>
-          <SectionLabel>Win probability</SectionLabel>
+          <SectionLabel className="mb-2">Win probability</SectionLabel>
           <WinProbabilityBar
             pShirtsWin={matchup.pShirtsWin}
             shirtsF={null}
@@ -59,7 +59,7 @@ export function WinProbabilityCalculator({ players }: { players: RatedPlayer[] }
 
       {splits && (
         <section>
-          <SectionLabel>
+          <SectionLabel className="mb-2">
             All three splits, most even first
             {splits.some((s) => s.provisional) && <InfoTooltip className="ml-1.5">{PROVISIONAL_NOTE}</InfoTooltip>}
           </SectionLabel>
@@ -89,7 +89,7 @@ function TeamPicker({
 }) {
   return (
     <div>
-      <SectionLabel>{label}</SectionLabel>
+      <SectionLabel className="mb-2">{label}</SectionLabel>
       <div className="flex flex-col gap-2">
         {slots.map((slot, i) => (
           <select

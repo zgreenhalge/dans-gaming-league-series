@@ -14,7 +14,7 @@ export function QuickActionsPanel({ demoMatchIds }: { demoMatchIds: Set<number> 
 
   return (
     <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-3">
-      <SectionLabel>Quick actions</SectionLabel>
+      <SectionLabel className="mb-2">Quick actions</SectionLabel>
       <BulkReparseButton matchIds={[...demoMatchIds]} />
     </div>
   );
