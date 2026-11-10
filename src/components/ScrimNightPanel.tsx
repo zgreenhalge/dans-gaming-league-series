@@ -7,7 +7,8 @@ import ErrorText from './ErrorText';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { LocalTime } from './LocalTime';
 import { CountdownTimer } from './CountdownTimer';
-import { AddPlayerSelect, RosterPlayerRow, RosterRemoveButton } from './RosterPlayerRow';
+import { AddPlayerSelect, RosterPlayerRow } from './RosterPlayerRow';
+import { AdminMenu, type AdminMenuItem } from './AdminMenu';
 import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
@@ -49,8 +50,9 @@ const START_FORMAT: Intl.DateTimeFormatOptions = {
 
 /** A scrim night that hasn't ended: when it is, who's coming (definite, then maybe, with a "Here" pill
  *  on whoever has checked in), and the controls to sign up, switch between definite and maybe, or drop
- *  out. Checking in is the lobby's (`ScrimLobbyPanel`). Admins can do all of it for any player, and
- *  check players in or out, from an Admin controls toggle that stays closed until opened.
+ *  out. Checking in is the lobby's (`ScrimLobbyPanel`). Admins can do all of it for any player from
+ *  `AdminMenu`s: one on each attendance row (check in or out, switch, remove) and one on the
+ *  Attendance header (add a player).
  *  When the last player drops out the night is removed, and the panel goes back to `/scrims`. On the
  *  night page, `canEnd` adds an End night button that, after a confirm, closes the night before the
  *  clock does. */
@@ -62,11 +64,8 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   const [target, setTarget] = useState<number | null>(null);
   const pending = busy ? target : null;
   const [addPlayerId, setAddPlayerId] = useState('');
-  // An admin's controls over other players' signups stay folded away until asked for.
-  const [adminOpen, setAdminOpen] = useState(false);
   // The attendance lists fold away to leave the night's controls.
   const [attendanceOpen, setAttendanceOpen] = useState(true);
-  const showAdmin = isAdmin && adminOpen;
   const [, startTransition] = useTransition();
 
   const mine = signups.find((s) => s.player_id === currentPlayerId) ?? null;
@@ -94,6 +93,52 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
     return send(playerId, checkedIn ? 'POST' : 'DELETE', 'check-in');
   }
 
+  /** An admin's actions on one player's signup. */
+  function rowItems(s: UpcomingScrimNight['signups'][number], other: ScrimCommitment): AdminMenuItem[] {
+    const disabled = pending === s.player_id;
+    return [
+      ...(checkInOpen
+        ? [{ label: s.checked_in_at ? 'Check out' : 'Check in', onSelect: () => setCheckIn(s.player_id, !s.checked_in_at), disabled }]
+        : []),
+      { label: `Make ${COMMITMENT_LABEL[other].toLowerCase()}`, onSelect: () => mutate(s.player_id, other), disabled },
+      { label: 'Remove', onSelect: () => mutate(s.player_id, null), disabled, danger: true },
+    ];
+  }
+
+  /** The night's admin actions: Add player… opens the player picker in the menu. */
+  const nightItems: AdminMenuItem[] = [
+    {
+      label: 'Add player…',
+      content: (close) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <AddPlayerSelect
+            players={allPlayers}
+            excludeIds={new Set(signups.map((s) => s.player_id))}
+            value={addPlayerId}
+            onChange={setAddPlayerId}
+            placeholder="Sign up a player…"
+          />
+          {SCRIM_COMMITMENTS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => {
+                const playerId = Number(addPlayerId);
+                setAddPlayerId('');
+                close();
+                mutate(playerId, c);
+              }}
+              disabled={!addPlayerId || pending != null}
+              className={addPlayerId ? ACTIVE_BTN_CLS[c] : IDLE_BTN_CLS}
+            >
+              Add as {COMMITMENT_LABEL[c].toLowerCase()}
+            </button>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
   function group(commitment: ScrimCommitment) {
     const entries = signups.filter((s) => s.commitment === commitment);
     const other: ScrimCommitment = commitment === 'definite' ? 'maybe' : 'definite';
@@ -114,29 +159,7 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
             >
               <div className="flex items-center gap-3 shrink-0">
                 {s.checked_in_at && <StatusPill variant="live">Here</StatusPill>}
-                {showAdmin && (
-                  <>
-                    {checkInOpen && (
-                      <button
-                        type="button"
-                        onClick={() => setCheckIn(s.player_id, !s.checked_in_at)}
-                        disabled={pending === s.player_id}
-                        className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
-                      >
-                        {s.checked_in_at ? 'Check out' : 'Check in'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => mutate(s.player_id, other)}
-                      disabled={pending === s.player_id}
-                      className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
-                    >
-                      Make {COMMITMENT_LABEL[other].toLowerCase()}
-                    </button>
-                    <RosterRemoveButton onClick={() => mutate(s.player_id, null)} pending={pending === s.player_id} />
-                  </>
-                )}
+                {isAdmin && <AdminMenu label={`Admin actions for ${s.player_name}`} items={rowItems(s, other)} />}
               </div>
             </RosterPlayerRow>
           ))}
@@ -187,53 +210,20 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
         )}
       </div>
 
-      <button
-        type="button"
-        aria-expanded={attendanceOpen}
-        onClick={() => setAttendanceOpen(!attendanceOpen)}
-        className="w-full text-left px-4 py-2 border-b border-[var(--color-border-tertiary)] tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-      >
-        {attendanceOpen ? '▾' : '▸'} Attendance · {signups.length}
-      </button>
+      {/* The toggle and the admin menu sit side by side, so neither button holds the other. */}
+      <div className="flex items-center gap-2 pr-2 border-b border-[var(--color-border-tertiary)]">
+        <button
+          type="button"
+          aria-expanded={attendanceOpen}
+          onClick={() => setAttendanceOpen(!attendanceOpen)}
+          className="flex-1 text-left px-4 py-2 tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+        >
+          {attendanceOpen ? '▾' : '▸'} Attendance · {signups.length}
+        </button>
+        {isAdmin && <AdminMenu label="Attendance admin actions" items={nightItems} />}
+      </div>
       {attendanceOpen && SCRIM_COMMITMENTS.map(group)}
 
-      {isAdmin && (
-        <div className="px-4 py-2 border-t border-[var(--color-border-tertiary)]">
-          <button
-            type="button"
-            aria-expanded={adminOpen}
-            onClick={() => setAdminOpen(!adminOpen)}
-            className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            {adminOpen ? '▾' : '▸'} Admin controls
-          </button>
-        </div>
-      )}
-      {showAdmin && (
-        <div className="px-4 pb-3 flex flex-wrap items-center gap-2">
-          <AddPlayerSelect
-            players={allPlayers}
-            excludeIds={new Set(signups.map((s) => s.player_id))}
-            value={addPlayerId}
-            onChange={setAddPlayerId}
-            placeholder="Sign up a player…"
-          />
-          {SCRIM_COMMITMENTS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => {
-                setAddPlayerId('');
-                mutate(Number(addPlayerId), c);
-              }}
-              disabled={!addPlayerId || pending != null}
-              className={addPlayerId ? ACTIVE_BTN_CLS[c] : IDLE_BTN_CLS}
-            >
-              Add as {COMMITMENT_LABEL[c].toLowerCase()}
-            </button>
-          ))}
-        </div>
-      )}
       {canEnd && (
         <div className="px-4 py-3 border-t border-[var(--color-border-tertiary)] flex justify-end">
           <ArmedConfirmButton

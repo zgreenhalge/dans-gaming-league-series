@@ -1,8 +1,8 @@
 /**
  * E2E coverage for scrim nights (`/scrims`, `/scrims/[id]`, `/scrims/matches/[id]`), through the real
  * UI: the calendar signed out and signed in, starting a night on a picked day, the overlap refusal,
- * signing up / switching / dropping out (the last player out removes the night), the admin controls
- * toggle, the lobby's check-in, Next Match (make, change the side, discard), Generate Rounds (preview,
+ * signing up / switching / dropping out (the last player out removes the night), the admin menus,
+ * the lobby's check-in, Next Match (make, change the side, discard), Generate Rounds (preview,
  * Details, queue), a night on the home page's Upcoming panel, and a past night's results and match
  * page. Each test starts from no scrim nights
  * and seeds its own (`e2e/support/db.ts`); see docs/e2e.md.
@@ -155,24 +155,29 @@ test.describe('calendar and signups', () => {
     expect(await scrimNightExists(nightId)).toBe(true);
   });
 
-  test('admin controls start closed, then add a player; a non-admin has none', async ({ page }) => {
+  test('an admin adds a player from the Attendance menu and removes one from their row; a non-admin has no menus', async ({ page }) => {
     const nightId = await seedScrimNight(2 * DAY, [{ playerId: CASEY }]);
 
     await openNightAs(page, 'Dan', `/scrims/${nightId}`);
     await expect(page.getByText('Definite · 1')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Admin controls/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /admin actions/i })).toHaveCount(0);
 
     await openNightAs(page, 'Zach', `/scrims/${nightId}`);
-    const toggle = page.getByRole('button', { name: /Admin controls/ });
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const nightMenu = page.getByRole('button', { name: 'Attendance admin actions' });
+    await expect(nightMenu).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByLabel('Sign up a player…')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Remove' })).toHaveCount(0);
 
-    await toggle.click();
+    await nightMenu.click();
+    await page.getByRole('menuitem', { name: 'Add player…' }).click();
     await page.getByLabel('Sign up a player…').selectOption({ label: 'Drew' });
     await page.getByRole('button', { name: 'Add as maybe' }).click();
     await expect(page.getByText('Maybe · 1')).toBeVisible();
     await expect(page.getByRole('main').getByText('Drew', { exact: true }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Admin actions for Drew' }).click();
+    await page.getByRole('menuitem', { name: 'Remove' }).click();
+    await expect(page.getByText('Maybe · 0')).toBeVisible();
   });
 });
 
