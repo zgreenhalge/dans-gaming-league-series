@@ -181,6 +181,12 @@ function renderRight(right: MatchCardRight) {
           Live
         </span>
       );
+    case 'next':
+      return (
+        <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)]">
+          Up next
+        </span>
+      );
     case 'pending':
       return (
         <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">

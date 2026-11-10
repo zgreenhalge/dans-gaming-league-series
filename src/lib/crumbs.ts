@@ -29,6 +29,11 @@ export function scrimNightHref(nightId: number): string {
   return `/scrims/${nightId}`;
 }
 
+/** A scrim night's Matches tab: its running order. */
+export function scrimNightMatchesHref(nightId: number): string {
+  return `${scrimNightHref(nightId)}?tab=matches`;
+}
+
 /** The path to a scrim match's page. */
 export function scrimMatchHref(matchId: number): string {
   return `/scrims/matches/${matchId}`;

@@ -44,12 +44,6 @@ export function isScrimMatchEditable(m: ScrimMatchState): boolean {
   return !isPlayedScore(m.final_score) && (m.server_state === null || !(RUNNING_SERVER_STATES.has(m.server_state) || m.server_state === 'done'));
 }
 
-/** Whether a scrim match belongs in the night's match list: it has started (it holds or held the
- *  server) or its game is over. A match still waiting in the lobby, never started, is not listed. */
-export function isScrimMatchListed(m: ScrimMatchState): boolean {
-  return !scrimMatchNeedsServer(m) || !isScrimMatchEditable(m);
-}
-
 /** Whether a scrim match can be discarded: not scored, and not holding the server right now. That
  *  includes one whose server stopped without a score (a crash, or a demo still waiting for review on
  *  its match page). */

@@ -117,7 +117,8 @@ database itself is disposable.
 signups and matches cascade) and seeds its own with `seedScrimNight()` — a start in milliseconds from
 now or an ISO instant, written straight to the table so a test can place a night ten minutes out
 with check-in open, which the app's quarter-hour rule wouldn't let the UI create.
-`seedScoredScrimMatch()` gives a night results. The lobby tests give the seeded maps Workshop links
+`seedScoredScrimMatch()` gives a night results, and `seedUnscoredScrimMatch()` an unscored match with a
+chosen server state (a Pending or Up next row). The lobby tests give the seeded maps Workshop links
 (`setMapWorkshopUrls()`, undone by `clearMapWorkshopUrls()`), since a scrim match only starts on a
 map the server can load. Days on the calendar are the browser's, so the spec reads them in the page
 (`browserDay()`) rather than in Node.

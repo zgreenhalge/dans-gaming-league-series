@@ -2,14 +2,12 @@
 
 import Link from 'next/link';
 import ErrorText from './ErrorText';
-import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { CountdownTimer } from './CountdownTimer';
 import { LocalTime } from './LocalTime';
 import { LeagueGameMark } from './ScrimSeats';
 import { ScrimCommitmentButtons } from './ScrimCommitmentButtons';
 import { StatusPill } from './StatusPill';
 import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
-import { useRefreshingAction } from './useRefreshingAction';
 import { useScrimSignupWrite } from './useScrimSignupWrite';
 import type { ScrimNightStatus } from '@/lib/scrim-night-page';
 
@@ -77,21 +75,5 @@ function ScrimCheckInButton({ nightId, playerId, checkedIn }: { nightId: number;
       </button>
       <ErrorText error={error} size={12} />
     </span>
-  );
-}
-
-/** End night (`POST /api/scrims/[id]/end`), after a confirm: closes the night before the clock does. */
-export function ScrimEndNightButton({ nightId }: { nightId: number }) {
-  const { busy, error, act } = useRefreshingAction();
-  return (
-    <ArmedConfirmButton
-      onConfirm={() => act('POST', `/api/scrims/${nightId}/end`)}
-      busy={busy}
-      error={error}
-      triggerLabel="End night"
-      confirmLabel="End night for everyone"
-      busyLabel="Ending…"
-      variant="danger"
-    />
   );
 }

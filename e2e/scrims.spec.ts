@@ -2,10 +2,11 @@
  * E2E coverage for scrim nights (`/scrims`, `/scrims/[id]`, `/scrims/matches/[id]`), through the real
  * UI: the calendar signed out and signed in, starting a night on a picked day, the overlap refusal,
  * signing up / switching / dropping out (the last player out removes the night), the night page's
- * status bar and Roster tab, the admin menus, checking in, Next Match (make, change the side, discard), Generate Rounds (preview,
- * Details, queue), a night on the home page's Upcoming panel, and a past night's results and match
- * page. Each test starts from no scrim nights
- * and seeds its own (`e2e/support/db.ts`); see docs/e2e.md.
+ * status bar and Roster tab, the admin menus, checking in, Next Match (make, change the side, discard),
+ * Generate Rounds (preview, Details, queue), the Matches tab's running order with an admin's Pending-row
+ * menu, End night in the Lobby, a night on the home page's Upcoming panel, and a past night's results
+ * and match page. Each test starts from no scrim nights and seeds its own (`e2e/support/db.ts`); see
+ * docs/e2e.md.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -18,6 +19,7 @@ import {
   scrimNightIdsStartingAt,
   seedScoredScrimMatch,
   seedScrimNight,
+  seedUnscoredScrimMatch,
   setMapWorkshopUrls,
   teardownScrims,
 } from './support/db';
@@ -229,7 +231,7 @@ test.describe('the lobby', () => {
 
     await page.getByRole('button', { name: 'Next Match' }).click();
     await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
-    await expect(main(page).getByText('Pending', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Up next', { exact: true })).toBeVisible();
     await expect(main(page).getByLabel('Starting side')).toHaveCount(0);
     const matches = await scrimMatchesOf(nightId);
     expect(matches).toHaveLength(1);
@@ -315,6 +317,42 @@ test.describe('the lobby', () => {
     if (count > 1) await expect(main(page).getByText(`Up next · ${count - 1}`)).toBeVisible();
     const matches = await scrimMatchesOf(nightId);
     expect(matches.map((m) => m.match_number)).toEqual(Array.from({ length: count }, (_, i) => i + 1));
+  });
+
+  test('Matches shows the running order; an admin discards a Pending match from its row menu', async ({ page }) => {
+    const players = [CASEY, DREW, SAM, JORDAN];
+    const nightId = await seedScrimNight(-10 * MINUTE, players.map((playerId) => ({ playerId, checkedIn: true })));
+    await seedScoredScrimMatch(nightId, players);
+    await seedUnscoredScrimMatch(nightId, 2, players, 'done');
+    await seedUnscoredScrimMatch(nightId, 3, players, null);
+
+    await page.goto(`/scrims/${nightId}?tab=matches`);
+    const cards = main(page).getByRole('link', { name: /^Match \d/ });
+    await expect(cards).toHaveCount(3);
+    await expect(cards.nth(0)).toContainText('Match 1');
+    await expect(cards.nth(0)).toContainText('13-7');
+    await expect(cards.nth(1)).toContainText('Pending');
+    await expect(cards.nth(2)).toContainText('Up next');
+    await expect(page.getByRole('button', { name: /Admin actions/ })).toHaveCount(0);
+
+    await openNightAs(page, 'Zach', `/scrims/${nightId}?tab=matches`);
+    await page.getByRole('button', { name: 'Admin actions for match 2' }).click();
+    await page.getByRole('menuitem', { name: 'Discard…' }).click();
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm discard' }).click();
+    await expect(cards).toHaveCount(2);
+    expect((await scrimMatchesOf(nightId)).map((m) => m.match_number)).toEqual([1, 3]);
+  });
+
+  test('End night sits beside Next Match in the Lobby and turns the night final', async ({ page }) => {
+    const nightId = await seedScrimNight(-10 * MINUTE, [CASEY, DREW, SAM, JORDAN].map((playerId) => ({ playerId, checkedIn: true })));
+    await openNightAs(page, 'Zach', `/scrims/${nightId}`);
+    await expect(page.getByRole('tab', { name: 'Lobby' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Next Match' })).toBeVisible();
+    await page.getByRole('button', { name: 'End night', exact: true }).click();
+    await page.getByRole('button', { name: 'End night for everyone' }).click();
+    await expect(main(page).getByText('Final', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Lobby' })).toHaveCount(0);
   });
 });
 
