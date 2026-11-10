@@ -41,7 +41,8 @@ const BASE: SeasonFormatSettings = {
   seed: 1,
 };
 
-// Plans are deterministic and only read by the assertions, so tests share one build per input.
+// Plans are deterministic and only read by the assertions, so tests share one build per input. The
+// reproducibility tests call buildFormatPlan() directly, so they compare two separate builds.
 const planCache = new Map<string, FormatPlan>();
 
 function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
@@ -261,7 +262,9 @@ test('a tiered draft with a halfway shuffle promotes and relegates by first-half
 test('a random draft is reproducible from the seed and still sound', () => {
   const a = plan(10, { divisions: 2, draftBasis: 'random' });
   assertSound(a, 10, 8, 2);
-  assert.deepEqual(plan(10, { divisions: 2, draftBasis: 'random' }).halves, a.halves);
+  const again = buildFormatPlan(players(10), { ...BASE, divisions: 2, draftBasis: 'random' });
+  assert.ok(again.ok);
+  assert.deepEqual(again.plan.halves, a.halves);
 });
 
 test('tier sizes set each tiered division, and promotion keeps them', () => {
@@ -345,9 +348,9 @@ test('a plan survives a structured-clone round trip unchanged, as it does throug
 });
 
 test('the same players, settings and seed produce the same plan', () => {
-  const a = plan(9, { weeks: 4 });
-  const b = plan(9, { weeks: 4 });
-  assert.deepEqual(a, b);
+  // Built directly rather than through plan(), whose cache would hand back the same object twice.
+  const settings = { ...BASE, weeks: 4 };
+  assert.deepEqual(buildFormatPlan(players(9), settings), buildFormatPlan(players(9), settings));
 });
 
 test('a one-week plan: every player plays the same count, and a halfway shuffle has no second half', () => {
