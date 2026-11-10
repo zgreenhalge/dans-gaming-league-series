@@ -300,10 +300,6 @@ export async function getMatchServerState(matchId: number): Promise<ServerState>
  * Played matches are excluded (their scheduled time is moot).
  */
 export const getScheduledUnplayedMatches = persistentQuery('getScheduledUnplayedMatches', async (): Promise<ScheduledMatchRef[]> => {
-  const { data } = await getAdminClient()
-    .from('matches')
-    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
-    .not('scheduled_at', 'is', null);
   type Row = {
     id: number;
     match_number: number | null;
@@ -311,9 +307,18 @@ export const getScheduledUnplayedMatches = persistentQuery('getScheduledUnplayed
     final_score: string | null;
     weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
   };
-  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
-  // unknown (same pattern as other nested selects here).
-  const rows = (data ?? []) as unknown as Row[];
+  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — `asPage()`
+  // casts to the runtime shape (same pattern as other nested selects here).
+  const rows = await fetchAllPages<Row>((from, to) =>
+    asPage(
+      getAdminClient()
+        .from('matches')
+        .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+        .not('scheduled_at', 'is', null)
+        .order('id')
+        .range(from, to),
+    ),
+  );
   return rows
     .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
     .map((r) => ({
@@ -473,7 +478,7 @@ export const getMatchScoutingData = persistentQuery('getMatchScoutingData', asyn
 
   const [statRows, players, leagueStatRows, leagueMatchRows, weekLookup] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
-      asPage(getAdminClient().from('player_match_stats').select('*').in('player_id', playerIds).range(from, to)),
+      asPage(getAdminClient().from('player_match_stats').select('*').in('player_id', playerIds).order('id').range(from, to)),
     ),
     getPlayersById(),
     fetchAllPages<LeagueStatRow>((from, to) =>
@@ -482,6 +487,7 @@ export const getMatchScoutingData = persistentQuery('getMatchScoutingData', asyn
           .from('player_match_stats')
           .select('match_id, adr, kills, deaths, assists, is_win')
           .gt('rounds_played', 0)
+          .order('id')
           .range(from, to),
       ),
     ),
@@ -490,7 +496,7 @@ export const getMatchScoutingData = persistentQuery('getMatchScoutingData', asyn
     // redundant `matches` round trip for the same rows (every id in `matchIds` is already present
     // here, since this is every match in the league).
     fetchAllPages<LeagueMatchRow>((from, to) =>
-      getAdminClient().from('matches').select('id, final_score, shirts_pick, skins_pick, week_id, match_number').range(from, to),
+      getAdminClient().from('matches').select('id, final_score, shirts_pick, skins_pick, week_id, match_number').order('id').range(from, to),
     ),
     getWeekLookup(),
   ]);

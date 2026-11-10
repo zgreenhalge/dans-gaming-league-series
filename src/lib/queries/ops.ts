@@ -11,7 +11,7 @@ import {
 import type { OpsErrorEntityType } from '../ops-errors';
 import type { Match, Season } from '../types';
 import { matchLabel, extractSeasonNumber } from '../util';
-import { getWeekLookup } from './_shared';
+import { asPage, batchedIn, fetchAllPages, getWeekLookup } from './_shared';
 
 
 /** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
@@ -37,17 +37,15 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
   const out = new Map<number, MatchJobContext>();
   if (!matchIds.length) return out;
 
-  const [{ data: matchRows }, weekLookup] = await Promise.all([
-    getAdminClient()
-      .from('matches')
-      .select('id, match_number, skins_pick, final_score, week_id')
-      .in('id', matchIds),
+  const [matches, weekLookup] = await Promise.all([
+    batchedIn<Pick<Match, 'id' | 'match_number' | 'skins_pick' | 'final_score' | 'week_id'>>(
+      'matches',
+      'id',
+      matchIds,
+      'id, match_number, skins_pick, final_score, week_id',
+    ),
     getWeekLookup(),
   ]);
-  const matches = (matchRows ?? []) as Pick<
-    Match,
-    'id' | 'match_number' | 'skins_pick' | 'final_score' | 'week_id'
-  >[];
 
   const seasonIds = Array.from(
     new Set(
@@ -124,15 +122,6 @@ function buildJobSubject(
  */
 export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
   try {
-    const { data: jobs, error } = await getAdminClient()
-      .from('background_jobs')
-      .select(
-        'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
-      )
-      .in('job_type', [...BACKGROUND_JOB_TYPES])
-      .order('updated_at', { ascending: false });
-    if (error || !jobs) return [];
-
     type JobRow = {
       job_type: BackgroundJobType;
       match_id: number | null;
@@ -146,7 +135,19 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
       started_at: string | null;
       finished_at: string | null;
     };
-    const jobRows = jobs as JobRow[];
+    const jobRows = await fetchAllPages<JobRow>((from, to) =>
+      asPage(
+        getAdminClient()
+          .from('background_jobs')
+          .select(
+            'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+          )
+          .in('job_type', [...BACKGROUND_JOB_TYPES])
+          .order('updated_at', { ascending: false })
+          .order('id')
+          .range(from, to),
+      ),
+    );
 
     // Batch subject context: match → week → season for match-keyed jobs, and maps for radar.
     const matchIds = Array.from(
@@ -238,12 +239,6 @@ export interface OpsErrorRow {
  * present.
  */
 export async function getOpsErrors(): Promise<OpsErrorRow[]> {
-  const { data, error } = await getAdminClient()
-    .from('ops_errors')
-    .select('id, entity_type, entity_id, operation, message, occurred_at')
-    .is('dismissed_at', null)
-    .order('occurred_at', { ascending: false });
-  if (error) throw error;
   type Row = {
     id: number;
     entity_type: OpsErrorEntityType;
@@ -252,34 +247,35 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
     message: string;
     occurred_at: string;
   };
-  const rows = (data ?? []) as Row[];
+  const rows = await fetchAllPages<Row>((from, to) =>
+    asPage(
+      getAdminClient()
+        .from('ops_errors')
+        .select('id, entity_type, entity_id, operation, message, occurred_at')
+        .is('dismissed_at', null)
+        .order('occurred_at', { ascending: false })
+        .order('id')
+        .range(from, to),
+    ),
+  );
   if (rows.length === 0) return [];
 
-  const seasonIds = rows.filter((r) => r.entity_type === 'season').map((r) => r.entity_id);
-  const matchIds = rows.filter((r) => r.entity_type === 'match').map((r) => r.entity_id);
-  const playerIds = rows.filter((r) => r.entity_type === 'player').map((r) => r.entity_id);
-
-  const [seasonRes, matchRes, playerRes] = await Promise.all([
-    seasonIds.length
-      ? getAdminClient().from('seasons').select('id, name').in('id', seasonIds)
-      : Promise.resolve({ data: [] }),
-    matchIds.length
-      ? getAdminClient().from('matches').select('id, match_number, weeks(week_number, seasons(name))').in('id', matchIds)
-      : Promise.resolve({ data: [] }),
-    playerIds.length
-      ? getAdminClient().from('players').select('id, name').in('id', playerIds)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const seasonName = new Map(((seasonRes.data ?? []) as { id: number; name: string }[]).map((s) => [s.id, s.name]));
-  const playerName = new Map(((playerRes.data ?? []) as { id: number; name: string }[]).map((p) => [p.id, p.name]));
+  const idsOf = (type: OpsErrorEntityType) => [...new Set(rows.filter((r) => r.entity_type === type).map((r) => r.entity_id))];
   type MatchJoinRow = {
     id: number;
     match_number: number | null;
     weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
   };
+  const [seasonRows, matchRows, playerRows] = await Promise.all([
+    batchedIn<{ id: number; name: string }>('seasons', 'id', idsOf('season'), 'id, name'),
+    batchedIn<MatchJoinRow>('matches', 'id', idsOf('match'), 'id, match_number, weeks(week_number, seasons(name))'),
+    batchedIn<{ id: number; name: string }>('players', 'id', idsOf('player'), 'id, name'),
+  ]);
+
+  const seasonName = new Map(seasonRows.map((s) => [s.id, s.name]));
+  const playerName = new Map(playerRows.map((p) => [p.id, p.name]));
   const matchLbl = new Map(
-    ((matchRes.data ?? []) as unknown as MatchJoinRow[]).map((m) => [
+    matchRows.map((m) => [
       m.id,
       matchLabel({
         matchId: m.id,
@@ -340,14 +336,14 @@ function weekStartOf(iso: string): string {
  */
 export async function getOpsErrorHistory(): Promise<OpsErrorHistoryRow[]> {
   const since = new Date(Date.now() - OPS_ERROR_HISTORY_WEEKS * 7 * 86_400_000).toISOString();
-  const { data, error } = await getAdminClient()
-    .from('ops_errors')
-    .select('operation, occurred_at')
-    .gte('occurred_at', since);
-  if (error) throw error;
+  const rows = await fetchAllPages<{ operation: string; occurred_at: string }>((from, to) =>
+    asPage(
+      getAdminClient().from('ops_errors').select('operation, occurred_at').gte('occurred_at', since).order('id').range(from, to),
+    ),
+  );
 
   const counts = new Map<string, OpsErrorHistoryRow>();
-  for (const r of (data ?? []) as { operation: string; occurred_at: string }[]) {
+  for (const r of rows) {
     const weekStart = weekStartOf(r.occurred_at);
     const key = `${weekStart}:${r.operation}`;
     const existing = counts.get(key);

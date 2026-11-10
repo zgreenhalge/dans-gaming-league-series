@@ -73,7 +73,9 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
 All Supabase data-fetching lives under `src/lib/queries/`, split by domain (`seasons.ts`,
 `schedule.ts`, `match.ts`, `admin.ts`, `player.ts`, `leaderboard.ts`, `gauntlet.ts`, `trophies.ts`,
 `maps.ts`, `h2h.ts`, `ehog.ts`, `sabremetrics.ts`, `replay.ts`, `ops.ts`), plus `_shared.ts` for
-private cross-cutting plumbing (`fetchAllPages()` and similar) and a barrel `index.ts` that
+private cross-cutting plumbing (`batchedIn()`, `getWeekLookup()` and similar), `_paging.ts` for
+`fetchAllPages()`/`asPage()` (re-exported from `_shared.ts`; it has no imports, so a route handler or
+script outside `queries/` can page a read without pulling in `_shared.ts`), and a barrel `index.ts` that
 re-exports every domain file's values *and* types — this is why every existing call site can still
 `import { getSeasonLeaderboard } from '@/lib/queries'` without knowing which file it actually lives
 in.
@@ -97,6 +99,14 @@ in.
    `const db = client ?? getAdminClient()`, as `getSeasons()` (`seasons.ts`) and
    `getSeasonSchedule()` (`schedule.ts`) do. Forward `client` as-is (possibly `undefined`) to other
    helpers rather than defaulting it early, so a nested call shares the bare call's `cache()` entry.
+   **Page any read that isn't bounded to a small set** (an `eq` on an id or a parent — one match,
+   one season, one player): wrap it in `fetchAllPages()` (`_paging.ts`, re-exported from
+   `_shared.ts`) with an `.order()` on a unique key (`id`, or a column list ending in one) before its
+   `.range(from, to)`, as `getScrimNightRows()` (`scrims.ts`) does. PostgREST silently truncates a
+   response at 1,000 rows, and without a unique order Postgres can repeat or skip a row between
+   pages. An `.in()` over a long or growing id list (every match of a map, every gauntlet season's
+   matches) goes through `batchedIn()`, which pages each id chunk. See
+   [`patterns.md`](./patterns.md)'s "Adopt a cheap safeguard before the failure it prevents shows up".
 5. **If the read is of shared, user-independent data and doesn't depend on its arguments — zero-arg,
    or keyed only by a primitive the caller already has (a `matchId`, a `seasonId`) — wrap it in
    `persistentQuery('name', fn)` (`_persistentCache.ts`) rather than adding a manual
@@ -142,7 +152,11 @@ in.
    snapshot, then commit it. If the fixture doesn't cover a case the new function needs (a new edge case,
    not just a new function over existing data), extend `fixtures.ts` rather than building a
    one-off fixture in the test file — it's a single shared, internally-consistent "league" other
-   tests also depend on.
+   tests also depend on. Every test runs with `fetchAllPages()` paging in two-row windows and the
+   fake client cutting any read with no `.eq()`/`.in()` filter, `.limit()` or `.single()` off at
+   two rows (`src/lib/test-support/setupPaging.ts`), so an unpaged unfiltered read changes the
+   snapshot and fails (a read filtered only on a column most rows share isn't capped, so check
+   those by eye). The fake also rejects a `.range()` with no `.order()`.
 
 ## Recipe: Test a route handler
 
