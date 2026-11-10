@@ -4,7 +4,7 @@ import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../ty
 import { extractSeasonNumber, compareMatchRefDesc, isPlayedScore } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { asPage, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
+import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
 import { getSeasons } from './seasons';
 import type { PlayerSeasonAdrTotal } from '../h2h';
 import { effectivePickedMap } from '../veto';
@@ -69,10 +69,9 @@ export const getPlayerNameHistory = persistentQuery('getPlayerNameHistory', asyn
  *  from the database. */
 export const getPlayersById = persistentQuery('getPlayersById', async (client?: SupabaseClient): Promise<Map<number, Player>> => {
   const db = client ?? getAdminClient();
-  const { data, error } = await db.from('players').select('*');
-  if (error) throw error;
+  const rows = await fetchAllPages<Player>((from, to) => asPage(db.from('players').select('*').order('id').range(from, to)));
   const map = new Map<number, Player>();
-  for (const p of (data ?? []) as Player[]) map.set(p.id, p);
+  for (const p of rows) map.set(p.id, p);
   return map;
 });
 
@@ -140,17 +139,16 @@ type HistoryBase = Omit<PlayerHistoryRow, keyof HistoryRoster>;
 async function attachRosters<T extends { match_id: number }>(rows: T[]): Promise<(T & HistoryRoster)[]> {
   if (rows.length === 0) return [];
   const matchIds = Array.from(new Set(rows.map((r) => r.match_id)));
-  const [{ data: allStats, error: aErr }, players] = await Promise.all([
-    getAdminClient().from('player_match_stats').select('*').in('match_id', matchIds),
+  const [allStats, players] = await Promise.all([
+    batchedIn<RosterStatRow>('player_match_stats', 'match_id', matchIds, '*'),
     getPlayersById(),
   ]);
-  if (aErr) throw aErr;
 
   const rosterByMatch = new Map<
     number,
     { shirts: { player_id: number; player_name: string }[]; skins: { player_id: number; player_name: string }[]; shirts_stats?: RosterStatRow[]; skins_stats?: RosterStatRow[] }
   >();
-  for (const st of (allStats ?? []) as RosterStatRow[]) {
+  for (const st of allStats) {
     const entry = rosterByMatch.get(st.match_id) ?? { shirts: [], skins: [] };
     const p = players.get(st.player_id);
     const slot = {
@@ -199,7 +197,7 @@ type WeekLookup = Awaited<ReturnType<typeof getWeekLookup>>;
 /** All of a player's `player_match_stats` rows, narrowed to `columns`. */
 function fetchPlayerStatRows<T>(playerId: number, columns: string): Promise<T[]> {
   return fetchAllPages<T>((from, to) =>
-    asPage(getAdminClient().from('player_match_stats').select(columns).eq('player_id', playerId).range(from, to)),
+    asPage(getAdminClient().from('player_match_stats').select(columns).eq('player_id', playerId).order('id').range(from, to)),
   );
 }
 
@@ -275,13 +273,12 @@ async function loadPlayerHistory(playerId: number): Promise<HistoryBase[]> {
   if (statRows.length === 0) return [];
 
   const matchIds = Array.from(new Set(statRows.map((s) => s.match_id)));
-  const [{ data: matches, error: mErr }, weekLookup] = await Promise.all([
-    getAdminClient().from('matches').select('*').in('id', matchIds),
+  const [matches, weekLookup] = await Promise.all([
+    batchedIn<Match>('matches', 'id', matchIds, '*'),
     getWeekLookup(),
   ]);
-  if (mErr) throw mErr;
   const seasonById = await fetchSeasonsById();
-  return toHistory(statRows, (matches ?? []) as Match[], weekLookup, seasonById);
+  return toHistory(statRows, matches, weekLookup, seasonById);
 }
 
 /**
@@ -300,12 +297,10 @@ async function loadPlayerRecentHistory(playerId: number, recentLimit: number): P
   if (stats.length === 0) return [];
 
   const matchIds = Array.from(new Set(stats.map((s) => s.match_id)));
-  const [{ data: placedRows, error: pErr }, weekLookup] = await Promise.all([
-    getAdminClient().from('matches').select('id, week_id, match_number, final_score').in('id', matchIds),
+  const [placedMatches, weekLookup] = await Promise.all([
+    batchedIn<Pick<Match, 'id' | 'week_id' | 'match_number' | 'final_score'>>('matches', 'id', matchIds, 'id, week_id, match_number, final_score'),
     getWeekLookup(),
   ]);
-  if (pErr) throw pErr;
-  const placedMatches = (placedRows ?? []) as Pick<Match, 'id' | 'week_id' | 'match_number' | 'final_score'>[];
   const seasonById = await fetchSeasonsById();
 
   const placedById = new Map(placedMatches.map((m) => [m.id, m]));
@@ -359,7 +354,7 @@ export const getPlayerSeasonAdrTotals = persistentQuery('getPlayerSeasonAdrTotal
     resolveMatchSeasons(),
     getSeasons(),
     fetchAllPages<Pick<PlayerMatchStat, 'match_id' | 'player_id' | 'adr' | 'rounds_played'>>((from, to) =>
-      asPage(getAdminClient().from('player_match_stats').select('match_id, player_id, adr, rounds_played').range(from, to)),
+      asPage(getAdminClient().from('player_match_stats').select('match_id, player_id, adr, rounds_played').order('id').range(from, to)),
     ),
   ]);
   const gauntletSeasonIds = new Set(seasons.filter((s) => s.is_gauntlet).map((s) => s.id));

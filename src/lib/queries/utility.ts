@@ -33,7 +33,7 @@ export async function getAllUtilityThrows(
     fetchAllPages<RawThrowRow>((from, to) => {
       let q = getAdminClient().from('match_utility_throws').select('*');
       if (matchId != null) q = q.eq('match_id', matchId);
-      return q.range(from, to);
+      return q.order('id').range(from, to);
     }),
     fetchPmsLookup(matchId, pmsRows),
   ]);

@@ -108,7 +108,7 @@ export const getMatchKills = persistentQuery('getMatchKills', async (
 ): Promise<MatchKillRow[]> => {
   const [killRows, pmsLookup, resolvedPlayersById] = await Promise.all([
     fetchAllPages<RawKillRow>((from, to) =>
-      getAdminClient().from('match_kills').select('*').eq('match_id', matchId).range(from, to),
+      getAdminClient().from('match_kills').select('*').eq('match_id', matchId).order('id').range(from, to),
     ),
     fetchPmsLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -129,7 +129,7 @@ export const getAllMatchKills = persistentQuery('getAllMatchKills', async (
   pmsRows?: PmsRow[] | Promise<PmsRow[]>,
 ): Promise<MatchKillRow[]> => {
   const [killRows, pmsLookup, matchSeason, resolvedPlayersById] = await Promise.all([
-    fetchAllPages<RawKillRow>((from, to) => getAdminClient().from('match_kills').select('*').range(from, to)),
+    fetchAllPages<RawKillRow>((from, to) => getAdminClient().from('match_kills').select('*').order('id').range(from, to)),
     fetchPmsLookup(undefined, pmsRows),
     resolveMatchSeasons(),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
@@ -153,7 +153,7 @@ export async function getAllKillCreditFlags(
   pmsRows?: PmsRow[] | Promise<PmsRow[]>,
 ): Promise<KillCreditFlags[]> {
   const [killRows, pmsLookup] = await Promise.all([
-    fetchAllPages<RawKillRow>((from, to) => getAdminClient().from('match_kills').select('*').range(from, to)),
+    fetchAllPages<RawKillRow>((from, to) => getAdminClient().from('match_kills').select('*').order('id').range(from, to)),
     fetchPmsLookup(undefined, pmsRows),
   ]);
 
