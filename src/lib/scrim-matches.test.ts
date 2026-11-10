@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { applyScrimSideChoice, isScrimMatchListed, scrimMatchPlaysAfter, isScrimMatchDiscardable, isScrimMatchEditable, leagueMatchBlockingScrim, parseScrimTeams, resolveScrimMap, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
+import { applyScrimSideChoice, scrimMatchPlaysAfter, isScrimMatchDiscardable, isScrimMatchEditable, leagueMatchBlockingScrim, parseScrimTeams, resolveScrimMap, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
@@ -96,15 +96,6 @@ test('scrimMatchPlaysAfter: waits behind the night\'s first match still needing 
   assert.equal(scrimMatchPlaysAfter(night, 4), 3);
   assert.equal(scrimMatchPlaysAfter(night, 3), null, 'next up');
   assert.equal(scrimMatchPlaysAfter(night, 99), null, 'not on this night');
-});
-
-test('isScrimMatchListed: once started or over; never-started lobby matches are not', () => {
-  assert.equal(isScrimMatchListed({ final_score: null, server_state: null }), false);
-  assert.equal(isScrimMatchListed({ final_score: null, server_state: 'failed' }), false);
-  for (const state of ['provisioning', 'live', 'tearing_down', 'done']) {
-    assert.equal(isScrimMatchListed({ final_score: null, server_state: state }), true, state);
-  }
-  assert.equal(isScrimMatchListed({ final_score: '13-9', server_state: null }), true);
 });
 
 report();

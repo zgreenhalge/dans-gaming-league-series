@@ -362,7 +362,9 @@ conventions, distinct from the content-page patterns above:
   `SeasonRosterPanel`'s Join / Leave Season button covers Remove and Add, so an admin's own row has no
   menu and its Add player… picker leaves them out. `ScrimNightRoster` keeps the admin's own row menu,
   since check in / out is there and not among the player's own controls. `ScrimNightRoster` and
-  `SeasonRosterPanel` are the worked examples.
+  `SeasonRosterPanel` are the worked examples; `ScrimPendingMatchActions` puts one on a row of a list
+  of `MatchCard` links, as its own slim row under the card, since a card is a link and can't hold a
+  button.
 - **The same header menu carries a section's setup on a player-facing page.** When several read-only
   lines each grew their own admin Edit button, the lines stay as every viewer sees them and the
   edits move into one `AdminMenu` beside them. An item whose editor needs the page's width is

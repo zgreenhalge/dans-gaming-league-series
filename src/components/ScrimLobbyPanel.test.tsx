@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `ScrimLobbyPanel`'s lobby match: its card (`LobbyMatchCard`) reads Pending
+ * Component tests for `ScrimLobbyPanel`'s lobby match: its card (`LobbyMatchCard`) reads Up next
  * before the server starts and Live once it has, for an admin and a non-admin alike. An admin can
  * configure the match only before it starts, and discard it — after a confirm — whenever it isn't
- * holding the server.
+ * holding the server. With no match, End night sits beside Next Match for a viewer who may end the
+ * night, and the matches queued behind the lobby's link to the running order.
  *
  * `MatchServerPanel` is stubbed — it has its own tests — and `next/navigation` is mocked for
  * `useRefreshingAction()`.
@@ -41,7 +42,7 @@ function scrimMatch(server_state: string | null): ScrimMatch {
   };
 }
 
-function renderLobby(match: ScrimMatch, canManage: boolean) {
+function renderLobby(match: ScrimMatch | null, canManage: boolean, extra: Partial<ComponentProps<typeof ScrimLobbyPanel>> = {}) {
   const props: ComponentProps<typeof ScrimLobbyPanel> = {
     nightId: 5,
     match,
@@ -50,31 +51,33 @@ function renderLobby(match: ScrimMatch, canManage: boolean) {
     names,
     maps: [],
     canMake: canManage,
+    canEnd: false,
     canManage,
     currentPlayerId: canManage ? null : 1,
     rounds: null,
+    ...extra,
   };
   return render(<ScrimLobbyPanel {...props} />);
 }
 
 describe('ScrimLobbyPanel lobby match card', () => {
   for (const [who, canManage] of [['an admin', true], ['a non-admin', false]] as const) {
-    test(`${who} sees the card as Pending before the server starts`, () => {
+    test(`${who} sees the card as Up next before the server starts`, () => {
       renderLobby(scrimMatch(null), canManage);
-      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.getByText('Up next')).toBeInTheDocument();
       expect(screen.queryByText('Live')).toBeNull();
     });
 
     test(`${who} sees the card as Live while the server runs`, () => {
       renderLobby(scrimMatch('live'), canManage);
       expect(screen.getByText('Live')).toBeInTheDocument();
-      expect(screen.queryByText('Pending')).toBeNull();
+      expect(screen.queryByText('Up next')).toBeNull();
     });
   }
 
   test('the card links to the scrim match page', () => {
     renderLobby(scrimMatch(null), false);
-    expect(screen.getByText('Pending').closest('a')).toHaveAttribute('href', scrimMatchHref(42));
+    expect(screen.getByText('Up next').closest('a')).toHaveAttribute('href', scrimMatchHref(42));
   });
 });
 
@@ -113,5 +116,33 @@ describe('ScrimLobbyPanel admin config', () => {
   test('a non-admin never sees the config', () => {
     renderLobby(scrimMatch(null), false);
     expect(screen.queryByText(/Configure/)).toBeNull();
+  });
+});
+
+describe('ScrimLobbyPanel actions and the queue', () => {
+  test('with no match, End night sits beside Next Match for a viewer who may end the night', () => {
+    renderLobby(null, true, { canEnd: true });
+    expect(screen.getByRole('button', { name: 'Next Match' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End night' })).toBeInTheDocument();
+  });
+
+  test('End night shows for a viewer who may end the night but not make a match', () => {
+    renderLobby(null, false, { canEnd: true });
+    expect(screen.queryByRole('button', { name: 'Next Match' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'End night' })).toBeInTheDocument();
+  });
+
+  test('no End night without canEnd', () => {
+    renderLobby(null, true);
+    expect(screen.queryByRole('button', { name: 'End night' })).toBeNull();
+  });
+
+  test('the queue is a short pointer: number and map, a Discard for whoever may, and a link to the running order', () => {
+    const queued = [{ match: { ...scrimMatch(null), id: 43, match_number: 4 }, canDiscard: true }];
+    renderLobby(scrimMatch('live'), false, { queued });
+    expect(screen.getByText('Up next · 1')).toBeInTheDocument();
+    expect(screen.getByText('Match 4 · Cobble')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Running order' })).toHaveAttribute('href', '/scrims/5?tab=matches');
   });
 });

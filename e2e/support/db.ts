@@ -554,6 +554,28 @@ export async function seedScoredScrimMatch(nightId: number, playerIds: number[],
   return matchId;
 }
 
+/** An unscored scrim match on `nightId` — match `matchNumber`, `playerIds` shirts first (2) then skins
+ *  (2) — with `serverState` as its `match_server_state` (none for `null`, a match never started). */
+export async function seedUnscoredScrimMatch(nightId: number, matchNumber: number, playerIds: number[], serverState: string | null, map = 'foroglio'): Promise<number> {
+  const supabase = adminClient();
+  const { data: match, error: matchErr } = await supabase
+    .from('matches')
+    .insert({ scrim_night_id: nightId, match_number: matchNumber, shirts_pick: map, scrim_side_choice: 'knife' })
+    .select('id')
+    .single();
+  if (matchErr) throw matchErr;
+  const matchId = (match as { id: number }).id;
+  const [a, b, c, d] = playerIds;
+  const lineup = [[a, 'SHIRTS'], [b, 'SHIRTS'], [c, 'SKINS'], [d, 'SKINS']] as const;
+  const { error } = await supabase.from('player_match_stats').insert(lineup.map(([playerId, faction]) => ({ match_id: matchId, player_id: playerId, faction })));
+  if (error) throw error;
+  if (serverState) {
+    const { error: stateErr } = await supabase.from('match_server_state').insert({ match_id: matchId, server_state: serverState });
+    if (stateErr) throw stateErr;
+  }
+  return matchId;
+}
+
 /** The scrim nights starting at `startsAt` exactly — how a test finds a night the UI just created. */
 export async function scrimNightIdsStartingAt(startsAt: string): Promise<number[]> {
   const { data, error } = await adminClient().from('scrim_nights').select('id').eq('starts_at', startsAt);

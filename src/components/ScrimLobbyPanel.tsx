@@ -1,7 +1,9 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { scrimMatchHref } from '@/lib/crumbs';
+import Link from 'next/link';
+import { scrimMatchHref, scrimNightMatchesHref } from '@/lib/crumbs';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
 import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
@@ -36,6 +38,9 @@ interface Props {
   maps: WorkshopMapOption[];
   /** The viewer may make the next match (checked in, or an admin, with check-in open). */
   canMake: boolean;
+  /** The viewer may end the night (`buildScrimNightPageModel()`'s `canEnd`): End night sits beside Next
+   *  Match. */
+  canEnd: boolean;
   /** The viewer may configure, discard or start `match` (an admin). Everyone else sees its card. */
   canManage: boolean;
   currentPlayerId: number | null;
@@ -56,11 +61,12 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 
 type Lineup = [number, number, number, number];
 
-/** The scrim night lobby: the next match — Next Match makes one, Generate Rounds queues several — and
- *  the lobby's match: a card for everyone, and for an admin its map, starting side and lineup (from the
- *  checked-in pool), starting it on the server, or discarding it. Checking in is the page's status bar
- *  (`ScrimNightStatusBar`). */
-export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, currentPlayerId, rounds }: Props) {
+/** The scrim night lobby, about the current match: with none, Next Match makes one, Generate Rounds
+ *  queues several, and End night closes the night; otherwise the lobby's match — a card for everyone,
+ *  and for an admin its map, starting side and lineup (from the checked-in pool), starting it on the
+ *  server, or discarding it — and a short pointer to the matches queued behind it. Checking in is the
+ *  page's status bar (`ScrimNightStatusBar`); the night's running order is its Matches tab. */
+export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canEnd, canManage, currentPlayerId, rounds }: Props) {
   const { busy, error, act } = useRefreshingAction();
   const [generating, setGenerating] = useState(false);
   const enough = pool.length >= SCRIM_MATCH_SIZE;
@@ -86,21 +92,30 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
               />
             </div>
           )}
-          {queued.length > 0 && <UpNext queued={queued} names={names} />}
+          {queued.length > 0 && <UpNext nightId={nightId} queued={queued} />}
         </>
-      ) : canMake ? (
+      ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
-            {busy ? '…' : 'Next Match'}
-          </button>
-          {rounds && (
-            <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
-              Generate Rounds
-            </button>
+          {canMake ? (
+            <>
+              <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
+                {busy ? '…' : 'Next Match'}
+              </button>
+              {rounds && (
+                <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
+                  Generate Rounds
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match yet. A checked-in player makes the next one.</p>
+          )}
+          {canEnd && (
+            <div className="ml-auto">
+              <ScrimEndNightButton nightId={nightId} />
+            </div>
           )}
         </div>
-      ) : (
-        <p className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match yet. A checked-in player makes the next one.</p>
       )}
       <ErrorText error={error} size={12} />
       {generating && rounds && !match && (
@@ -119,7 +134,7 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
         href={scrimMatchHref(match.id)}
         map={match.map}
         label={{ type: 'match', matchNumber: match.match_number, isFeatureMatch: false }}
-        right={isScrimMatchEditable(match) ? { type: 'pending' } : { type: 'live' }}
+        right={isScrimMatchEditable(match) ? { type: 'next' } : { type: 'live' }}
         shirtsFallback={scrimTeamLabel(match.shirts, names)}
         skinsFallback={scrimTeamLabel(match.skins, names)}
         currentPlayerId={currentPlayerId}
@@ -254,21 +269,43 @@ function LobbyMatchConfig({
   );
 }
 
-/** The pre-matched matches waiting behind the lobby's, each with a Discard for its players or an
- *  admin (after a confirm). Each becomes the lobby's match in turn, where its map, side and lineup can still change. */
-function UpNext({ queued, names }: { queued: Props['queued']; names: Props['names'] }) {
+/** A short pointer to the pre-matched matches waiting behind the lobby's — each by number and map,
+ *  with a Discard for its players or an admin (after a confirm) — linking to the Matches tab, which
+ *  shows them with their lineups in the night's running order. Each becomes the lobby's match in turn,
+ *  where its map, side and lineup can still change. */
+function UpNext({ nightId, queued }: { nightId: number; queued: Props['queued'] }) {
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <SectionLabel className="px-4 py-2 border-b border-[var(--color-border-tertiary)]">Up next · {queued.length}</SectionLabel>
+      <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
+        <SectionLabel as="span">Up next · {queued.length}</SectionLabel>
+        <Link href={scrimNightMatchesHref(nightId)} className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline">
+          Running order
+        </Link>
+      </div>
       {queued.map(({ match, canDiscard }) => (
         <div key={match.id} className="px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 flex items-center justify-between gap-3 font-mono text-[12px]">
-          <span className="min-w-0">
-            <span className="text-[var(--color-text-secondary)]">{match.match_number} · {match.map ? toSentenceCase(match.map) : '—'} · </span>
-            {scrimTeamLabel(match.shirts, names)} <span className="text-[var(--color-text-secondary)]">vs</span> {scrimTeamLabel(match.skins, names)}
+          <span className="min-w-0 text-[var(--color-text-secondary)]">
+            Match {match.match_number} · {match.map ? toSentenceCase(match.map) : '—'}
           </span>
           {canDiscard && <ScrimDiscardButton matchId={match.id} />}
         </div>
       ))}
     </div>
+  );
+}
+
+/** End night (`POST /api/scrims/[id]/end`), after a confirm: closes the night before the clock does. */
+function ScrimEndNightButton({ nightId }: { nightId: number }) {
+  const { busy, error, act } = useRefreshingAction();
+  return (
+    <ArmedConfirmButton
+      onConfirm={() => act('POST', `/api/scrims/${nightId}/end`)}
+      busy={busy}
+      error={error}
+      triggerLabel="End night"
+      confirmLabel="End night for everyone"
+      busyLabel="Ending…"
+      variant="danger"
+    />
   );
 }
