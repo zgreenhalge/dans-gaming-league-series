@@ -93,7 +93,7 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
           {new Date(`${selected}T00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </SectionLabel>
         {day.upcoming.map((u) => (
-          <ScrimNightPanel key={u.night.id} upcoming={u} currentPlayerId={currentPlayerId} isAdmin={isAdmin} allPlayers={allPlayers} showNightLink />
+          <ScrimNightPanel key={u.night.id} upcoming={u} currentPlayerId={currentPlayerId} isAdmin={isAdmin} allPlayers={allPlayers} />
         ))}
         {day.past.length > 0 && <ScrimPastNights nights={day.past} />}
         {day.upcoming.length === 0 && day.past.length === 0 && (

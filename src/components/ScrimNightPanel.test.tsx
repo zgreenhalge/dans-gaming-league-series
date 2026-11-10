@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `ScrimNightPanel`: the attendance toggle (the lists start open, the toggle folds
+ * Component tests for `ScrimNightPanel` and the `ScrimNightRoster` it holds: the attendance toggle (the lists start open, the toggle folds
  * them away and back, and its label carries the signup count either way), and the admin menus (only an
  * admin has them; a row's menu sends that player's change once, and every row's actions hold while a
  * write is in flight; the header's Add player… picker signs a player up).
