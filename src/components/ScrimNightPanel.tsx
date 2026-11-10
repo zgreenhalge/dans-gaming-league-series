@@ -66,8 +66,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   const [adminOpen, setAdminOpen] = useState(false);
   // The attendance lists fold away to leave the night's controls.
   const [attendanceOpen, setAttendanceOpen] = useState(true);
-  // End night asks for a confirm before it closes the night for everyone.
-  const [endArmed, setEndArmed] = useState(false);
   const showAdmin = isAdmin && adminOpen;
   const [, startTransition] = useTransition();
 
@@ -82,7 +80,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   }
 
   function endNight() {
-    // An ended night's page drops this panel on refresh; a failed end stays armed beside its error.
     return run(async () => {
       await sendJsonRequest('POST', `/api/scrims/${night.id}/end`, {});
       startTransition(() => router.refresh());
@@ -240,9 +237,6 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
       {canEnd && (
         <div className="px-4 py-3 border-t border-[var(--color-border-tertiary)] flex justify-end">
           <ArmedConfirmButton
-            armed={endArmed}
-            onArm={() => setEndArmed(true)}
-            onCancel={() => setEndArmed(false)}
             onConfirm={endNight}
             busy={busy}
             triggerLabel="End night"

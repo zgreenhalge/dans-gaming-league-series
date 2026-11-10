@@ -20,7 +20,6 @@ type SeedBands = { byes: string[]; playing: string[]; relegated: string[] };
 
 function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
   const router = useRouter();
-  const [resetArmed, setResetArmed] = useState(false);
   const [forceArmed, setForceArmed] = useState(false);
   const [forceConfirmText, setForceConfirmText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,7 +55,6 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Failed to reset gauntlet.');
-        setResetArmed(false);
         setForceArmed(false);
         return;
       }
@@ -113,9 +111,6 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
           ) : (
             // `error` is shown once already, next to the season name above — not passed here too.
             <ArmedConfirmButton
-              armed={resetArmed}
-              onArm={() => setResetArmed(true)}
-              onCancel={() => setResetArmed(false)}
               onConfirm={() => reset(false)}
               busy={busy}
               triggerLabel="Reset"
