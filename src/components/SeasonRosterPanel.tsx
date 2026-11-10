@@ -31,16 +31,20 @@ interface Props {
 
 const GREEN_BTN_CLS = 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110';
 
-/** Roster editor for an UPCOMING season's `season_players` — admins manage the full roster,
- * everyone else can join or drop themselves. Only rendered while the season is UPCOMING (the API
- * enforces the same gate server-side). The season's buy-in, when set, shows in the header so
- * players see the cost before joining. */
+/** Roster editor for an UPCOMING season's `season_players` — every viewer signed in as a
+ * player, an admin included, gets the same Join / Leave Season button for themselves, and an admin
+ * also manages the full roster. Only rendered while the season is UPCOMING (the API enforces the same gate
+ * server-side). The season's buy-in, when set, shows in the header so players see the cost before
+ * joining. */
 export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, currentPlayerId, buyInAmount }: Props) {
   const router = useRouter();
   const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null);
   const [addPlayerId, setAddPlayerId] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const [refreshing, startTransition] = useTransition();
+  // One gate for every control: nothing else can start while a roster write or the refresh after
+  // it is in flight, so the single `pendingPlayerId` slot always names the one running write.
+  const busy = pendingPlayerId != null || refreshing;
 
   const rosterIds = new Set(roster.map((r) => r.player_id));
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
@@ -81,11 +85,11 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
           Roster · {roster.length} {roster.length === 1 ? 'player' : 'players'}
           {buyInAmount != null && <> · Buy-in {formatBuyIn(buyInAmount)}</>}
         </SectionLabel>
-        {!isAdmin && currentPlayerId != null && (
+        {currentPlayerId != null && (
           <button
             type="button"
             onClick={() => mutate(currentPlayerId, selfOnRoster ? 'DELETE' : 'POST')}
-            disabled={pendingPlayerId === currentPlayerId}
+            disabled={busy}
             className={`tracked text-[10px] font-semibold px-2 py-1 border transition-colors disabled:opacity-40 ${
               selfOnRoster
                 ? 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]'
@@ -116,7 +120,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
             avatarUrl={r.steam_avatar_url}
             isMe={currentPlayerId !== null && r.player_id === currentPlayerId}
           >
-            {isAdmin && <RosterRemoveButton onClick={() => mutate(r.player_id, 'DELETE')} pending={pendingPlayerId === r.player_id} />}
+            {isAdmin && <RosterRemoveButton onClick={() => mutate(r.player_id, 'DELETE')} pending={pendingPlayerId === r.player_id} disabled={busy} />}
           </RosterPlayerRow>
         ))
       )}
@@ -138,7 +142,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
               setAddPlayerId('');
               mutate(id, 'POST');
             }}
-            disabled={!addPlayerId || pendingPlayerId != null}
+            disabled={!addPlayerId || busy}
             className={`tracked text-[10px] font-semibold px-3 py-2 border transition-colors disabled:opacity-40 ${
               addPlayerId
                 ? GREEN_BTN_CLS
