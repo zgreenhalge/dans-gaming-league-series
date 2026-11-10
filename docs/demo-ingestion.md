@@ -85,7 +85,10 @@ free, side-trusted, and corroborated by MatchZy's own `map_result` writes the sc
 (`writeMatchScore()`) with no human step at all. Anything else — quarantined, an unresolved starting
 side, a mismatch against `map_result` — stages the parsed result at `demoResultKey(matchId)` (R2,
 gzipped JSON) for the in-match review block (`MatchDemoReviewBlock.tsx`) to confirm or dismiss.
-Confirming writes the same `PATCH /api/matches/[id]/score` a hand-entered score does.
+Confirming writes the same `PATCH /api/matches/[id]/score` a hand-entered score does. The block
+reads the staged result through `GET /api/matches/[id]/demo/result`, which answers 500 when its job
+status, match or R2 read fails, so a broken read never passes for "nothing staged". The block then
+shows that error with a retry in place of hiding.
 
 Demos are kept in R2 indefinitely (`demoKey(matchId)` is never deleted), so an already-scored match
 can be reparsed at any time — most commonly to backfill fields from a sabremetric collector added
