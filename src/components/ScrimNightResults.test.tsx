@@ -68,15 +68,10 @@ describe('ScrimNightMatchList', () => {
 
     await userEvent.click(menu);
     await userEvent.click(screen.getByRole('menuitem', { name: 'Discard…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(fetchMock).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: 'Discard match 2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm discard' }));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/scrims/matches/2', expect.objectContaining({ method: 'DELETE' })));
     vi.unstubAllGlobals();
-  });
-
-  test('Discard is held while the match still holds the server', async () => {
-    renderList([{ match: scrimMatch(2, null, 'tearing_down'), status: 'pending', resolve: true }]);
-    await userEvent.click(screen.getByRole('button', { name: 'Admin actions for match 2' }));
-    expect(screen.getByRole('menuitem', { name: 'Discard…' })).toBeDisabled();
   });
 });

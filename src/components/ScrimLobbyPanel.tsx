@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import Link from 'next/link';
-import { scrimMatchHref, scrimNightHref } from '@/lib/crumbs';
+import { scrimMatchHref, scrimNightMatchesHref } from '@/lib/crumbs';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
@@ -134,7 +134,7 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
         href={scrimMatchHref(match.id)}
         map={match.map}
         label={{ type: 'match', matchNumber: match.match_number, isFeatureMatch: false }}
-        right={isScrimMatchEditable(match) ? { type: 'pending' } : { type: 'live' }}
+        right={isScrimMatchEditable(match) ? { type: 'next' } : { type: 'live' }}
         shirtsFallback={scrimTeamLabel(match.shirts, names)}
         skinsFallback={scrimTeamLabel(match.skins, names)}
         currentPlayerId={currentPlayerId}
@@ -278,7 +278,7 @@ function UpNext({ nightId, queued }: { nightId: number; queued: Props['queued'] 
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-4 py-2 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
         <SectionLabel as="span">Up next · {queued.length}</SectionLabel>
-        <Link href={`${scrimNightHref(nightId)}?tab=matches`} className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline">
+        <Link href={scrimNightMatchesHref(nightId)} className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline">
           Running order
         </Link>
       </div>

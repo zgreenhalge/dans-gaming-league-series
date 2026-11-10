@@ -5,7 +5,7 @@
 // rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
-import { isScrimMatchEditable, isScrimMatchListed, scrimMatchNeedsServer } from './scrim-matches';
+import { isScrimMatchEditable, scrimMatchNeedsServer } from './scrim-matches';
 import { SCRIM_MATCH_SIZE, leagueMatchesDuring, type ScrimCommitment } from './scrim-schedule';
 import type { ScheduledMatchRef } from './server-schedule-collision';
 import { isPlayedScore } from './util';
@@ -91,8 +91,13 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
   const orderStatus = (m: ScrimMatch): ScrimRunningOrderStatus =>
     isPlayedScore(m.final_score) ? 'played' : !scrimMatchNeedsServer(m) ? 'pending' : isScrimMatchEditable(m) ? 'next' : 'live';
   // Matches play in order, but one can finish while an earlier one still waits for the server (a failed
-  // start), so the finished ones lead and the rest follow, each group in play order.
-  const ordered = [...night.matches.filter((m) => !scrimMatchNeedsServer(m)), ...night.matches.filter(scrimMatchNeedsServer)];
+  // start), so the finished ones lead and the rest follow, each group in play order. A match still to
+  // start shows only while check-in is open, since only then can it start.
+  const entries = night.matches
+    .map((m) => ({ match: m, status: orderStatus(m) }))
+    .filter((e) => e.status !== 'next' || night.checkInOpen)
+    .map((e) => ({ ...e, resolve: isAdmin && e.status === 'pending' }));
+  const finished = (e: ScrimRunningOrderEntry) => e.status === 'played' || e.status === 'pending';
   return {
     status: {
       state: !night.current ? 'final' : night.started ? 'live' : 'upcoming',
@@ -105,12 +110,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
     pool,
     lobbyMatch,
     queued: waiting.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) })),
-    runningOrder: ordered
-      .filter((m) => night.checkInOpen || isScrimMatchListed(m))
-      .map((m) => {
-        const status = orderStatus(m);
-        return { match: m, status, resolve: isAdmin && status === 'pending' };
-      }),
+    runningOrder: [...entries.filter(finished), ...entries.filter((e) => !finished(e))],
     scoredMatchIds: night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id),
     canMake,
     canEnd,

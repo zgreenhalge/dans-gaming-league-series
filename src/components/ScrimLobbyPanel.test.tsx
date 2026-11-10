@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `ScrimLobbyPanel`'s lobby match: its card (`LobbyMatchCard`) reads Pending
+ * Component tests for `ScrimLobbyPanel`'s lobby match: its card (`LobbyMatchCard`) reads Up next
  * before the server starts and Live once it has, for an admin and a non-admin alike. An admin can
  * configure the match only before it starts, and discard it — after a confirm — whenever it isn't
  * holding the server. With no match, End night sits beside Next Match for a viewer who may end the
@@ -62,22 +62,22 @@ function renderLobby(match: ScrimMatch | null, canManage: boolean, extra: Partia
 
 describe('ScrimLobbyPanel lobby match card', () => {
   for (const [who, canManage] of [['an admin', true], ['a non-admin', false]] as const) {
-    test(`${who} sees the card as Pending before the server starts`, () => {
+    test(`${who} sees the card as Up next before the server starts`, () => {
       renderLobby(scrimMatch(null), canManage);
-      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.getByText('Up next')).toBeInTheDocument();
       expect(screen.queryByText('Live')).toBeNull();
     });
 
     test(`${who} sees the card as Live while the server runs`, () => {
       renderLobby(scrimMatch('live'), canManage);
       expect(screen.getByText('Live')).toBeInTheDocument();
-      expect(screen.queryByText('Pending')).toBeNull();
+      expect(screen.queryByText('Up next')).toBeNull();
     });
   }
 
   test('the card links to the scrim match page', () => {
     renderLobby(scrimMatch(null), false);
-    expect(screen.getByText('Pending').closest('a')).toHaveAttribute('href', scrimMatchHref(42));
+    expect(screen.getByText('Up next').closest('a')).toHaveAttribute('href', scrimMatchHref(42));
   });
 });
 

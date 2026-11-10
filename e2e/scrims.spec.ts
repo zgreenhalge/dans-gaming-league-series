@@ -231,7 +231,7 @@ test.describe('the lobby', () => {
 
     await page.getByRole('button', { name: 'Next Match' }).click();
     await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
-    await expect(main(page).getByText('Pending', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Up next', { exact: true })).toBeVisible();
     await expect(main(page).getByLabel('Starting side')).toHaveCount(0);
     const matches = await scrimMatchesOf(nightId);
     expect(matches).toHaveLength(1);
@@ -338,7 +338,8 @@ test.describe('the lobby', () => {
     await openNightAs(page, 'Zach', `/scrims/${nightId}?tab=matches`);
     await page.getByRole('button', { name: 'Admin actions for match 2' }).click();
     await page.getByRole('menuitem', { name: 'Discard…' }).click();
-    await page.getByRole('button', { name: 'Discard match 2' }).click();
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm discard' }).click();
     await expect(cards).toHaveCount(2);
     expect((await scrimMatchesOf(nightId)).map((m) => m.match_number)).toEqual([1, 3]);
   });
