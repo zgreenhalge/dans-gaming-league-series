@@ -103,10 +103,11 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - **`FieldLabel`** (`src/components/FieldLabel.tsx`) — a form field's own label, in the same look as
   `SectionLabel`: a real `<label htmlFor>` naming one input, select or textarea. Give the control an
   id from `useId()` and pass it as `htmlFor`, so a click focuses the control and screen readers and
-  `getByLabel` find it by that text. It renders as a block above its control; spacing goes in
-  `className`. Use `FieldLabel` when the text names one control and `SectionLabel` when it heads a
-  section or a group. Labels with a deliberately different look (amber callouts, faction-coloured
-  team labels, mono checkbox captions) stay hand-styled
+  label queries (Playwright `getByLabel`, Testing Library `getByLabelText`) find it by that text. It
+  renders as a block above its control; spacing goes in `className`. Use `FieldLabel` when the text
+  names one control and `SectionLabel` when it heads a section or a group. Labels with a
+  deliberately different look (amber callouts, faction-coloured team labels, mono checkbox captions)
+  stay hand-styled
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for

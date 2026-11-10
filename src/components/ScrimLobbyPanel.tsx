@@ -244,7 +244,10 @@ function LobbyMatchConfig({
         <CollapsiblePanel title="Configure" className="mx-4 mb-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <FieldLabel htmlFor={mapFieldId}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</FieldLabel>
+              {/* The saved map is shown beside the label but kept out of the select's accessible name. */}
+              <FieldLabel htmlFor={mapFieldId}>
+                Map{match.map && <span aria-hidden="true"> · {toSentenceCase(match.map)}</span>}
+              </FieldLabel>
               <MapPicker
                 id={mapFieldId}
                 maps={maps}
