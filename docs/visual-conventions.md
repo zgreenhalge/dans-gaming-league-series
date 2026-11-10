@@ -352,7 +352,7 @@ conventions, distinct from the content-page patterns above:
   it sits on — one on each row for that row's actions, one on the section header for the list's own
   (adding an entry). The list reads the same for an admin as for a player until the menu opens. An
   item is one-click (`onSelect`, run after the menu closes) or expands in place of the list
-  (`content`, rendered with a `close` callback — `ScrimNightPanel`'s **Add player…** opens
+  (`content`, rendered with a `close` callback — `ScrimNightRoster`'s **Add player…** opens
   `AddPlayerSelect` that way). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
   focuses the first item, arrow keys move between items, and Escape, a press outside or tabbing away
   closes it, with Escape and a pick returning focus to the trigger. The popup anchors to the trigger's
@@ -360,8 +360,8 @@ conventions, distinct from the content-page patterns above:
   take (a scrim night's End night, a season's Join / Leave Season) stays out of it. Where the player's
   own controls already cover every admin action on their own row, that row gets no menu:
   `SeasonRosterPanel`'s Join / Leave Season button covers Remove and Add, so an admin's own row has no
-  menu and its Add player… picker leaves them out. `ScrimNightPanel` keeps the admin's own row menu,
-  since check in / out is there and not among the player's own controls. `ScrimNightPanel` and
+  menu and its Add player… picker leaves them out. `ScrimNightRoster` keeps the admin's own row menu,
+  since check in / out is there and not among the player's own controls. `ScrimNightRoster` and
   `SeasonRosterPanel` are the worked examples.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in

@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useState } from 'react';
-import Link from 'next/link';
 import { scrimMatchHref } from '@/lib/crumbs';
 import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
@@ -13,9 +12,6 @@ import { MatchCard } from './MatchCard';
 import { CollapsiblePanel } from './CollapsiblePanel';
 import { ScrimDiscardButton } from './ScrimDiscardButton';
 import { ScrimRoundsGenerator } from './ScrimRoundsGenerator';
-import { LocalTime } from './LocalTime';
-import { LeagueGameMark } from './ScrimSeats';
-import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import type { ServerState } from '@/lib/dathost-lifecycle';
 import type { ScheduleLabPlayer, ScheduleLabRoster, ScrimMatch, WorkshopMapOption } from '@/lib/queries';
 import type { FormatRecord } from '@/lib/season-format';
@@ -43,14 +39,9 @@ interface Props {
   /** The viewer may configure, discard or start `match` (an admin). Everyone else sees its card. */
   canManage: boolean;
   currentPlayerId: number | null;
-  /** The signed-in viewer and whether they're checked in; `null` when signed out. */
-  viewer: { playerId: number; checkedIn: boolean } | null;
   /** What Generate Rounds plans over — the checked-in players' ratings and season records — when the
    *  viewer may make matches and none is waiting; `null` otherwise. */
   rounds: { players: ScheduleLabPlayer[]; rosters: ScheduleLabRoster[]; careerRecords: Record<number, FormatRecord> } | null;
-  /** League matches scheduled during the night (`leagueMatchesDuring()`): each takes the server, so
-   *  no scrim match starts within half an hour of one. */
-  leagueMatches: ScheduledMatchRef[];
 }
 
 const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
@@ -65,18 +56,17 @@ const SIDE_LABEL: Record<ScrimSideChoice, string> = {
 
 type Lineup = [number, number, number, number];
 
-/** The scrim night lobby: checking in first, then the next match — Next Match makes one, Generate
- *  Rounds queues several — and the lobby's match: a card for everyone, and for an admin its map,
- *  starting side and lineup (from the checked-in pool), starting it on the server, or discarding it. */
-export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, currentPlayerId, viewer, rounds, leagueMatches }: Props) {
+/** The scrim night lobby: the next match — Next Match makes one, Generate Rounds queues several — and
+ *  the lobby's match: a card for everyone, and for an admin its map, starting side and lineup (from the
+ *  checked-in pool), starting it on the server, or discarding it. Checking in is the page's status bar
+ *  (`ScrimNightStatusBar`). */
+export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canManage, currentPlayerId, rounds }: Props) {
   const { busy, error, act } = useRefreshingAction();
   const [generating, setGenerating] = useState(false);
   const enough = pool.length >= SCRIM_MATCH_SIZE;
   const editable = match != null && isScrimMatchEditable(match);
   return (
     <div className="flex flex-col gap-3">
-      <CheckInBar nightId={nightId} checkedInCount={pool.length} viewer={viewer} leagueMatches={leagueMatches} />
-
       {match ? (
         <>
           <LobbyMatchCard match={match} names={names} currentPlayerId={currentPlayerId} />
@@ -98,77 +88,25 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
           )}
           {queued.length > 0 && <UpNext queued={queued} names={names} />}
         </>
-      ) : (
-        canMake && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
-              {busy ? '…' : 'Next Match'}
+      ) : canMake ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => act('POST', `/api/scrims/${nightId}/matches`)} disabled={busy || !enough} className={GO_BTN_CLS}>
+            {busy ? '…' : 'Next Match'}
+          </button>
+          {rounds && (
+            <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
+              Generate Rounds
             </button>
-            {rounds && (
-              <button type="button" onClick={() => setGenerating(!generating)} aria-expanded={generating} className={BTN_CLS}>
-                Generate Rounds
-              </button>
-            )}
-          </div>
-        )
+          )}
+        </div>
+      ) : (
+        <p className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match yet. A checked-in player makes the next one.</p>
       )}
       <ErrorText error={error} size={12} />
       {generating && rounds && !match && (
         <ScrimRoundsGenerator nightId={nightId} {...rounds} onClose={() => setGenerating(false)} />
       )}
     </div>
-  );
-}
-
-/** The lobby's first row: how many are checked in, and the viewer's own Check in / Check out. */
-function CheckInBar({
-  nightId,
-  checkedInCount,
-  viewer,
-  leagueMatches,
-}: {
-  nightId: number;
-  checkedInCount: number;
-  viewer: Props['viewer'];
-  leagueMatches: ScheduledMatchRef[];
-}) {
-  return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">{checkedInCount} checked in</span>
-        {leagueMatches.map((m) => (
-          <Link
-            key={m.id}
-            href={`/matches/${m.id}`}
-            title={`${m.label} takes the server`}
-            className="inline-flex items-center gap-1.5 font-mono text-[12px] hover:underline"
-          >
-            <LeagueGameMark />
-            <LocalTime iso={m.scheduledAt} opts={{ hour: 'numeric', minute: '2-digit' }} />
-          </Link>
-        ))}
-      </div>
-      {viewer && <ScrimCheckInButton nightId={nightId} viewer={viewer} />}
-    </div>
-  );
-}
-
-/** The viewer's own Check in / Check out for a night — the lobby's first row, and on its own before
- *  anyone has checked in, when the night page shows no lobby yet. */
-export function ScrimCheckInButton({ nightId, viewer }: { nightId: number; viewer: NonNullable<Props['viewer']> }) {
-  const { busy, error, act } = useRefreshingAction();
-  return (
-    <span className="inline-flex flex-col items-start gap-1">
-      <button
-        type="button"
-        onClick={() => act(viewer.checkedIn ? 'DELETE' : 'POST', `/api/scrims/${nightId}/check-in`, { player_id: viewer.playerId })}
-        disabled={busy}
-        className={viewer.checkedIn ? BTN_CLS : GO_BTN_CLS}
-      >
-        {busy ? '…' : viewer.checkedIn ? 'Check out' : 'Check in'}
-      </button>
-      <ErrorText error={error} size={12} />
-    </span>
   );
 }
 

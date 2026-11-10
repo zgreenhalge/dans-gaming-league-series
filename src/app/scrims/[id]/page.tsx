@@ -5,19 +5,19 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { LocalTime } from '@/components/LocalTime';
 import { RefreshAt } from '@/components/RefreshAt';
 import { RefreshOnServerState } from '@/components/RefreshOnServerState';
-import { ScrimCheckInButton, ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
+import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
 import { ScrimAwaitingScore } from '@/components/ScrimAwaitingScore';
 import { ScrimNightH2H } from '@/components/ScrimNightH2H';
 import { ScrimNightStats } from '@/components/ScrimNightStats';
 import { ScrimNightTabs, type ScrimNightTabSpec } from '@/components/ScrimNightTabs';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
-import { ScrimNightPanel } from '@/components/ScrimNightPanel';
+import { ScrimNightRoster } from '@/components/ScrimNightRoster';
+import { ScrimEndNightButton, ScrimNightStatusBar } from '@/components/ScrimNightStatusBar';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
-import { StatusPill } from '@/components/StatusPill';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimNightStatsVersion, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
-import { hasScrimNightEnded, leagueMatchesDuring, scrimNightBoundaries } from '@/lib/scrim-schedule';
+import { hasScrimNightEnded, scrimNightBoundaries } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { formatLeagueDate, formatLeagueDateTime, nextRefreshInstant, parseRouteId } from '@/lib/util';
 import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
@@ -64,7 +64,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
-  const model = buildScrimNightPageModel(night, { playerId: currentPlayerId, isAdmin });
+  const model = buildScrimNightPageModel(night, { playerId: currentPlayerId, isAdmin }, scheduled);
   const { pool, lobbyMatch, scoredMatchIds } = model;
   const [rounds, hasAdvancedStats, statsVersion] = await Promise.all([
     model.offerRounds ? getScheduleLabData(pool.map((p) => p.id)) : null,
@@ -89,9 +89,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
             canMake={model.canMake}
             canManage={isAdmin}
             currentPlayerId={currentPlayerId}
-            viewer={currentPlayerId != null ? { playerId: currentPlayerId, checkedIn: model.viewerCheckedIn } : null}
             rounds={rounds}
-            leagueMatches={leagueMatchesDuring(night.night, scheduled)}
           />
           {night.leaderboard.length > 0 && (
             <section className="mt-8">
@@ -100,6 +98,21 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
             </section>
           )}
         </>
+      ),
+    },
+    roster: {
+      label: 'Roster',
+      content: (
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+          <ScrimNightRoster
+            nightId={night.night.id}
+            signups={night.signups}
+            checkInOpen={night.checkInOpen}
+            currentPlayerId={currentPlayerId}
+            admin={model.rosterAdmin}
+            allPlayers={model.rosterAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
+          />
+        </div>
       ),
     },
     matches: {
@@ -129,40 +142,22 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims', href: '/scrims' }, { label: dateLabel, localDate: night.night.startsAt }]} />
       <LocalDateInTitle iso={night.night.startsAt} serverLabel={dateLabel} />
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-16">
-        <div className="mt-8 mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="font-display text-[28px] font-semibold leading-tight">Scrim night</h1>
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-              <LocalTime iso={night.night.startsAt} opts={START_FORMAT} />
-            </div>
+        <div className="mt-8 mb-6">
+          <h1 className="font-display text-[28px] font-semibold leading-tight">Scrim night</h1>
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
+            <LocalTime iso={night.night.startsAt} opts={START_FORMAT} />
           </div>
-          {night.started && night.current ? (
-            <StatusPill variant="live">Happening now</StatusPill>
-          ) : night.current ? (
-            <StatusPill variant="accent">Upcoming</StatusPill>
-          ) : (
-            <StatusPill variant="neutral">Final</StatusPill>
-          )}
         </div>
 
-        {night.current && (
-          <div className="mb-8">
-            <ScrimNightPanel
-              upcoming={night}
-              currentPlayerId={currentPlayerId}
-              isAdmin={isAdmin}
-              canEnd={model.canEnd}
-              allPlayers={isAdmin ? [...playersById.values()].map((p) => ({ id: p.id, name: p.name })) : []}
-            />
-          </div>
-        )}
-
-        {/* Before anyone has checked in there's no lobby, only the viewer's own Check in. */}
-        {model.checkInOnlyFor != null && (
-          <div className="flex justify-end mb-8">
-            <ScrimCheckInButton nightId={night.night.id} viewer={{ playerId: model.checkInOnlyFor, checkedIn: false }} />
-          </div>
-        )}
+        {/* The night's status, the same over every tab. */}
+        <div className="mb-8 flex flex-col gap-3">
+          <ScrimNightStatusBar nightId={night.night.id} startsAt={night.night.startsAt} status={model.status} />
+          {model.canEnd && (
+            <div className="flex justify-end">
+              <ScrimEndNightButton nightId={night.night.id} />
+            </div>
+          )}
+        </div>
 
         {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
 
@@ -170,7 +165,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
             whichever tab is showing. */}
         {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
 
-        {/* A night with nothing played or running yet has no tabs: the signup panel above is all of it. */}
+        {/* A night with no signups and nothing played has no tabs: the status bar is all of it. */}
         {tabs.length > 0 && (
           <Suspense>
             <UrlStateProvider>

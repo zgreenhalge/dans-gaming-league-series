@@ -52,9 +52,7 @@ function renderLobby(match: ScrimMatch, canManage: boolean) {
     canMake: canManage,
     canManage,
     currentPlayerId: canManage ? null : 1,
-    viewer: null,
     rounds: null,
-    leagueMatches: [],
   };
   return render(<ScrimLobbyPanel {...props} />);
 }
