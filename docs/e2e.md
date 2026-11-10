@@ -141,13 +141,15 @@ middle levels below `sm`.
 
 ## Locators: assert on what the page shows
 
-`getByText` matches hidden nodes too. Just after a load, React can hold a second, hidden copy of a
-streamed page section in `<div hidden id="S:…">`: its reveal script (`$RC`) queues the swap for up to
-300 ms, or until 2.3 s after navigation when it lands just before then, and if the client has
-already rendered that section in place, the hidden copy sits beside it until the queued reveal
-removes it. A `getByText` assertion that runs in that window sees both and fails strict mode.
-Scope text assertions to the visible page — `page.getByRole('main').getByText(…)` (`getByRole`
-skips hidden elements) — or use a role locator outright.
+Every locator but `getByRole` — `getByText`, `getByLabel`, a CSS `locator()` — matches hidden
+nodes too. Just after a load, React can hold a second, hidden copy of a streamed page section in
+`<div hidden id="S:…">`: its reveal script (`$RC`) queues the swap for up to 300 ms, or until 2.3 s
+after navigation when it lands just before then. An update that reaches the section in that window
+(a prop or context change above it) makes React client-render the section in place, and the hidden
+copy sits beside it until the queued reveal removes it. A locator meant to match one element then
+matches two, and the action or assertion fails strict mode at once. Scope such locators to the
+visible page — `page.getByRole('main').getByText(…)` (`getByRole` skips hidden elements) — or use
+a role locator outright.
 
 ## CI placement
 
