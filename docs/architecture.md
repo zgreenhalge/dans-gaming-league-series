@@ -108,7 +108,9 @@ Linking also creates a cosmetic per-player Discord role named after the player's
 
 Most mutation routes require a valid session (caller in the match or an admin). The DatHost/MatchZy
 hosting + ingestion routes are their own subsystem — see [`hosting.md`](./hosting.md); the machine-auth
-ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not a browser.
+ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not a browser. A new
+mutation route writes through a lib function that throws on failure — see
+[`recipes.md`](./recipes.md)'s "Add a mutation route".
 
 | Method | Path | Description |
 |---|---|---|

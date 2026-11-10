@@ -52,7 +52,8 @@ directions on purpose; the skill is knowing which one applies.
 - **SOLID**, translated to this functional/module codebase — we favor **composition over
   inheritance** and there are almost no classes, so read these as module/component discipline:
   - **S**ingle responsibility — a `queries/*.ts` helper fetches + shapes; a component renders; an
-    `api/` route validates + writes. Don't blur the three.
+    `api/` route validates + writes, the write itself a named lib function that throws on failure
+    ([`recipes.md`](./recipes.md)'s "Add a mutation route"). Don't blur the three.
   - **O**pen/closed — extend a shared primitive by passing a new *parameter* (color, count, variant),
     not by forking it into a near-duplicate. Ask "new *shape* or new *parameter*?" — usually the latter.
   - **L/I/D** — depend on the shared helper and the domain types (`LeaderboardRow`, …), not on raw
@@ -218,7 +219,8 @@ a clever abstraction is declined for that reason.
   an unfiltered read that skips `fetchAllPages()` fails its test; a read filtered that loosely is
   caught only in review.
 - **Check every write's outcome** (AGENTS.md's "Never swallow a write's outcome"), not just the ones
-  that have failed before.
+  that have failed before. A new mutation route gets the error check by construction: its writes go
+  through lib functions that throw ([`recipes.md`](./recipes.md)'s "Add a mutation route").
 - **Format a time of day on the client** (**Client-only values** below), whatever timezone today's
   players are in.
 
