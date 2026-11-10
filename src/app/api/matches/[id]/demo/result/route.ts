@@ -1,5 +1,6 @@
 // Read / dispose of a match's pending demo-ingest result. Session-gated (admin or in-match).
-//   GET    → the staged DemoIngestResult (from R2) + the background_jobs status, or 404 if none.
+//   GET    → the staged DemoIngestResult (from R2) + the background_jobs status (`result: null` if
+//            none), or 500 if one of those reads fails.
 //   DELETE → remove the R2 artifact + mark the job (confirmed | dismissed). Called by the review block
 //            after a successful confirm (→ PATCH /score) or a dismiss.
 
@@ -18,14 +19,16 @@ import { accessDenied } from '@/lib/access-control';
 /** The job's status plus whether it's an in-progress row stuck past `STALE_IN_FLIGHT_MS` — the same
  *  heartbeat check the admin Activity feed's `jobIsStale()` makes, so a demo stuck behind a dead
  *  GitHub Action reads the same way here as it does there (`isJobInFlight`, `background-jobs.ts`,
- *  already lets a stale row's retry actually redispatch). */
+ *  already lets a stale row's retry actually redispatch). No job row reads as `status: null`; a
+ *  failed read throws, so it can't pass for "no job yet". */
 async function jobStatus(matchId: number): Promise<{ status: string | null; stale: boolean }> {
   const { data } = await getAdminClient()
     .from('background_jobs')
     .select('status, updated_at')
     .eq('job_type', JOB_TYPE)
     .eq('match_id', matchId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   const row = data as { status?: string; updated_at?: string | null } | null;
   const status = row?.status ?? null;
   if (!status || !JOB_IN_PROGRESS_STATUSES.has(status)) return { status, stale: false };
@@ -43,7 +46,7 @@ type OrphanGateRow = VetoFields & {
  * suspicious: ready to play (`isReadyToPlay()`: pick/ban finished, or a scrim lobby's map set — so a
  * server could have been provisioned and the match played) but
  * no score recorded yet. Gates the R2 existence check below to that single match, on demand, when its
- * own page is viewed — never a bucket-wide scan across every match.
+ * own page is viewed — never a bucket-wide scan across every match. A failed read throws.
  */
 async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   const { data } = await getAdminClient()
@@ -52,7 +55,8 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
       'final_score, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, scrim_night_id, weeks(seasons(is_gauntlet))',
     )
     .eq('id', matchId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   if (!data) return false;
   const m = data as unknown as OrphanGateRow;
   if (isPlayedScore(m.final_score)) return false;
@@ -75,6 +79,19 @@ async function findOrphanedDemo(matchId: number): Promise<boolean> {
   return Date.now() - head.lastModified.getTime() >= ORPHANED_DEMO_GRACE_MS;
 }
 
+/** The job status, the staged artifact (`buf`, null when none), and — when there's neither — whether
+ *  an orphaned demo is waiting in R2. Any failed read throws. */
+async function loadStagedResult(matchId: number) {
+  const [{ status, stale }, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
+  // No staged artifact. If there's also no job at all (status null — the ingest notify never
+  // fired, or its dispatch was lost) *and* this match is actually in the window where a demo could
+  // legitimately exist already (veto done, not yet scored), check R2 for one old enough to be
+  // considered abandoned rather than still uploading, and offer a manual trigger instead of asking
+  // for a re-upload. This never fires for a match that hasn't started or is already scored.
+  const hasDemo = !buf && !status ? await findOrphanedDemo(matchId) : false;
+  return { status, stale, buf, hasDemo };
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -87,16 +104,18 @@ export async function GET(
   const access = await requireMatchAccess(matchId);
   if (!access.ok) return accessDenied(access);
 
-  const [{ status, stale }, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
-  if (!buf) {
-    // No staged artifact. If there's also no job at all (status null — the ingest notify never
-    // fired, or its dispatch was lost) *and* this match is actually in the window where a demo could
-    // legitimately exist already (veto done, not yet scored), check R2 for one old enough to be
-    // considered abandoned rather than still uploading, and offer a manual trigger instead of asking
-    // for a re-upload. This never fires for a match that hasn't started or is already scored.
-    const hasDemo = status ? false : await findOrphanedDemo(matchId);
-    return NextResponse.json({ status, stale, result: null, hasDemo });
+  // A failed read (job status, match row, or R2) answers 500 rather than a response built on data
+  // that was never loaded — e.g. a broken job-status read passing for "no job yet". The detail is
+  // logged, not sent to the client.
+  let loaded;
+  try {
+    loaded = await loadStagedResult(matchId);
+  } catch (err) {
+    console.error(`[demo/result] reading the staged result for match ${matchId} failed:`, err);
+    return NextResponse.json({ error: 'Could not load the demo result' }, { status: 500 });
   }
+  const { status, stale, buf, hasDemo } = loaded;
+  if (!buf) return NextResponse.json({ status, stale, result: null, hasDemo });
   // A truncated/corrupt artifact (partial write, aborted Action) must not 500 into a silently
   // swallowed error — surface it so the UI can show a failure and let the user dismiss it.
   try {
