@@ -1,5 +1,6 @@
 /**
- * Covers `requireAdminAccess()`'s three outcomes: admin session, non-admin session, no session.
+ * Covers `requireAdminAccess()`'s outcomes: admin session, non-admin session, no session, and a
+ * failed `players` read (which throws rather than denying with a 403).
  * Uses the shared `test-support/fixtures.ts` `PLAYERS` list (Alice, id 1, `is_admin: true`;
  * everyone else `is_admin: false`) as the admin-vs-non-admin fixture, wired as the server client
  * `isPlayerAdmin()` reads through.
@@ -10,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from './session';
 import { __setTestAdminClient } from './supabase-admin';
-import { createFakeSupabaseClient } from './test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { PLAYERS } from './test-support/fixtures';
 import { sessionFor } from './test-support/nextRequest';
 import { test, report } from './test-support/miniTest';
@@ -43,6 +44,14 @@ async function main() {
     __setTestSession(null);
     const result = await requireAdminAccess();
     assert.deepEqual(result, { ok: false, status: 401, error: 'Unauthorized' });
+  });
+
+  await test('a failed players read throws instead of answering 403', async () => {
+    __setTestAdminClient(
+      clientFailingOn(createFakeSupabaseClient({ players: PLAYERS }), 'players', 'select', { code: 'TEST', message: 'connection reset' }),
+    );
+    __setTestSession(sessionFor(NON_ADMIN_ID));
+    await assert.rejects(requireAdminAccess(), { message: 'connection reset' });
   });
 
   __setTestSession(undefined);
