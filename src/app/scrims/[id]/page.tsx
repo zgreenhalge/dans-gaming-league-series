@@ -6,13 +6,12 @@ import { LocalTime } from '@/components/LocalTime';
 import { RefreshAt } from '@/components/RefreshAt';
 import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { ScrimLobbyPanel } from '@/components/ScrimLobbyPanel';
-import { ScrimAwaitingScore } from '@/components/ScrimAwaitingScore';
 import { ScrimNightH2H } from '@/components/ScrimNightH2H';
 import { ScrimNightStats } from '@/components/ScrimNightStats';
 import { ScrimNightTabs, type ScrimNightTabSpec } from '@/components/ScrimNightTabs';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { ScrimNightRoster } from '@/components/ScrimNightRoster';
-import { ScrimEndNightButton, ScrimNightStatusBar } from '@/components/ScrimNightStatusBar';
+import { ScrimNightStatusBar } from '@/components/ScrimNightStatusBar';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { getSession } from '@/lib/session';
 import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimNightStatsVersion, getScrimSignups } from '@/lib/queries';
@@ -21,7 +20,6 @@ import { hasScrimNightEnded, scrimNightBoundaries } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
 import { formatLeagueDate, formatLeagueDateTime, nextRefreshInstant, parseRouteId } from '@/lib/util';
 import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightTab } from '@/lib/scrim-night-page';
-import SectionLabel from '@/components/SectionLabel';
 
 // What the night shows (lobby, check-in, live server state) depends on the current time.
 export const dynamic = 'force-dynamic';
@@ -77,27 +75,20 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     lobby: {
       label: 'Lobby',
       content: (
-        <>
-          <ScrimLobbyPanel
-            key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
-            nightId={night.night.id}
-            match={lobbyMatch}
-            queued={model.queued}
-            pool={pool}
-            names={names}
-            maps={maps}
-            canMake={model.canMake}
-            canManage={isAdmin}
-            currentPlayerId={currentPlayerId}
-            rounds={rounds}
-          />
-          {night.leaderboard.length > 0 && (
-            <section className="mt-8">
-              <SectionLabel className="mb-2">Leaderboard</SectionLabel>
-              <ScrimNightLeaderboard rows={night.leaderboard} condensed />
-            </section>
-          )}
-        </>
+        <ScrimLobbyPanel
+          key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
+          nightId={night.night.id}
+          match={lobbyMatch}
+          queued={model.queued}
+          pool={pool}
+          names={names}
+          maps={maps}
+          canMake={model.canMake}
+          canEnd={model.canEnd}
+          canManage={isAdmin}
+          currentPlayerId={currentPlayerId}
+          rounds={rounds}
+        />
       ),
     },
     roster: {
@@ -117,12 +108,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     },
     matches: {
       label: 'Matches',
-      content: (
-        <>
-          {isAdmin && model.awaitingScore.length > 0 && <ScrimAwaitingScore matches={model.awaitingScore} />}
-          <ScrimNightMatchList matches={night.matches} names={names} currentPlayerId={currentPlayerId} />
-        </>
-      ),
+      content: <ScrimNightMatchList entries={model.runningOrder} names={names} currentPlayerId={currentPlayerId} />,
     },
     leaderboard: { label: 'Leaderboard', content: <ScrimNightLeaderboard rows={night.leaderboard} /> },
     stats: {
@@ -150,13 +136,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* The night's status, the same over every tab. */}
-        <div className="mb-8 flex flex-col gap-3">
+        <div className="mb-8">
           <ScrimNightStatusBar nightId={night.night.id} startsAt={night.night.startsAt} status={model.status} />
-          {model.canEnd && (
-            <div className="flex justify-end">
-              <ScrimEndNightButton nightId={night.night.id} />
-            </div>
-          )}
         </div>
 
         {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
