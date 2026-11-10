@@ -368,7 +368,10 @@ conventions, distinct from the content-page patterns above:
   edits move into one `AdminMenu` beside them. An item whose editor needs the page's width is
   one-click and opens that editor in place of its line; a one-way action expands (`content`) into
   its confirm, which stands in for `ArmedConfirmButton`'s arming step. `SeasonSetupDetails` (an
-  UPCOMING season's start date, map pool, buy-in and **Mark active…**) is the worked example.
+  UPCOMING season's start date, map pool, buy-in and **Mark active…**) is the worked example; it
+  keeps the same menu on a standalone gauntlet season, where only the start date is editable, so the
+  season header reads one way everywhere. While one editor is open the menu's other editors are
+  disabled, so switching can't drop an unsaved draft.
 - **A lone admin control stays inline.** A menu that would hold one item adds a click without
   removing anything, so a single admin link or button on a section stays where it is: a tab's
   **Manage →** link to its admin page (the season Survey and Superlatives tabs), the Gauntlet tab's

@@ -7,7 +7,7 @@ import { hasMapPool } from '@/lib/season-map-pool';
 import { formatBuyIn } from '@/lib/season-buy-in';
 import { AdminMenu, type AdminMenuItem } from './AdminMenu';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
-import { ActivationWarning, useActivateSeason } from './MarkSeasonActiveButton';
+import { ActivationWarning, useActivateSeason } from './useActivateSeason';
 import { SeasonStartDateForm } from './SeasonStartDateForm';
 import { SeasonMapPoolForm } from './SeasonMapPoolForm';
 import { SeasonBuyInForm } from './SeasonBuyInForm';
@@ -66,15 +66,16 @@ export function SeasonSetupDetails({ seasonId, seasonStatus, isAdmin, startDate,
     if (saved) startTransition(() => router.refresh());
   }
 
-  const items: AdminMenuItem[] = [
-    { label: startDate ? 'Edit start date…' : 'Set start date…', onSelect: () => setEditing('startDate') },
-  ];
+  // While one editor is open the others stay shut, so switching can't drop its unsaved draft.
+  const editItem = (label: string, which: Editing): AdminMenuItem => ({
+    label,
+    onSelect: () => setEditing(which),
+    disabled: editing !== null,
+  });
+  const items: AdminMenuItem[] = [editItem(startDate ? 'Edit start date…' : 'Set start date…', 'startDate')];
   if (regular) {
-    items.push({
-      label: hasMapPool(regular.mapPool) ? 'Edit map pool…' : 'Set map pool…',
-      onSelect: () => setEditing('mapPool'),
-    });
-    if (regular.buyInEditable) items.push({ label: 'Edit buy-in…', onSelect: () => setEditing('buyIn') });
+    items.push(editItem(hasMapPool(regular.mapPool) ? 'Edit map pool…' : 'Set map pool…', 'mapPool'));
+    if (regular.buyInEditable) items.push(editItem('Edit buy-in…', 'buyIn'));
     items.push({
       label: 'Mark active…',
       disabled: activation.busy,
@@ -83,16 +84,25 @@ export function SeasonSetupDetails({ seasonId, seasonStatus, isAdmin, startDate,
           <p className="text-[12px] text-[var(--color-text-secondary)]">
             Takes the season live now. There&apos;s no undo.
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              close();
-              activation.activate();
-            }}
-            className={`${ADMIN_PRIMARY_BUTTON_CLS} self-start`}
-          >
-            Confirm Go Live
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                activation.activate();
+              }}
+              className={ADMIN_PRIMARY_BUTTON_CLS}
+            >
+              Confirm Go Live
+            </button>
+            <button
+              type="button"
+              onClick={() => close()}
+              className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       ),
     });

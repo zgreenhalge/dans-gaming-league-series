@@ -3,7 +3,8 @@
  * Component tests for `SeasonSetupDetails`: every viewer sees the same start date / map pool / buy-in
  * lines, and only an admin gets the setup `AdminMenu`, whose items open each line's editor in place
  * (saving PATCHes that field and closes the editor; a failed save keeps it open with the route's
- * error), leave out the buy-in once it's fixed, and expand Mark active… into the go-live confirm.
+ * error; while one is open the others are disabled), leave out the buy-in once it's fixed, and
+ * expand Mark active… into the go-live confirm, with a Cancel.
  * Run: npx vitest run src/components/SeasonSetupDetails.test.tsx
  */
 
@@ -104,5 +105,28 @@ describe('SeasonSetupDetails', () => {
       body: JSON.stringify({ status: 'ACTIVE' }),
     }));
     expect(screen.queryByRole('group')).toBeNull();
+  });
+
+  test("Mark active…'s Cancel closes the confirm without a write", async () => {
+    const fetchMock = stubFetch();
+    renderDetails();
+
+    await openMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Mark active…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("while one editor is open, the menu's other editors are disabled", async () => {
+    renderDetails();
+
+    await openMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Set map pool…' }));
+    await openMenu();
+
+    expect(screen.getByRole('menuitem', { name: 'Edit buy-in…' })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: 'Mark active…' })).toBeEnabled();
   });
 });

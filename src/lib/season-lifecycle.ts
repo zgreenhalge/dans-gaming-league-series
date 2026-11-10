@@ -116,7 +116,7 @@ export async function activateSeasonBestEffort(supabaseAdmin: SupabaseClient, se
     console.error(`auto-activate(season ${seasonId}) after schedule confirm failed:`, err);
     await recordOpsError(
       supabaseAdmin, 'season', seasonId, 'season_activate',
-      `Auto-activate after schedule confirm failed: ${(err as Error).message}. Use "Mark Active" to retry.`,
+      `Auto-activate after schedule confirm failed: ${(err as Error).message}. Use Mark active… in the season page's admin menu to retry.`,
     );
   }
 }

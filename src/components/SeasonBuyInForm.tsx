@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { parseBuyInText } from '@/lib/season-buy-in';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import ErrorText from '@/components/ErrorText';
@@ -38,7 +39,7 @@ export function SeasonBuyInForm({ seasonId, buyInAmount, onDone }: Props) {
         onChange={(e) => setDraft(e.target.value)}
         placeholder="TBD"
         aria-label="Buy-in in dollars (blank for TBD)"
-        className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+        className={FORM_INPUT_CLS}
       />
       <ErrorText error={error} size={12} />
       <div className="flex items-center gap-3">

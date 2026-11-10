@@ -615,7 +615,7 @@ and has one admin-triggered and two automatic transitions, all in `src/lib/seaso
   the season going live. `PATCH /api/seasons/[id]/status` (`{ status: 'ACTIVE' }`) still exists and is
   still admin-only; it's surfaced as **Mark active…** in the season page's setup admin menu
   (`SeasonSetupDetails`) and as the "Mark Active" button in the admin console's season list
-  (`MarkSeasonActiveButton`), both over `useActivateSeason()` (`MarkSeasonActiveButton.tsx`) and
+  (`MarkSeasonActiveButton`), both over `useActivateSeason()` (`src/components/useActivateSeason.tsx`) and
   both only while a season is still `UPCOMING` — the manual fallback for the rare case where the
   auto-trigger's own status write fails.
 - **`ACTIVE` → `ARCHIVED`** (regular seasons) is fully automatic — `checkSeasonCompletion()` runs
