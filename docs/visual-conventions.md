@@ -362,7 +362,9 @@ conventions, distinct from the content-page patterns above:
   `SeasonRosterPanel`'s Join / Leave Season button covers Remove and Add, so an admin's own row has no
   menu and its Add player… picker leaves them out. `ScrimNightRoster` keeps the admin's own row menu,
   since check in / out is there and not among the player's own controls. `ScrimNightRoster` and
-  `SeasonRosterPanel` are the worked examples.
+  `SeasonRosterPanel` are the worked examples; `ScrimPendingMatchActions` puts one on a row of a list
+  of `MatchCard` links, as its own slim row under the card, since a card is a link and can't hold a
+  button.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
