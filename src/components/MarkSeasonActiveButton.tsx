@@ -23,7 +23,6 @@ interface Props {
  * place the failure is visible afterward. */
 export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus }: Props) {
   const router = useRouter();
-  const [armed, setArmed] = useState(false);
   const { busy, error, run } = useAsyncAction();
   const [warning, setWarning] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -36,10 +35,7 @@ export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus
         body: JSON.stringify({ status: 'ACTIVE' }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setArmed(false);
-        throw new Error(body.error ?? 'Failed to activate season.');
-      }
+      if (!res.ok) throw new Error(body.error ?? 'Failed to activate season.');
       if (body.gauntletBuilt === false) {
         setWarning(`Season is live, but its gauntlet bracket wasn't built: ${body.gauntletBuildError}`);
       }
@@ -61,9 +57,6 @@ export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus
 
   return (
     <ArmedConfirmButton
-      armed={armed}
-      onArm={() => setArmed(true)}
-      onCancel={() => setArmed(false)}
       onConfirm={activate}
       busy={busy}
       error={error}
