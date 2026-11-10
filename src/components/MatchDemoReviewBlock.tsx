@@ -15,6 +15,7 @@ import {
   type DemoIngestResult,
 } from '@/lib/demo/ingestResult';
 import { useDemoIngestActions } from './useDemoIngestActions';
+import { routeError } from '@/lib/util';
 import ErrorText from '@/components/ErrorText';
 
 interface ResultResponse {
@@ -30,6 +31,7 @@ interface ResultResponse {
 export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   const router = useRouter();
   const [data, setData] = useState<ResultResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { confirm, dismiss, retry, busy, error } = useDemoIngestActions(matchId, {
     onSuccess: () => {
       setData(null);
@@ -40,10 +42,17 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/matches/${matchId}/demo/result`);
-      if (!res.ok) return;
+      // A 401/403 means this viewer can't see the block at all, so it stays hidden; any other
+      // failure is shown.
+      if (res.status === 401 || res.status === 403) return;
+      if (!res.ok) {
+        setLoadError(await routeError(res, 'Could not load the demo result'));
+        return;
+      }
+      setLoadError(null);
       setData((await res.json()) as ResultResponse);
     } catch {
-      /* transient */
+      setLoadError('Could not load the demo result');
     }
   }, [matchId]);
 
@@ -73,7 +82,23 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
     },
   );
 
-  if (!data) return null;
+  if (!data) {
+    // The result read failed before anything loaded — say so rather than hiding a staged result
+    // behind an empty block. Once a result has loaded, a later failed read keeps showing it.
+    if (!loadError) return null;
+    return (
+      <Card>
+        <Header />
+        <ErrorText error={loadError} tone="onDark" size={12} />
+        <button
+          onClick={refresh}
+          className="mt-3 text-xs text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)]"
+        >
+          Try again
+        </button>
+      </Card>
+    );
+  }
   const { status, result, hasDemo, stale } = data;
 
   // In progress, but stuck past the point a genuinely-working parse would still be running — the
