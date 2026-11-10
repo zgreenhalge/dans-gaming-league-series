@@ -339,6 +339,17 @@ conventions, distinct from the content-page patterns above:
   toggle already uses, driven by Tailwind's `group-open:` on the native `open` state, no JS) and a
   `preview` slot for a live status summary that stays visible while collapsed, so a problem inside
   still reads at a glance without expanding.
+- **Admin powers on a player-facing list sit behind an `AdminMenu`** (`src/components/AdminMenu.tsx`),
+  not a mode toggle: a ⋯ button, rendered only for an admin, that opens a menu of the actions on what
+  it sits on — one on each row for that row's actions, one on the section header for the list's own
+  (adding an entry). The list reads the same for an admin as for a player until the menu opens. An
+  item is one-click (`onSelect`, run after the menu closes) or expands in place of the list
+  (`content`, rendered with a `close` callback — `ScrimNightPanel`'s **Add player…** opens
+  `AddPlayerSelect` that way). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
+  focuses the first item, arrow keys move between items, and Escape, a press outside or tabbing away
+  closes it, with Escape and a pick returning focus to the trigger. The popup anchors to the trigger's
+  right edge and is capped to the viewport width, so it fits at phone width. An action any player may
+  take (a scrim night's End night) stays out of it. `ScrimNightPanel` is the worked example.
 - **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, and a secondary
   action (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`. Both live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
