@@ -45,7 +45,7 @@ describe('ArmedConfirmButton (uncontrolled)', () => {
 
   test('disarms once onConfirm rejects, keeping the error beside the trigger', async () => {
     const d = deferred();
-    // The rejection still propagates out of the click handler; catch it so the test stays clean.
+    // The button doesn't swallow the rejection: it still propagates out of the click handler.
     const onUnhandled = vi.fn();
     process.on('unhandledRejection', onUnhandled);
     const { rerender } = render(<ArmedConfirmButton onConfirm={() => d.promise} busy={false} {...LABELS} />);
@@ -60,6 +60,7 @@ describe('ArmedConfirmButton (uncontrolled)', () => {
     expect(screen.getByText('Failed to delete.')).toBeInTheDocument();
     await new Promise((r) => setTimeout(r, 0));
     process.off('unhandledRejection', onUnhandled);
+    expect(onUnhandled).toHaveBeenCalledTimes(1);
   });
 
   test('a synchronous onConfirm disarms straight away', async () => {
