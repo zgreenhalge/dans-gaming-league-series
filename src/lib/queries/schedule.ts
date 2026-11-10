@@ -251,11 +251,11 @@ export type UpcomingGames = UpcomingGamesOf<MatchWithRoster>;
  *  already has a time (regardless of which week it falls in), plus the unplayed matches in the
  *  current/next week (`findCurrentWeek()`) that still don't — a gauntlet season has no weekly
  *  structure to anchor that second bucket on, so it uses `getUpcomingGauntletGames()` (`gauntlet.ts`)
- *  instead. */
-export function getUpcomingGames(schedule: WeekWithMatches[], startDate: string | null): UpcomingGames {
+ *  instead. `now` (epoch ms) is the current time by default. */
+export function getUpcomingGames(schedule: WeekWithMatches[], startDate: string | null, now: number = Date.now()): UpcomingGames {
   const scheduled = upcomingScheduledMatches(schedule.flatMap((w) => w.matches));
 
-  const currentWeek = findCurrentWeek(schedule, startDate);
+  const currentWeek = findCurrentWeek(schedule, startDate, now);
   const unscheduled = currentWeek ? upcomingUnscheduledMatches(currentWeek.matches) : [];
 
   return { scheduled, unscheduled };

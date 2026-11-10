@@ -35,7 +35,7 @@ export default async function ScrimsPage() {
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Scrims' }]} />
-      {refreshAt && <RefreshAt iso={refreshAt} />}
+      {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-16">
         <h1 className="mt-8 mb-6 font-display text-[28px] font-semibold leading-tight">Scrims</h1>
         <div className="flex flex-col gap-6">

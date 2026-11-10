@@ -314,7 +314,7 @@ user's browser — React will either warn or silently show the wrong value until
 A server-rendered check against the current time (check-in is open, the veto window has opened, this
 is the current week) is decided once, when the page renders. Nothing re-renders it when the instant
 passes, so a viewer with the page open sees the old answer until they reload. A page with such a
-check renders `<RefreshAt iso={…} />` (`src/components/RefreshAt.tsx`), which calls
+check renders `<RefreshAt iso={…} serverNow={…} />` (`src/components/RefreshAt.tsx`), which calls
 `router.refresh()` once that instant arrives.
 
 - **Compute the instant from the helpers the check uses.** Each check has a helper that returns where
@@ -326,11 +326,16 @@ check renders `<RefreshAt iso={…} />` (`src/components/RefreshAt.tsx`), which 
   against to `nextRefreshInstant()` (`src/lib/util.ts`): it returns the earliest one still ahead, or
   `null` when there is none, and the page renders `RefreshAt` only when it isn't `null`. After the
   refresh the page renders the following boundary. Past instants are dropped, so it never fires
-  straight away, and a refresh that renders the same instant doesn't re-arm the timer.
+  straight away.
+- **Pass the same `now` the checks used as `serverNow`.** `RefreshAt` waits `iso − serverNow`, never
+  reading the viewer's clock, so a device clock that runs fast can't refresh before the server is past
+  the boundary. Read the clock once per render and hand that one `now` to the checks, to the query
+  helpers that take it (`getScrimNight()`, `getHomeGames()`) and to `RefreshAt`, so they can't
+  disagree about which side of a boundary the page is on.
 - **A boundary more than about 24.8 days out never fires** (`setTimeout`'s limit). Nobody keeps a tab
   open that long, and the page renders a nearer one when it next loads.
-- **It is hydration-safe.** The instant is computed on the server and passed as a prop; the client
-  reads the clock only inside the effect.
+- **It is hydration-safe.** The instant and `serverNow` are computed on the server and passed as
+  props, and the timer starts in an effect.
 
 `RefreshAt` is for the clock only. A page that changes when the database does (a match is scored, a
 server starts) needs Realtime or its own polling instead — `RefreshOnServerState` on the scrim night

@@ -99,7 +99,7 @@ export default async function Home() {
 
   const [myStats, games, form, rankChanges, feedbackViews] = await Promise.all([
     currentPlayerId != null ? getMyStats(currentPlayerId, h2h) : null,
-    getHomeGames(home),
+    getHomeGames(home, now.getTime()),
     standings ? getSeasonForm(standings.season.id) : new Map<number, boolean[]>(),
     standings?.live ? getSeasonSchedule(standings.season.id).then(rankChangesSinceLastWeek) : undefined,
     Promise.all(
@@ -120,7 +120,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen">
       <HomeTopbar />
-      {refreshAt && <RefreshAt iso={refreshAt} />}
+      {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
       <main className="max-w-[1080px] mx-auto px-6 pt-6 pb-16">
         {feedbackBanners.map((b) => (
           <FeedbackBanner

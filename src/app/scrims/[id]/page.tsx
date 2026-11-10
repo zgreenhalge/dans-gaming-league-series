@@ -164,7 +164,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           </div>
         )}
 
-        {refreshAt && <RefreshAt iso={refreshAt} />}
+        {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
 
         {/* The lobby match's game ending frees the next match, so the page follows its server state
             whichever tab is showing. */}

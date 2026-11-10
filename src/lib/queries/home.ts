@@ -32,10 +32,11 @@ export interface HomeGames {
   boundaries: number[];
 }
 
-/** `HomeGames` for an active regular season. */
-export function buildRegularHomeGames(season: Pick<Season, 'id' | 'start_date'>, schedule: WeekWithMatches[]): HomeGames {
-  const { scheduled, unscheduled } = getUpcomingGames(schedule, season.start_date);
-  const week = findCurrentWeek(schedule, season.start_date);
+/** `HomeGames` for an active regular season, with its current week as of `now` (epoch ms, the
+ *  current time by default). */
+export function buildRegularHomeGames(season: Pick<Season, 'id' | 'start_date'>, schedule: WeekWithMatches[], now: number = Date.now()): HomeGames {
+  const { scheduled, unscheduled } = getUpcomingGames(schedule, season.start_date, now);
+  const week = findCurrentWeek(schedule, season.start_date, now);
   return {
     scheduled,
     unscheduled,
@@ -59,10 +60,11 @@ export function buildGauntletHomeGames(hubSeasonId: number, rounds: GauntletRoun
   };
 }
 
-/** The home page's games for already-resolved seasons: the active regular season's, else the active
- *  gauntlet's; `null` when neither is active. */
-export async function getHomeGames(home: HomeSeasons): Promise<HomeGames | null> {
-  if (home.regular) return buildRegularHomeGames(home.regular, await getSeasonSchedule(home.regular.id));
+/** The home page's games for already-resolved seasons as of `now` (epoch ms, the current time by
+ *  default): the active regular season's, else the active gauntlet's; `null` when neither is active.
+ *  The page passes the `now` it computes its refresh from, so both read the same instant. */
+export async function getHomeGames(home: HomeSeasons, now: number = Date.now()): Promise<HomeGames | null> {
+  if (home.regular) return buildRegularHomeGames(home.regular, await getSeasonSchedule(home.regular.id), now);
   if (!home.gauntlet) return null;
   return buildGauntletHomeGames(home.gauntlet.hubId, await getGauntletRounds(home.gauntlet.season.id));
 }
