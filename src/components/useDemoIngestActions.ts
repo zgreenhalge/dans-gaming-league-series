@@ -41,6 +41,16 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
     [onSuccess],
   );
 
+  /** Clear the staged artifact and record the job's disposition — an error message, or null. */
+  const clearResult = useCallback(
+    async (disposition: 'confirmed' | 'dismissed'): Promise<string | null> => {
+      const res = await fetch(`/api/matches/${matchId}/demo/result?disposition=${disposition}`, { method: 'DELETE' });
+      if (res.ok) return null;
+      return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not clear the parsed result';
+    },
+    [matchId],
+  );
+
   /** Write the staged score, then clear the staged artifact. `payload` avoids a refetch when the
    *  caller already has it (the match page does); otherwise the staged result is fetched first. */
   const confirm = useCallback(
@@ -65,19 +75,18 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
           body: JSON.stringify({ ...p, warnings: w ?? [] }),
         });
         if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not save the score';
-        await fetch(`/api/matches/${matchId}/demo/result?disposition=confirmed`, { method: 'DELETE' }).catch(() => {});
-        return null;
+        const cleared = await clearResult('confirmed');
+        return cleared && `Score saved, but clearing the parsed result failed: ${cleared}`;
       }),
-    [matchId, run],
+    [matchId, run, clearResult],
   );
 
   const dismiss = useCallback(
     () =>
       run(async () => {
-        await fetch(`/api/matches/${matchId}/demo/result?disposition=dismissed`, { method: 'DELETE' }).catch(() => {});
-        return null;
+        return clearResult('dismissed');
       }),
-    [matchId, run],
+    [run, clearResult],
   );
 
   /** Re-dispatch the demo-ingest Action (parse again from the demo already in R2). */

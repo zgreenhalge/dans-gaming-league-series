@@ -24,17 +24,16 @@ export async function POST() {
   }
 
   // Put it back whether the dispatch succeeded or not — a disabled workflow stays disabled after a
-  // one-off manual run. A thrown dispatch (network failure) still reaches the restore below.
-  const dispatch = await dispatchWorkflow(WORKFLOW_FILE, { dry_run: 'false' }).catch((err: unknown) => ({
-    ok: false,
-    error: err instanceof Error ? err.message : String(err),
-  }));
+  // one-off manual run.
+  const dispatch = await dispatchWorkflow(WORKFLOW_FILE, { dry_run: 'false' });
   if (wasDisabled) {
     const restored = await setWorkflowEnabled(WORKFLOW_FILE, false);
     if (!restored.ok) {
-      const outcome = dispatch.ok ? 'The run was dispatched' : `The dispatch failed (${dispatch.error})`;
+      const outcome = dispatch.ok
+        ? 'The run was dispatched (don\'t run it again)'
+        : `The dispatch failed (${dispatch.error})`;
       return NextResponse.json(
-        { error: `${outcome}, but re-disabling the workflow failed: ${restored.error}` },
+        { error: `${outcome}, but re-disabling the workflow failed — disable it by hand: ${restored.error}` },
         { status: 502 },
       );
     }
