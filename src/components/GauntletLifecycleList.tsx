@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
+import { useAsyncAction } from './useAsyncAction';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 import ErrorText from '@/components/ErrorText';
 
@@ -20,34 +21,23 @@ type SeedBands = { byes: string[]; playing: string[]; relegated: string[] };
 
 function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
   const router = useRouter();
-  const [resetArmed, setResetArmed] = useState(false);
   const [forceArmed, setForceArmed] = useState(false);
   const [forceConfirmText, setForceConfirmText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAsyncAction();
   const [seededResult, setSeededResult] = useState<SeedBands | null>(null);
 
-  async function seed() {
-    setBusy(true);
-    setError(null);
-    try {
+  function seed() {
+    return run(async () => {
       const res = await fetch(`/api/seasons/${season.regularSeasonId}/gauntlet/seed`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error ?? 'Failed to seed gauntlet.');
-        return;
-      }
+      if (!res.ok) throw new Error(body.error ?? 'Failed to seed gauntlet.');
       setSeededResult(body.seed_bands as SeedBands);
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
-  async function reset(force: boolean) {
-    setBusy(true);
-    setError(null);
-    try {
+  function reset(force: boolean) {
+    return run(async () => {
       const res = await fetch(`/api/seasons/${season.regularSeasonId}/gauntlet`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -55,15 +45,11 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to reset gauntlet.');
-        setResetArmed(false);
         setForceArmed(false);
-        return;
+        throw new Error(body.error ?? 'Failed to reset gauntlet.');
       }
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -113,9 +99,6 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
           ) : (
             // `error` is shown once already, next to the season name above — not passed here too.
             <ArmedConfirmButton
-              armed={resetArmed}
-              onArm={() => setResetArmed(true)}
-              onCancel={() => setResetArmed(false)}
               onConfirm={() => reset(false)}
               busy={busy}
               triggerLabel="Reset"
