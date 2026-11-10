@@ -41,11 +41,9 @@ const BASE: SeasonFormatSettings = {
   seed: 1,
 };
 
-// Plans are deterministic and only read by the assertions, so tests share one build per input —
-// keyed by the full settings, so spelling out a default still hits the cache. Each plan takes a few
-// hundred milliseconds of search, so a test builds as few as its assertions need: cases that each
-// need their own plan are separate tests. The reproducibility tests call buildFormatPlan() directly,
-// so they compare two separate builds.
+// Plans are deterministic and only read by the assertions, so tests share one build per input,
+// keyed by the full settings. A plan costs a few hundred milliseconds of search, so a case that
+// needs its own plan gets its own test rather than sharing one test's time budget.
 const planCache = new Map<string, FormatPlan>();
 
 function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
