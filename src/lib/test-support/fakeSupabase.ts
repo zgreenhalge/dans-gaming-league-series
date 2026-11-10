@@ -13,6 +13,10 @@
  * comparators real call sites use, and none of `.insert()`/`.delete()`/`.update()`/`.upsert()` emulate
  * FK or unique constraints.
  *
+ * A `.range()` read must also `.order()`, or it rejects: paging without a stable order can repeat
+ * or skip rows on a real database (see `fetchAllPages()`). `setFakeRowCap()` (below) simulates
+ * PostgREST's response cap for the test suite.
+ *
  * `.insert()`/`.upsert()` assign an auto-incrementing `id` (current max in the table + 1) to any row
  * that doesn't already specify one, mirroring a real serial primary key — this only matters when a
  * caller chains `.select().single()`/`.maybeSingle()` after the write to read the generated id back,
@@ -261,6 +265,20 @@ export function nextId(rows: Row[]): number {
   return max + 1;
 }
 
+let unboundedRowCap: number | null = null;
+
+/**
+ * Caps every unbounded select (see `FakeQueryBuilder.isUnbounded()`) at `n` rows, the way
+ * PostgREST's `max-rows` cuts off a response without an error; `null` turns the cap off. A read
+ * that pages through `fetchAllPages()` still sees every row, as long as the page size is no larger
+ * than `n`. `test-support/setupPaging.ts` sets both for every test, so an unpaged unfiltered read
+ * loses rows and its test fails. Reads bounded by an `.eq()`/`.in()` filter are not capped: a small
+ * fixture can't tell a legitimately small result from a truncated one there.
+ */
+export function setFakeRowCap(n: number | null): void {
+  unboundedRowCap = n;
+}
+
 /** Shape of the one error this fake ever surfaces — an `.insert()` primary-key collision. */
 export interface FakeError {
   code: string;
@@ -428,6 +446,13 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
       .then(onfulfilled, onrejected);
   }
 
+  /** A read with nothing bounding it to a small set: no `.eq()`/`.in()` filter (a parent id, an id
+   *  list), no `.limit()`, not `.single()`/`.maybeSingle()`. Only these reads take the row cap. */
+  private isUnbounded(): boolean {
+    if (this.limitN != null || this.singleMode) return false;
+    return !this.filters.some((f) => f.op === 'eq' || f.op === 'in');
+  }
+
   private matchesRow(row: Row): boolean {
     if (!this.filters.every((f) => matchFilter(row, f, this.table, this.db))) return false;
     if (this.orClauses) return this.orClauses.some((c) => matchOrClause(row, c));
@@ -490,6 +515,12 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
       return { data: null, error: null };
     }
 
+    if (this.rangeSpec && this.orderSpecs.length === 0) {
+      throw new Error(
+        `fakeSupabase: "${this.table}" read pages with .range() but has no .order() — page over a unique key (see fetchAllPages())`,
+      );
+    }
+
     const table = this.db[this.table] ?? [];
     let rows = table.filter((row) => this.matchesRow(row));
 
@@ -500,6 +531,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     } else if (this.limitN != null) {
       rows = rows.slice(0, this.limitN);
     }
+    if (unboundedRowCap != null && this.isUnbounded()) rows = rows.slice(0, unboundedRowCap);
 
     const projected = rows.map((r) => projectRow(this.table, r, this.selectStr, this.db, this.referencedOrders)) as T[];
 
