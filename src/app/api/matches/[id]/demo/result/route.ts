@@ -133,10 +133,13 @@ export async function DELETE(
       ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]
       : [deleteR2Object(demoResultKey(matchId))];
   await Promise.all(cleanup);
-  await recordJobStatus(getAdminClient(), JOB_TYPE, matchJobKey(matchId), {
+  const { error: recordErr } = await recordJobStatus(getAdminClient(), JOB_TYPE, matchJobKey(matchId), {
     status: disposition,
     stage: disposition,
   });
+  if (recordErr) {
+    return NextResponse.json({ error: `Could not record the job: ${recordErr}` }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, status: disposition });
 }

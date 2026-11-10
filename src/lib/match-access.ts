@@ -1,11 +1,13 @@
 // Shared session gate for match-scoped mutations: the caller must be a site admin or a player in
 // the match, checked against the next-auth session and `players.is_admin`. Used by the match-scoped
 // mutation routes (score, veto, schedule, recording, demo, replay dispatch, server provision/status/
-// teardown).
+// teardown). A failed read throws (the route answers 500) rather than reading as "not an admin, not
+// in the match" and denying with a misleading 403.
 
 import { requireSession } from './session';
 import { getAdminClient } from './supabase-admin';
 import { isScrimMatch } from './scrim-matches';
+import { isPlayerAdmin } from './queries';
 import type { AccessResult } from './access-control';
 
 export type MatchAccess = AccessResult<{ playerId: number; isAdmin: boolean }>;
@@ -15,13 +17,11 @@ export async function requireMatchAccess(matchId: number): Promise<MatchAccess> 
   const playerId = session?.user?.playerId;
   if (!playerId) return { ok: false, status: 401, error: 'Unauthorized' };
 
-  const supabaseAdmin = getAdminClient();
-  const [{ data: playerRow }, { data: matchStats }] = await Promise.all([
-    supabaseAdmin.from('players').select('is_admin').eq('id', playerId).maybeSingle(),
-    supabaseAdmin.from('player_match_stats').select('player_id').eq('match_id', matchId),
+  const [isAdmin, { data: matchStats }] = await Promise.all([
+    isPlayerAdmin(playerId),
+    getAdminClient().from('player_match_stats').select('player_id').eq('match_id', matchId).throwOnError(),
   ]);
 
-  const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const isInMatch = (matchStats ?? []).some((s) => s.player_id === playerId);
   if (!isAdmin && !isInMatch) return { ok: false, status: 403, error: 'Forbidden' };
 
