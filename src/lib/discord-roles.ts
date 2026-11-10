@@ -15,7 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { getActiveRegularSeason, getSeasonParticipants } from './queries';
+import { getActiveRegularSeason, getPlayersById, getSeasonParticipants } from './queries';
 import { sleep } from './dathost';
 
 const OPERATION = 'discord_role_sync';
@@ -356,14 +356,8 @@ export interface NameRoleBackfillResult {
  *  players with `discord_id` set and `discord_name_role_id` still null are selected, and
  *  `createNameRole()` itself is idempotent. */
 export async function backfillNameRoles(supabaseAdmin: SupabaseClient): Promise<NameRoleBackfillResult> {
-  const { data, error } = await supabaseAdmin
-    .from('players')
-    .select('id, name, discord_id')
-    .not('discord_id', 'is', null)
-    .is('discord_name_role_id', null);
-  if (error) throw error;
-
-  const players = (data ?? []) as { id: number; name: string; discord_id: string }[];
+  const players = [...(await getPlayersById(supabaseAdmin)).values()]
+    .filter((p): p is typeof p & { discord_id: string } => p.discord_id != null && p.discord_name_role_id == null);
 
   // The bot's top-role position is guild-wide, not per-player -- resolve it once for the whole batch
   // rather than have every createNameRole() call redo the same three-request lookup.

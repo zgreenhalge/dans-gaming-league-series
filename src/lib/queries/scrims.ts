@@ -28,11 +28,13 @@ export interface ScrimSignupEntry {
   checked_in_at: string | null;
 }
 
-/** Every scrim night, in no particular order. */
+/** Every scrim night, in id order. */
 export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): Promise<ScrimNight[]> => {
-  const { data, error } = await getAdminClient().from('scrim_nights').select('id, starts_at, ended_at');
-  if (error) throw error;
-  return ((data ?? []) as { id: number; starts_at: string; ended_at: string | null }[]).map((r) => ({
+  type Row = { id: number; starts_at: string; ended_at: string | null };
+  const rows = await fetchAllPages<Row>((from, to) =>
+    asPage(getAdminClient().from('scrim_nights').select('id, starts_at, ended_at').order('id').range(from, to)),
+  );
+  return rows.map((r) => ({
     id: r.id,
     startsAt: new Date(r.starts_at).toISOString(),
     endedAt: r.ended_at ? new Date(r.ended_at).toISOString() : null,
@@ -264,7 +266,7 @@ export interface PastScrimNight extends ScrimNight {
 const getScrimNightPlayCounts = persistentQuery('getScrimNightPlayCounts', async (): Promise<{ nightId: number; matches: number; players: number }[]> => {
   type MatchRow = { scrim_night_id: number; final_score: string | null; player_match_stats: { player_id: number }[] | null };
   const data = await fetchAllPages<MatchRow>((from, to) =>
-    asPage(getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null).range(from, to)),
+    asPage(getAdminClient().from('matches').select('scrim_night_id, final_score, player_match_stats(player_id)').not('scrim_night_id', 'is', null).order('id').range(from, to)),
   );
   const byNight = new Map<number, { matches: number; players: Set<number> }>();
   for (const m of data) {

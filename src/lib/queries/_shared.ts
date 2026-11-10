@@ -6,44 +6,9 @@ import { getAdminClient } from '../supabase-admin';
 import { isPlayedScore } from '../util';
 import type { Faction } from '../types';
 import { persistentQuery } from './_persistentCache';
+import { asPage, fetchAllPages } from './_paging';
 
-const SUPABASE_PAGE_SIZE = 1000;
-
-/**
- * Casts a Supabase query result to the `{ data: T[] | null; error }` shape `fetchAllPages`/
- * `batchedIn` expect. The generated `Database` type checks a query's columns are real, but its
- * per-column nullability is the schema's, which is sometimes looser than a caller's own narrower
- * type trusts by app-level invariant (e.g. a nullable FK column ingestion always populates) — this
- * is that narrowing, applied once at each call site instead of restating the target shape inline.
- */
-export function asPage<T>(
-  query: PromiseLike<unknown>,
-): PromiseLike<{ data: T[] | null; error: { message: string } | null }> {
-  return query as unknown as PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
-}
-
-/**
- * Runs `buildQuery` across successive `.range()` windows until a page comes back short,
- * working around PostgREST's default 1000-row response cap — a plain `.select()` (or a
- * `.limit()` above 1000) silently truncates once a table grows past that, biasing any
- * aggregate computed from the result. Pass a query builder rather than a built query so this
- * can attach `.range()` per page.
- */
-export async function fetchAllPages<T>(
-  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const results: T[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await buildQuery(from, from + SUPABASE_PAGE_SIZE - 1);
-    if (error) throw error;
-    const page = data ?? [];
-    results.push(...page);
-    if (page.length < SUPABASE_PAGE_SIZE) break;
-    from += SUPABASE_PAGE_SIZE;
-  }
-  return results;
-}
+export { asPage, fetchAllPages };
 
 /** `.in()` batch size — keeps the request URL well under PostgREST/proxy length limits when a
  *  caller's id list itself runs into the thousands. */
@@ -66,7 +31,8 @@ export function chunk<T>(arr: T[], size: number): T[][] {
  * Runs a `.in(column, ids)` select in `SUPABASE_IN_BATCH`-sized id chunks, each chunk itself
  * paginated via `fetchAllPages()` — covers both truncation risks a large `.in()` list carries:
  * the id list overflowing a safe URL length, and any single chunk's result overflowing
- * PostgREST's row cap.
+ * PostgREST's row cap. Each chunk pages over `id`, so `table` must have an `id` column; rows come
+ * back in `id` order within each chunk, chunks in `ids` order.
  */
 export async function batchedIn<T>(
   table: string,
@@ -82,7 +48,7 @@ export async function batchedIn<T>(
       // can't be narrowed to the generated client's per-table literal union — `asPage<T>` below
       // covers the rest of the result shape.
       fetchAllPages<T>((from, to) =>
-        asPage<T>(getAdminClient().from(table as never).select(select).in(column, idBatch).range(from, to)),
+        asPage<T>(getAdminClient().from(table as never).select(select).in(column, idBatch).order('id').range(from, to)),
       ),
     ),
   );
@@ -188,7 +154,7 @@ export type PmsRow = { id: number; player_id: number; match_id: number };
  *  one query the way passing `rows` explicitly can. */
 const fetchAllPmsRows = cache((): Promise<PmsRow[]> =>
   fetchAllPages<PmsRow>((from, to) =>
-    asPage(getAdminClient().from('player_match_stats').select('id, player_id, match_id').range(from, to)),
+    asPage(getAdminClient().from('player_match_stats').select('id, player_id, match_id').order('id').range(from, to)),
   ),
 );
 
@@ -208,7 +174,7 @@ export const fetchPmsLookup = cache((
     ? Promise.resolve(rows)
     : matchId != null
       ? fetchAllPages<PmsRow>((from, to) =>
-          asPage(getAdminClient().from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).range(from, to)),
+          asPage(getAdminClient().from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).order('id').range(from, to)),
         )
       : fetchAllPmsRows();
   return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
@@ -225,7 +191,7 @@ export const fetchPmsFactionLookup = cache((matchId?: number): Promise<Map<numbe
   fetchAllPages<PmsFactionRow>((from, to) => {
     let q = getAdminClient().from('player_match_stats').select('id, player_id, match_id, faction');
     if (matchId != null) q = q.eq('match_id', matchId);
-    return asPage(q.range(from, to));
+    return asPage(q.order('id').range(from, to));
   }).then((rows) => new Map(rows.map((r) => [r.id, r]))),
 );
 
@@ -278,7 +244,7 @@ export const getRoundSides = cache(async (matchId?: number): Promise<Map<string,
     (from, to) => {
       let q = getAdminClient().from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
       if (matchId != null) q = q.eq('match_id', matchId);
-      return q.range(from, to);
+      return q.order('id').range(from, to);
     },
   );
   return new Map(rows.map((r) => [

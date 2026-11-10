@@ -1,4 +1,3 @@
-import { getAdminClient } from '../supabase-admin';
 import {
   extractSeasonNumber,
   buildRegularToGauntletMap,
@@ -9,7 +8,7 @@ import { mapSlug } from '../maps';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
-import { getWeekLookup } from './_shared';
+import { batchedIn, getWeekLookup } from './_shared';
 import { effectivePickedMap } from '../veto';
 
 // The rating scorers and the rankings built on them live in `../h2h-ratings.ts` (pure and
@@ -106,12 +105,6 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const seasonNumberById = new Map(allSeasons.map((s) => [s.id, extractSeasonNumber(s.name)]));
   const seasonIsGauntletById = new Map(allSeasons.map((s) => [s.id, s.is_gauntlet]));
 
-  const { data: matches, error: mErr } = await getAdminClient()
-    .from('matches')
-    .select('id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, skins_starting_side')
-    .in('week_id', [...weekLookup.keys()]);
-  if (mErr) throw mErr;
-
   type MatchRow = {
     id: number;
     week_id: number;
@@ -122,19 +115,19 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     skins_pick: string | null;
     skins_starting_side: 'CT' | 'T' | null;
   };
-  const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
+  const matches = await batchedIn<MatchRow>(
+    'matches',
+    'week_id',
+    [...weekLookup.keys()],
+    'id, week_id, match_number, final_score, pre_match_win_prob, shirts_pick, skins_pick, skins_starting_side',
+  );
+  const playedMatches = matches.filter((m) => isPlayedScore(m.final_score));
   if (playedMatches.length === 0) return { duos: [], rivals: [], players: [] };
 
   const mapFilter = selection.map ? mapSlug(selection.map) : null;
   const filteredMatches = mapFilter
     ? playedMatches.filter((m) => mapSlug(effectivePickedMap(m) ?? '') === mapFilter)
     : playedMatches;
-
-  const { data: stats, error: sErr } = await getAdminClient()
-    .from('player_match_stats')
-    .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played')
-    .in('match_id', filteredMatches.map((m) => m.id));
-  if (sErr) throw sErr;
 
   type StatRow = {
     match_id: number;
@@ -148,8 +141,14 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     rounds_won: number;
     rounds_played: number;
   };
+  const stats = await batchedIn<StatRow>(
+    'player_match_stats',
+    'match_id',
+    filteredMatches.map((m) => m.id),
+    'match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played',
+  );
   const statsByMatch = new Map<number, StatRow[]>();
-  for (const s of (stats ?? []) as StatRow[]) {
+  for (const s of stats) {
     const list = statsByMatch.get(s.match_id) ?? [];
     list.push(s);
     statsByMatch.set(s.match_id, list);

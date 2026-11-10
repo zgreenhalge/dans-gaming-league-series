@@ -72,6 +72,7 @@ const getSeasonBaseData = persistentQuery('getSeasonBaseData', async (): Promise
         getAdminClient()
           .from('player_match_stats')
           .select('player_id, assists, rounds_won, match_id, kills, deaths, is_win')
+          .order('id')
           .range(from, to),
       ),
     ),
@@ -126,9 +127,9 @@ const getSeasonBaseData = persistentQuery('getSeasonBaseData', async (): Promise
  *  `getAllLeaderboards()`, `getScheduleLabData()` and any indirect caller of them (e.g.
  *  `getAllSeasonMedalists()`) share one read instead of each re-scanning the view. */
 export const getRawSeasonLeaderboardRows = persistentQuery('getRawSeasonLeaderboardRows', async (): Promise<LeaderboardRow[]> => {
-  const { data, error } = await getAdminClient().from('player_season_leaderboard').select('*');
-  if (error) throw error;
-  return (data ?? []) as LeaderboardRow[];
+  return fetchAllPages<LeaderboardRow>((from, to) =>
+    asPage(getAdminClient().from('player_season_leaderboard').select('*').order('season_id').order('player_id').range(from, to)),
+  );
 });
 
 function zeroStatRows(
@@ -326,16 +327,15 @@ export async function getShortCountHistory(playerIds: number[]): Promise<Map<num
  * are re-derived from totals so the math stays correct.
  */
 export const getCareerLeaderboard = persistentQuery('getCareerLeaderboard', async (): Promise<LeaderboardRowWithId[]> => {
-  const [rows, { perPlayerStats: perPlayer, rosterBySeason }, playersById, { data: seasonRows, error: sErr }] = await Promise.all([
+  const [rows, { perPlayerStats: perPlayer, rosterBySeason }, playersById, seasons] = await Promise.all([
     getRawSeasonLeaderboardRows(),
     getSeasonBaseData(),
     getPlayersById(),
-    getAdminClient().from('seasons').select('id, status'),
+    getSeasons(),
   ]);
-  if (sErr) throw sErr;
 
   const activeSeasonIds = new Set(
-    ((seasonRows ?? []) as { id: number; status: string }[])
+    seasons
       .filter((s) => s.status === 'ACTIVE' || s.status === 'UPCOMING')
       .map((s) => s.id),
   );
