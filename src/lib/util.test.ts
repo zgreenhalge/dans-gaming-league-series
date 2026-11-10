@@ -25,6 +25,7 @@ import {
   factionClass,
   formatCountdownClock,
   formatCountdownRelative,
+  nextRefreshInstant,
   deriveRates,
   deriveRwr,
   deriveAdr,
@@ -520,6 +521,14 @@ test('formatCountdownRelative: future reads "in …", past reads "… ago"', () 
   assert.equal(formatCountdownRelative('2026-01-01T00:00:05Z', now), 'in 5s');
   assert.equal(formatCountdownRelative('2026-01-02T01:02:03Z', now), 'in 1d 1h 2m 3s');
   assert.equal(formatCountdownRelative('2025-12-31T23:58:00Z', now), '2m 0s ago');
+});
+
+test('nextRefreshInstant: the earliest instant strictly after now, skipping past ones and NaN', () => {
+  const now = Date.parse('2026-01-01T00:00:00Z');
+  assert.equal(nextRefreshInstant([now + 5_000, now + 1_000, now + 9_000], now), '2026-01-01T00:00:01.000Z');
+  assert.equal(nextRefreshInstant([now - 1_000, now, NaN, now + 2_000], now), '2026-01-01T00:00:02.000Z');
+  assert.equal(nextRefreshInstant([now - 1_000, now], now), null);
+  assert.equal(nextRefreshInstant([], now), null);
 });
 
 test('ordinal: st / nd / rd / th, with 11-13 always th', () => {

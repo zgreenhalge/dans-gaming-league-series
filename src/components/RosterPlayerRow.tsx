@@ -5,8 +5,8 @@ import { PlayerName } from './PlayerName';
 import { SELECT_CLS } from './formStyles';
 
 // The pieces a signup list is built from — a season roster (`SeasonRosterPanel`) and a scrim night's
-// signups (`ScrimNightPanel`): a player row with room for row actions, the season roster's Remove
-// button, and the admin's "add a player" select (in `ScrimNightPanel`, inside an `AdminMenu`).
+// signups (`ScrimNightPanel`): a player row with room for row actions, and the admin's "add a player"
+// select (inside each panel's header `AdminMenu`).
 
 /** One player in a signup list: avatar + name linking to their profile, then `children` (row actions)
  *  on the right. */
@@ -33,21 +33,6 @@ export function RosterPlayerRow({
       </PlayerLink>
       {children}
     </div>
-  );
-}
-
-/** A row's admin "Remove" action: `pending` shows this row's write in flight, `disabled` holds it
- *  while another one is. */
-export function RosterRemoveButton({ onClick, pending, disabled = false }: { onClick: () => void; pending: boolean; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={pending || disabled}
-      className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg,#f87171)] transition-colors disabled:opacity-40"
-    >
-      {pending ? '…' : 'Remove'}
-    </button>
   );
 }
 
