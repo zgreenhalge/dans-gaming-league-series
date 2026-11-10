@@ -77,6 +77,26 @@ describe('AdminMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Three' })).toHaveFocus();
   });
 
+  test('from the trigger, ArrowUp goes to the last item and ArrowDown to the first', async () => {
+    const trigger = setup([{ label: 'One', onSelect: vi.fn() }, { label: 'Two', onSelect: vi.fn() }, { label: 'Three', onSelect: vi.fn() }]);
+    await userEvent.click(trigger);
+    trigger.focus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getByRole('menuitem', { name: 'Three' })).toHaveFocus();
+    trigger.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'One' })).toHaveFocus();
+  });
+
+  test('reopening after an expanded item was dismissed shows the list again', async () => {
+    const trigger = setup([{ label: 'Add…', content: () => <button type="button">Done</button> }]);
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    await userEvent.click(trigger);
+    expect(screen.getByRole('menuitem', { name: 'Add…' })).toBeInTheDocument();
+  });
+
   test('picking a one-click item fires it once, closes the menu and returns focus', async () => {
     const onSelect = vi.fn();
     const trigger = setup([{ label: 'One', onSelect }]);

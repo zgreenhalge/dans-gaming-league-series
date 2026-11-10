@@ -2,8 +2,8 @@
 /**
  * Component tests for `ScrimNightPanel`: the attendance toggle (the lists start open, the toggle folds
  * them away and back, and its label carries the signup count either way), and the admin menus (only an
- * admin has them; a row's menu sends that player's change once; the header's Add player… picker signs
- * a player up).
+ * admin has them; a row's menu sends that player's change once, and every row's actions hold while a
+ * write is in flight; the header's Add player… picker signs a player up).
  *
  * Run:  npx vitest run src/components/ScrimNightPanel.test.tsx
  */
@@ -67,6 +67,21 @@ describe('ScrimNightPanel admin menus', () => {
     await waitFor(() => expect(sendJsonRequest).toHaveBeenCalledTimes(1));
     expect(sendJsonRequest).toHaveBeenCalledWith('POST', '/api/scrims/5/signups', { player_id: 2, commitment: 'definite' });
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  test("every row's actions hold while a signup write is in flight", async () => {
+    let finish!: () => void;
+    sendJsonRequest.mockImplementationOnce(() => new Promise((resolve) => (finish = () => resolve(null))));
+    render(<ScrimNightPanel upcoming={upcoming} currentPlayerId={null} isAdmin allPlayers={players} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin actions for Alice' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Admin actions for Bob' }));
+    for (const item of screen.getAllByRole('menuitem')) expect(item).toBeDisabled();
+
+    finish();
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeEnabled());
+    expect(sendJsonRequest).toHaveBeenCalledTimes(1);
   });
 
   test("the header's Add player… opens the picker and signs the picked player up", async () => {

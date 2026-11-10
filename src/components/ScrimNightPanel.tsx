@@ -63,7 +63,9 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
   // The player whose signup is being changed, so only their controls show as pending.
   const [target, setTarget] = useState<number | null>(null);
   const pending = busy ? target : null;
-  const [addPlayerId, setAddPlayerId] = useState('');
+  const [pickedPlayerId, setPickedPlayerId] = useState('');
+  // The picker keeps its pick while the menu is closed, until that player signs up some other way.
+  const addPlayerId = signups.some((s) => String(s.player_id) === pickedPlayerId) ? '' : pickedPlayerId;
   // The attendance lists fold away to leave the night's controls.
   const [attendanceOpen, setAttendanceOpen] = useState(true);
   const [, startTransition] = useTransition();
@@ -93,15 +95,14 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
     return send(playerId, checkedIn ? 'POST' : 'DELETE', 'check-in');
   }
 
-  /** An admin's actions on one player's signup. */
+  /** An admin's actions on one player's signup, held while any signup write is in flight. */
   function rowItems(s: UpcomingScrimNight['signups'][number], other: ScrimCommitment): AdminMenuItem[] {
-    const disabled = pending === s.player_id;
     return [
       ...(checkInOpen
-        ? [{ label: s.checked_in_at ? 'Check out' : 'Check in', onSelect: () => setCheckIn(s.player_id, !s.checked_in_at), disabled }]
+        ? [{ label: s.checked_in_at ? 'Check out' : 'Check in', onSelect: () => setCheckIn(s.player_id, !s.checked_in_at), disabled: busy }]
         : []),
-      { label: `Make ${COMMITMENT_LABEL[other].toLowerCase()}`, onSelect: () => mutate(s.player_id, other), disabled },
-      { label: 'Remove', onSelect: () => mutate(s.player_id, null), disabled, danger: true },
+      { label: `Make ${COMMITMENT_LABEL[other].toLowerCase()}`, onSelect: () => mutate(s.player_id, other), disabled: busy },
+      { label: 'Remove', onSelect: () => mutate(s.player_id, null), disabled: busy, danger: true },
     ];
   }
 
@@ -115,7 +116,7 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
             players={allPlayers}
             excludeIds={new Set(signups.map((s) => s.player_id))}
             value={addPlayerId}
-            onChange={setAddPlayerId}
+            onChange={setPickedPlayerId}
             placeholder="Sign up a player…"
           />
           {SCRIM_COMMITMENTS.map((c) => (
@@ -124,7 +125,7 @@ export function ScrimNightPanel({ upcoming, currentPlayerId, isAdmin, allPlayers
               type="button"
               onClick={() => {
                 const playerId = Number(addPlayerId);
-                setAddPlayerId('');
+                setPickedPlayerId('');
                 close();
                 mutate(playerId, c);
               }}

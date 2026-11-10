@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useDismissOnOutsidePress } from './useDismissOnOutsidePress';
 
 /** One entry in an `AdminMenu`. A one-click item has `onSelect`, which runs after the menu closes. An
  *  item with `content` expands in place of the item list instead: `content` is rendered with a `close`
@@ -22,8 +23,8 @@ const ITEM_CLS =
  *  Escape or picking an item puts focus back on the button. Arrow keys move between items. */
 export function AdminMenu({ label, items }: { label: string; items: AdminMenuItem[] }) {
   const [open, setOpen] = useState(false);
-  // The item whose `content` is showing in place of the list, by index.
-  const [expanded, setExpanded] = useState<number | null>(null);
+  // The label of the item whose `content` is showing in place of the list. Opening resets it.
+  const [expanded, setExpanded] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -31,22 +32,17 @@ export function AdminMenu({ label, items }: { label: string; items: AdminMenuIte
 
   function close(returnFocus = true) {
     setOpen(false);
-    setExpanded(null);
-    // By id, not a ref: `close` is handed to `content` during render.
+    // By id, not a ref: `close` is passed to `content` during render, which the refs lint rule forbids
+    // for a function that reads a ref.
     if (returnFocus) document.getElementById(triggerId)?.focus();
   }
 
-  // A press anywhere outside the menu closes it, leaving focus where the press put it.
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(e: PointerEvent) {
-      if (rootRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-      setExpanded(null);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
+  function openMenu() {
+    setExpanded(null);
+    setOpen(true);
+  }
+
+  useDismissOnOutsidePress(rootRef, open, setOpen);
 
   // Opening, or expanding an item, moves focus to the first control inside.
   useEffect(() => {
@@ -59,30 +55,31 @@ export function AdminMenu({ label, items }: { label: string; items: AdminMenuIte
       close();
       return;
     }
-    if (expanded != null || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    if (shown || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
     const enabled = Array.from(popupRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []);
     if (enabled.length === 0) return;
     e.preventDefault();
+    // -1 when focus is on the trigger or the popup itself: Down then goes to the first, Up to the last.
     const at = enabled.indexOf(document.activeElement as HTMLElement);
+    const n = enabled.length;
     const next =
-      e.key === 'Home' ? 0
-      : e.key === 'End' ? enabled.length - 1
-      : e.key === 'ArrowDown' ? (at + 1) % enabled.length
-      : (at - 1 + enabled.length) % enabled.length;
+      e.key === 'Home' || (e.key === 'ArrowDown' && at < 0) ? 0
+      : e.key === 'End' || (e.key === 'ArrowUp' && at < 0) ? n - 1
+      : e.key === 'ArrowDown' ? (at + 1) % n
+      : (at - 1 + n) % n;
     enabled[next].focus();
   }
 
-  function pick(index: number) {
-    const item = items[index];
+  function pick(item: AdminMenuItem) {
     if (item.content) {
-      setExpanded(index);
+      setExpanded(item.label);
     } else {
       close();
       item.onSelect?.();
     }
   }
 
-  const shown = expanded != null ? items[expanded] : null;
+  const shown = items.find((item) => item.content && item.label === expanded) ?? null;
 
   return (
     <div
@@ -102,15 +99,18 @@ export function AdminMenu({ label, items }: { label: string; items: AdminMenuIte
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => (open ? close() : openMenu())}
         className="px-2 py-0.5 font-mono text-[14px] leading-none text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border border-transparent hover:border-[var(--color-border-primary)] transition-colors"
       >
         ⋯
       </button>
       {open && (
+        // Focusable (tabIndex -1) so a press on its padding or a disabled item keeps focus, and Escape,
+        // inside the menu.
         <div
           ref={popupRef}
-          className="absolute right-0 top-full mt-1 z-30 min-w-[10rem] max-w-[calc(100vw-2rem)] border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] shadow-lg"
+          tabIndex={-1}
+          className="absolute right-0 top-full mt-1 z-30 focus:outline-none min-w-[10rem] max-w-[calc(100vw-2rem)] border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] shadow-lg"
         >
           {shown?.content ? (
             <div id={menuId} role="group" aria-label={shown.label} className="p-3 w-[18rem] max-w-full">
@@ -118,13 +118,13 @@ export function AdminMenu({ label, items }: { label: string; items: AdminMenuIte
             </div>
           ) : (
             <div id={menuId} role="menu" aria-label={label} className="py-1">
-              {items.map((item, i) => (
+              {items.map((item) => (
                 <button
                   key={item.label}
                   type="button"
                   role="menuitem"
                   disabled={item.disabled}
-                  onClick={() => pick(i)}
+                  onClick={() => pick(item)}
                   className={`${ITEM_CLS} ${item.danger ? 'text-[var(--color-accent-red-fg,#f87171)]' : 'text-[var(--color-text-primary)]'}`}
                 >
                   {item.label}
