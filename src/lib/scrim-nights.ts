@@ -24,7 +24,7 @@ export async function startScrimNight(db: SupabaseClient, startsAt: string, play
   });
   if (error) {
     if (error.message.includes('overlapping-scrim-night')) throw new OverlappingScrimNightError();
-    throw error;
+    throw new Error(error.message);
   }
   return data as number;
 }
@@ -42,7 +42,7 @@ export async function setScrimSignup(db: SupabaseClient, nightId: number, player
  *  is left and it has no matches (`leave_scrim_night()`). Returns whether the night was removed. */
 export async function leaveScrimNight(db: SupabaseClient, nightId: number, playerId: number): Promise<boolean> {
   const { data, error } = await db.rpc('leave_scrim_night', { p_night_id: nightId, p_player_id: playerId });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data as boolean;
 }
 
