@@ -98,8 +98,15 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - **`SectionLabel`** (`src/components/SectionLabel.tsx`) — the small section label: `.tracked` at
   10px in secondary text, naming a section of a page, panel or form. Use it rather than typing the
   classes out. Spacing goes in `className` (`<SectionLabel className="mb-3">`); `as="span"` keeps it
-  inline inside a heading row, link or button. A form field's own label (tied to its input) is not a
-  section label and stays a plain `<label>`/`<span>`
+  inline inside a heading row, link or button. It names a section or a group of controls (a team's
+  two lineup selects), never a single input
+- **`FieldLabel`** (`src/components/FieldLabel.tsx`) — a form field's own label, in the same look as
+  `SectionLabel`: a real `<label htmlFor>` naming one input, select or textarea. Give the control an
+  id from `useId()` and pass it as `htmlFor`, so a click focuses the control and screen readers and
+  `getByLabel` find it by that text. It renders as a block above its control; spacing goes in
+  `className`. Use `FieldLabel` when the text names one control and `SectionLabel` when it heads a
+  section or a group. Labels with a deliberately different look (amber callouts, faction-coloured
+  team labels, mono checkbox captions) stay hand-styled
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
   transparent-fill outlined look via `.ghost-accent`'s text-stroke technique
 - The `.text-[Npx]` overrides bump several common Tailwind arbitrary font sizes ~10% for
