@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Link from 'next/link';
 import { scrimMatchHref } from '@/lib/crumbs';
 import ErrorText from './ErrorText';
@@ -24,6 +24,7 @@ import { toSentenceCase } from '@/lib/maps';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { workshopIdFromInput } from '@/lib/workshop';
 import SectionLabel from './SectionLabel';
+import FieldLabel from './FieldLabel';
 
 interface Props {
   nightId: number;
@@ -54,7 +55,6 @@ interface Props {
 
 const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
 const GO_BTN_CLS = `${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`;
-const FIELD_LABEL_CLS = 'tracked text-[10px] text-[var(--color-text-secondary)]';
 
 const SIDE_LABEL: Record<ScrimSideChoice, string> = {
   skins_t: 'Skins start T',
@@ -201,6 +201,8 @@ function LobbyMatchConfig({
   maps,
 }: Pick<Props, 'pool' | 'names' | 'maps'> & { match: ScrimMatch; editable: boolean }) {
   const { busy, error, act } = useRefreshingAction();
+  const mapFieldId = useId();
+  const sideFieldId = useId();
   const current: Lineup = [...match.shirts, ...match.skins];
   const [draft, setDraft] = useState<Lineup>(current);
   // The picker shows the saved map; only the custom-id field is local, opened by picking "Custom".
@@ -242,8 +244,9 @@ function LobbyMatchConfig({
         <CollapsiblePanel title="Configure" className="mx-4 mb-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <span className={FIELD_LABEL_CLS}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</span>
+              <FieldLabel htmlFor={mapFieldId}>Map{match.map && ` · ${toSentenceCase(match.map)}`}</FieldLabel>
               <MapPicker
+                id={mapFieldId}
                 maps={maps}
                 value={mapChoice}
                 onChange={(value) => {
@@ -261,9 +264,10 @@ function LobbyMatchConfig({
                 </button>
               )}
             </div>
-            <label className="flex flex-col gap-1">
-              <span className={FIELD_LABEL_CLS}>Starting side</span>
+            <div className="flex flex-col gap-1">
+              <FieldLabel htmlFor={sideFieldId}>Starting side</FieldLabel>
               <select
+                id={sideFieldId}
                 value={match.side_choice}
                 disabled={busy}
                 onChange={(e) => act('PATCH', url, { side: e.target.value })}
@@ -273,14 +277,14 @@ function LobbyMatchConfig({
                   <option key={c} value={c}>{SIDE_LABEL[c]}</option>
                 ))}
               </select>
-            </label>
+            </div>
             <div className="flex flex-col gap-1">
-              <span className={FIELD_LABEL_CLS}>Shirts</span>
+              <SectionLabel>Shirts</SectionLabel>
               {slot(0)}
               {slot(1)}
             </div>
             <div className="flex flex-col gap-1">
-              <span className={FIELD_LABEL_CLS}>Skins</span>
+              <SectionLabel>Skins</SectionLabel>
               {slot(2)}
               {slot(3)}
             </div>
