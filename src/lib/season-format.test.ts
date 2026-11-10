@@ -41,15 +41,19 @@ const BASE: SeasonFormatSettings = {
   seed: 1,
 };
 
-// Plans are deterministic and only read by the assertions, so tests share one build per input. The
-// reproducibility tests call buildFormatPlan() directly, so they compare two separate builds.
+// Plans are deterministic and only read by the assertions, so tests share one build per input —
+// keyed by the full settings, so spelling out a default still hits the cache. Each plan takes a few
+// hundred milliseconds of search, so a test builds as few as its assertions need: cases that each
+// need their own plan are separate tests. The reproducibility tests call buildFormatPlan() directly,
+// so they compare two separate builds.
 const planCache = new Map<string, FormatPlan>();
 
 function plan(n: number, settings: Partial<SeasonFormatSettings>, roster: FormatPlayer[] = players(n)): FormatPlan {
-  const key = JSON.stringify({ roster, settings });
+  const full = { ...BASE, ...settings };
+  const key = JSON.stringify({ roster, settings: full });
   const cached = planCache.get(key);
   if (cached) return cached;
-  const result = buildFormatPlan(roster, { ...BASE, ...settings });
+  const result = buildFormatPlan(roster, full);
   if (!result.ok) throw new Error(`expected a plan, got issues: ${result.issues.join(' ')}`);
   planCache.set(key, result.plan);
   return result.plan;
@@ -148,14 +152,14 @@ test('formatIssues refuses a 4-player division two groups in one week', () => {
   assert.deepEqual(formatIssues(8, { ...BASE, weekShape: 'group', divisions: 2, weeks: 6 }), []);
 });
 
-test('one league, one match a week: equal games and everyone meets everyone', () => {
-  for (const n of [7, 13]) {
+for (const n of [7, 13]) {
+  test(`one league, one match a week: equal games and everyone meets everyone (n=${n})`, () => {
     const p = plan(n, {});
     assertSound(p, n, 8, 2);
     assert.equal(p.scorecard.pairsNeverMet, 0, `n=${n}: every pair meets`);
     assert.equal(p.halves.length, 1);
-  }
-});
+  });
+}
 
 test('one league, a group a week: groups of 4, everyone partners everyone at 10 players', () => {
   const p = plan(10, { weekShape: 'group' });
@@ -177,8 +181,9 @@ test('a doubleheader week never replays the same matchup in a 4-player division'
   }
 });
 
-test('every doubleheader pays back a bye, and the scorecard counts the weeks they fall in', () => {
-  for (const p of [plan(13, {}), plan(13, { weekShape: 'group' }), plan(13, { divisions: 2, halfwayShuffle: true })]) {
+for (const settings of [{}, { weekShape: 'group' as const }, { divisions: 2, halfwayShuffle: true }]) {
+  test(`every doubleheader pays back a bye, and the scorecard counts the weeks they fall in (${JSON.stringify(settings)})`, () => {
+    const p = plan(13, settings);
     const label = JSON.stringify(p.settings);
     const usual = WEEK_UNIT[p.settings.weekShape].games;
     const perPlayer = weeklyGames(p);
@@ -190,8 +195,8 @@ test('every doubleheader pays back a bye, and the scorecard counts the weeks the
     assert.equal(p.scorecard.doubleheaderWeeks, weeksWhere((c) => c > usual));
     assert.equal(p.scorecard.byeWeeks, weeksWhere((c) => c < usual));
     assert.equal(p.scorecard.maxGamesInAWeek, Math.max(...all.flat()));
-  }
-});
+  });
+}
 
 test('group seasons round to the group count nearest one a week', () => {
   // 7 players can only split into whole groups at 4 or 8 groups each; over 5 weeks, 4 is nearer.
@@ -216,14 +221,14 @@ test('a division that divides by 4 never seats the same four players in two grou
   }
 });
 
-test('group weeks give leftover players a bye, paid back by a second group another week', () => {
-  for (const n of [7, 13]) {
+for (const n of [7, 13]) {
+  test(`group weeks give leftover players a bye, paid back by a second group another week (n=${n})`, () => {
     const p = plan(n, { weekShape: 'group' });
     assertSound(p, n, 16, 4);
     assertPods(p);
     assert.ok(p.scorecard.byeWeeks > 0, `n=${n}: a roster not divisible by 4 has bye weeks`);
-  }
-});
+  });
+}
 
 test('two divisions with a halfway shuffle re-snake the second half', () => {
   const p = plan(13, { divisions: 2, halfwayShuffle: true });
