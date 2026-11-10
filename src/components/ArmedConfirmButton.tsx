@@ -1,12 +1,14 @@
 'use client';
 
-// Shared arm -> confirm/cancel control for a destructive or one-way admin action (delete, reset,
-// go-live) — the exact same two-state shape and Tailwind classes were independently duplicated across
-// DeleteSeasonButton, MarkSeasonActiveButton, and GauntletLifecycleList's reset control. The caller
-// owns the actual mutation (`onConfirm`) plus its own `armed`/`busy`/`error` state, since each
-// caller's request/response handling differs too much to generalize (warnings, redirects, retries) —
-// this only extracts the interaction shape and styling, not the mutation logic.
+// Shared arm -> confirm/cancel control for a destructive or one-way action (delete, reset, go-live,
+// end a scrim night). It owns the `armed` state: the trigger arms it, Cancel disarms it, and it
+// disarms once `onConfirm`'s returned promise settles, whether the action succeeded or failed — a
+// failure's `error` still shows beside the trigger. A caller that needs different arming passes
+// `armed` (with `onArm`/`onCancel`) to control it instead. The caller owns the mutation itself
+// (`onConfirm`) and its `busy`/`error` state, since each caller's request/response handling differs
+// too much to generalize (warnings, redirects, retries).
 
+import { useState } from 'react';
 import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 
@@ -38,10 +40,11 @@ export function ArmedConfirmButton({
   busyLabel,
   variant,
 }: {
-  armed: boolean;
-  onArm: () => void;
-  onCancel: () => void;
-  onConfirm: () => void;
+  /** Controls the armed state from outside; leave unset to let the button own it. */
+  armed?: boolean;
+  onArm?: () => void;
+  onCancel?: () => void;
+  onConfirm: () => void | Promise<unknown>;
   busy: boolean;
   error?: string | null;
   triggerLabel: string;
@@ -50,19 +53,41 @@ export function ArmedConfirmButton({
   busyLabel: string;
   variant: 'primary' | 'danger';
 }) {
+  const [ownArmed, setOwnArmed] = useState(false);
+  const controlled = armed !== undefined;
+  const isArmed = controlled ? armed : ownArmed;
+
+  function arm() {
+    if (!controlled) setOwnArmed(true);
+    onArm?.();
+  }
+
+  function cancel() {
+    if (!controlled) setOwnArmed(false);
+    onCancel?.();
+  }
+
+  async function confirm() {
+    try {
+      await onConfirm();
+    } finally {
+      if (!controlled) setOwnArmed(false);
+    }
+  }
+
   return (
     <div className="flex items-center gap-2">
-      {armed ? (
+      {isArmed ? (
         <>
           <button
-            onClick={onConfirm}
+            onClick={confirm}
             disabled={busy}
             className={`tracked text-[10px] font-semibold px-2 py-1 border hover:brightness-110 transition-all disabled:opacity-40 ${CONFIRM_VARIANT[variant]}`}
           >
             {busy ? busyLabel : confirmLabel}
           </button>
           <button
-            onClick={onCancel}
+            onClick={cancel}
             disabled={busy}
             className="font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
@@ -70,7 +95,7 @@ export function ArmedConfirmButton({
           </button>
         </>
       ) : (
-        <button onClick={onArm} className={TRIGGER_STYLE[triggerStyle]}>
+        <button onClick={arm} className={TRIGGER_STYLE[triggerStyle]}>
           {triggerLabel}
         </button>
       )}
