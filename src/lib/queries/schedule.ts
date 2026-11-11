@@ -5,6 +5,7 @@ import { allMatchesPlayed, isPlayedScore, weekWindow, upcomingScheduledMatches, 
 import type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry } from '../stage-types';
 import { getPlayersById } from './player';
 import { persistentQuery } from './_persistentCache';
+import { getWeekLookup } from './_shared';
 
 export type { RosterStat, MatchWithRoster, WeekWithMatches, SeasonWeekNavEntry };
 
@@ -140,6 +141,14 @@ export const getSeasonMatchSummaries = persistentQuery('getSeasonMatchSummaries'
 
   return { weekCount: weekRows.length, matches: summaries };
 });
+
+/** The Realtime row filter on `matches` (`RefreshOnServerState`) covering every match in the given
+ *  seasons' weeks, or `null` when they have none. Realtime takes up to 100 values in an `in` filter,
+ *  far more weeks than a season and its gauntlet hold. */
+export async function getSeasonMatchesRealtimeFilter(seasonIds: number[]): Promise<string | null> {
+  const weekIds = [...(await getWeekLookup(seasonIds)).keys()];
+  return weekIds.length > 0 ? `week_id=in.(${weekIds.join(',')})` : null;
+}
 
 /** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind
  * `isSeasonFullyPlayed()` (`season-lifecycle.ts`), used wherever a caller already has week ids in

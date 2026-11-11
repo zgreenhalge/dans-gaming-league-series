@@ -117,6 +117,9 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   statsData?: SeasonStatsView;
   statsError?: boolean;
   onStatsRetry?: () => void;
+  /** Uncontrolled mode only: the content version the page rendered at (`getStatsVersion()`). When a
+   *  refresh brings a new one, the fetched stats are dropped and refetched. */
+  statsVersion?: string;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
@@ -414,6 +417,11 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   // Bumped by the error state's "Retry" button to force the effect below to re-run — same reasoning
   // as `CombinedSeasonTabView`'s own top-tab fetch retry.
   const [localStatsRetryNonce, setLocalStatsRetryNonce] = useState(0);
+  const [statsDataVersion, setStatsDataVersion] = useState(props.statsVersion);
+  if (statsDataVersion !== props.statsVersion) {
+    setStatsDataVersion(props.statsVersion);
+    setLocalStatsData(undefined);
+  }
 
   const statsData = isStatsControlled ? props.statsData : localStatsData;
   const statsError = isStatsControlled ? !!props.statsError : localStatsError;
@@ -451,7 +459,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       setLocalStatsLoading(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStatsControlled, tab, seasonId, props.kind, localStatsRetryNonce]);
+  }, [isStatsControlled, tab, seasonId, props.kind, localStatsRetryNonce, props.statsVersion]);
 
   // Scrolls to the default-open week/round whenever the Schedule tab becomes active with no
   // explicit `week`/`round` override (that case already scrolls via `scrollTargetId` above) — without

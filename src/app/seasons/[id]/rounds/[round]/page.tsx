@@ -7,7 +7,8 @@ import { StageHeader } from '@/components/StageHeader';
 import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
 import EmptyState from '@/components/EmptyState';
-import { getSeedNames, resolveRoundPage } from '@/lib/queries';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
+import { getSeasonMatchesRealtimeFilter, getSeedNames, resolveRoundPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, regularSeasonLink, roundHref, stageHeading } from '@/lib/crumbs';
 import { describeMatchups, roundTitle } from '@/lib/seo/stage-meta';
@@ -25,8 +26,11 @@ const loadRound = cache(async (idParam: string, roundParam: string) => {
   const found = await resolveRoundPage(seasonId, roundNumber);
   if (!found) notFound();
   if (found.scope.hub.id !== seasonId) redirect(roundHref(found.scope.hub.id, roundNumber));
-  const seedNames = found.view.groups.some((g) => g.matches.length === 0) ? await getSeedNames(found.scope.hub.id) : undefined;
-  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames };
+  const [seedNames, matchesFilter] = await Promise.all([
+    found.view.groups.some((g) => g.matches.length === 0) ? getSeedNames(found.scope.hub.id) : undefined,
+    getSeasonMatchesRealtimeFilter(found.scope.gauntlet ? [found.scope.gauntlet.id] : []),
+  ]);
+  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames, matchesFilter };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -46,7 +50,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function RoundPage({ params }: { params: Promise<Params> }) {
   const { id, round } = await params;
-  const [{ hub, data, view, seedNames }, session] = await Promise.all([loadRound(id, round), getServerSession(authOptions)]);
+  const [{ hub, data, view, seedNames, matchesFilter }, session] = await Promise.all([loadRound(id, round), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
 
   const trail = { season: hub, gauntlet: true, round: view.roundNumber };
@@ -54,6 +58,9 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={buildCrumbs(trail)} />
+      {/* A result anywhere in the gauntlet can fill this round's groups, so the page follows every
+          gauntlet match. */}
+      {matchesFilter && <RefreshOnServerState table="matches" filter={matchesFilter} />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader heading={stageHeading(trail)} status={view.status} details={[view.isFinal && 'Final round']} />
         <div className="mb-6">
