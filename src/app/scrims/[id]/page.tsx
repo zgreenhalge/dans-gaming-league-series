@@ -14,7 +14,7 @@ import { ScrimNightRoster } from '@/components/ScrimNightRoster';
 import { ScrimNightStatusBar } from '@/components/ScrimNightStatusBar';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getScrimNightStatsVersion, getScrimSignups } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getStatsVersion, getScrimSignups } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
 import { hasScrimNightEnded, scrimNightBoundaries } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
@@ -68,7 +68,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
     model.offerRounds ? getScheduleLabData(pool.map((p) => p.id)) : null,
     // The Advanced Stats tab shows once a scored match has parsed sabremetrics.
     hasScrimMatchSabremetrics(scoredMatchIds),
-    getScrimNightStatsVersion(),
+    getStatsVersion(),
   ]);
 
   const content: Record<ScrimNightTab, { label: string; content: ReactNode }> = {
@@ -144,7 +144,18 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
 
         {/* The lobby match's game ending frees the next match, so the page follows its server state
             whichever tab is showing. */}
-        {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
+        {lobbyMatch && <RefreshOnServerState table="match_server_state" filter={`match_id=eq.${lobbyMatch.id}`} fallback />}
+
+        {/* Until the night is over, signups, check-ins and drop-outs change the roster and the
+            lobby's pool, and End night closes the night, for every viewer. A delete can't be
+            filtered, so a drop-out from any night refreshes the page. */}
+        {!hasScrimNightEnded(night.night, now) && (
+          <>
+            <RefreshOnServerState table="scrim_signups" filter={`night_id=eq.${night.night.id}`} />
+            <RefreshOnServerState table="scrim_signups" event="DELETE" />
+            <RefreshOnServerState table="scrim_nights" event="UPDATE" filter={`id=eq.${night.night.id}`} />
+          </>
+        )}
 
         {/* A night with no signups and nothing played has no tabs: the status bar is all of it. */}
         {tabs.length > 0 && (
