@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightPageModel, scrimNightTabOrder } from './scrim-night-page';
+import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightViewer } from './scrim-night-page';
 import { scrimSignup } from './test-support/scrimFixtures';
 import type { ScrimLeaderboardRow, ScrimMatch, ScrimNightView } from './queries';
 import type { H2HData } from './h2h';
@@ -16,6 +16,7 @@ function match(id: number, final_score: string | null, server_state: string | nu
   return {
     id,
     night_id: 5,
+    revision: 0,
     match_number: id,
     map: 'cobble',
     workshop_id: null,
@@ -90,6 +91,16 @@ test('a queued match is discardable by its players or an admin, not by anyone el
   assert.equal(buildScrimNightPageModel(night({ matches }), ADMIN).queued[0].canDiscard, true);
   assert.equal(buildScrimNightPageModel(night({ matches }), PLAYER(7)).queued[0].canDiscard, false);
   assert.equal(buildScrimNightPageModel(night({ matches }), SIGNED_OUT).queued[0].canDiscard, false);
+});
+
+test('the lobby match is managed by its players or an admin, not by anyone else', () => {
+  const canManageLobby = (viewer: ScrimNightViewer, matches = [match(1, null, null, [1, 2, 3, 4])]) =>
+    buildScrimNightPageModel(night({ matches }), viewer).canManageLobby;
+  assert.equal(canManageLobby(PLAYER(2)), true);
+  assert.equal(canManageLobby(ADMIN), true);
+  assert.equal(canManageLobby(PLAYER(7)), false);
+  assert.equal(canManageLobby(SIGNED_OUT), false);
+  assert.equal(canManageLobby(ADMIN, []), false, 'no lobby match');
 });
 
 test('making matches: a checked-in player or an admin; Generate Rounds only with four in and no match waiting', () => {

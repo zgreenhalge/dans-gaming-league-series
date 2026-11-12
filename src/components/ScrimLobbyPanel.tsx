@@ -41,7 +41,8 @@ interface Props {
   /** The viewer may end the night (`buildScrimNightPageModel()`'s `canEnd`): End night sits beside Next
    *  Match. */
   canEnd: boolean;
-  /** The viewer may configure, discard or start `match` (an admin). Everyone else sees its card. */
+  /** The viewer may configure, discard or start `match` (`canManageScrimMatch()`: an admin or one of
+   *  its players). Everyone else sees its card. */
   canManage: boolean;
   currentPlayerId: number | null;
   /** What Generate Rounds plans over — the checked-in players' ratings and season records — when the
@@ -63,9 +64,11 @@ type Lineup = [number, number, number, number];
 
 /** The scrim night lobby, about the current match: with none, Next Match makes one, Generate Rounds
  *  queues several, and End night closes the night; otherwise the lobby's match — a card for everyone,
- *  and for an admin its map, starting side and lineup (from the checked-in pool), starting it on the
- *  server, or discarding it — and a short pointer to the matches queued behind it. Checking in is the
- *  page's status bar (`ScrimNightStatusBar`); the night's running order is its Matches tab. */
+ *  and for its players and admins its map, starting side and lineup (from the checked-in pool),
+ *  starting it on the server, or discarding it — and a short pointer to the matches queued behind it.
+ *  Every change, start and discard sends the match's `revision`; one refused because someone else
+ *  changed the match first reloads the page. Checking in is the page's status bar
+ *  (`ScrimNightStatusBar`); the night's running order is its Matches tab. */
 export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, canMake, canEnd, canManage, currentPlayerId, rounds }: Props) {
   const { busy, error, act } = useRefreshingAction();
   const [generating, setGenerating] = useState(false);
@@ -80,7 +83,7 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
           {canManage && isScrimMatchDiscardable(match) && (
             <LobbyMatchConfig match={match} editable={editable} pool={pool} names={names} maps={maps} />
           )}
-          {/* An admin runs the server; once it has started, anyone signed in can join it. */}
+          {/* Its players and admins run the server; once it has started, anyone signed in can join it. */}
           {(canManage || !editable) && (
             <div className="w-full max-w-md self-center">
               <MatchServerPanel
@@ -89,6 +92,7 @@ export function ScrimLobbyPanel({ nightId, match, queued, pool, names, maps, can
                 canJoin={canManage || currentPlayerId != null}
                 signInToJoin={!canManage && currentPlayerId == null}
                 initialState={(match.server_state ?? 'idle') as ServerState}
+                revision={match.revision}
               />
             </div>
           )}
@@ -143,9 +147,11 @@ function LobbyMatchCard({ match, names, currentPlayerId }: { match: ScrimMatch; 
   );
 }
 
-/** The lobby's match, for admins: a header with Discard (after a confirm), and while the match is
- *  `editable` (unstarted) a Configure `CollapsiblePanel` under it, collapsed by default, holding the
- *  map, starting side and lineup pickers. */
+/** The lobby's match, for its players and admins: a header with Discard (after a confirm), and while
+ *  the match is `editable` (unstarted) a Configure `CollapsiblePanel` under it, collapsed by default,
+ *  holding the map, starting side and lineup pickers. A change sends the match's `revision`; the
+ *  pickers start over from the saved match whenever it changes (keyed on `revision`), while the panel
+ *  and its error stay, so "This match was changed — reloaded" shows over the reloaded match. */
 function LobbyMatchConfig({
   match,
   editable,
@@ -154,6 +160,32 @@ function LobbyMatchConfig({
   maps,
 }: Pick<Props, 'pool' | 'names' | 'maps'> & { match: ScrimMatch; editable: boolean }) {
   const { busy, error, act } = useRefreshingAction();
+  const patch = (changes: Record<string, unknown>) => act('PATCH', `/api/scrims/matches/${match.id}`, { ...changes, revision: match.revision });
+  return (
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+      <div className="px-4 py-3 flex items-center justify-between gap-3">
+        <SectionLabel as="span">Match {match.match_number}</SectionLabel>
+        <ScrimDiscardButton matchId={match.id} revision={match.revision} />
+      </div>
+      {editable && (
+        <CollapsiblePanel title="Configure" className="mx-4 mb-3">
+          <LobbyMatchPickers key={match.revision} match={match} pool={pool} names={names} maps={maps} busy={busy} patch={patch} />
+          <ErrorText error={error} size={12} className="pt-3" />
+        </CollapsiblePanel>
+      )}
+    </div>
+  );
+}
+
+/** `LobbyMatchConfig`'s map, starting side and lineup pickers, drafted from the saved match. */
+function LobbyMatchPickers({
+  match,
+  pool,
+  names,
+  maps,
+  busy,
+  patch,
+}: Pick<Props, 'pool' | 'names' | 'maps'> & { match: ScrimMatch; busy: boolean; patch: (changes: Record<string, unknown>) => void }) {
   const mapFieldId = useId();
   const sideFieldId = useId();
   const current: Lineup = [...match.shirts, ...match.skins];
@@ -165,7 +197,6 @@ function LobbyMatchConfig({
   const mapChoice = customOpen ? CUSTOM_MAP_CHOICE : (match.workshop_id ?? '');
   const customId = workshopIdFromInput(customMap);
 
-  const url = `/api/scrims/matches/${match.id}`;
   const lineupChanged = draft.some((id, i) => id !== current[i]);
   const lineupValid = new Set(draft).size === 4;
   // A slot can hold anyone in the pool, plus whoever holds it now (even if they've since checked out).
@@ -188,86 +219,78 @@ function LobbyMatchConfig({
   );
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-4 py-3 flex items-center justify-between gap-3">
-        <SectionLabel as="span">Match {match.match_number}</SectionLabel>
-        <ScrimDiscardButton matchId={match.id} />
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          {/* The saved map is shown beside the label but kept out of the select's accessible name. */}
+          <FieldLabel htmlFor={mapFieldId}>
+            Map{match.map && <span aria-hidden="true"> · {toSentenceCase(match.map)}</span>}
+          </FieldLabel>
+          <MapPicker
+            id={mapFieldId}
+            maps={maps}
+            value={mapChoice}
+            onChange={(value) => {
+              setCustomOpen(value === CUSTOM_MAP_CHOICE);
+              if (value && value !== CUSTOM_MAP_CHOICE) patch({ workshop: value });
+            }}
+            customValue={customMap}
+            onCustomChange={setCustomMap}
+            customInvalid={customMap.trim() !== '' && !customId}
+            disabled={busy}
+          />
+          {mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
+            <button type="button" onClick={() => patch({ workshop: customId })} disabled={busy} className={`${GO_BTN_CLS} self-start`}>
+              Use this map
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col gap-1">
+          <FieldLabel htmlFor={sideFieldId}>Starting side</FieldLabel>
+          <select
+            id={sideFieldId}
+            value={match.side_choice}
+            disabled={busy}
+            onChange={(e) => patch({ side: e.target.value })}
+            className={`${SELECT_CLS} w-full`}
+          >
+            {SCRIM_SIDE_CHOICES.map((c) => (
+              <option key={c} value={c}>{SIDE_LABEL[c]}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <SectionLabel>Shirts</SectionLabel>
+          {slot(0)}
+          {slot(1)}
+        </div>
+        <div className="flex flex-col gap-1">
+          <SectionLabel>Skins</SectionLabel>
+          {slot(2)}
+          {slot(3)}
+        </div>
       </div>
-      {editable && (
-        <CollapsiblePanel title="Configure" className="mx-4 mb-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              {/* The saved map is shown beside the label but kept out of the select's accessible name. */}
-              <FieldLabel htmlFor={mapFieldId}>
-                Map{match.map && <span aria-hidden="true"> · {toSentenceCase(match.map)}</span>}
-              </FieldLabel>
-              <MapPicker
-                id={mapFieldId}
-                maps={maps}
-                value={mapChoice}
-                onChange={(value) => {
-                  setCustomOpen(value === CUSTOM_MAP_CHOICE);
-                  if (value && value !== CUSTOM_MAP_CHOICE) act('PATCH', url, { workshop: value });
-                }}
-                customValue={customMap}
-                onCustomChange={setCustomMap}
-                customInvalid={customMap.trim() !== '' && !customId}
-                disabled={busy}
-              />
-              {mapChoice === CUSTOM_MAP_CHOICE && customId && customId !== match.workshop_id && (
-                <button type="button" onClick={() => act('PATCH', url, { workshop: customId })} disabled={busy} className={`${GO_BTN_CLS} self-start`}>
-                  Use this map
-                </button>
-              )}
-            </div>
-            <div className="flex flex-col gap-1">
-              <FieldLabel htmlFor={sideFieldId}>Starting side</FieldLabel>
-              <select
-                id={sideFieldId}
-                value={match.side_choice}
-                disabled={busy}
-                onChange={(e) => act('PATCH', url, { side: e.target.value })}
-                className={`${SELECT_CLS} w-full`}
-              >
-                {SCRIM_SIDE_CHOICES.map((c) => (
-                  <option key={c} value={c}>{SIDE_LABEL[c]}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <SectionLabel>Shirts</SectionLabel>
-              {slot(0)}
-              {slot(1)}
-            </div>
-            <div className="flex flex-col gap-1">
-              <SectionLabel>Skins</SectionLabel>
-              {slot(2)}
-              {slot(3)}
-            </div>
-          </div>
 
-          {lineupChanged && (
-            <div className="pt-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => act('PATCH', url, { lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
-                disabled={busy || !lineupValid}
-                className={GO_BTN_CLS}
-              >
-                Save lineup
-              </button>
-              <button type="button" onClick={() => setDraft(current)} disabled={busy} className={BTN_CLS}>
-                Reset
-              </button>
-              {!lineupValid && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Each player can only take one slot.</span>}
-            </div>
+      {lineupChanged && (
+        <div className="pt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => patch({ lineup: { shirts: draft.slice(0, 2), skins: draft.slice(2) } })}
+            disabled={busy || !lineupValid}
+            className={GO_BTN_CLS}
+          >
+            Save lineup
+          </button>
+          <button type="button" onClick={() => setDraft(current)} disabled={busy} className={BTN_CLS}>
+            Reset
+          </button>
+          {!lineupValid && <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Each player can only take one slot.</span>}
+        </div>
       )}
-      <ErrorText error={error} size={12} className="pt-3" />
-    </CollapsiblePanel>
-      )}
-    </div>
+    </>
   );
 }
+
 
 /** A short pointer to the pre-matched matches waiting behind the lobby's — each by number and map,
  *  with a Discard for its players or an admin (after a confirm) — linking to the Matches tab, which
@@ -287,7 +310,7 @@ function UpNext({ nightId, queued }: { nightId: number; queued: Props['queued'] 
           <span className="min-w-0 text-[var(--color-text-secondary)]">
             Match {match.match_number} · {match.map ? toSentenceCase(match.map) : '—'}
           </span>
-          {canDiscard && <ScrimDiscardButton matchId={match.id} />}
+          {canDiscard && <ScrimDiscardButton matchId={match.id} revision={match.revision} />}
         </div>
       ))}
     </div>

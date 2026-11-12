@@ -1,9 +1,12 @@
 // Changes a scrim match before it starts — any of `PATCH { workshop }` (a Steam Workshop link or item
 // id, any map, `resolveScrimMap()`), `{ side }` (a `ScrimSideChoice`)
-// and `{ lineup: { shirts, skins } }`, the lineup drawn from the night's checked-in players — or
-// discards it (`DELETE`). The players in the match or an admin (`requireScrimMatchAccess()`). Changes
-// are refused (409) once it has a score or has been started (`isScrimMatchEditable()`); discarding
-// once it has a score or holds the server (`isScrimMatchDiscardable()`). Starting it is the shared
+// and `{ lineup: { shirts, skins } }`, the lineup drawn from the night's checked-in players, applied
+// together by `updateScrimMatch()` — or discards it (`DELETE`, `discardScrimMatch()`). The players in
+// the match or an admin (`requireScrimMatchAccess()`). Both send `{ revision }`, the match's
+// `revision` as the client saw it, and are refused (409, `code: 'match_changed'`) when the match has
+// moved on since. Changes are also refused (409) once it has a score or has been started
+// (`isScrimMatchEditable()`); discarding once it has a score or holds the server
+// (`isScrimMatchDiscardable()`) — both checked inside the write. Starting it is the shared
 // `POST /api/matches/[id]/server/provision`.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,31 +17,46 @@ import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { workshopIdFromInput } from '@/lib/workshop';
 import { requireScrimMatchAccess, checkedInPlayerIds } from '@/lib/scrim-match-access';
 import {
-  deleteScrimMatch,
+  discardScrimMatch,
   isScrimMatchDiscardable,
   isScrimMatchEditable,
+  parseScrimRevision,
   parseScrimTeams,
-  setScrimMatchLineup,
   resolveScrimMap,
-  setScrimMatchMap,
-  setScrimMatchSideChoice,
+  updateScrimMatch,
+  ScrimMatchChangedError,
+  ScrimMatchConflictError,
+  SCRIM_MATCH_LOCKED,
+  SCRIM_MATCH_NOT_DISCARDABLE,
+  SCRIM_MATCH_CHANGED_CODE,
+  SCRIM_REVISION_INVALID,
   SCRIM_SIDE_CHOICES,
   type ScrimSideChoice,
 } from '@/lib/scrim-matches';
 
-const LOCKED = 'This match has started or been scored, so it can no longer be changed';
+
+/** The response for a write that threw: 409 for a refusal (`code: 'match_changed'` when the match
+ *  moved on, so the client reloads), 500 otherwise. */
+function writeFailed(err: unknown, fallback: string): NextResponse {
+  if (err instanceof ScrimMatchConflictError) {
+    return NextResponse.json({ error: err.message, ...(err instanceof ScrimMatchChangedError && { code: SCRIM_MATCH_CHANGED_CODE }) }, { status: 409 });
+  }
+  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const matchId = parseRouteId((await params).id);
   if (matchId === null) return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   const access = await requireScrimMatchAccess(matchId);
   if (!access.ok) return accessDenied(access);
-  if (!isScrimMatchEditable(access.match)) return NextResponse.json({ error: LOCKED }, { status: 409 });
+  if (!isScrimMatchEditable(access.match)) return NextResponse.json({ error: SCRIM_MATCH_LOCKED }, { status: 409 });
 
-  const body = (await req.json().catch(() => null)) as { workshop?: unknown; lineup?: unknown; side?: unknown } | null;
+  const body =(await req.json().catch(() => null)) as { workshop?: unknown; lineup?: unknown; side?: unknown; revision?: unknown } | null;
+  const revision = parseScrimRevision(body?.revision);
   const workshopId = body?.workshop !== undefined ? workshopIdFromInput(typeof body.workshop === 'string' ? body.workshop : null) : undefined;
   const lineup = body?.lineup !== undefined ? parseScrimTeams(body.lineup) : undefined;
   const side = body?.side;
+  if (revision === null) return NextResponse.json({ error: SCRIM_REVISION_INVALID }, { status: 400 });
   if (workshopId === undefined && lineup === undefined && side === undefined) {
     return NextResponse.json({ error: 'Send a workshop map, a side and/or a lineup' }, { status: 400 });
   }
@@ -63,30 +81,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const map = workshopId !== undefined ? await resolveScrimMap(workshopId, maps) : undefined;
   if (map === null) return NextResponse.json({ error: 'Steam has no workshop item with that id' }, { status: 400 });
 
-  const db = getAdminClient();
   try {
-    if (map) await setScrimMatchMap(db, matchId, map);
-    if (side !== undefined) await setScrimMatchSideChoice(db, matchId, side as ScrimSideChoice);
-    if (lineup) await setScrimMatchLineup(db, matchId, lineup);
+    const next = await updateScrimMatch(getAdminClient(), matchId, revision, { map, side: side as ScrimSideChoice | undefined, lineup });
+    return NextResponse.json({ ok: true, revision: next });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Updating the match failed' }, { status: 500 });
+    return writeFailed(err, 'Updating the match failed');
   }
-  return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const matchId = parseRouteId((await params).id);
   if (matchId === null) return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   const access = await requireScrimMatchAccess(matchId);
   if (!access.ok) return accessDenied(access);
-  if (!isScrimMatchDiscardable(access.match)) {
-    return NextResponse.json({ error: 'This match is scored or running on the server, so it can no longer be discarded' }, { status: 409 });
-  }
+  if (!isScrimMatchDiscardable(access.match)) return NextResponse.json({ error: SCRIM_MATCH_NOT_DISCARDABLE }, { status: 409 });
+  const revision = parseScrimRevision(((await req.json().catch(() => null)) as { revision?: unknown } | null)?.revision);
+  if (revision === null) return NextResponse.json({ error: SCRIM_REVISION_INVALID }, { status: 400 });
 
   try {
-    await deleteScrimMatch(getAdminClient(), matchId);
+    await discardScrimMatch(getAdminClient(), matchId, revision);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Discarding the match failed' }, { status: 500 });
+    return writeFailed(err, 'Discarding the match failed');
   }
   return NextResponse.json({ ok: true });
 }

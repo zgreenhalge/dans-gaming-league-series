@@ -715,6 +715,7 @@ export type Database = {
           ot_rounds_per_half: number | null
           round_history: Json | null
           scrim_night_id: number | null
+          scrim_revision: number
           scrim_side_choice: string | null
           scrim_workshop_id: string | null
           scheduled_at: string | null
@@ -740,6 +741,7 @@ export type Database = {
           ot_rounds_per_half?: number | null
           round_history?: Json | null
           scrim_night_id?: number | null
+          scrim_revision?: number
           scrim_side_choice?: string | null
           scrim_workshop_id?: string | null
           scheduled_at?: string | null
@@ -765,6 +767,7 @@ export type Database = {
           ot_rounds_per_half?: number | null
           round_history?: Json | null
           scrim_night_id?: number | null
+          scrim_revision?: number
           scrim_side_choice?: string | null
           scrim_workshop_id?: string | null
           scheduled_at?: string | null
@@ -1805,6 +1808,10 @@ export type Database = {
       }
     }
     Functions: {
+      claim_scrim_match_start: {
+        Args: { p_match_id: number; p_revision: number }
+        Returns: number
+      }
       clear_season_schedule_draft: {
         Args: { p_season_id: number }
         Returns: undefined
@@ -1817,6 +1824,10 @@ export type Database = {
         Args: { p_season_id: number }
         Returns: Json
       }
+      discard_scrim_match: {
+        Args: { p_match_id: number; p_revision: number }
+        Returns: undefined
+      }
       generate_season_schedule_draft: {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
@@ -1828,6 +1839,10 @@ export type Database = {
       lock_and_check_season_materialized: {
         Args: { p_season_id: number }
         Returns: boolean
+      }
+      lock_scrim_match_at_revision: {
+        Args: { p_match_id: number; p_revision: number }
+        Returns: undefined
       }
       queue_scrim_matches: {
         Args: { p_matches: Json; p_night_id: number }
@@ -1889,6 +1904,18 @@ export type Database = {
       }
       start_scrim_night: {
         Args: { p_commitment: string; p_night_minutes: number; p_player_id: number; p_starts_at: string }
+        Returns: number
+      }
+      update_scrim_match: {
+        Args: {
+          p_map: string | null
+          p_match_id: number
+          p_revision: number
+          p_shirts: number[] | null
+          p_side_choice: string | null
+          p_skins: number[] | null
+          p_workshop_id: string | null
+        }
         Returns: number
       }
     }

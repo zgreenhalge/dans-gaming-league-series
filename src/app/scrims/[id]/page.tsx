@@ -76,7 +76,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
       label: 'Lobby',
       content: (
         <ScrimLobbyPanel
-          key={lobbyMatch ? `${lobbyMatch.id}:${lobbyMatch.workshop_id}:${[...lobbyMatch.shirts, ...lobbyMatch.skins].join(',')}` : 'none'}
+          key={lobbyMatch?.id ?? 'none'}
           nightId={night.night.id}
           match={lobbyMatch}
           queued={model.queued}
@@ -85,7 +85,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           maps={maps}
           canMake={model.canMake}
           canEnd={model.canEnd}
-          canManage={isAdmin}
+          canManage={model.canManageLobby}
           currentPlayerId={currentPlayerId}
           rounds={rounds}
         />
@@ -143,8 +143,8 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
         {refreshAt && <RefreshAt iso={refreshAt} serverNow={now.getTime()} />}
 
         {/* The lobby match's game ending frees the next match, so the page follows its server state
-            whichever tab is showing. */}
-        {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} />}
+            whichever tab is showing, and its own row, so everyone sees a lobby edit at once. */}
+        {lobbyMatch && <RefreshOnServerState matchId={lobbyMatch.id} followMatchRow />}
 
         {/* A night with no signups and nothing played has no tabs: the status bar is all of it. */}
         {tabs.length > 0 && (
