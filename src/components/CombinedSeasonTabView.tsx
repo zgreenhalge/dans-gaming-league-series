@@ -85,16 +85,6 @@ export default function CombinedSeasonTabView({
   // `topTab` — switching away and back would also retry naturally (a fresh `topTab` value re-runs
   // it), but a retry button avoids making that the only way back from a failed fetch.
   const [retryNonce, setRetryNonce] = useState(0);
-  const [statsCache, setStatsCache] = useState<StatsCache>({});
-
-  // A refresh keeps this component's state, so a new content version is what drops the caches: the
-  // initial tab reseeds from the fresh server props and the effects below refetch the rest.
-  const [cachedVersion, setCachedVersion] = useState(statsVersion);
-  if (cachedVersion !== statsVersion) {
-    setCachedVersion(statsVersion);
-    setLightCache({ [initialLightData.kind]: initialLightData.data });
-    setStatsCache({});
-  }
 
   // Fetches the active tab's light data the first time it's opened — once cached, switching back to
   // it later is instant (no further network calls for the life of this page view). The Stats/
@@ -135,7 +125,20 @@ export default function CombinedSeasonTabView({
 
   const [statsLoadingKind, setStatsLoadingKind] = useState<DataTab | null>(null);
   const [statsLoadError, setStatsLoadError] = useState<DataTab | null>(null);
+  const [statsCache, setStatsCache] = useState<StatsCache>({});
   const [statsRetryNonce, setStatsRetryNonce] = useState(0);
+
+  // A refresh keeps this component's state, so a new content version is what drops the caches: the
+  // initial tab reseeds from the fresh server props and the effects refetch the rest. The loading
+  // flags clear too, since the version change cancels any fetch in flight.
+  const [cachedVersion, setCachedVersion] = useState(statsVersion);
+  if (cachedVersion !== statsVersion) {
+    setCachedVersion(statsVersion);
+    setLightCache({ [initialLightData.kind]: initialLightData.data });
+    setStatsCache({});
+    setLoadingKind(null);
+    setStatsLoadingKind(null);
+  }
 
   // `subTab` is shared across both top tabs (it doesn't reset on a topTab switch), so it can read
   // 'advanced' while the *active* tab's own light view has no advanced stats at all (e.g. switching

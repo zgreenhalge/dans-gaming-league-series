@@ -30,7 +30,7 @@ const loadRound = cache(async (idParam: string, roundParam: string) => {
     found.view.groups.some((g) => g.matches.length === 0) ? getSeedNames(found.scope.hub.id) : undefined,
     getSeasonMatchesRealtimeFilter(found.scope.gauntlet ? [found.scope.gauntlet.id] : []),
   ]);
-  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames, matchesFilter };
+  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames, matchesFilter, gauntletId: found.scope.gauntlet?.id ?? null };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function RoundPage({ params }: { params: Promise<Params> }) {
   const { id, round } = await params;
-  const [{ hub, data, view, seedNames, matchesFilter }, session] = await Promise.all([loadRound(id, round), getServerSession(authOptions)]);
+  const [{ hub, data, view, seedNames, matchesFilter, gauntletId }, session] = await Promise.all([loadRound(id, round), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
 
   const trail = { season: hub, gauntlet: true, round: view.roundNumber };
@@ -59,8 +59,9 @@ export default async function RoundPage({ params }: { params: Promise<Params> })
     <div className="min-h-screen">
       <TopbarShell crumbs={buildCrumbs(trail)} />
       {/* A result anywhere in the gauntlet can fill this round's groups, so the page follows every
-          gauntlet match. */}
+          gauntlet match, and its pods for a group scheduled into a round's new week. */}
       {matchesFilter && <RefreshOnServerState table="matches" filter={matchesFilter} />}
+      {gauntletId !== null && <RefreshOnServerState table="gauntlet_pods" filter={`season_id=eq.${gauntletId}`} />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader heading={stageHeading(trail)} status={view.status} details={[view.isFinal && 'Final round']} />
         <div className="mb-6">

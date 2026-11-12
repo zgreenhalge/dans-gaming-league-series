@@ -27,7 +27,7 @@ const loadGroup = cache(async (idParam: string, podIdParam: string) => {
     found.view.group.matches.length === 0 ? getSeedNames(found.scope.hub.id) : undefined,
     getSeasonMatchesRealtimeFilter(found.scope.gauntlet ? [found.scope.gauntlet.id] : []),
   ]);
-  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames, matchesFilter };
+  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames, matchesFilter, gauntletId: found.scope.gauntlet?.id ?? null };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -47,7 +47,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function GroupPage({ params }: { params: Promise<Params> }) {
   const { id, podId } = await params;
-  const [{ hub, data, view, seedNames, matchesFilter }, session] = await Promise.all([loadGroup(id, podId), getServerSession(authOptions)]);
+  const [{ hub, data, view, seedNames, matchesFilter, gauntletId }, session] = await Promise.all([loadGroup(id, podId), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const { group } = view;
   const { pod } = group;
@@ -62,8 +62,10 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={buildCrumbs(trail)} />
-      {/* An earlier round's result fills this group's slots, so the page follows every gauntlet match. */}
+      {/* An earlier round's result fills this group's slots, so the page follows every gauntlet
+          match, and its pods for a group scheduled into a round's new week. */}
       {matchesFilter && <RefreshOnServerState table="matches" filter={matchesFilter} />}
+      {gauntletId !== null && <RefreshOnServerState table="gauntlet_pods" filter={`season_id=eq.${gauntletId}`} />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
           heading={stageHeading(trail)}

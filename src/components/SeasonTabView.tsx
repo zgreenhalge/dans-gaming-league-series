@@ -421,6 +421,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   if (statsDataVersion !== props.statsVersion) {
     setStatsDataVersion(props.statsVersion);
     setLocalStatsData(undefined);
+    setLocalStatsLoading(false);
   }
 
   const statsData = isStatsControlled ? props.statsData : localStatsData;
