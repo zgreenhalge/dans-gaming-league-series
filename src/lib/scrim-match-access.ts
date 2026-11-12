@@ -1,15 +1,16 @@
 // Session gates for scrim night matches. Creating the night's next match is open to any checked-in
 // player or an admin, once check-in is open; ending the night is open to anyone signed up for it or an
-// admin, once it has started and no match is waiting for the server. Changing, discarding or starting a
+// admin, once it has started and no match is waiting for the server, and so is reopening it once it's
+// over. Changing, discarding or starting a
 // match is open to the players in it or an admin — the same "admin-or-in-match" shape `requireMatchAccess()` checks
 // for every match.
 
 import { requireSession } from './session';
 import { requireMatchAccess } from './match-access';
 import { isPlayerAdmin, getScrimSignups, getScrimMatch, getScrimNightMatches, type ScrimMatch } from './queries';
-import { hasScrimNightStarted, isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
+import { canReopenScrimNight, hasScrimNightEnded, hasScrimNightStarted, isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
 import { scrimMatchNeedsServer } from './scrim-matches';
-import { findCurrentScrimNight } from './scrim-signup-access';
+import { findCurrentScrimNight, findScrimNight } from './scrim-signup-access';
 import type { AccessResult } from './access-control';
 
 /** Players checked in to a night — the pool matchmaking and lineup changes draw from. */
@@ -60,6 +61,25 @@ export async function requireScrimNightEndAccess(id: string, now: Date = new Dat
   if (matches.some(scrimMatchNeedsServer)) {
     return { ok: false, status: 409, error: "Finish or discard the night's waiting matches first" };
   }
+  return { ok: true, night };
+}
+
+/** Gate for reopening a night that is over, like End night's: the requester is signed up for it or an
+ *  admin, and it is still reopenable (`canReopenScrimNight()`). Whether another night holds the server
+ *  is `reopen_scrim_night()`'s check. */
+export async function requireScrimNightReopenAccess(id: string, now: Date = new Date()): Promise<AccessResult<{ night: ScrimNight }>> {
+  const session = await requireSession();
+  const playerId = session?.user?.playerId;
+  if (!playerId) return { ok: false, status: 401, error: 'Unauthorized' };
+  const [found, admin] = await Promise.all([findScrimNight(id), isPlayerAdmin(playerId)]);
+  if (!found.ok) return found;
+  const { night } = found;
+  const signups = await getScrimSignups(night.id);
+  if (!admin && !signups.some((s) => s.player_id === playerId)) {
+    return { ok: false, status: 403, error: 'Only players on the night can reopen it' };
+  }
+  if (!hasScrimNightEnded(night, now)) return { ok: false, status: 409, error: 'That night is still on' };
+  if (!canReopenScrimNight(night, now)) return { ok: false, status: 409, error: 'That night is too long ago to reopen' };
   return { ok: true, night };
 }
 

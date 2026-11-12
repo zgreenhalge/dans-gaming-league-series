@@ -294,7 +294,8 @@ function UpNext({ nightId, queued }: { nightId: number; queued: Props['queued'] 
   );
 }
 
-/** End night (`POST /api/scrims/[id]/end`), after a confirm: closes the night before the clock does. */
+/** End night (`POST /api/scrims/[id]/end`), after a confirm: closes the night now, rather than once it
+ *  goes idle. */
 function ScrimEndNightButton({ nightId }: { nightId: number }) {
   const { busy, error, act } = useRefreshingAction();
   return (

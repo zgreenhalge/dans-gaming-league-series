@@ -2,7 +2,7 @@
 /**
  * Component tests for `ScrimNightStatusBar`: it renders what `buildScrimNightPageModel()`'s `status`
  * gives it — the state pill, the checked-in count and the league-match marks, with no buttons for a
- * signed-out viewer — and the viewer's own Check in and commitment send their writes.
+ * signed-out viewer — and the viewer's own Check in, commitment and Reopen send their writes.
  *
  * Run:  npx vitest run src/components/ScrimNightStatusBar.test.tsx
  */
@@ -19,7 +19,7 @@ vi.mock('./sendJsonRequest', () => ({ sendJsonRequest }));
 
 afterEach(() => sendJsonRequest.mockClear());
 
-const LIVE: ScrimNightStatus = { state: 'live', checkedInCount: 3, leagueMatches: [], checkIn: null, commitment: null };
+const LIVE: ScrimNightStatus = { state: 'live', checkedInCount: 3, leagueMatches: [], checkIn: null, commitment: null, canReopen: false };
 
 function renderBar(status: Partial<ScrimNightStatus>) {
   return render(<ScrimNightStatusBar nightId={5} startsAt="2026-01-01T20:00:00Z" status={{ ...LIVE, ...status }} />);
@@ -38,6 +38,13 @@ describe('ScrimNightStatusBar', () => {
     renderBar({ state: 'final', checkedInCount: null });
     expect(screen.getByText('Final')).toBeInTheDocument();
     expect(screen.queryByText(/checked in/)).toBeNull();
+  });
+
+  test('Reopen, on a night the viewer may reopen, posts after a confirm', async () => {
+    renderBar({ state: 'final', checkedInCount: null, canReopen: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reopen the night' }));
+    await waitFor(() => expect(sendJsonRequest).toHaveBeenCalledWith('POST', '/api/scrims/5/reopen', {}));
   });
 
   test("the viewer's Check in and commitment send their own writes", async () => {

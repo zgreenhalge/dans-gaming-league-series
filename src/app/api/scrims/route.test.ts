@@ -1,7 +1,7 @@
 /**
  * Route-handler tests for POST /api/scrims: starting a night with its first signup, admin-or-self,
- * input checks (start time, commitment, player), and refusing a night within the night length of
- * another.
+ * input checks (start time, commitment, player), and refusing a night whose slot meets another's
+ * (from its start until it ends or would go idle).
  *
  * Run:  npx vitest run src/app/api/scrims/route.test.ts
  */
@@ -12,7 +12,7 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, FakeRpcError, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
-import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
+import { idleFor, scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
 import { scrimNightRpcs } from '@/lib/test-support/scrimNightRpcs';
 import { POST } from './route';
 
@@ -51,7 +51,7 @@ async function main() {
     const res = await start({ player_id: PLAYER_ID, startsAt, commitment: 'maybe' });
     assert.equal(res.status, 201);
     const { nightId } = (await res.json()) as { nightId: number };
-    assert.deepEqual(db.scrim_nights, [{ id: nightId, starts_at: startsAt, ended_at: null }]);
+    assert.deepEqual(db.scrim_nights, [{ id: nightId, starts_at: startsAt, ended_at: null, last_active_at: null }]);
     assert.deepEqual(db.scrim_signups.map((s) => [s.night_id, s.player_id, s.commitment]), [[nightId, PLAYER_ID, 'maybe']]);
   });
 
@@ -77,19 +77,20 @@ async function main() {
     assert.equal(db.scrim_nights.length, 0);
   });
 
-  await test('a night already running can be started (one that began within the night length)', async () => {
+  await test('a night already running can be started (one that began less than the idle time ago)', async () => {
     installFixture();
     __setTestSession(sessionFor(PLAYER_ID));
-    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(-1), commitment: 'definite' })).status, 201);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(-0.25), commitment: 'definite' })).status, 201);
   });
 
-  await test('409 overlapping another night; fine just outside it', async () => {
+  await test('409 within the idle time either side of an upcoming night; fine just outside it', async () => {
     const db = installFixture({ scrim_nights: [scrimNightStartingIn(48 * HOUR)] });
     __setTestSession(sessionFor(PLAYER_ID));
-    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(50), commitment: 'definite' })).status, 409);
-    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(45), commitment: 'definite' })).status, 409);
-    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(53), commitment: 'definite' })).status, 201);
-    assert.equal(db.scrim_nights.length, 2);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(48.25), commitment: 'definite' })).status, 409);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(47.75), commitment: 'definite' })).status, 409);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(49), commitment: 'definite' })).status, 201);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(47), commitment: 'definite' })).status, 201);
+    assert.equal(db.scrim_nights.length, 3);
   });
 
   await test('an ended night frees its slot: a night can start after its end', async () => {
@@ -100,9 +101,15 @@ async function main() {
     assert.equal(db.scrim_nights.length, 2);
   });
 
-  await test('409 starting before a still-running night ends, even one set to end later', async () => {
-    const running = { ...scrimNightStartingIn(-3 * HOUR), ended_at: new Date(Date.now() + HOUR).toISOString() };
-    installFixture({ scrim_nights: [running] });
+  await test('a night gone idle frees its slot too', async () => {
+    const db = installFixture({ scrim_nights: [idleFor(scrimNightStartingIn(-3 * HOUR), HOUR)] });
+    __setTestSession(sessionFor(PLAYER_ID));
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 201);
+    assert.equal(db.scrim_nights.length, 2);
+  });
+
+  await test('409 starting while a night that began hours ago is still active', async () => {
+    installFixture({ scrim_nights: [scrimNightStartingIn(-3 * HOUR)] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 409);
   });
