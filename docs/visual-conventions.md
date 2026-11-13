@@ -353,7 +353,9 @@ conventions, distinct from the content-page patterns above:
   (adding an entry). The list reads the same for an admin as for a player until the menu opens. An
   item is one-click (`onSelect`, run after the menu closes) or expands in place of the list
   (`content`, rendered with a `close` callback — `ScrimNightRoster`'s **Add player…** opens
-  `AddPlayerSelect` that way). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
+  `AddPlayerSelect` that way). An item that needs a confirm expands into an `ArmedConfirmButton` the same
+  way (`ScrimPendingMatchActions`' Discard…; `ScrimNightRoster`'s Remove… for the night's only player, whose
+  removal deletes a night with no matches — any other Remove is one click). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
   focuses the first item, arrow keys move between items, and Escape, a press outside or tabbing away
   closes it, with Escape and a pick returning focus to the trigger. The popup anchors to the trigger's
   right edge and is capped to the viewport width, so it fits at phone width. An action any player may
