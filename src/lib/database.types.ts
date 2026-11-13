@@ -1817,6 +1817,10 @@ export type Database = {
         Args: { p_season_id: number }
         Returns: Json
       }
+      delete_upcoming_season: {
+        Args: { p_season_id: number }
+        Returns: undefined
+      }
       generate_season_schedule_draft: {
         Args: { p_season_id: number; p_weeks: Json }
         Returns: Json
