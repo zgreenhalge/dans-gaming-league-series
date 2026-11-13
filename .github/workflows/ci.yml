@@ -120,10 +120,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # An exact version: `latest` resolves through GitHub's rate-limited API (docs/e2e.md, "CI placement").
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
-          version: latest
+          version: 3.1.0
 
       - name: Start local Supabase (applies supabase/migrations + supabase/seed.sql)
         run: supabase start
@@ -160,7 +161,12 @@ jobs:
 
       - name: Stop local Supabase
         if: always()
-        run: supabase stop --no-backup
+        run: |
+          if command -v supabase >/dev/null 2>&1; then
+            supabase stop --no-backup
+          else
+            echo "The Supabase CLI isn't installed, so there is no local stack to stop."
+          fi
 
   ehog:
     needs: changes
