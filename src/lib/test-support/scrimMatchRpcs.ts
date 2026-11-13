@@ -2,7 +2,7 @@
  * Test-local fakes for the scrim match Postgres RPCs — `set_scrim_match_lineup`,
  * `queue_scrim_matches`, `update_scrim_match`, `discard_scrim_match` and `claim_scrim_match_start`
  * (`supabase/migrations/20261101140000_add_scrim_match_rpcs.sql`,
- * `20261102140000_add_queue_scrim_matches.sql`, `20261110120000_add_scrim_match_revision.sql`) — see
+ * `20261102140000_add_queue_scrim_matches.sql`, `20261110130000_add_scrim_match_revision.sql`) — see
  * fakeSupabase.ts's header on why `.rpc()` needs a per-name fake. Mirrors each function's refusals as
  * `FakeRpcError`s. A fixture row without `scrim_revision` is at revision 0.
  */
