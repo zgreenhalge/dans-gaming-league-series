@@ -1,8 +1,9 @@
 'use client';
 
-import { startTransition, useEffect, useRef } from 'react';
+import { startTransition, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRealtimeChanges, type RealtimeChange } from './useRealtimeChanges';
+import { useVisibleInterval } from './useVisibleInterval';
 import { isPlayedScore } from '@/lib/util';
 
 /** How often a visible page re-renders when no Realtime event has arrived, with `fallback`. */
@@ -51,18 +52,14 @@ export function RefreshOnServerState({
     },
   );
 
-  useEffect(() => {
-    if (!fallback) return;
-    const refreshIfVisible = () => {
-      if (document.visibilityState === 'visible') startTransition(() => router.refresh());
-    };
-    document.addEventListener('visibilitychange', refreshIfVisible);
-    const id = setInterval(refreshIfVisible, FALLBACK_REFRESH_MS);
-    return () => {
-      document.removeEventListener('visibilitychange', refreshIfVisible);
-      clearInterval(id);
-    };
-  }, [router, fallback]);
+  return fallback ? <FallbackRefresh /> : null;
+}
 
+/** `RefreshOnServerState`'s fallback: a refresh when the tab becomes visible again and every
+ *  `FALLBACK_REFRESH_MS` while it stays visible. */
+function FallbackRefresh() {
+  const router = useRouter();
+  const refresh = useCallback(() => startTransition(() => router.refresh()), [router]);
+  useVisibleInterval(refresh, FALLBACK_REFRESH_MS);
   return null;
 }

@@ -146,6 +146,7 @@ export const getSeasonMatchSummaries = persistentQuery('getSeasonMatchSummaries'
  *  seasons' weeks, or `null` when they have none. Realtime takes up to 100 values in an `in` filter,
  *  far more weeks than a season and its gauntlet hold. */
 export async function getSeasonMatchesRealtimeFilter(seasonIds: number[]): Promise<string | null> {
+  if (seasonIds.length === 0) return null;
   const weekIds = [...(await getWeekLookup(seasonIds)).keys()];
   return weekIds.length > 0 ? `week_id=in.(${weekIds.join(',')})` : null;
 }

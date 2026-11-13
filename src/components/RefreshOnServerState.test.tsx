@@ -30,6 +30,7 @@ vi.mock('./useRealtimeChanges', () => ({
 
 function setVisibility(state: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => state === 'hidden' });
 }
 
 function deliver(row: Record<string, unknown> = {}) {
@@ -111,6 +112,7 @@ describe('RefreshOnServerState', () => {
     act(() => void vi.advanceTimersByTime(30_000));
     expect(refresh).toHaveBeenCalledTimes(1);
     setVisibility('hidden');
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
     act(() => void vi.advanceTimersByTime(30_000));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
