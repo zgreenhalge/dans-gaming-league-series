@@ -70,7 +70,7 @@ begin
     perform set_scrim_match_lineup(p_match_id, p_shirts, p_skins);
   end if;
 
-  -- One update of the match's own row, so a change is one Realtime event.
+  -- The match's own row changes in one update, so a subscriber to it gets one event per change.
   update matches
   set shirts_pick = coalesce(p_map, shirts_pick),
       scrim_workshop_id = coalesce(p_workshop_id, scrim_workshop_id),
