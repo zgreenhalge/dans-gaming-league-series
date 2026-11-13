@@ -118,7 +118,7 @@ export interface ScrimMatch {
 }
 
 const SCRIM_MATCH_COLUMNS =
-  'id, scrim_night_id, match_number, scrim_revision, shirts_pick,scrim_workshop_id, scrim_side_choice, skins_starting_side, final_score, ' +
+  'id, scrim_night_id, match_number, scrim_revision, shirts_pick, scrim_workshop_id, scrim_side_choice, skins_starting_side, final_score, ' +
   'player_match_stats(player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win), ' +
   'match_server_state(server_state)';
 

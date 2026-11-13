@@ -34,7 +34,6 @@ import {
   type ScrimSideChoice,
 } from '@/lib/scrim-matches';
 
-
 /** The response for a write that threw: 409 for a refusal (`code: 'match_changed'` when the match
  *  moved on, so the client reloads), 500 otherwise. */
 function writeFailed(err: unknown, fallback: string): NextResponse {
@@ -51,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!access.ok) return accessDenied(access);
   if (!isScrimMatchEditable(access.match)) return NextResponse.json({ error: SCRIM_MATCH_LOCKED }, { status: 409 });
 
-  const body =(await req.json().catch(() => null)) as { workshop?: unknown; lineup?: unknown; side?: unknown; revision?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { workshop?: unknown; lineup?: unknown; side?: unknown; revision?: unknown } | null;
   const revision = parseScrimRevision(body?.revision);
   const workshopId = body?.workshop !== undefined ? workshopIdFromInput(typeof body.workshop === 'string' ? body.workshop : null) : undefined;
   const lineup = body?.lineup !== undefined ? parseScrimTeams(body.lineup) : undefined;

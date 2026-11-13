@@ -62,7 +62,7 @@ export interface ScrimNightPageModel {
   canManageLobby: boolean;
   /** The matches waiting behind it, in play order, and whether the viewer may discard each
    *  (`canManageScrimMatch()`). */
-  queued:{ match: ScrimMatch; canDiscard: boolean }[];
+  queued: { match: ScrimMatch; canDiscard: boolean }[];
   /** The night's running order: the matches whose game is over (played or pending) in play order, then
    *  the one on the server, then those still to start — these only while check-in is open, since a match
    *  can start only then. */

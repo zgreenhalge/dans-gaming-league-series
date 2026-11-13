@@ -291,7 +291,6 @@ function LobbyMatchPickers({
   );
 }
 
-
 /** A short pointer to the pre-matched matches waiting behind the lobby's — each by number and map,
  *  with a Discard for its players or an admin (after a confirm) — linking to the Matches tab, which
  *  shows them with their lineups in the night's running order. Each becomes the lobby's match in turn,
