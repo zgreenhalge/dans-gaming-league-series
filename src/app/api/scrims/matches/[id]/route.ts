@@ -37,9 +37,10 @@ import {
 /** The response for a write that threw: 409 for a refusal (`code: 'match_changed'` when the match
  *  moved on, so the client reloads), 500 otherwise. */
 function writeFailed(err: unknown, fallback: string): NextResponse {
-  if (err instanceof ScrimMatchConflictError) {
-    return NextResponse.json({ error: err.message, ...(err instanceof ScrimMatchChangedError && { code: SCRIM_MATCH_CHANGED_CODE }) }, { status: 409 });
+  if (err instanceof ScrimMatchChangedError) {
+    return NextResponse.json({ error: err.message, code: SCRIM_MATCH_CHANGED_CODE }, { status: 409 });
   }
+  if (err instanceof ScrimMatchConflictError) return NextResponse.json({ error: err.message }, { status: 409 });
   return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
 }
 

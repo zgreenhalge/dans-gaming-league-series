@@ -154,10 +154,7 @@ export async function queueScrimMatches(
     }),
   });
   if (error) {
-    if (error.message.includes('unplayed-scrim-match')) {
-      throw new ScrimMatchConflictError('Finish or discard the current match before making the next one.');
-    }
-    throw new Error(error.message);
+    throw scrimMatchRpcError(error.message, { 'unplayed-scrim-match': 'Finish or discard the current match before making the next one.' });
   }
   return data as number[];
 }

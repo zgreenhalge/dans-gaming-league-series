@@ -66,17 +66,18 @@ begin
     raise exception 'A scrim map needs both its name and its workshop id';
   end if;
 
-  if p_map is not null then
-    update matches set shirts_pick = p_map, scrim_workshop_id = p_workshop_id where id = p_match_id;
-  end if;
-  if p_side_choice is not null then
-    update matches set scrim_side_choice = p_side_choice, skins_starting_side = null where id = p_match_id;
-  end if;
   if p_shirts is not null or p_skins is not null then
     perform set_scrim_match_lineup(p_match_id, p_shirts, p_skins);
   end if;
 
-  update matches set scrim_revision = scrim_revision + 1 where id = p_match_id
+  -- One update of the match's own row, so a change is one Realtime event.
+  update matches
+  set shirts_pick = coalesce(p_map, shirts_pick),
+      scrim_workshop_id = coalesce(p_workshop_id, scrim_workshop_id),
+      scrim_side_choice = coalesce(p_side_choice, scrim_side_choice),
+      skins_starting_side = case when p_side_choice is not null then null else skins_starting_side end,
+      scrim_revision = scrim_revision + 1
+  where id = p_match_id
   returning scrim_revision into v_revision;
   return v_revision;
 end;
