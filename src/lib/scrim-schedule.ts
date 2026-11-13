@@ -72,10 +72,11 @@ export function isScrimCheckInOpen(night: ScrimNight, now: Date): boolean {
 }
 
 /** The instants, in epoch ms, where `night`'s clock checks flip: check-in opens
- *  (`isScrimCheckInOpen()`), it starts (`hasScrimNightStarted()`) and it ends (`hasScrimNightEnded()`).
+ *  (`isScrimCheckInOpen()`), it starts (`hasScrimNightStarted()`), it ends (`hasScrimNightEnded()`) and
+ *  it can no longer be reopened (`canReopenScrimNight()`).
  *  A page that renders those checks refreshes at the next one (`nextRefreshInstant()`, `util.ts`). */
 export function scrimNightBoundaries(night: ScrimNight): number[] {
-  return [scrimCheckInOpensAt(night), Date.parse(night.startsAt), scrimNightEnd(night)];
+  return [scrimCheckInOpensAt(night), Date.parse(night.startsAt), scrimNightEnd(night), Date.parse(night.startsAt) + SCRIM_NIGHT_SPAN_MS];
 }
 
 /** How far from a scheduled league match a scrim match can't start: a DGLS wingman game runs about

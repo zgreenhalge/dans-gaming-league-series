@@ -63,7 +63,7 @@ test('isScrimCheckInOpen: from SCRIM_CHECK_IN_LEAD_MS before the start until the
 });
 
 test('scrimNightBoundaries: each instant is exactly where its clock check flips', () => {
-  const [checkIn, start, end] = scrimNightBoundaries(NIGHT);
+  const [checkIn, start, end, reopenEnds] = scrimNightBoundaries(NIGHT);
   const before = (t: number) => new Date(t - 1);
   assert.equal(isScrimCheckInOpen(NIGHT, before(checkIn)), false);
   assert.equal(isScrimCheckInOpen(NIGHT, new Date(checkIn)), true);
@@ -71,6 +71,8 @@ test('scrimNightBoundaries: each instant is exactly where its clock check flips'
   assert.equal(hasScrimNightStarted(NIGHT, new Date(start)), true);
   assert.equal(hasScrimNightEnded(NIGHT, before(end)), false);
   assert.equal(hasScrimNightEnded(NIGHT, new Date(end)), true);
+  assert.equal(canReopenScrimNight(NIGHT, before(reopenEnds)), true);
+  assert.equal(canReopenScrimNight(NIGHT, new Date(reopenEnds)), false);
   // A night ended by hand ends at that instant, so nothing is left to refresh for afterward.
   const ended = { ...NIGHT, endedAt: at(HOUR).toISOString() };
   assert.equal(scrimNightBoundaries(ended)[2], at(HOUR).getTime());
