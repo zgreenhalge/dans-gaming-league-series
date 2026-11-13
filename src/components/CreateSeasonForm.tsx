@@ -13,7 +13,7 @@ interface Props {
 }
 
 /** The map pool is optional here — a season can open for signups before its maps are decided, and
- * is set later from the season page (`SeasonMapPoolPanel`). */
+ * is set later from the season page (`SeasonSetupDetails`). */
 export function CreateSeasonForm({ knownMaps }: Props) {
   const router = useRouter();
   const selection = useMapPoolSelection();

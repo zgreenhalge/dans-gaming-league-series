@@ -144,7 +144,7 @@ export function SeasonManager({
                   )}
                   {s.status === 'UPCOMING' && !s.isGauntlet && (
                     <div className="shrink-0 flex items-center gap-3">
-                      <MarkSeasonActiveButton seasonId={s.id} canEdit seasonStatus={s.status} />
+                      <MarkSeasonActiveButton seasonId={s.id} seasonStatus={s.status} />
                       <DeleteSeasonButton seasonId={s.id} />
                     </div>
                   )}
