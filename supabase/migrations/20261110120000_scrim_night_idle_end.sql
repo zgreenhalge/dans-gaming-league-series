@@ -8,6 +8,13 @@
 
 alter table public.scrim_nights add column last_active_at timestamptz;
 
+-- A night running when this applies keeps running: one not ended by hand that started within the last
+-- 4 hours is stamped active now.
+update public.scrim_nights
+set last_active_at = now()
+where ended_at is null
+  and starts_at > now() - interval '4 hours';
+
 -- The instant a night ends: `ended_at` (never before it starts), else 30 minutes after its latest
 -- activity. A night not ended yet gives the instant it would end if nothing more happened.
 create or replace function public.scrim_night_end(
@@ -26,7 +33,10 @@ as $function$
   end;
 $function$;
 
--- Records activity on night `p_night_id` now, unless it has already ended (a null id is a no-op).
+-- Records activity on night `p_night_id` now, unless it has already ended (a null id is a no-op). A
+-- night stamped within the last 5 minutes is left alone: a live match scores far more often than that,
+-- and each stamp is a `scrim_nights` update, which bumps `data_version` and so refreshes every cached
+-- read. A night therefore goes idle after 25 to 30 minutes of nothing.
 create or replace function public.touch_scrim_night(p_night_id integer)
 returns void
 language sql
@@ -35,7 +45,8 @@ as $function$
   update scrim_nights
   set last_active_at = now()
   where id = p_night_id
-    and scrim_night_end(starts_at, ended_at, last_active_at) > now();
+    and scrim_night_end(starts_at, ended_at, last_active_at) > now()
+    and (last_active_at is null or last_active_at < now() - interval '5 minutes');
 $function$;
 
 -- The trigger behind every activity source: the night is the row's own (`scrim_signups.night_id`,
@@ -125,9 +136,11 @@ begin
   ) then
     raise exception 'current-scrim-night' using errcode = 'P0001';
   end if;
-  update scrim_nights set ended_at = null, last_active_at = now() where id = p_night_id;
+  update scrim_nights set ended_at = null, last_active_at = now()
+  where id = p_night_id
+    and scrim_night_end(starts_at, ended_at, last_active_at) <= now();
   if not found then
-    raise exception 'Scrim night % not found', p_night_id;
+    raise exception 'Scrim night % not found or not over', p_night_id;
   end if;
 end;
 $function$;
