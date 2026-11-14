@@ -52,7 +52,7 @@ function draftMatchesOf(db: FakeDb, draftWeekId: unknown): Row[] {
 
 /** Deletes a season's draft (matches, then weeks) — the shared body behind the `generate` and
  * `delete` fakes below, mirroring the real functions' own shared delete sequence. */
-function deleteDraft(db: FakeDb, seasonId: number): void {
+export function deleteDraft(db: FakeDb, seasonId: number): void {
   const weekIds = draftWeeksOf(db, seasonId).map((w) => w.id);
   db.season_schedule_draft_matches = (db.season_schedule_draft_matches ?? []).filter((m) => !weekIds.includes(m.draft_week_id));
   db.season_schedule_draft_weeks = (db.season_schedule_draft_weeks ?? []).filter((w) => w.season_id !== seasonId);
