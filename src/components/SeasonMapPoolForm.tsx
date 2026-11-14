@@ -1,6 +1,6 @@
 'use client';
 
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
@@ -46,7 +46,7 @@ export function SeasonMapPoolForm({ seasonId, mapPool, knownMaps, onDone }: Prop
         <button
           type="button"
           onClick={() => onDone(false)}
-          className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+          className={ADMIN_CANCEL_BUTTON_CLS}
         >
           Cancel
         </button>

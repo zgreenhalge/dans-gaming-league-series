@@ -15,7 +15,7 @@ import { useAsyncAction } from './useAsyncAction';
  * activation itself still succeeds, so the warning is the only place the failure is visible. */
 export function useActivateSeason(seasonId: number) {
   const router = useRouter();
-  const { busy: writing, error, run } = useAsyncAction();
+  const { busy: writing, error, run, clearError } = useAsyncAction();
   const [warning, setWarning] = useState<string | null>(null);
   const [refreshing, startTransition] = useTransition();
 
@@ -34,7 +34,7 @@ export function useActivateSeason(seasonId: number) {
   }
 
   // Busy through the refresh after a write too: the season reads UPCOMING until it lands.
-  return { activate, busy: writing || refreshing, error, warning };
+  return { activate, busy: writing || refreshing, error, clearError, warning };
 }
 
 /** The amber line for `useActivateSeason()`'s `warning`. */
