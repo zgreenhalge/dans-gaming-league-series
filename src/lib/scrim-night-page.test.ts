@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightPageModel, scrimNightTabOrder } from './scrim-night-page';
+import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightViewer } from './scrim-night-page';
 import { scrimSignup } from './test-support/scrimFixtures';
 import type { ScrimLeaderboardRow, ScrimMatch, ScrimNightView } from './queries';
 import type { H2HData } from './h2h';
@@ -16,6 +16,7 @@ function match(id: number, final_score: string | null, server_state: string | nu
   return {
     id,
     night_id: 5,
+    revision: 0,
     match_number: id,
     map: 'cobble',
     workshop_id: null,
@@ -37,6 +38,7 @@ function night(overrides: Partial<ScrimNightView> = {}): ScrimNightView {
     started: true,
     checkInOpen: true,
     current: true,
+    reopenable: false,
     signups: [1, 2, 3, 4].map((id) => scrimSignup(id, 'definite', { checked_in_at: '2026-01-01T19:45:00Z' })),
     matches: [],
     leaderboard: [],
@@ -70,10 +72,22 @@ test('the running order: a match that finished while an earlier one waits for th
   assert.deepEqual(order.map((e) => [e.match.id, e.status]), [[2, 'played'], [1, 'next']]);
 });
 
-test('the running order: matches still to start drop out once check-in closes', () => {
+test('a match already made stays startable once the night is over: the lobby holds it and the running order keeps it', () => {
   const matches = [match(1, '13-9', 'done'), match(2, null, null)];
-  const order = buildScrimNightPageModel(night({ matches, current: false, checkInOpen: false }), PLAYER(1)).runningOrder;
-  assert.deepEqual(order.map((e) => e.match.id), [1]);
+  const model = buildScrimNightPageModel(night({ matches, current: false, checkInOpen: false }), ADMIN);
+  assert.deepEqual(model.runningOrder.map((e) => [e.match.id, e.status]), [[1, 'played'], [2, 'next']]);
+  assert.equal(model.lobbyMatch?.id, 2);
+  assert.equal(model.hasLobby, true);
+  assert.equal(model.canEnd, false);
+});
+
+test('reopening: a night that is over and reopenable, for anyone signed up or an admin', () => {
+  const over = night({ current: false, checkInOpen: false, reopenable: true });
+  assert.equal(buildScrimNightPageModel(over, PLAYER(1)).status.canReopen, true);
+  assert.equal(buildScrimNightPageModel(over, ADMIN).status.canReopen, true);
+  assert.equal(buildScrimNightPageModel(over, PLAYER(7)).status.canReopen, false);
+  assert.equal(buildScrimNightPageModel(over, SIGNED_OUT).status.canReopen, false);
+  assert.equal(buildScrimNightPageModel(night({ current: false, checkInOpen: false }), ADMIN).status.canReopen, false, 'past the span');
 });
 
 test('the running order: an admin resolves each pending row, and only those', () => {
@@ -90,6 +104,16 @@ test('a queued match is discardable by its players or an admin, not by anyone el
   assert.equal(buildScrimNightPageModel(night({ matches }), ADMIN).queued[0].canDiscard, true);
   assert.equal(buildScrimNightPageModel(night({ matches }), PLAYER(7)).queued[0].canDiscard, false);
   assert.equal(buildScrimNightPageModel(night({ matches }), SIGNED_OUT).queued[0].canDiscard, false);
+});
+
+test('the lobby match is managed by its players or an admin, not by anyone else', () => {
+  const canManageLobby = (viewer: ScrimNightViewer, matches = [match(1, null, null, [1, 2, 3, 4])]) =>
+    buildScrimNightPageModel(night({ matches }), viewer).canManageLobby;
+  assert.equal(canManageLobby(PLAYER(2)), true);
+  assert.equal(canManageLobby(ADMIN), true);
+  assert.equal(canManageLobby(PLAYER(7)), false);
+  assert.equal(canManageLobby(SIGNED_OUT), false);
+  assert.equal(canManageLobby(ADMIN, []), false, 'no lobby match');
 });
 
 test('making matches: a checked-in player or an admin; Generate Rounds only with four in and no match waiting', () => {

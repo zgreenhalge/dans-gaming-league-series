@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
@@ -118,6 +118,7 @@ function baseProps() {
     seasonNumber: 1,
     initialView: 'regular' as const,
     initialLightData: { kind: 'regular' as const, data: REGULAR_LIGHT },
+    statsVersion: '1',
   };
 }
 
@@ -195,6 +196,18 @@ describe('CombinedSeasonTabView — Stats/Advanced Stats sub-tab data', () => {
     expect((fetch as unknown as { mock: { calls: string[][] } }).mock.calls[0][0]).toBe(
       '/api/seasons/1/stats?kind=regular',
     );
+  });
+
+  test('a new statsVersion drops the fetched stats and fetches them again', async () => {
+    nextNavigationMock.setSearchParams('tab=stats');
+    const { rerender } = renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    rerender(<CombinedSeasonTabView {...baseProps()} />);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    rerender(<CombinedSeasonTabView {...baseProps()} statsVersion="2" />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect((fetch as unknown as { mock: { calls: string[][] } }).mock.calls[1][0]).toBe('/api/seasons/1/stats?kind=regular');
   });
 
   test('does not fetch stats data while on the Leaderboard sub-tab', () => {

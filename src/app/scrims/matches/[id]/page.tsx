@@ -8,6 +8,7 @@ import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import { MatchMapBackdrop, MatchPanelSlot } from '@/components/MatchBackdrop';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { getSession } from '@/lib/session';
 import { getMapLookup, getMatchServerState, getPlayersById, getScrimMatchDetail } from '@/lib/queries';
@@ -18,6 +19,7 @@ import { effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { formatLeagueDate, isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
 import { DEFAULT_TARGET_WIN_ROUNDS } from '@/lib/replay/inputs';
+import { canManageScrimMatch } from '@/lib/scrim-matches';
 
 // The server panel's state and the lobby's lock change live; don't cache.
 export const dynamic = 'force-dynamic';
@@ -62,7 +64,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
   const nightLabel = formatLeagueDate(match.night_starts_at);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
-  const canManage = currentPlayerId != null && (isAdmin || stats.some((s) => s.player_id === currentPlayerId));
+  const canManage = canManageScrimMatch({ playerId: currentPlayerId, isAdmin }, stats.map((s) => s.player_id));
 
   return (
     <div className="min-h-screen">
@@ -75,6 +77,8 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           { label: `Match ${match.match_number}` },
         ]}
       />
+      {/* Until the match is scored, its result landing turns the page to the scored match. */}
+      {!played && <RefreshOnServerState table="matches" filter={`id=eq.${match.id}`} onlyPlayed />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <MatchMapBackdrop map={map} mapImg={mapImg}>
           <div className="pt-8 pb-6">
@@ -90,7 +94,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           </div>
           {!played && (
             <MatchPanelSlot>
-              <MatchServerPanel matchId={match.id} canManage={canManage} canJoin={currentPlayerId != null} signInToJoin={currentPlayerId == null} initialState={serverState} />
+              <MatchServerPanel matchId={match.id} canManage={canManage} canJoin={currentPlayerId != null} signInToJoin={currentPlayerId == null} initialState={serverState} revision={match.scrim_revision} />
             </MatchPanelSlot>
           )}
           {canManage && (

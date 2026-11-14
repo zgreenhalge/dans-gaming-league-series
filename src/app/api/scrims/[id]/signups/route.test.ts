@@ -13,7 +13,7 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
-import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
+import { idleFor, scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
 import { scrimNightRpcs } from '@/lib/test-support/scrimNightRpcs';
 import { POST, DELETE } from './route';
 
@@ -57,7 +57,7 @@ async function main() {
   });
 
   await test('POST: 400 for a malformed id, 404 for no such night, 409 for one that is over', async () => {
-    installFixture({ scrim_nights: [scrimNightStartingIn(-DAY, NIGHT_ID)] });
+    installFixture({ scrim_nights: [idleFor(scrimNightStartingIn(-DAY, NIGHT_ID), DAY)] });
     __setTestSession(sessionFor(PLAYER_ID));
     const body = { player_id: PLAYER_ID, commitment: 'definite' };
     assert.equal((await call(POST, 'POST', 'tomorrow', body)).status, 400);

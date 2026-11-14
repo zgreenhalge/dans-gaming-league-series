@@ -31,7 +31,7 @@ function loadStats(nightId: number, version: string): Promise<ScrimNightStatsVie
 }
 
 /** `rows` are the night's totals the Stats view shows; the Advanced view reads its own data.
- *  `version` changes whenever the night's stats could have (`getScrimNightStatsVersion()`), so a fetch
+ *  `version` changes whenever the night's stats could have (`getStatsVersion()`), so a fetch
  *  is reused only while it's current. */
 export function ScrimNightStats({
   nightId,

@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 import ErrorText from './ErrorText';
+import { useRefreshingAction } from './useRefreshingAction';
 import { CountdownTimer } from './CountdownTimer';
 import { LocalTime } from './LocalTime';
 import { LeagueGameMark } from './ScrimSeats';
@@ -20,7 +22,8 @@ const STATE_PILL = {
 /** The scrim night page's status bar, above every tab: the night's state (a countdown while it's
  *  upcoming), how many have checked in while check-in is open, each league match scheduled during the
  *  night (its diamond and time, linking to the match: it takes the server), and the viewer's own
- *  commitment and Check in / Check out. What it shows is `buildScrimNightPageModel()`'s `status`. */
+ *  commitment and Check in / Check out, or Reopen once it's over. What it shows is
+ *  `buildScrimNightPageModel()`'s `status`. */
 export function ScrimNightStatusBar({
   nightId,
   startsAt,
@@ -30,7 +33,7 @@ export function ScrimNightStatusBar({
   startsAt: string;
   status: ScrimNightStatus;
 }) {
-  const { state, checkedInCount, leagueMatches, checkIn, commitment } = status;
+  const { state, checkedInCount, leagueMatches, checkIn, commitment, canReopen } = status;
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -56,7 +59,24 @@ export function ScrimNightStatusBar({
           {commitment && <ScrimCommitmentButtons nightId={nightId} {...commitment} />}
         </div>
       )}
+      {canReopen && <ScrimReopenButton nightId={nightId} />}
     </div>
+  );
+}
+
+/** Reopen (`POST /api/scrims/[id]/reopen`), after a confirm: the night is current again. */
+function ScrimReopenButton({ nightId }: { nightId: number }) {
+  const { busy, error, act } = useRefreshingAction();
+  return (
+    <ArmedConfirmButton
+      onConfirm={() => act('POST', `/api/scrims/${nightId}/reopen`)}
+      busy={busy}
+      error={error}
+      triggerLabel="Reopen"
+      confirmLabel="Reopen the night"
+      busyLabel="Reopening…"
+      variant="primary"
+    />
   );
 }
 

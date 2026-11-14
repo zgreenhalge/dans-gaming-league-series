@@ -19,6 +19,7 @@ import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
+import { scrimMatchRpcs } from '@/lib/test-support/scrimMatchRpcs';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { POST } from './route';
@@ -50,7 +51,7 @@ function makeDb(): FakeDb {
 
 function installFixture(): FakeDb {
   const db = makeDb();
-  const client = createFakeSupabaseClient(db);
+  const client = createFakeSupabaseClient(db, scrimMatchRpcs);
   __setTestAdminClient(client);
   return db;
 }
@@ -143,8 +144,25 @@ async function main() {
     process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
     const db = installFixture();
     db.matches = [{ id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'skins_t', skins_starting_side: null }];
-    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID, { revision: 0 })).status, 202);
     assert.equal(db.matches[0].skins_starting_side, 'T');
+    await __flushTestAfter();
+    delete process.env.MATCHZY_CONFIG_SECRET;
+    __setTestAfterMode(false);
+  });
+
+  await test('POST — a scrim match starts only from its current revision, and the start bumps it', async () => {
+    process.env.MATCHZY_CONFIG_SECRET = 'test-secret';
+    const db = installFixture();
+    db.matches = [{ id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_revision: 2, scrim_side_choice: 'skins_t', skins_starting_side: null }];
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 400, 'no revision');
+    const stale = await call(MATCH_ID, IN_MATCH_ID, { revision: 1 });
+    assert.equal(stale.status, 409);
+    assert.equal(((await stale.json()) as { code: string }).code, 'match_changed');
+    assert.equal(db.matches[0].skins_starting_side, null, 'a refused start flips no side');
+    __setTestAfterMode(true);
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID, { revision: 2 })).status, 202);
+    assert.equal(db.matches[0].scrim_revision, 3);
     await __flushTestAfter();
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);
@@ -157,12 +175,12 @@ async function main() {
       { id: 900, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'knife' },
       { id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 2, final_score: null, scrim_side_choice: 'random', skins_starting_side: null },
     ];
-    const res = await call(MATCH_ID, IN_MATCH_ID);
+    const res = await call(MATCH_ID, IN_MATCH_ID, { revision: 0 });
     assert.equal(res.status, 409);
     assert.equal(db.matches[1].skins_starting_side, null, 'a refused start flips no side');
     db.matches[0].final_score = '13-7';
     __setTestAfterMode(true);
-    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID, { revision: 0 })).status, 202);
     await __flushTestAfter();
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);
@@ -196,7 +214,7 @@ async function main() {
     }) as typeof fetch;
     __setTestAfterMode(true);
     try {
-      assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+      assert.equal((await call(MATCH_ID, IN_MATCH_ID, { revision: 0 })).status, 202);
       assert.equal(stopped, true, 'the finished match\'s server was stopped for it');
       assert.equal(db.match_server_state.find((r) => r.match_id === 900)!.server_state, 'done');
       await __flushTestAfter();
@@ -220,12 +238,12 @@ async function main() {
       { id: MATCH_ID, scrim_night_id: 5, week_id: null, match_number: 1, final_score: null, scrim_side_choice: 'knife', skins_starting_side: null, scheduled_at: null },
       { id: 500, scrim_night_id: null, week_id: 40, match_number: 2, final_score: null, scheduled_at: soon },
     ];
-    const res = await call(MATCH_ID, IN_MATCH_ID);
+    const res = await call(MATCH_ID, IN_MATCH_ID, { revision: 0 });
     assert.equal(res.status, 409);
     assert.equal(((await res.json()) as { code: string }).code, 'league_match_due');
     db.matches[1].scheduled_at = new Date(Date.now() + 90 * 60 * 1000).toISOString();
     __setTestAfterMode(true);
-    assert.equal((await call(MATCH_ID, IN_MATCH_ID)).status, 202);
+    assert.equal((await call(MATCH_ID, IN_MATCH_ID, { revision: 0 })).status, 202);
     await __flushTestAfter();
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);

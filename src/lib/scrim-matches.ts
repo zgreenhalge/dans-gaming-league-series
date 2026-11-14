@@ -8,6 +8,10 @@
 // id in `scrim_workshop_id`, which the server is started on (`resolveMapWorkshopId()`). Its starting side is the lobby's `ScrimSideChoice`
 // (`scrim_side_choice`), turned into `skins_starting_side` only as the match starts
 // (`applyScrimSideChoice()`), so a random side stays unknown until then.
+//
+// Changing, discarding and starting a scrim match are version-checked: each sends the
+// `scrim_revision` its client saw, and is refused (`ScrimMatchChangedError`) when someone else's
+// change landed first, so nobody acts on a version of the match they never saw.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
@@ -73,17 +77,6 @@ export function resolveScrimSide(choice: ScrimSideChoice, rand: () => number = M
   if (choice === 'knife') return null;
   if (choice === 'random') return rand() < 0.5 ? 'T' : 'CT';
   return choice === 'skins_t' ? 'T' : 'CT';
-}
-
-/** Sets a scrim match's starting-side choice (`scrim_side_choice`), clearing any side an earlier start
- *  resolved so the next start applies the new choice. */
-export async function setScrimMatchSideChoice(db: SupabaseClient, matchId: number, choice: ScrimSideChoice): Promise<void> {
-  await db
-    .from('matches')
-    .update({ scrim_side_choice: choice, skins_starting_side: null })
-    .eq('id', matchId)
-    .not('scrim_night_id', 'is', null)
-    .throwOnError();
 }
 
 /** Turns a scrim match's side choice into its `skins_starting_side` — called as the match starts,
@@ -161,33 +154,94 @@ export async function queueScrimMatches(
     }),
   });
   if (error) {
-    if (error.message.includes('unplayed-scrim-match')) {
-      throw new ScrimMatchConflictError('Finish or discard the current match before making the next one.');
-    }
-    throw new Error(error.message);
+    throw scrimMatchRpcError(error.message, { 'unplayed-scrim-match': 'Finish or discard the current match before making the next one.' });
   }
   return data as number[];
 }
 
-/** Replaces a scrim match's lineup (`set_scrim_match_lineup()`, one transaction). */
-export async function setScrimMatchLineup(db: SupabaseClient, matchId: number, teams: ScrimTeams): Promise<void> {
-  const { error } = await db.rpc('set_scrim_match_lineup', { p_match_id: matchId, p_shirts: teams.shirts, p_skins: teams.skins });
-  if (error) throw new Error(error.message);
+/** Thrown by `updateScrimMatch()`, `discardScrimMatch()` and `claimScrimMatchStart()` when the match
+ *  moved on from the revision the client saw: someone else changed, started or discarded it first.
+ *  The client reloads to see what they did. */
+export class ScrimMatchChangedError extends ScrimMatchConflictError {
+  constructor() {
+    super('This match was changed — reloaded');
+    this.name = 'ScrimMatchChangedError';
+  }
 }
 
-/** Sets a scrim match's map. */
-export async function setScrimMatchMap(db: SupabaseClient, matchId: number, map: ScrimMap): Promise<void> {
-  await db
-    .from('matches')
-    .update({ shirts_pick: map.name, scrim_workshop_id: map.workshopId })
-    .eq('id', matchId)
-    .not('scrim_night_id', 'is', null)
-    .throwOnError();
+/** The error for a refused scrim match RPC: `ScrimMatchChangedError` for `scrim-match-changed`, a
+ *  `ScrimMatchConflictError` carrying `refusals`' message for one of the RPC's own refusal codes, else
+ *  a plain `Error`. */
+function scrimMatchRpcError(message: string, refusals: Record<string, string> = {}): Error {
+  if (message.includes('scrim-match-changed')) return new ScrimMatchChangedError();
+  const code = Object.keys(refusals).find((c) => message.includes(c));
+  return code ? new ScrimMatchConflictError(refusals[code]) : new Error(message);
 }
 
-/** Deletes a scrim match; its player rows (and anything else keyed to it) cascade. */
-export async function deleteScrimMatch(db: SupabaseClient, matchId: number): Promise<void> {
-  await db.from('matches').delete().eq('id', matchId).not('scrim_night_id', 'is', null).throwOnError();
+/** Why a scrim match can't change (`isScrimMatchEditable()`) or be discarded (`isScrimMatchDiscardable()`). */
+export const SCRIM_MATCH_LOCKED = 'This match has started or been scored, so it can no longer be changed';
+export const SCRIM_MATCH_NOT_DISCARDABLE = 'This match is scored or running on the server, so it can no longer be discarded';
+
+/** What a lobby edit changes; a part left out stays as it is. */
+export interface ScrimMatchChanges {
+  map?: ScrimMap;
+  side?: ScrimSideChoice;
+  lineup?: ScrimTeams;
+}
+
+/** Changes a scrim match's map, starting-side choice and/or lineup together (`update_scrim_match()`,
+ *  one transaction), from `revision`, the one the client saw. A new side choice clears any side an
+ *  earlier start resolved, so the next start applies it. Throws `ScrimMatchChangedError` when the
+ *  match has moved on, and `ScrimMatchConflictError` once it has started or been scored. Returns the
+ *  new revision. */
+export async function updateScrimMatch(db: SupabaseClient, matchId: number, revision: number, changes: ScrimMatchChanges): Promise<number> {
+  const { data, error } = await db.rpc('update_scrim_match', {
+    p_match_id: matchId,
+    p_revision: revision,
+    p_map: changes.map?.name ?? null,
+    p_workshop_id: changes.map?.workshopId ?? null,
+    p_side_choice: changes.side ?? null,
+    p_shirts: changes.lineup?.shirts ?? null,
+    p_skins: changes.lineup?.skins ?? null,
+  });
+  if (error) throw scrimMatchRpcError(error.message, { 'scrim-match-locked': SCRIM_MATCH_LOCKED });
+  return data as number;
+}
+
+/** Discards a scrim match from `revision` (`discard_scrim_match()`); its player rows (and anything
+ *  else keyed to it) cascade. Throws `ScrimMatchChangedError` when the match has moved on, and
+ *  `ScrimMatchConflictError` once it is scored or while it holds the server. */
+export async function discardScrimMatch(db: SupabaseClient, matchId: number, revision: number): Promise<void> {
+  const { error } = await db.rpc('discard_scrim_match', { p_match_id: matchId, p_revision: revision });
+  if (error) throw scrimMatchRpcError(error.message, { 'scrim-match-running': SCRIM_MATCH_NOT_DISCARDABLE });
+}
+
+/** Claims a scrim match's start from `revision` (`claim_scrim_match_start()`), bumping it so a change
+ *  or discard sent from the version before the start is refused. Throws `ScrimMatchChangedError` when
+ *  the match has moved on. Returns the new revision. */
+export async function claimScrimMatchStart(db: SupabaseClient, matchId: number, revision: number): Promise<number> {
+  const { data, error } = await db.rpc('claim_scrim_match_start', { p_match_id: matchId, p_revision: revision });
+  if (error) throw scrimMatchRpcError(error.message);
+  return data as number;
+}
+
+/** The 400 for a change, discard or start sent without a revision `parseScrimRevision()` accepts. */
+export const SCRIM_REVISION_INVALID = 'revision must be the revision of the match as last loaded';
+
+/** The `code` of the 409 a route answers `ScrimMatchChangedError` with: the client reloads on it. */
+export const SCRIM_MATCH_CHANGED_CODE = 'match_changed';
+
+/** Parses the revision a client sends with a change, discard or start: a non-negative integer, or
+ *  `null` if it isn't one. */
+export function parseScrimRevision(value: unknown): number | null {
+  return Number.isInteger(value) && (value as number) >= 0 ? (value as number) : null;
+}
+
+/** Whether `viewer` may change, discard or start a scrim match with players `playerIds`: an admin, or
+ *  one of its players. `requireScrimMatchAccess()` gates the API on it; the night page and the match
+ *  page offer the controls on it. */
+export function canManageScrimMatch(viewer: { playerId: number | null; isAdmin: boolean }, playerIds: number[]): boolean {
+  return viewer.isAdmin || (viewer.playerId != null && playerIds.includes(viewer.playerId));
 }
 
 /** Parses `{ shirts: [a, b], skins: [c, d] }` from a request body: two positive integer ids per side,
