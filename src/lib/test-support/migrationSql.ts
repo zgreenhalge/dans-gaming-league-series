@@ -14,6 +14,16 @@ export function readMigration(file: string): string {
   return fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
 }
 
+let allMigrations: string[] | null = null;
+
+/** The SQL of the latest migration that creates function `fn` in `public` (a later one replaces it),
+ *  or `''` when none does. The migrations are read once per test file. */
+export function latestMigrationDefining(fn: string): string {
+  allMigrations ??= migrationFiles().map(readMigration);
+  const defines = new RegExp(`\\bcreate\\s+(?:or\\s+replace\\s+)?function\\s+public\\.${fn}\\(`, 'i');
+  return allMigrations.filter((sql) => defines.test(sql)).at(-1) ?? '';
+}
+
 const IDENT = String.raw`(?:"([^"]+)"|(\w+))`;
 export const CREATE_TABLE = new RegExp(
   String.raw`\bcreate\s+(?:unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?(?:${IDENT}\s*\.\s*)?${IDENT}`,

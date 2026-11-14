@@ -25,7 +25,7 @@ import {
   SCRIM_NIGHT_SPAN_MS,
   canReopenScrimNight,
 } from './scrim-schedule';
-import { readMigration, migrationFiles } from './test-support/migrationSql';
+import { latestMigrationDefining } from './test-support/migrationSql';
 
 const START = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
 const NIGHT = { id: 1, startsAt: START };
@@ -137,13 +137,13 @@ test('canReopenScrimNight: once over, until SCRIM_NIGHT_SPAN_MS after the start'
 });
 
 test("SCRIM_NIGHT_IDLE_MS matches the idle interval in the latest migration's scrim_night_end()", () => {
-  const sql = migrationFiles().map(readMigration).filter((s) => /function public\.scrim_night_end\(/.test(s)).at(-1) ?? '';
+  const sql = latestMigrationDefining('scrim_night_end');
   const minutes = Number(/\+ interval '(\d+) minutes'/.exec(sql)?.[1]);
   assert.equal(minutes * 60_000, SCRIM_NIGHT_IDLE_MS);
 });
 
 test('only a match starting or being scored stamps a scrim night as active', () => {
-  const sql = migrationFiles().map(readMigration).filter((s) => /function public\.touch_scrim_night_on_activity\(/.test(s)).at(-1) ?? '';
+  const sql = latestMigrationDefining('touch_scrim_night_on_activity');
   const triggers = [...sql.matchAll(/create trigger (touch_scrim_night_on_\w+) after [^\n]* on public\.(\w+)/g)].map((m) => `${m[2]}:${m[1]}`).sort();
   assert.deepEqual(triggers, [
     'live_match_score:touch_scrim_night_on_live_score',

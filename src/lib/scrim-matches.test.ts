@@ -18,6 +18,7 @@ import {
   leagueMatchBlockingScrim,
   parseScrimRevision,
   parseScrimTeams,
+  RUNNING_SERVER_STATES,
   resolveScrimMap,
   resolveScrimSide,
   updateScrimMatch,
@@ -25,6 +26,7 @@ import {
   ScrimMatchConflictError,
 } from './scrim-matches';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { latestMigrationDefining } from './test-support/migrationSql';
 import { scrimMatchRpcs } from './test-support/scrimMatchRpcs';
 
 test('canManageScrimMatch: an admin or one of its players; nobody signed out', () => {
@@ -156,6 +158,28 @@ test('scrimMatchPlaysAfter: waits behind the night\'s first match still needing 
   assert.equal(scrimMatchPlaysAfter(night, 4), 3);
   assert.equal(scrimMatchPlaysAfter(night, 3), null, 'next up');
   assert.equal(scrimMatchPlaysAfter(night, 99), null, 'not on this night');
+});
+
+/** The `server_state in (...)` list of a function in the latest migration that defines it. */
+function sqlServerStates(fn: string): Set<string> {
+  const sql = latestMigrationDefining(fn);
+  const body = new RegExp(`create or replace function public\\.${fn}\\([\\s\\S]*?\\$function\\$;`).exec(sql)?.[0] ?? '';
+  assert.notEqual(body, '', `found ${fn}()'s body in the latest migration that defines it`);
+  const list = /server_state in \(([^)]*)\)/.exec(body)?.[1] ?? '';
+  return new Set([...list.matchAll(/'(\w+)'/g)].map((m) => m[1]));
+}
+
+test("isScrimMatchEditable / isScrimMatchDiscardable agree with update_scrim_match() / discard_scrim_match()'s server states", () => {
+  const locksEdit = sqlServerStates('update_scrim_match');
+  const locksDiscard = sqlServerStates('discard_scrim_match');
+  assert.notEqual(locksEdit.size, 0, 'found update_scrim_match()\'s state list');
+  assert.notEqual(locksDiscard.size, 0, 'found discard_scrim_match()\'s state list');
+  const states = new Set(['idle', 'failed', ...RUNNING_SERVER_STATES, ...locksEdit, ...locksDiscard]);
+  for (const server_state of states) {
+    const m = { final_score: null, server_state };
+    assert.equal(isScrimMatchEditable(m), !locksEdit.has(server_state), `editable while ${server_state}`);
+    assert.equal(isScrimMatchDiscardable(m), !locksDiscard.has(server_state), `discardable while ${server_state}`);
+  }
 });
 
 report();
