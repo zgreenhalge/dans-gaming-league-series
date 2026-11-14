@@ -1,4 +1,7 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { useState, type ReactNode } from 'react';
+import type { AdminMenuItem } from './AdminMenu';
 import { PlayerLink } from './PlayerLink';
 import PlayerAvatar from './PlayerAvatar';
 import { PlayerName } from './PlayerName';
@@ -6,7 +9,7 @@ import { SELECT_CLS } from './formStyles';
 
 // The pieces a signup list is built from — a season roster (`SeasonRosterPanel`) and a scrim night's
 // signups (`ScrimNightRoster`): a player row with room for row actions, and the admin's "add a player"
-// select (inside each panel's header `AdminMenu`).
+// select (inside each panel's header `AdminMenu`) with the `useAddPlayerMenuItem()` item that wraps it.
 
 /** One player in a signup list: avatar + name linking to their profile, then `children` (row actions)
  *  on the right. */
@@ -65,4 +68,59 @@ export function AddPlayerSelect({
       ))}
     </select>
   );
+}
+
+/** One button beside the picker in an "Add player…" item. `activeCls` styles it once a player is picked,
+ *  `idleCls` until then. */
+export interface AddPlayerAction {
+  label: string;
+  onAdd: (playerId: number) => void;
+  activeCls: string;
+  idleCls: string;
+}
+
+/** The header `AdminMenu`'s "Add player…" item, shared by `SeasonRosterPanel` and `ScrimNightRoster`:
+ *  it expands into an `AddPlayerSelect` plus one button per `actions` entry, which adds the picked
+ *  player, clears the pick and closes the menu. The pick lives here so it survives the menu closing,
+ *  and is dropped once that player lands in `excludeIds` by some other route. `busy` holds the buttons
+ *  while a write is in flight. */
+export function useAddPlayerMenuItem({
+  players,
+  excludeIds,
+  placeholder,
+  actions,
+  busy,
+}: {
+  players: { id: number; name: string }[];
+  excludeIds: Set<number>;
+  placeholder: string;
+  actions: AddPlayerAction[];
+  busy: boolean;
+}): AdminMenuItem {
+  const [pickedPlayerId, setPickedPlayerId] = useState('');
+  const addPlayerId = pickedPlayerId !== '' && excludeIds.has(Number(pickedPlayerId)) ? '' : pickedPlayerId;
+  return {
+    label: 'Add player…',
+    content: (close) => (
+      <div className="flex flex-wrap items-center gap-2">
+        <AddPlayerSelect players={players} excludeIds={excludeIds} value={addPlayerId} onChange={setPickedPlayerId} placeholder={placeholder} />
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            onClick={() => {
+              const playerId = Number(addPlayerId);
+              setPickedPlayerId('');
+              close();
+              a.onAdd(playerId);
+            }}
+            disabled={!addPlayerId || busy}
+            className={addPlayerId ? a.activeCls : a.idleCls}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
+    ),
+  };
 }

@@ -6,7 +6,7 @@ import { ScrimNightPanel } from './ScrimNightPanel';
 import { ScrimPastNights } from './ScrimPastNights';
 import { StartScrimNightForm } from './StartScrimNightForm';
 import { SkeletonBar } from './Skeleton';
-import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { useHasMounted } from './useHasMounted';
 import { DAY_FILL_CLS, Seats } from './ScrimSeats';
 import { dayNightFill } from '@/lib/scrim-seats';
@@ -68,11 +68,11 @@ function CalendarBody({ upcoming, past, currentPlayerId, isAdmin, allPlayers }: 
     <div className="flex flex-col gap-6">
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-3 sm:p-4">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <button type="button" onClick={() => setShown(addMonths(shown, -1))} aria-label="Previous month" className={ADMIN_SMALL_BUTTON_CLS}>
+          <button type="button" onClick={() => setShown(addMonths(shown, -1))} aria-label="Previous month" className={SMALL_BUTTON_CLS}>
             ‹
           </button>
           <div className="font-display text-[16px] font-semibold">{monthLabel}</div>
-          <button type="button" onClick={() => setShown(addMonths(shown, 1))} aria-label="Next month" className={ADMIN_SMALL_BUTTON_CLS}>
+          <button type="button" onClick={() => setShown(addMonths(shown, 1))} aria-label="Next month" className={SMALL_BUTTON_CLS}>
             ›
           </button>
         </div>

@@ -429,12 +429,21 @@ body::before {
 
 /* Motion keyframes — broadcast-chrome touches: subtler pulse, reveal bars, hover sheen */
 @keyframes dgls-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes dgls-spin { to { transform: rotate(360deg); } }
 @keyframes dgls-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes dgls-sheen { 0% { transform: translateX(-120%); } 60%,100% { transform: translateX(220%); } }
 @keyframes feature-gradient-pan { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
 @keyframes feature-holo-sweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(110%); } }
 
 .live-dot { animation: dgls-pulse 1.6s ease-in-out infinite; }
+
+/* A spinning ring for "loading" — the site accent arc over a faint track. Size it at the call site. */
+.loading-ring {
+  border-radius: 9999px;
+  border: 2px solid var(--color-border-primary);
+  border-top-color: var(--color-site-accent);
+  animation: dgls-spin 0.8s linear infinite;
+}
 
 /* Sheen sweep on hover cards */
 .sheen { position: relative; overflow: hidden; }
@@ -477,6 +486,8 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .live-dot, .sheen::after { animation: none !important; }
+  /* A ring that stopped would read as stuck, so it pulses in place instead of turning. */
+  .loading-ring { animation: dgls-pulse 1.6s ease-in-out infinite; }
   .feature-banner-active, .feature-holo-active { animation: none !important; }
 }
 

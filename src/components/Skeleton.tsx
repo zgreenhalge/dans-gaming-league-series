@@ -9,6 +9,14 @@ export function SkeletonBar({ className = '', tone = 'default' }: { className?: 
   );
 }
 
+/** A spinning ring (`.loading-ring`) for a spot where something is loading, so the placeholder reads as
+ *  in motion rather than broken; it is decorative, so the loading state is announced by the caller
+ *  (`aria-busy`). Pass the size as `className` (`h-6 w-6`). Under `prefers-reduced-motion`
+ *  it pulses instead of turning. */
+export function LoadingRing({ className = 'h-6 w-6' }: { className?: string }) {
+  return <span className={`loading-ring block ${className}`} aria-hidden />;
+}
+
 /** A placeholder for a tab's content while its data is still loading — shared by every "fetch this
  *  tab's data lazily, on first open" spot (`CombinedSeasonTabView`'s top tabs, `SeasonTabView`'s own
  *  Stats/Advanced Stats sub-tabs) so the loading affordance can't drift between them. */

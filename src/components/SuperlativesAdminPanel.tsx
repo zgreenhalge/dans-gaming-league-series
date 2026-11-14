@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';
@@ -79,10 +79,10 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
                   maxLength={MAX_SUPERLATIVE_TITLE_LENGTH}
                   className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
                 />
-                <button type="submit" disabled={busy || !editTitle.trim()} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+                <button type="submit" disabled={busy || !editTitle.trim()} className={`${SMALL_BUTTON_CLS} disabled:opacity-40`}>
                   Save
                 </button>
-                <button type="button" onClick={() => setEditingId(null)} disabled={busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+                <button type="button" onClick={() => setEditingId(null)} disabled={busy} className={`${SMALL_BUTTON_CLS} disabled:opacity-40`}>
                   Cancel
                 </button>
               </form>
@@ -97,7 +97,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
                       setEditTitle(s.title);
                     }}
                     disabled={busy}
-                    className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}
+                    className={`${SMALL_BUTTON_CLS} disabled:opacity-40`}
                   >
                     Edit
                   </button>
@@ -148,7 +148,7 @@ export function SuperlativesAdminPanel({ seasonId, poll }: { seasonId: number; p
           placeholder="New superlative, e.g. Best Teammate"
           className={`${FORM_INPUT_CLS} flex-1 min-w-[220px]`}
         />
-        <button type="submit" disabled={busy || !title.trim()} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+        <button type="submit" disabled={busy || !title.trim()} className={`${SMALL_BUTTON_CLS} disabled:opacity-40`}>
           Add superlative
         </button>
       </form>

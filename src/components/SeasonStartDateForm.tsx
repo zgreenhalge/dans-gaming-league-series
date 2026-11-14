@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
-import { ADMIN_CANCEL_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 
 interface Props {
@@ -59,7 +59,7 @@ export function SeasonStartDateForm({ seasonId, startDate, onDone }: Props) {
         <button
           type="button"
           onClick={() => onDone(false)}
-          className={ADMIN_CANCEL_BUTTON_CLS}
+          className={CANCEL_BUTTON_CLS}
         >
           Cancel
         </button>

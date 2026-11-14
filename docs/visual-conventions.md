@@ -50,6 +50,10 @@ match's card doesn't flip to the site accent on hover).
   hero/panel edges elsewhere.
 - **`.live-dot`** / **`.sheen`** — shared motion utilities for "this is live/active" signals
   (pulsing dot, hover sheen sweep across cards). Both respect `prefers-reduced-motion`.
+- **`.loading-ring`** / **`LoadingRing`** (`src/components/Skeleton.tsx`) — a spinning accent arc for a
+  spot that is loading, so a placeholder reads as in motion rather than broken; the player hover
+  card's skeleton puts one where the avatar goes. Under `prefers-reduced-motion` it pulses in place
+  instead of turning.
 
 ## Faction styling
 
@@ -77,7 +81,7 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - **`<PlayerLink playerId>`** (`PlayerLink.tsx`) — the link to a player's page, with a hover card:
   a `PlayerPreviewCard` (a player's `PlayerSummary` — EHOG badge, W-L, KDA, ADR and a Form row of
   their last five results) opens beside the link as a skeleton of the
-  same layout (`PlayerSummaryBlockSkeleton`) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute).
+  same layout (`PlayerSummaryBlockSkeleton`: pulsing bars and a `LoadingRing` where the avatar goes) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute).
   It opens on mouse hover (and stays open while the mouse is over the link or the card), on keyboard
   focus (closes on blur or Escape), and on a touch long-press (a tap still navigates; a press
   elsewhere closes it). The card is `role="tooltip"` and the link carries `aria-describedby` while
@@ -103,13 +107,17 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   10px in secondary text, naming a section of a page, panel or form. Use it rather than typing the
   classes out. Spacing goes in `className` (`<SectionLabel className="mb-3">`); `as="span"` keeps it
   inline inside a heading row, link or button. It names a section or a group of controls (a team's
-  two lineup selects), never a single input
+  two lineup selects), never a single input. A label that heads a set of controls (`Stepper`'s − / +,
+  `ScheduleLabView`'s `Choice`, `GauntletPreviewView`'s Seed names) takes an `id` and its wrapper is a
+  `role="group"` with `aria-labelledby` pointing at it
 - **`FieldLabel`** (`src/components/FieldLabel.tsx`) — a form field's own label, in the same look as
   `SectionLabel`: a real `<label htmlFor>` naming one input, select or textarea. Give the control an
   id from `useId()` and pass it as `htmlFor`, so a click focuses the control and screen readers and
   label queries (Playwright `getByLabel`, Testing Library `getByLabelText`) find it by that text. It
   renders as a block above its control; spacing goes in `className`. Use `FieldLabel` when the text
-  names one control and `SectionLabel` when it heads a section or a group. Labels with a
+  names one control and `SectionLabel` when it heads a section or a group. A control with no room for
+  a visible label (`LaunchOptionsPicker`'s config-set select, `MapPicker`'s select when its caller passes
+  `ariaLabel`, its custom workshop-ID input) carries an `aria-label` instead. Labels with a
   deliberately different look (amber callouts, faction-coloured team labels, mono checkbox captions)
   stay hand-styled
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
@@ -356,7 +364,7 @@ conventions, distinct from the content-page patterns above:
   it sits on — one on each row for that row's actions, one on the section header for the list's own
   (adding an entry). The list reads the same for an admin as for a player until the menu opens. An
   item is one-click (`onSelect`, run after the menu closes) or expands in place of the list
-  (`content`, rendered with a `close` callback — `ScrimNightRoster`'s **Add player…** opens
+  (`content`, rendered with a `close` callback — the **Add player…** item both rosters share, `useAddPlayerMenuItem()` in `RosterPlayerRow.tsx`, opens
   `AddPlayerSelect` that way). An item that needs a confirm expands into an `ArmedConfirmButton` the same
   way (`ScrimPendingMatchActions`' Discard…; `ScrimNightRoster`'s Remove… for the night's only player, whose
   removal deletes a night with no matches — any other Remove is one click). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
@@ -391,9 +399,10 @@ conventions, distinct from the content-page patterns above:
   demo review panels, the results and recording forms): it isn't an admin power. `VetoSequence`'s
   per-step ✕ and **Clear all pick/bans** stay on the pick/ban strip, where a per-tile menu would be
   the same ink and the steps share labels.
-- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, a secondary action
-  (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`, and the unboxed
-  Cancel beside a form's Save `ADMIN_CANCEL_BUTTON_CLS`. All live in
+- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`. The site's standard
+  small button, admin or player-facing, is the bordered `SMALL_BUTTON_CLS` (an Edit or Manage button,
+  a row action, Join / Leave Season), with `SMALL_GREEN_BUTTON_CLS` / `SMALL_AMBER_BUTTON_CLS` for a
+  selected or confirming one, and the unboxed Cancel beside a form's Save is `CANCEL_BUTTON_CLS`. All live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
   a constant exported from a `'use client'` file is a client reference there) — use them rather than a
   re-typed class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { GauntletPreviewSeason } from '@/lib/queries';
 import { GAUNTLET_MAX_QUALIFIERS, GAUNTLET_MIN_QUALIFIERS } from '@/lib/gauntlet-bracket';
 import { buildGauntletPreview, qualifierCountFor, type SeedFate } from '@/lib/gauntlet-preview';
@@ -21,6 +21,7 @@ export function GauntletPreviewView({ seasons }: { seasons: GauntletPreviewSeaso
   const filterSeasons = useMemo(() => seasons.map((s) => ({ id: s.seasonId, name: s.label, is_gauntlet: false })), [seasons]);
   const filter = useSeasonFilter({ regularSeasons: filterSeasons });
   const [qualifierOverride, setQualifierOverride] = useState<number | null>(null);
+  const seedNamesLabelId = useId();
 
   const season = seasons.find((s) => s.seasonId === filter.selectedSeason) ?? null;
   // Loading a season sets the count to its player count (clamped); the stepper then overrides it.
@@ -37,8 +38,10 @@ export function GauntletPreviewView({ seasons }: { seasons: GauntletPreviewSeaso
       <section className="flex flex-wrap items-end gap-x-8 gap-y-4">
         <Stepper label="Qualifiers" value={qualifiers} min={GAUNTLET_MIN_QUALIFIERS} max={GAUNTLET_MAX_QUALIFIERS} onChange={setQualifierOverride} />
         {seasons.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Seed names</span>
+          <div role="group" aria-labelledby={seedNamesLabelId} className="flex flex-col gap-1.5">
+            <SectionLabel as="span" id={seedNamesLabelId}>
+              Seed names
+            </SectionLabel>
             <SeasonFilter filter={filter} seasons={filterSeasons} onSeasonChange={selectSeason} showRegular={false} showGauntlet={false} className="flex h-8 items-center" />
           </div>
         )}

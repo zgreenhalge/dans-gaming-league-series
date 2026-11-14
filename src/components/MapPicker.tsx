@@ -10,6 +10,7 @@ export const CUSTOM_MAP_CHOICE = '__custom__';
 
 export function MapPicker({
   id,
+  ariaLabel,
   maps,
   value,
   onChange,
@@ -20,6 +21,8 @@ export function MapPicker({
 }: {
   /** The select's id, for a `<label htmlFor>` naming it. */
   id?: string;
+  /** The select's accessible name, for a caller with no visible label. */
+  ariaLabel?: string;
   maps: WorkshopMapOption[];
   value: string;
   onChange: (value: string) => void;
@@ -32,6 +35,7 @@ export function MapPicker({
     <>
       <select
         id={id}
+        aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -49,6 +53,7 @@ export function MapPicker({
         <>
           <input
             value={customValue}
+            aria-label="Custom workshop ID or URL"
             onChange={(e) => onCustomChange(e.target.value)}
             placeholder="Steam workshop ID or URL"
             disabled={disabled}

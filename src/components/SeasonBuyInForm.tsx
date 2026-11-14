@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { parseBuyInText } from '@/lib/season-buy-in';
-import { ADMIN_CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
@@ -54,7 +54,7 @@ export function SeasonBuyInForm({ seasonId, buyInAmount, onDone }: Props) {
         <button
           type="button"
           onClick={() => onDone(false)}
-          className={ADMIN_CANCEL_BUTTON_CLS}
+          className={CANCEL_BUTTON_CLS}
         >
           Cancel
         </button>

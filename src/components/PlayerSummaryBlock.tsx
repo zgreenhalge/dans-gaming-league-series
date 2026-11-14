@@ -3,7 +3,7 @@ import type { PlayerSummary } from '@/lib/queries';
 import { playerHref } from '@/lib/crumbs';
 import EhogBadge, { EHOG_BADGE_SIZE_CLS } from './EhogBadge';
 import PlayerAvatar from './PlayerAvatar';
-import { SkeletonBar } from './Skeleton';
+import { LoadingRing, SkeletonBar } from './Skeleton';
 import { PlayerName } from './PlayerName';
 import StatTileGrid from './StatTileGrid';
 import { WLChip } from './WLChip';
@@ -77,8 +77,9 @@ export function PlayerSummaryBlock({
 }
 
 /**
- * `PlayerSummaryBlock`'s loading stand-in: the same avatar, name, EHOG badge, tiles and Form row as
- * pulsing bars, so the layout holds still when the data arrives. Sits on a `bg-secondary` surface.
+ * `PlayerSummaryBlock`'s loading stand-in: the same name, EHOG badge, tiles and Form row as pulsing
+ * bars and a spinning ring where the avatar goes, so the layout holds still when the data arrives.
+ * Sits on a `bg-secondary` surface.
  */
 export function PlayerSummaryBlockSkeleton({ compact = false }: { compact?: boolean }) {
   const bar = (className: string) => <SkeletonBar tone="raised" className={className} />;
@@ -86,7 +87,10 @@ export function PlayerSummaryBlockSkeleton({ compact = false }: { compact?: bool
     <div aria-busy="true">
       <div className="flex items-center justify-between gap-3 mb-2.5">
         <div className="flex items-center gap-3 min-w-0">
-          {bar('w-10 h-10 rounded-full shrink-0')}
+          {/* The avatar's spot holds a spinning ring, so the card reads as loading rather than broken. */}
+          <div className="w-10 h-10 shrink-0 flex items-center justify-center">
+            <LoadingRing className="h-8 w-8" />
+          </div>
           {bar('h-6 w-32')}
         </div>
         {bar(`${EHOG_BADGE_SIZE_CLS} shrink-0`)}

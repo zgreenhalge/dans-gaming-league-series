@@ -8,7 +8,7 @@ import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
 import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
 import { SELECT_CLS } from './formStyles';
-import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
 import { MatchCard } from './MatchCard';
 import { CollapsiblePanel } from './CollapsiblePanel';
@@ -50,8 +50,8 @@ interface Props {
   rounds: { players: ScheduleLabPlayer[]; rosters: ScheduleLabRoster[]; careerRecords: Record<number, FormatRecord> } | null;
 }
 
-const BTN_CLS = `${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`;
-const GO_BTN_CLS = `${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`;
+const BTN_CLS = `${SMALL_BUTTON_CLS} disabled:opacity-40`;
+const GO_BTN_CLS = `${SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`;
 
 const SIDE_LABEL: Record<ScrimSideChoice, string> = {
   skins_t: 'Skins start T',

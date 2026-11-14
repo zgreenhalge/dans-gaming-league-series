@@ -2,7 +2,7 @@
 
 import { ScheduleLabView, type PlanPeriod } from './ScheduleLabView';
 import ErrorText from './ErrorText';
-import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
 import type { ScheduleLabPlayer, ScheduleLabRoster } from '@/lib/queries';
 import type { FormatPlan, FormatRecord } from '@/lib/season-format';
@@ -38,7 +38,7 @@ export function ScrimRoundsGenerator({
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-4 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <SectionLabel>Generate rounds</SectionLabel>
-        <button type="button" onClick={onClose} className={ADMIN_SMALL_BUTTON_CLS}>
+        <button type="button" onClick={onClose} className={SMALL_BUTTON_CLS}>
           Close
         </button>
       </div>
@@ -58,7 +58,7 @@ export function ScrimRoundsGenerator({
                 type="button"
                 onClick={() => act('POST', `/api/scrims/${nightId}/rounds`, { games })}
                 disabled={busy}
-                className={`${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
+                className={`${SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
               >
                 {busy ? '…' : `Queue these ${games.length} matches`}
               </button>

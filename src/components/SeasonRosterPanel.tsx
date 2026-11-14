@@ -3,9 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from './EmptyState';
-import { AddPlayerSelect, RosterPlayerRow } from './RosterPlayerRow';
-import { AdminMenu, type AdminMenuItem } from './AdminMenu';
-import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { RosterPlayerRow, useAddPlayerMenuItem } from './RosterPlayerRow';
+import { AdminMenu } from './AdminMenu';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { formatBuyIn } from '@/lib/season-buy-in';
@@ -54,9 +54,6 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
   // The viewer's own place on the roster is the Join / Leave Season button's, so the picker leaves them out.
   const pickerExcludeIds = currentPlayerId == null ? rosterIds : new Set([...rosterIds, currentPlayerId]);
-  const [pickedPlayerId, setPickedPlayerId] = useState('');
-  // The picker keeps its pick while the menu is closed, until that player joins some other way.
-  const addPlayerId = pickerExcludeIds.has(Number(pickedPlayerId)) ? '' : pickedPlayerId;
   // Admin-only: players joining/leaving don't need to see gauntlet-planning warnings.
   const gauntletSizeUnsupported =
     isAdmin && roster.length > 0 && (roster.length < GAUNTLET_MIN_QUALIFIERS || roster.length > GAUNTLET_MAX_QUALIFIERS);
@@ -69,36 +66,21 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
     });
   }
 
-  /** The roster's admin actions: Add player… opens the player picker in the menu. */
-  const rosterItems: AdminMenuItem[] = [
-    {
-      label: 'Add player…',
-      content: (close) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <AddPlayerSelect
-            players={allPlayers}
-            excludeIds={pickerExcludeIds}
-            value={addPlayerId}
-            onChange={setPickedPlayerId}
-            placeholder="Add a player…"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const playerId = Number(addPlayerId);
-              setPickedPlayerId('');
-              close();
-              mutate(playerId, 'POST');
-            }}
-            disabled={!addPlayerId || busy}
-            className={`${addPlayerId ? ADMIN_SMALL_GREEN_BUTTON_CLS : ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}
-          >
-            Add
-          </button>
-        </div>
-      ),
-    },
-  ];
+  // The roster's admin actions: Add player… opens the player picker in the menu.
+  const addPlayerItem = useAddPlayerMenuItem({
+    players: allPlayers,
+    excludeIds: pickerExcludeIds,
+    placeholder: 'Add a player…',
+    busy,
+    actions: [
+      {
+        label: 'Add',
+        onAdd: (playerId) => mutate(playerId, 'POST'),
+        activeCls: `${SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`,
+        idleCls: `${SMALL_BUTTON_CLS} disabled:opacity-40`,
+      },
+    ],
+  });
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
@@ -113,12 +95,12 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
               type="button"
               onClick={() => mutate(currentPlayerId, selfOnRoster ? 'DELETE' : 'POST')}
               disabled={busy}
-              className={`${selfOnRoster ? ADMIN_SMALL_BUTTON_CLS : ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
+              className={`${selfOnRoster ? SMALL_BUTTON_CLS : SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
             >
               {pending === currentPlayerId ? '…' : selfOnRoster ? 'Leave Season' : 'Join Season'}
             </button>
           )}
-          {isAdmin && <AdminMenu label="Roster admin actions" items={rosterItems} />}
+          {isAdmin && <AdminMenu label="Roster admin actions" items={[addPlayerItem]} />}
         </div>
       </div>
 

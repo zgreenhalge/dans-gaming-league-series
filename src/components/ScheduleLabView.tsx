@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   divisionSizesFor,
   formatIssues,
@@ -32,7 +32,7 @@ import SectionLabel from './SectionLabel';
 import { Stepper } from './Stepper';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { SELECT_CLS } from './formStyles';
 import { RemoveXButton } from './RemoveXButton';
 
@@ -303,7 +303,7 @@ export function ScheduleLabView({
               </option>
             ))}
           </select>
-          <button type="button" className={`${ADMIN_SMALL_BUTTON_CLS} mb-2`} onClick={() => setPicked(new Set())}>
+          <button type="button" className={`${SMALL_BUTTON_CLS} mb-2`} onClick={() => setPicked(new Set())}>
             Clear
           </button>
         </div>
@@ -399,7 +399,7 @@ export function ScheduleLabView({
               {busy ? 'Generating…' : comparePreviews ? 'Generate preview' : previews.length > 0 ? 'Regenerate' : 'Generate'}
             </button>
             {busy && (
-              <button type="button" className={ADMIN_SMALL_BUTTON_CLS} onClick={cancel}>
+              <button type="button" className={SMALL_BUTTON_CLS} onClick={cancel}>
                 Cancel
               </button>
             )}
@@ -481,9 +481,12 @@ export function ScheduleLabView({
 }
 
 function Choice<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  const labelId = useId();
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="tracked text-[10px] text-[var(--color-text-secondary)]">{label}</span>
+    <div role="group" aria-labelledby={labelId} className="flex flex-col gap-1.5">
+      <SectionLabel as="span" id={labelId}>
+        {label}
+      </SectionLabel>
       <TabBar bordered>
         {options.map((o) => (
           <button key={o.value} type="button" role="tab" aria-selected={value === o.value} className={tabCls(value === o.value, { compact: true })} onClick={() => onChange(o.value)}>
