@@ -160,11 +160,17 @@ docs-only changes), same as any other check, no manual trigger or label needed. 
 local Docker-based stack made this cheap enough to run on every push: no Supabase branch to
 provision per run, no state-pollution risk against a shared project, and the whole job (image pulls,
 `supabase start`, Playwright browsers, the suite itself) runs in a couple of minutes. It installs the
-Supabase CLI (`supabase/setup-cli`), runs `supabase start`, pulls `NEXT_PUBLIC_SUPABASE_URL` from
-`supabase status -o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the
+Supabase CLI (`supabase/setup-cli`, pinned in `ci.yml`), runs `supabase start`, pulls
+`NEXT_PUBLIC_SUPABASE_URL` from `supabase status -o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the
 anon/service_role keys by sourcing `supabase/local.env` into `$GITHUB_ENV` (not parsed from CLI
 output — see the "Running locally" section for why), verifies none of the three ended up empty
-before running anything, runs the suite, then `supabase stop`.
+before running anything, runs the suite, then `supabase stop` (skipped when the CLI never installed, so a
+setup failure is one error).
+
+The CLI is pinned to an exact `version`, since `latest` is looked up through GitHub's releases API, which
+rate limits, and a failed lookup fails the job before any test runs. To bump it, set the "Setup Supabase
+CLI" step's `version` to the new release; the images `supabase start` pulls follow the CLI version, so the
+e2e job is the check.
 
 ## Claude Code sessions
 

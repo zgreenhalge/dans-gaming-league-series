@@ -10,15 +10,21 @@ import { hasScrimNightEnded, type ScrimNight } from './scrim-schedule';
 import { selfOrAdminTarget, type AccessResult } from './access-control';
 import { parseRouteId } from './util';
 
-/** The night with route param `id`, if it hasn't ended — 400 for a malformed id, 404 for no such
- *  night, 409 for one that's over. */
-export async function findCurrentScrimNight(id: string, now: Date): Promise<AccessResult<{ night: ScrimNight }>> {
+/** The night with route param `id` — 400 for a malformed id, 404 for no such night. */
+export async function findScrimNight(id: string): Promise<AccessResult<{ night: ScrimNight }>> {
   const nightId = parseRouteId(id);
   if (nightId === null) return { ok: false, status: 400, error: 'Invalid scrim night id' };
   const night = await getScrimNightById(nightId);
   if (!night) return { ok: false, status: 404, error: 'Scrim night not found' };
-  if (hasScrimNightEnded(night, now)) return { ok: false, status: 409, error: 'That scrim night is over' };
   return { ok: true, night };
+}
+
+/** `findScrimNight()`, if the night hasn't ended — 409 for one that's over. */
+export async function findCurrentScrimNight(id: string, now: Date): Promise<AccessResult<{ night: ScrimNight }>> {
+  const found = await findScrimNight(id);
+  if (!found.ok) return found;
+  if (hasScrimNightEnded(found.night, now)) return { ok: false, status: 409, error: 'That scrim night is over' };
+  return found;
 }
 
 export type ScrimSignupTarget = AccessResult<{ targetPlayerId: number; body: unknown }>;

@@ -11,7 +11,7 @@ import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
-import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
+import { idleFor, scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
 import { POST, DELETE } from './route';
 
 const ADMIN_ID = 1;
@@ -89,7 +89,7 @@ async function main() {
   });
 
   await test('POST: 409 once the night is over', async () => {
-    const { date } = installFixture(-5 * 60 * 60 * 1000);
+    const { date } = installFixture(-5 * 60 * 60 * 1000, { scrim_nights: [idleFor(scrimNightStartingIn(-5 * 60 * 60 * 1000, Number(NIGHT)), 60 * 60 * 1000)] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await call(POST, 'POST', date, { player_id: PLAYER_ID })).status, 409);
   });

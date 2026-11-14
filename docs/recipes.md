@@ -170,9 +170,9 @@ and `src/app/api/scrims/matches/[id]/route.ts`, writing through `src/lib/scrim-n
    one exported function per write, taking the client first (`db: SupabaseClient`). Page and view
    reads stay in `src/lib/queries/`; a read the write itself depends on sits beside it
    (`applyScrimSideChoice()`).
-   - A table write ends its chain with `.throwOnError()` (`setScrimSignup()`, `deleteScrimMatch()`).
+   - A table write ends its chain with `.throwOnError()` (`setScrimSignup()`, `applyScrimSideChoice()`).
    - An RPC call checks its `{ error }` and throws `new Error(error.message)`
-     (`leaveScrimNight()`, `setScrimMatchLineup()`). Supabase returns that `error` as a plain
+     (`leaveScrimNight()`, `updateScrimMatch()`). Supabase returns that `error` as a plain
      object, not an `Error`, so rethrowing it as-is loses its message at the route's catch.
    - Rows that must change together are one Postgres function called through `.rpc()`
      (`start_scrim_night()` behind `startScrimNight()`, `queue_scrim_matches()` behind
@@ -194,7 +194,12 @@ and `src/app/api/scrims/matches/[id]/route.ts`, writing through `src/lib/scrim-n
    (`isScrimMatchEditable()`). The write runs inside one `try/catch` that maps each typed error to a
    409 and anything else to a 500 carrying the error's message — see `POST` in
    `src/app/api/scrims/route.ts`. Writes that each stand on their own can run in sequence inside
-   that one `try/catch`, as the scrim match `PATCH` sets the map, side and lineup.
+   that one `try/catch`; parts of one edit that must land together are one RPC, as the scrim match
+   `PATCH` sets the map, side and lineup through `updateScrimMatch()`.
+   - When two people can edit the same row, the client sends the version it saw and the RPC refuses
+     a stale one under the row lock: the scrim match routes send `scrim_revision` and answer a moved
+     one with 409 `code: 'match_changed'` (`ScrimMatchChangedError`), which the client meets with a
+     reload.
 4. **Test it.** The route gets a colocated `route.test.ts` (next recipe). To reach an error raised
    inside an RPC, the test's fake RPC handler throws `FakeRpcError`
    (`src/lib/test-support/fakeSupabase.ts`): `src/app/api/scrims/route.test.ts` covers both the

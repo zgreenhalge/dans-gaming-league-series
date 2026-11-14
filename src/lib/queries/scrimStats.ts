@@ -67,11 +67,12 @@ export async function getScrimNightStatsView(nightId: number): Promise<ScrimNigh
   };
 }
 
-/** A token that changes whenever a night's Stats/Advanced Stats data could have: the content version
- *  (`data_version`), which every write to a match, its stats or its sabremetrics bumps. `ScrimNightStats`
- *  reuses a fetch only while it holds. When the version can't be read, a fresh token each render, so
- *  the tabs always refetch. */
-export async function getScrimNightStatsVersion(): Promise<string> {
+/** A token that changes whenever lazily fetched Stats/Advanced Stats data could have: the content
+ *  version (`data_version`), which every write to a match, its stats or its sabremetrics bumps.
+ *  `ScrimNightStats` and the season hub's tabs (`CombinedSeasonTabView`, `SeasonTabView`) reuse a
+ *  fetch only while it holds. When the version can't be read, a fresh token each render, so the tabs
+ *  always refetch. */
+export async function getStatsVersion(): Promise<string> {
   const version = await getDataVersion();
   return version === null ? `uncached-${Date.now()}` : String(version);
 }

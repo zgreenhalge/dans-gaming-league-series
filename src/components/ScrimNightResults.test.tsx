@@ -24,6 +24,7 @@ function scrimMatch(id: number, final_score: string | null, server_state: string
   return {
     id,
     night_id: 5,
+    revision: 0,
     match_number: id,
     map: 'cobble',
     workshop_id: null,

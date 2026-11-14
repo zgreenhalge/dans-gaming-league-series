@@ -21,6 +21,8 @@ import {
   getGauntletSeasonLightView,
   getSeasonSurveyView,
   getSeasonSuperlativesView,
+  getSeasonMatchesRealtimeFilter,
+  getStatsVersion,
   type RegularSeasonLightView,
   type GauntletSeasonLightView,
   type GauntletRound,
@@ -41,6 +43,7 @@ import { authOptions } from '@/lib/authOptions';
 import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber, parseRouteId } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 
 export async function generateMetadata({
   params,
@@ -140,9 +143,11 @@ export default async function SeasonPage({
     // Advanced Stats sub-tabs' own heavier data is a separate lazy fetch — see SeasonTabView.
     const playersById = await getPlayersById();
     const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
-    const [light, bracketShape] = await Promise.all([
+    const [light, bracketShape, matchesFilter, statsVersion] = await Promise.all([
       getGauntletSeasonLightView(seasonId, extractSeasonNumber(season.name)),
       getGauntletBracketShape(seasonId),
+      getSeasonMatchesRealtimeFilter([seasonId]),
+      getStatsVersion(),
     ]);
     const { rounds, leaderboard, h2hData, ehogRatings, hasAdvancedStats } = light;
     const matchCount = countGauntletMatches(rounds);
@@ -165,6 +170,7 @@ export default async function SeasonPage({
       <div className="min-h-screen">
         <JsonLd data={seasonJsonLd} />
         <Topbar season={season} />
+        {matchesFilter && <RefreshOnServerState table="matches" filter={matchesFilter} onlyPlayed />}
         <main className="max-w-[1080px] mx-auto px-6 pb-16">
           <div className="mt-8 mb-6">
             <div className="flex items-center gap-3">
@@ -196,6 +202,7 @@ export default async function SeasonPage({
                 h2hData={h2hData}
                 ehogRatings={ehogRatings}
                 hasAdvancedStats={hasAdvancedStats}
+                statsVersion={statsVersion}
               />
             </UrlStateProvider>
           </Suspense>
@@ -233,7 +240,7 @@ export default async function SeasonPage({
   // tab `initialView` names (the other tab's light view is fetched lazily, client-side, once it's
   // actually opened — see CombinedSeasonTabView; either tab's own Stats/Advanced Stats data is a
   // further lazy fetch on top of that, owned by SeasonTabView itself).
-  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, scheduleGenerated, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView] = await Promise.all([
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, scheduleGenerated, roster, knownMaps, initialLight, leaderboard, matchSummaries, surveyView, superlativesView, matchesFilter, statsVersion] = await Promise.all([
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
     linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
@@ -247,6 +254,8 @@ export default async function SeasonPage({
     matchSummariesPromise,
     getSeasonSurveyView(seasonId, currentPlayerId),
     getSeasonSuperlativesView(seasonId, currentPlayerId),
+    getSeasonMatchesRealtimeFilter(linkedGauntlet ? [seasonId, linkedGauntlet.id] : [seasonId]),
+    getStatsVersion(),
   ]);
 
   // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
@@ -286,6 +295,9 @@ export default async function SeasonPage({
     <div className="min-h-screen">
       <JsonLd data={seasonJsonLd} />
       <Topbar season={season} />
+      {/* A reported result changes the standings and stats; nothing else on the hub follows the
+          database live. */}
+      {matchesFilter && <RefreshOnServerState table="matches" filter={matchesFilter} onlyPlayed />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="flex items-center gap-3">
@@ -342,6 +354,7 @@ export default async function SeasonPage({
                 seasonNumber={seasonNumber}
                 initialView={initialView}
                 initialLightData={initialLightData}
+                statsVersion={statsVersion}
                 feedbackTabs={feedbackTabs}
               />
             ) : initialLightData.kind === 'regular' ? (
@@ -358,6 +371,7 @@ export default async function SeasonPage({
                   h2hData={initialLightData.data.h2hData}
                   ehogRatings={initialLightData.data.ehogRatings}
                   hasAdvancedStats={initialLightData.data.hasAdvancedStats}
+                  statsVersion={statsVersion}
                 />
               </SeasonFeedbackTabs>
             ) : (

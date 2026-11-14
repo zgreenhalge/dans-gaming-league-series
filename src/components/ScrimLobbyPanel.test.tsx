@@ -29,6 +29,7 @@ function scrimMatch(server_state: string | null): ScrimMatch {
   return {
     id: 42,
     night_id: 5,
+    revision: 0,
     match_number: 3,
     map: 'cobble',
     workshop_id: null,
