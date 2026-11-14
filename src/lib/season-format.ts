@@ -750,14 +750,18 @@ function simulateRecords(games: FormatGame[], rand: () => number): Map<number, F
 }
 
 export interface FormatBuildOptions {
-  /** Scales the annealing search length (1 = the full search, the default; 0.01 = a hundredth of
-   *  the moves). A lower effort builds the same kind of plan — every structural guarantee holds —
-   *  but a worse-optimized one, so it suits tests that sweep many settings, never a real build. */
+  /** Scales the annealing search length: a finite number above 0 (1 = the full search, the default;
+   *  0.01 = a hundredth of the moves), else `buildFormatPlan()` throws a `RangeError`. A lower effort
+   *  keeps the structural guarantees (seating, divisions, week counts) but is optimized less, so
+   *  soft goals such as equal game counts can be missed; it suits tests that sweep many settings,
+   *  never a real build. */
   effort?: number;
 }
 
 /** Builds a plan for `players` under `settings`, or the reasons it can't. */
 export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatSettings, options: FormatBuildOptions = {}): FormatResult {
+  const effort = options.effort ?? 1;
+  if (!Number.isFinite(effort) || effort <= 0) throw new RangeError(`effort must be a finite number above 0, got ${effort}`);
   const issues = formatIssues(players.length, settings);
   if (issues.length > 0) return { ok: false, issues };
 
@@ -814,7 +818,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
     divisions.forEach((divisionIds, d) => {
       const members = divisionIds.map((id) => indexById.get(id)!);
       const { templates, gamesPerPlayer } = halfTemplates(members.length, halfWeeks, settings.weekShape, sizes);
-      const result = searchHalf({ members, templates, gamesPerPlayer, history }, n, winProb, settings.ehogBalance, rand, options.effort ?? 1);
+      const result = searchHalf({ members, templates, gamesPerPlayer, history }, n, winProb, settings.ehogBalance, rand, effort);
 
       templates.forEach((t, w) => {
         const playing = new Set<number>();

@@ -91,7 +91,7 @@ function* grid(): Generator<{ n: number; settings: SeasonFormatSettings }> {
                   halfwayShuffle,
                   halfwayRedraft: n % 2 === 0 ? 'win-rate' : 'new-pairings',
                   ehogBalance: true,
-                  seed: n + weeks,
+                  seed: n * 1000 + weeks * 10 + divisions + (halfwayShuffle ? 5 : 0) + (weekShape === 'group' ? 3 : 0),
                 },
               };
             }
@@ -144,5 +144,10 @@ test(
   },
   SWEEP_TIMEOUT_MS,
 );
+
+test('buildFormatPlan rejects an effort that is not a finite number above 0', () => {
+  const settings = grid().next().value!.settings;
+  for (const effort of [0, -1, NaN, Infinity]) assert.throws(() => buildFormatPlan(roster(8), settings, { effort }), RangeError, `effort ${effort}`);
+});
 
 report();
