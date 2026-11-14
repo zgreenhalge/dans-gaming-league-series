@@ -60,10 +60,10 @@ export function parseMapPoolInput(body: unknown): MapPoolInput {
   return { ok: true, mapPool: mapPool.length > 0 ? mapPool : null, newMaps: newMaps as NewMap[] };
 }
 
-/** Upserts newly-entered maps into the `maps` table (fetching preview images from Steam). Returns
- * an error message on failure, `null` on success. */
-export async function upsertNewMaps(supabaseAdmin: SupabaseClient, newMaps: NewMap[]): Promise<string | null> {
-  if (newMaps.length === 0) return null;
+/** Upserts newly-entered maps into the `maps` table (fetching preview images from Steam). Throws
+ * on failure. */
+export async function upsertNewMaps(supabaseAdmin: SupabaseClient, newMaps: NewMap[]): Promise<void> {
+  if (newMaps.length === 0) return;
   const rows = await Promise.all(
     newMaps.map(async (m) => {
       const workshopUrl = m.workshopUrl.trim();
@@ -76,5 +76,5 @@ export async function upsertNewMaps(supabaseAdmin: SupabaseClient, newMaps: NewM
     }),
   );
   const { error } = await supabaseAdmin.from('maps').upsert(rows, { onConflict: 'slug' });
-  return error ? error.message : null;
+  if (error) throw new Error(error.message);
 }

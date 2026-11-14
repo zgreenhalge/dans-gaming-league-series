@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getLinkedGauntlet, getGauntletRounds, getGauntletBracketShape } from '@/lib/queries';
-import { isPlayedScore, parseRouteId } from '@/lib/util';
+import { isDateOnly, isPlayedScore, parseRouteId } from '@/lib/util';
 import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 import { accessDenied } from '@/lib/access-control';
 
@@ -29,8 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const body = await req.json().catch(() => ({}));
-  const start_date: string | null = (body as { start_date?: string | null })?.start_date ?? null;
-  if (start_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(start_date)) {
+  const start_date: unknown = (body as { start_date?: unknown })?.start_date ?? null;
+  if (start_date !== null && !isDateOnly(start_date)) {
     return NextResponse.json({ error: 'Invalid date format (expected YYYY-MM-DD)' }, { status: 400 });
   }
 

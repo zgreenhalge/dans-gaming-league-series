@@ -162,6 +162,15 @@ export function parseRouteId(id: string): number | null {
   return n > 0 && n <= MAX_INT4 ? n : null;
 }
 
+/** Whether `value` is a real calendar date written `YYYY-MM-DD`: a string in that form that names a day
+ *  that exists (`2027-02-31` is not one). What a route accepts for a date-only column such as
+ *  `seasons.start_date`. */
+export function isDateOnly(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 /** A short date label, e.g. `Thu, Nov 5` — the format of a date crumb (`Crumb.localDate`) and of
  *  dates swapped into a page title (`LocalDateInTitle`). */
 export const SHORT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };

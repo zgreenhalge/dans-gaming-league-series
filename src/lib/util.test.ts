@@ -31,6 +31,7 @@ import {
   deriveAdr,
   deriveKda,
   parseRouteId,
+  isDateOnly,
   weekWindow,
   matchLabel,
   seasonTitle,
@@ -637,6 +638,17 @@ test('signedColor: green above zero, red below, none at zero, judged at the disp
   assert.equal(signedColor(-0.5, 1), 'var(--color-accent-red-fg)');
   assert.equal(signedColor(0, 1), undefined);
   assert.equal(signedColor(-0.04, 1), undefined);
+});
+
+test('isDateOnly: accepts a real YYYY-MM-DD date, including a leap day', () => {
+  for (const ok of ['2027-01-02', '2026-12-31', '2028-02-29']) assert.equal(isDateOnly(ok), true, ok);
+});
+
+test('isDateOnly: rejects other forms, days that do not exist, and non-strings', () => {
+  for (const bad of ['2027-02-31', '2027-13-01', '2027-00-10', '2027-04-31', '2027-02-29', '2027-1-2', '01/02/2027', '2027-01-02T00:00:00Z', ' 2027-01-02', '']) {
+    assert.equal(isDateOnly(bad), false, bad);
+  }
+  for (const bad of [null, undefined, 20270102, ['2027-01-02'], { toString: () => '2027-01-02' }]) assert.equal(isDateOnly(bad), false);
 });
 
 report();
