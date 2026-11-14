@@ -5,7 +5,7 @@
 // rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
-import { isScrimMatchEditable, scrimMatchNeedsServer } from './scrim-matches';
+import { canManageScrimMatch, isScrimMatchEditable, scrimMatchNeedsServer } from './scrim-matches';
 import { SCRIM_MATCH_SIZE, leagueMatchesDuring, type ScrimCommitment } from './scrim-schedule';
 import type { ScheduledMatchRef } from './server-schedule-collision';
 import { isPlayedScore } from './util';
@@ -57,7 +57,11 @@ export interface ScrimNightPageModel {
   pool: { id: number; name: string }[];
   /** The first match that still needs the server (`scrimMatchNeedsServer()`): the lobby's. */
   lobbyMatch: ScrimMatch | null;
-  /** The matches waiting behind it, in play order, and whether the viewer may discard each. */
+  /** The viewer may change, discard or start the lobby's match (`canManageScrimMatch()`: an admin or
+   *  one of its players). */
+  canManageLobby: boolean;
+  /** The matches waiting behind it, in play order, and whether the viewer may discard each
+   *  (`canManageScrimMatch()`). */
   queued: { match: ScrimMatch; canDiscard: boolean }[];
   /** The night's running order: the matches whose game is over (played or pending) in play order, then
    *  the one on the server, then those still to start — these only while check-in is open, since a match
@@ -82,7 +86,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
   // Matches play in order: the first still needing the server is the lobby's, the rest wait behind it.
   const [lobbyMatch = null, ...waiting] = night.matches.filter(scrimMatchNeedsServer);
-  const inMatch = (m: ScrimMatch) => playerId != null && [...m.shirts, ...m.skins].includes(playerId);
+  const canManage = (m: ScrimMatch) => canManageScrimMatch(viewer, [...m.shirts, ...m.skins]);
   const viewerCheckedIn = playerId != null && pool.some((p) => p.id === playerId);
   const canMake = isAdmin || viewerCheckedIn;
   const mine = night.signups.find((s) => s.player_id === playerId);
@@ -109,7 +113,8 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
     rosterAdmin: isAdmin && night.current,
     pool,
     lobbyMatch,
-    queued: waiting.map((m) => ({ match: m, canDiscard: isAdmin || inMatch(m) })),
+    canManageLobby: lobbyMatch != null && canManage(lobbyMatch),
+    queued: waiting.map((m) => ({ match: m, canDiscard: canManage(m) })),
     runningOrder: [...entries.filter(finished), ...entries.filter((e) => !finished(e))],
     scoredMatchIds: night.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id),
     canMake,

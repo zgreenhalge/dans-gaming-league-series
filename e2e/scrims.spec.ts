@@ -215,7 +215,7 @@ test.describe('the lobby', () => {
     await clearMapWorkshopUrls();
   });
 
-  test('checking in, then Next Match makes a match shown to the player as a card; an admin saves its side choice and discards it', async ({ page }) => {
+  test('checking in, then Next Match makes a match its player can configure; an admin saves its side choice and discards it', async ({ page }) => {
     const nightId = await seedScrimNight(10 * MINUTE, [
       { playerId: CASEY, checkedIn: true },
       { playerId: DREW, checkedIn: true },
@@ -232,7 +232,8 @@ test.describe('the lobby', () => {
     await page.getByRole('button', { name: 'Next Match' }).click();
     await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
     await expect(main(page).getByText('Up next', { exact: true })).toBeVisible();
-    await expect(main(page).getByLabel('Starting side')).toHaveCount(0);
+    // A player in the match manages it too, so Dan has its Configure panel.
+    await expect(main(page).getByText('Configure', { exact: true })).toBeVisible();
     const matches = await scrimMatchesOf(nightId);
     expect(matches).toHaveLength(1);
     const [match] = matches;
@@ -255,6 +256,24 @@ test.describe('the lobby', () => {
     await page.getByRole('button', { name: 'Confirm discard' }).click();
     await expect(page.getByRole('button', { name: 'Next Match' })).toBeVisible();
     expect(await scrimMatchesOf(nightId)).toHaveLength(0);
+  });
+
+  test('a signed-in player who is not in the lobby match sees its card without its controls', async ({ page }) => {
+    const nightId = await seedScrimNight(10 * MINUTE, [
+      { playerId: CASEY, checkedIn: true },
+      { playerId: DREW, checkedIn: true },
+      { playerId: SAM, checkedIn: true },
+      { playerId: JORDAN, checkedIn: true },
+      { playerId: DAN },
+    ]);
+    await openNightAs(page, 'Zach', `/scrims/${nightId}`);
+    await page.getByRole('button', { name: 'Next Match' }).click();
+    await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
+
+    await openNightAs(page, 'Dan', `/scrims/${nightId}`);
+    await expect(page.getByRole('link', { name: /Match 1/ })).toBeVisible();
+    await expect(main(page).getByText('Configure', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Discard' })).toHaveCount(0);
   });
 
   test("with nobody checked in there is no lobby; the status bar's Check in opens it", async ({ page }) => {
