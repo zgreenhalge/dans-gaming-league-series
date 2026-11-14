@@ -9,6 +9,7 @@ import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import type { BracketPod } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
 import FieldLabel from './FieldLabel';
+import { routeError } from '@/lib/util';
 
 interface Props {
   seasons: { id: number; name: string }[];
@@ -40,11 +41,11 @@ export function CreateGauntletForm({ seasons }: Props) {
     setPreviewing(true);
     try {
       const res = await fetch(`/api/seasons/${selectedSeasonId}/gauntlet/preview`, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Failed to preview the gauntlet bracket.');
+        setError(await routeError(res, 'Failed to preview the gauntlet bracket.'));
         return;
       }
+      const body = await res.json().catch(() => ({}));
       setPreview({ shape: body.shape as Shape, pods: (body.pods as BracketPod[]) ?? [] });
     } finally {
       setPreviewing(false);
@@ -61,9 +62,8 @@ export function CreateGauntletForm({ seasons }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ start_date: startDate || null }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Failed to build the gauntlet bracket.');
+        setError(await routeError(res, 'Failed to build the gauntlet bracket.'));
         return;
       }
       // Nothing left to preview — the built season now shows up under "Existing Gauntlets" once the

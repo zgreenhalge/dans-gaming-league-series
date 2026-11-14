@@ -25,7 +25,7 @@ import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/component
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { fmtUtcShort, isServerLive, isServerOff, playersOnServer } from '@/lib/util';
+import { fmtUtcShort, isServerLive, isServerOff, playersOnServer, routeError } from '@/lib/util';
 import { workshopIdFromInput } from '@/lib/workshop';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
@@ -297,8 +297,7 @@ export function ServerConsolePanel({
         body: JSON.stringify({ enabled: !cleanup.enabled }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setCleanupError(body.error ?? 'Could not update cleanup schedule');
+        setCleanupError(await routeError(res, 'Could not update cleanup schedule'));
         return;
       }
       await refreshCleanup();
@@ -320,8 +319,7 @@ export function ServerConsolePanel({
         body: JSON.stringify({ days }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setIntervalError(body.error ?? 'Could not save interval');
+        setIntervalError(await routeError(res, 'Could not save interval'));
         return;
       }
       setIntervalSaved(true);
@@ -338,8 +336,7 @@ export function ServerConsolePanel({
     try {
       const res = await fetch('/api/admin/dathost-cleanup/run', { method: 'POST' });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setCleanupError(body.error ?? 'Could not trigger cleanup');
+        setCleanupError(await routeError(res, 'Could not trigger cleanup'));
         return;
       }
       setCleanupRunMessage('Triggered — status below will update automatically.');
@@ -357,11 +354,11 @@ export function ServerConsolePanel({
     setRegisterCommandsMessage(null);
     try {
       const res = await fetch('/api/admin/discord/register-commands', { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRegisterCommandsError(body.error ?? 'Could not register commands');
+        setRegisterCommandsError(await routeError(res, 'Could not register commands'));
         return;
       }
+      const body = await res.json().catch(() => ({}));
       setRegisterCommandsMessage(`Registered: ${(body.names as string[]).join(', ')}. Can take up to an hour to show up in Discord.`);
     } finally {
       setRegisterCommandsBusy(false);
@@ -374,11 +371,11 @@ export function ServerConsolePanel({
     setBackfillRolesMessage(null);
     try {
       const res = await fetch('/api/admin/discord/backfill-name-roles', { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setBackfillRolesError(body.error ?? 'Could not run the backfill');
+        setBackfillRolesError(await routeError(res, 'Could not run the backfill'));
         return;
       }
+      const body = await res.json().catch(() => ({}));
       setBackfillRolesMessage(`Attempted ${body.attempted} player(s). Check the Activity feed for any failures.`);
     } finally {
       setBackfillRolesBusy(false);
@@ -490,8 +487,7 @@ export function ServerConsolePanel({
     try {
       const res = await fetch(`/api/matches/${active.matchId}/server/teardown`, { method: 'POST' });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setTeardownError(body.error ?? 'Could not stop the server');
+        setTeardownError(await routeError(res, 'Could not stop the server'));
         return;
       }
       router.refresh();
@@ -512,8 +508,7 @@ export function ServerConsolePanel({
     try {
       const res = await fetch(`/api/matches/${active.matchId}/server/apply-match-config`, { method: 'POST' });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setMatchCfgError(body.error ?? 'Could not apply match settings');
+        setMatchCfgError(await routeError(res, 'Could not apply match settings'));
         return;
       }
       setMatchCfgSuccess(true);
@@ -528,8 +523,7 @@ export function ServerConsolePanel({
     try {
       const res = await fetch(`/api/admin/server/config-diff?configSet=${encodeURIComponent(configSet || 'golden')}`);
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setDiffError(body.error ?? 'Could not compare config');
+        setDiffError(await routeError(res, 'Could not compare config'));
         return;
       }
       setDiff((await res.json()) as ConfigSetDiff);

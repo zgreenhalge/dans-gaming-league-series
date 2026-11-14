@@ -6,6 +6,7 @@
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 export function FeatureMatchToggle({ matchId, isFeature }: { matchId: number; isFeature: boolean }) {
   const router = useRouter();
@@ -18,10 +19,7 @@ export function FeatureMatchToggle({ matchId, isFeature }: { matchId: number; is
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ is_feature_match: !isFeature }),
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? 'Failed to update');
-      }
+      if (!res.ok) throw new Error(await routeError(res, 'Failed to update'));
       router.refresh();
     });
   }

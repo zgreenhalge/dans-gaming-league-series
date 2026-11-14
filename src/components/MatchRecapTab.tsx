@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Crosshair } from 'lucide-react';
-import { tabCls, sideColor, factionClass } from '@/lib/util';
+import { tabCls, sideColor, factionClass, routeError } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import { ticksSince, formatClock } from '@/lib/replay/playback';
 import MapHeatmap from './MapHeatmap';
@@ -50,8 +50,7 @@ function useReplayDispatch(matchId: number) {
     try {
       const res = await fetch(`/api/matches/${matchId}/replay/dispatch`, { method: 'POST' });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? `Dispatch failed (${res.status})`);
+        setError(await routeError(res, `Dispatch failed (${res.status})`));
       } else {
         startTransition(() => router.refresh());
       }

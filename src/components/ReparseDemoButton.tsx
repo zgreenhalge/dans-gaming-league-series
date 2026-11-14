@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 export function ReparseDemoButton({ matchId }: { matchId: number }) {
   const router = useRouter();
@@ -18,10 +19,7 @@ export function ReparseDemoButton({ matchId }: { matchId: number }) {
   async function reparse() {
     await run(async () => {
       const res = await fetch(`/api/matches/${matchId}/demo/dispatch`, { method: 'POST' });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? 'Failed to dispatch');
-      }
+      if (!res.ok) throw new Error(await routeError(res, 'Failed to dispatch'));
       setQueued(true);
       router.refresh();
     });

@@ -904,7 +904,9 @@ export function shortCountPlayerIds(appearances: Map<number, number>): number[] 
   return [...appearances].filter(([, n]) => n === min).map(([id]) => id);
 }
 
-/** A failed API route response's `{ error }` message, or `fallback` when its body carries none. */
+/** A failed API route response's `{ error }` message, or `fallback` when its body carries none (an
+ *  empty, non-JSON, non-object, or non-string / empty `error` body). */
 export async function routeError(res: Response, fallback: string): Promise<string> {
-  return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? fallback;
+  const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+  return typeof body?.error === 'string' && body.error !== '' ? body.error : fallback;
 }

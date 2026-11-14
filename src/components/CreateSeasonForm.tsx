@@ -7,6 +7,7 @@ import { parseBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 import ErrorText from '@/components/ErrorText';
 import FieldLabel from './FieldLabel';
+import { routeError } from '@/lib/util';
 
 interface Props {
   knownMaps: string[];
@@ -36,8 +37,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
         body: JSON.stringify({ map_pool: selection.mapPool, new_maps: selection.newMaps, buy_in_amount: buyInInput.amount }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to create season.');
+        setError(await routeError(res, 'Failed to create season.'));
         return;
       }
       const created = await res.json();

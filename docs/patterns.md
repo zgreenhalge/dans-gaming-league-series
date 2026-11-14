@@ -88,6 +88,16 @@ Pick one policy per call site and apply it for the same reason across every scri
 the shape — don't let equivalent call sites disagree on whether a write failure aborts, gets recorded,
 or vanishes.
 
+## Read a failed route response through `routeError()`
+
+A client component that calls an API route reads the failure message with `routeError(res, fallback)`
+(`src/lib/util.ts`) — never a hand-rolled `(await res.json()).error ?? '…'`. `routeError()` tolerates
+a non-JSON body and returns the fallback, so every surface words the same failure the same way.
+`sendJsonRequest()` (`src/components/sendJsonRequest.ts`) already uses it; hand it to
+`useAsyncAction().run()` when the request is the standard JSON mutation. A call site that needs more
+than the message from the error body (a `code`, `forceable`, `nextEligibleAt`) parses the body itself.
+Whichever path a call site takes, it still shows the error to the user.
+
 ## Test external IO by extracting the logic around it, not by mocking the call
 
 When a module wraps an external HTTP call (DatHost, GitHub Actions dispatch, R2, Steam), the call

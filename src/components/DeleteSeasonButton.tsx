@@ -7,6 +7,7 @@
 import { useRouter } from 'next/navigation';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { useAsyncAction } from './useAsyncAction';
+import { routeError } from '@/lib/util';
 
 export default function DeleteSeasonButton({ seasonId }: { seasonId: number }) {
   const router = useRouter();
@@ -15,10 +16,7 @@ export default function DeleteSeasonButton({ seasonId }: { seasonId: number }) {
   async function del() {
     await run(async () => {
       const res = await fetch(`/api/seasons/${seasonId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Failed to delete season.');
-      }
+      if (!res.ok) throw new Error(await routeError(res, 'Failed to delete season.'));
       router.refresh();
     });
   }
