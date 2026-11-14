@@ -636,6 +636,8 @@ function searchHalf(
     for (let it = 0; it < iterations; it++, temperature *= cooling) {
       const w = Math.floor(rand() * weeks);
       const t = templates[w];
+      // A division with fewer units than weeks has weeks with no games: nothing there to move.
+      if (t.games.length === 0) continue;
 
       // A move either swaps two slots' players within the week, or switches one game to one of its
       // other two team splits. Plain variables rather than move/undo closures: this loop runs a few

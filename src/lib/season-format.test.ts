@@ -152,6 +152,31 @@ test('formatIssues accepts group seasons of any roster size and length', () => {
   for (const n of [7, 10, 13]) for (const weeks of [5, 7, 8]) assert.deepEqual(formatIssues(n, { ...BASE, weekShape: 'group', weeks }), [], `n=${n} weeks=${weeks}`);
 });
 
+/** Settings `formatIssues()` accepts where a division has fewer matches or groups than weeks, so it sits
+ *  a week out: every player plays 4 in 5 weeks (a multiple of 4 that fits a 5-player division), which a
+ *  4-player division spreads over 4 of the weeks. With a halfway shuffle each half is searched on its own. */
+const IDLE_WEEK_SETTINGS: { n: number; settings: Partial<SeasonFormatSettings> }[] = [
+  { n: 9, settings: { weeks: 5, divisions: 2, weekShape: 'match' } },
+  { n: 9, settings: { weeks: 5, divisions: 2, weekShape: 'group' } },
+  { n: 13, settings: { weeks: 5, divisions: 3, weekShape: 'match' } },
+  { n: 9, settings: { weeks: 9, divisions: 2, weekShape: 'match', halfwayShuffle: true } },
+];
+
+for (const { n, settings: overrides } of IDLE_WEEK_SETTINGS) {
+  const settings = { ...BASE, ...overrides };
+  planTest(`a division with a week out builds what formatIssues() accepts (${n} players, ${JSON.stringify(overrides)})`, () => {
+    assert.deepEqual(formatIssues(n, settings), []);
+    const p = plan(n, settings);
+    assert.ok(p.weeks.some((w) => w.divisions.some((d) => d.games.length === 0)), 'a division sits a week out');
+    assert.ok(p.weeks.every((w) => w.divisions.some((d) => d.games.length > 0)), 'every week has games somewhere');
+    // Without a reshuffle every player plays the same number of games: 4 units of the week shape.
+    if (!settings.halfwayShuffle) {
+      const games = 4 * WEEK_UNIT[settings.weekShape].games;
+      assert.deepEqual(p.scorecard.gamesPerPlayer, { min: games, max: games });
+    }
+  });
+}
+
 test('formatIssues refuses a 4-player division two groups in one week', () => {
   // Divisions of 5 and 4 over 6 weeks need 8 groups each, so the 4-player division would play two
   // groups — four games over only three possible team splits — in some week.
