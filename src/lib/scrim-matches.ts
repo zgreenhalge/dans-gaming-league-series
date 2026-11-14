@@ -25,6 +25,9 @@ export const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_d
 
 type ScrimMatchState = { final_score: string | null; server_state: string | null };
 
+/** The signed-in viewer (`playerId` `null` when signed out) and whether they are an admin. */
+export type ScrimViewer = { playerId: number | null; isAdmin: boolean };
+
 /** `server_state` values once a match's game is over: the scoreboard grace period before the server
  *  stops, then stopped. */
 const GAME_OVER_SERVER_STATES = new Set(['tearing_down', 'done']);
@@ -240,7 +243,7 @@ export function parseScrimRevision(value: unknown): number | null {
 /** Whether `viewer` may change, discard or start a scrim match with players `playerIds`: an admin, or
  *  one of its players. `requireScrimMatchAccess()` gates the API on it; the night page and the match
  *  page offer the controls on it. */
-export function canManageScrimMatch(viewer: { playerId: number | null; isAdmin: boolean }, playerIds: number[]): boolean {
+export function canManageScrimMatch(viewer: ScrimViewer, playerIds: number[]): boolean {
   return viewer.isAdmin || (viewer.playerId != null && playerIds.includes(viewer.playerId));
 }
 
@@ -252,7 +255,7 @@ export function scrimNightEndRefusal(
   night: ScrimNight,
   signups: { player_id: number }[],
   matches: ScrimMatchState[],
-  viewer: { playerId: number | null; isAdmin: boolean },
+  viewer: ScrimViewer,
   now: Date,
 ): { status: 403 | 409; error: string } | null {
   if (hasScrimNightEnded(night, now)) return { status: 409, error: SCRIM_NIGHT_OVER_ERROR };
@@ -270,7 +273,7 @@ export function canEndScrimNight(
   night: ScrimNight,
   signups: { player_id: number }[],
   matches: ScrimMatchState[],
-  viewer: { playerId: number | null; isAdmin: boolean },
+  viewer: ScrimViewer,
   now: Date,
 ): boolean {
   return scrimNightEndRefusal(night, signups, matches, viewer, now) === null;

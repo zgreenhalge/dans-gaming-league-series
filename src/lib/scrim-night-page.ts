@@ -5,7 +5,7 @@
 // rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
-import { canEndScrimNight, canManageScrimMatch, isScrimMatchEditable, scrimMatchNeedsServer } from './scrim-matches';
+import { canEndScrimNight, canManageScrimMatch, isScrimMatchEditable, scrimMatchNeedsServer, type ScrimViewer } from './scrim-matches';
 import { SCRIM_MATCH_SIZE, leagueMatchesDuring, type ScrimCommitment } from './scrim-schedule';
 import type { ScheduledMatchRef } from './server-schedule-collision';
 import { isPlayedScore } from './util';
@@ -17,11 +17,7 @@ export type ScrimNightTab = (typeof SCRIM_NIGHT_TABS)[number];
  *  `current`). */
 export type ScrimNightState = 'upcoming' | 'live' | 'final';
 
-/** The signed-in viewer (`playerId` `null` when signed out) and whether they're an admin. */
-export interface ScrimNightViewer {
-  playerId: number | null;
-  isAdmin: boolean;
-}
+export type ScrimNightViewer = ScrimViewer;
 
 /** What the night's status bar (`ScrimNightStatusBar`) shows, the same over every tab. */
 export interface ScrimNightStatus {
