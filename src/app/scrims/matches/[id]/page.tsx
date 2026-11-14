@@ -19,6 +19,7 @@ import { effectivePickedMap, effectiveSkinsStartingSide } from '@/lib/veto';
 import { mapImageFor, mapSidesHref } from '@/lib/maps';
 import { formatLeagueDate, isPlayedScore, parseRouteId, parseScore } from '@/lib/util';
 import { DEFAULT_TARGET_WIN_ROUNDS } from '@/lib/replay/inputs';
+import { canManageScrimMatch } from '@/lib/scrim-matches';
 
 // The server panel's state and the lobby's lock change live; don't cache.
 export const dynamic = 'force-dynamic';
@@ -63,7 +64,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
   const nightLabel = formatLeagueDate(match.night_starts_at);
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
-  const canManage = currentPlayerId != null && (isAdmin || stats.some((s) => s.player_id === currentPlayerId));
+  const canManage = canManageScrimMatch({ playerId: currentPlayerId, isAdmin }, stats.map((s) => s.player_id));
 
   return (
     <div className="min-h-screen">
@@ -93,7 +94,7 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           </div>
           {!played && (
             <MatchPanelSlot>
-              <MatchServerPanel matchId={match.id} canManage={canManage} canJoin={currentPlayerId != null} signInToJoin={currentPlayerId == null} initialState={serverState} />
+              <MatchServerPanel matchId={match.id} canManage={canManage} canJoin={currentPlayerId != null} signInToJoin={currentPlayerId == null} initialState={serverState} revision={match.scrim_revision} />
             </MatchPanelSlot>
           )}
           {canManage && (

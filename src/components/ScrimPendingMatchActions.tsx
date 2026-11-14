@@ -18,7 +18,7 @@ export function ScrimPendingMatchActions({ match }: { match: ScrimMatch }) {
         label={`Admin actions for match ${match.match_number}`}
         items={[
           { label: 'Confirm result…', onSelect: () => router.push(scrimMatchHref(match.id)) },
-          { label: 'Discard…', danger: true, content: () => <ScrimDiscardButton matchId={match.id} /> },
+          { label: 'Discard…', danger: true, content: () => <ScrimDiscardButton matchId={match.id} revision={match.revision} /> },
         ]}
       />
     </div>
