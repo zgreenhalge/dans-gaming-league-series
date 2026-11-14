@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
-import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
@@ -262,6 +262,25 @@ async function main() {
 
     delete process.env.MATCHZY_CONFIG_SECRET;
     __setTestAfterMode(false);
+  });
+
+  await test('PATCH — a failed pick/ban write is a 500 carrying the database message, and the match is unchanged', async () => {
+    const db = makeDb();
+    __setTestAdminClient(clientFailingOn(createFakeSupabaseClient(db), 'matches', 'update', { code: 'XX000', message: 'connection reset' }));
+    const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { field: 'shirts_ban', value: 'Foroglio' });
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'connection reset');
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)!.shirts_ban, null);
+  });
+
+  await test('PATCH — a failed clear is a 500 carrying the database message, and the pick/ban stays', async () => {
+    const db = makeDb();
+    db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)!.shirts_ban = 'Foroglio';
+    __setTestAdminClient(clientFailingOn(createFakeSupabaseClient(db), 'matches', 'update', { code: 'XX000', message: 'connection reset' }));
+    const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { field: 'shirts_ban', value: null });
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'connection reset');
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)!.shirts_ban, 'Foroglio');
   });
 
   __setTestSession(undefined);
