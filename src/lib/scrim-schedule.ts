@@ -21,11 +21,11 @@ export interface ScrimNight {
   lastActiveAt?: string | null;
 }
 
-/** How long a night runs with nothing happening before it ends on its own. Activity is a match made,
- *  its server changing state, a round or final score, and a check in or check out — stamped on
+/** How long a night runs without a match starting or being scored before it ends on its own. Activity
+ *  is a match's server going `provisioning` or `live` and a live round or final score — stamped on
  *  `scrim_nights.last_active_at` by triggers, and `scrim_night_end()` in the migrations measures idle
  *  the same way. */
-export const SCRIM_NIGHT_IDLE_MS = 30 * 60 * 1000;
+export const SCRIM_NIGHT_IDLE_MS = 60 * 60 * 1000;
 
 /** How long after its start a night counts as that night: an ended night can be reopened within it
  *  (`canReopenScrimNight()`), and the league matches in it show on the night (`leagueMatchesDuring()`). */

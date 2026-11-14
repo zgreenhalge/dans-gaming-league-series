@@ -1,21 +1,15 @@
 -- A scrim night has no fixed length. It ends when a player or admin ends it (`ended_at`), or once it
--- has been idle for 30 minutes: nothing has happened on it since `greatest(starts_at, last_active_at)`.
--- Activity is a match made, its server changing state (starting, live, game over), a live round score
--- or final score, and a check in or check out. Triggers stamp `last_active_at` on each, so a write
--- from any source counts — a route, the demo-ingest Action, hand-run SQL. A night that has ended stays
--- ended: activity on it afterward (a late score) doesn't revive it; `reopen_scrim_night()` does.
+-- has been idle for an hour: no match has started or been scored on it since
+-- `greatest(starts_at, last_active_at)`. Activity is a match starting (its server going `provisioning`
+-- or `live`) and a match being scored (a live round score or the final score). Triggers stamp
+-- `last_active_at` on each, so a write from any source counts — a route, the demo-ingest Action,
+-- hand-run SQL. A night that has ended stays ended: activity on it afterward (a late score) doesn't
+-- revive it; `reopen_scrim_night()` does.
 -- Mirrors `scrimNightEnd()` / `SCRIM_NIGHT_IDLE_MS` in src/lib/scrim-schedule.ts.
 
 alter table public.scrim_nights add column last_active_at timestamptz;
 
--- A night running when this applies keeps running: one not ended by hand that started within the last
--- 4 hours is stamped active now.
-update public.scrim_nights
-set last_active_at = now()
-where ended_at is null
-  and starts_at > now() - interval '4 hours';
-
--- The instant a night ends: `ended_at` (never before it starts), else 30 minutes after its latest
+-- The instant a night ends: `ended_at` (never before it starts), else an hour after its latest
 -- activity. A night not ended yet gives the instant it would end if nothing more happened.
 create or replace function public.scrim_night_end(
   p_starts_at timestamptz,
@@ -29,14 +23,14 @@ set search_path = public
 as $function$
   select case
     when p_ended_at is not null then greatest(p_starts_at, p_ended_at)
-    else greatest(p_starts_at, p_last_active_at) + interval '30 minutes'
+    else greatest(p_starts_at, p_last_active_at) + interval '60 minutes'
   end;
 $function$;
 
 -- Records activity on night `p_night_id` now, unless it has already ended (a null id is a no-op). A
 -- night stamped within the last 5 minutes is left alone: a live match scores far more often than that,
 -- and each stamp is a `scrim_nights` update, which bumps `data_version` and so refreshes every cached
--- read. A night therefore goes idle after 25 to 30 minutes of nothing.
+-- read. A night therefore goes idle after 55 to 60 minutes of nothing.
 create or replace function public.touch_scrim_night(p_night_id integer)
 returns void
 language sql
@@ -49,17 +43,15 @@ as $function$
     and (last_active_at is null or last_active_at < now() - interval '5 minutes');
 $function$;
 
--- The trigger behind every activity source: the night is the row's own (`scrim_signups.night_id`,
--- `matches.scrim_night_id`) or its match's (`match_server_state`, `live_match_score`).
+-- The trigger behind every activity source: the night is the row's own (`matches.scrim_night_id`) or
+-- its match's (`match_server_state`, `live_match_score`).
 create or replace function public.touch_scrim_night_on_activity()
 returns trigger
 language plpgsql
 set search_path = public
 as $function$
 begin
-  if tg_table_name = 'scrim_signups' then
-    perform touch_scrim_night(new.night_id);
-  elsif tg_table_name = 'matches' then
+  if tg_table_name = 'matches' then
     perform touch_scrim_night(new.scrim_night_id);
   else
     perform touch_scrim_night((select scrim_night_id from matches where id = new.match_id));
@@ -68,19 +60,14 @@ begin
 end;
 $function$;
 
-create trigger touch_scrim_night_on_check_in after insert on public.scrim_signups
-  for each row when (new.checked_in_at is not null) execute function public.touch_scrim_night_on_activity();
-create trigger touch_scrim_night_on_check_in_change after update of checked_in_at on public.scrim_signups
-  for each row when (new.checked_in_at is distinct from old.checked_in_at) execute function public.touch_scrim_night_on_activity();
-create trigger touch_scrim_night_on_match after insert on public.matches
-  for each row when (new.scrim_night_id is not null) execute function public.touch_scrim_night_on_activity();
 create trigger touch_scrim_night_on_score after update of final_score on public.matches
   for each row when (new.scrim_night_id is not null and new.final_score is distinct from old.final_score)
   execute function public.touch_scrim_night_on_activity();
 create trigger touch_scrim_night_on_server_start after insert on public.match_server_state
-  for each row execute function public.touch_scrim_night_on_activity();
+  for each row when (new.server_state in ('provisioning', 'live')) execute function public.touch_scrim_night_on_activity();
 create trigger touch_scrim_night_on_server_state after update of server_state on public.match_server_state
-  for each row when (new.server_state is distinct from old.server_state) execute function public.touch_scrim_night_on_activity();
+  for each row when (new.server_state in ('provisioning', 'live') and new.server_state is distinct from old.server_state)
+  execute function public.touch_scrim_night_on_activity();
 create trigger touch_scrim_night_on_live_score after insert or update on public.live_match_score
   for each row execute function public.touch_scrim_night_on_activity();
 

@@ -217,7 +217,7 @@ see [`season-lifecycle.md`](./season-lifecycle.md).
   when everyone drops out before it has any matches. Players sign up as **definite** or **maybe**, so
   everyone can judge attendance ahead of time, and can switch or drop out right up until it ends. A
   night has no fixed length: it ends when a player or admin presses **End night**, or once it has
-  been **idle** for 30 minutes — no match made, started or scored, and nobody checking in or out. A
+  been **idle** for an hour — no match started or scored. A
   night that is over can be **reopened** within 12 hours of its start, while no other night holds
   the server. A match already made can always be started and scored.
   See `/scrims` and [`architecture.md`](./architecture.md) (Database, `scrim_nights`). A **scrim
