@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, type ReactNode } from 'react';
 import type { AdminMenuItem } from './AdminMenu';
 import { PlayerLink } from './PlayerLink';
@@ -96,7 +98,7 @@ export function useAddPlayerMenuItem({
   busy: boolean;
 }): AdminMenuItem {
   const [pickedPlayerId, setPickedPlayerId] = useState('');
-  const addPlayerId = excludeIds.has(Number(pickedPlayerId)) ? '' : pickedPlayerId;
+  const addPlayerId = pickedPlayerId !== '' && excludeIds.has(Number(pickedPlayerId)) ? '' : pickedPlayerId;
   return {
     label: 'Add player…',
     content: (close) => (

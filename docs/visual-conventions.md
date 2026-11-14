@@ -116,8 +116,8 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   label queries (Playwright `getByLabel`, Testing Library `getByLabelText`) find it by that text. It
   renders as a block above its control; spacing goes in `className`. Use `FieldLabel` when the text
   names one control and `SectionLabel` when it heads a section or a group. A control with no room for
-  a visible label (`LaunchOptionsPicker`'s config-set select, `MapPicker`'s select when no `id` is
-  passed, its custom workshop-ID input) carries an `aria-label` instead. Labels with a
+  a visible label (`LaunchOptionsPicker`'s config-set select, `MapPicker`'s select when its caller passes
+  `ariaLabel`, its custom workshop-ID input) carries an `aria-label` instead. Labels with a
   deliberately different look (amber callouts, faction-coloured team labels, mono checkbox captions)
   stay hand-styled
 - **`.display-numeral`** (with optional **`.ghost`**) — large hero stat numerals; `.ghost` gives a
@@ -399,9 +399,10 @@ conventions, distinct from the content-page patterns above:
   demo review panels, the results and recording forms): it isn't an admin power. `VetoSequence`'s
   per-step ✕ and **Clear all pick/bans** stay on the pick/ban strip, where a per-tile menu would be
   the same ink and the steps share labels.
-- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`, a secondary action
-  (an Edit or Manage button, a row action) the bordered `ADMIN_SMALL_BUTTON_CLS`, and the unboxed
-  Cancel beside a form's Save `ADMIN_CANCEL_BUTTON_CLS`. All live in
+- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS`. The site's standard
+  small button, admin or player-facing, is the bordered `SMALL_BUTTON_CLS` (an Edit or Manage button,
+  a row action, Join / Leave Season), with `SMALL_GREEN_BUTTON_CLS` / `SMALL_AMBER_BUTTON_CLS` for a
+  selected or confirming one, and the unboxed Cancel beside a form's Save is `CANCEL_BUTTON_CLS`. All live in
   `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
   a constant exported from a `'use client'` file is a client reference there) — use them rather than a
   re-typed class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,

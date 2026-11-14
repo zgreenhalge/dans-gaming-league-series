@@ -10,6 +10,7 @@ export const CUSTOM_MAP_CHOICE = '__custom__';
 
 export function MapPicker({
   id,
+  ariaLabel,
   maps,
   value,
   onChange,
@@ -18,8 +19,10 @@ export function MapPicker({
   customInvalid,
   disabled,
 }: {
-  /** The select's id, for a `<label htmlFor>` naming it. Without one the select is named "Map". */
+  /** The select's id, for a `<label htmlFor>` naming it. */
   id?: string;
+  /** The select's accessible name, for a caller with no visible label. */
+  ariaLabel?: string;
   maps: WorkshopMapOption[];
   value: string;
   onChange: (value: string) => void;
@@ -32,7 +35,7 @@ export function MapPicker({
     <>
       <select
         id={id}
-        aria-label={id ? undefined : 'Map'}
+        aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

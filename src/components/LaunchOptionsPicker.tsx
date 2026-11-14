@@ -54,6 +54,7 @@ export function LaunchOptionsPicker({
         ))}
       </select>
       <MapPicker
+        ariaLabel="Map"
         maps={maps}
         value={mapChoice}
         onChange={onMapChoiceChange}
