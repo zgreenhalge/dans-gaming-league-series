@@ -50,6 +50,10 @@ match's card doesn't flip to the site accent on hover).
   hero/panel edges elsewhere.
 - **`.live-dot`** / **`.sheen`** — shared motion utilities for "this is live/active" signals
   (pulsing dot, hover sheen sweep across cards). Both respect `prefers-reduced-motion`.
+- **`.loading-ring`** / **`LoadingRing`** (`src/components/Skeleton.tsx`) — a spinning accent arc for a
+  spot that is loading, so a placeholder reads as in motion rather than broken; the player hover
+  card's skeleton puts one where the avatar goes. Under `prefers-reduced-motion` it pulses in place
+  instead of turning.
 
 ## Faction styling
 
@@ -77,7 +81,7 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - **`<PlayerLink playerId>`** (`PlayerLink.tsx`) — the link to a player's page, with a hover card:
   a `PlayerPreviewCard` (a player's `PlayerSummary` — EHOG badge, W-L, KDA, ADR and a Form row of
   their last five results) opens beside the link as a skeleton of the
-  same layout (`PlayerSummaryBlockSkeleton`) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute).
+  same layout (`PlayerSummaryBlockSkeleton`: pulsing bars and a `LoadingRing` where the avatar goes) until `GET /api/players/[id]/summary` answers (fetched per player and reused for a minute).
   It opens on mouse hover (and stays open while the mouse is over the link or the card), on keyboard
   focus (closes on blur or Escape), and on a touch long-press (a tap still navigates; a press
   elsewhere closes it). The card is `role="tooltip"` and the link carries `aria-describedby` while
