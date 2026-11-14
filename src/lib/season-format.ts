@@ -521,11 +521,12 @@ function searchHalf(
   winProb: WinProb,
   ehogBalance: boolean,
   rand: () => number,
+  effort: number,
 ): HalfSearchResult {
   const { members, templates, gamesPerPlayer, history } = input;
   const size = members.length;
   const weeks = templates.length;
-  const iterations = 10000 + 900 * size * weeks;
+  const iterations = Math.max(1, Math.round(effort * (10000 + 900 * size * weeks)));
   // Per week: the games each slot plays in, so a move only rescores the games it actually touches.
   const slotGames = templates.map((t) => Array.from({ length: size }, (_, slot) => t.games.flatMap((g, gi) => (g.includes(slot) ? [gi] : []))));
 
@@ -748,8 +749,19 @@ function simulateRecords(games: FormatGame[], rand: () => number): Map<number, F
   return records;
 }
 
+export interface FormatBuildOptions {
+  /** Scales the annealing search length: a finite number above 0 (1 = the full search, the default;
+   *  0.01 = a hundredth of the moves), else `buildFormatPlan()` throws a `RangeError`. A lower effort
+   *  keeps the structural guarantees (seating, divisions, week counts) but is optimized less, so
+   *  soft goals such as equal game counts can be missed; it suits tests that sweep many settings,
+   *  never a real build. */
+  effort?: number;
+}
+
 /** Builds a plan for `players` under `settings`, or the reasons it can't. */
-export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatSettings): FormatResult {
+export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatSettings, options: FormatBuildOptions = {}): FormatResult {
+  const effort = options.effort ?? 1;
+  if (!Number.isFinite(effort) || effort <= 0) throw new RangeError(`effort must be a finite number above 0, got ${effort}`);
   const issues = formatIssues(players.length, settings);
   if (issues.length > 0) return { ok: false, issues };
 
@@ -806,7 +818,7 @@ export function buildFormatPlan(players: FormatPlayer[], settings: SeasonFormatS
     divisions.forEach((divisionIds, d) => {
       const members = divisionIds.map((id) => indexById.get(id)!);
       const { templates, gamesPerPlayer } = halfTemplates(members.length, halfWeeks, settings.weekShape, sizes);
-      const result = searchHalf({ members, templates, gamesPerPlayer, history }, n, winProb, settings.ehogBalance, rand);
+      const result = searchHalf({ members, templates, gamesPerPlayer, history }, n, winProb, settings.ehogBalance, rand, effort);
 
       templates.forEach((t, w) => {
         const playing = new Set<number>();

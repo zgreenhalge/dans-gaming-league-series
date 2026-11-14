@@ -118,7 +118,9 @@ async function main() {
 
   await test('PATCH — a failed pool update is a 500, and the pool is unchanged', async () => {
     const db = installFixture({ table: 'seasons', method: 'update' });
-    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { map_pool: FIVE })).status, 500);
+    const res = await call(UPCOMING_ID, ADMIN_ID, { map_pool: FIVE });
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'connection reset');
     assert.equal(db.seasons.find((s) => s.id === UPCOMING_ID)!.map_pool, null);
   });
 

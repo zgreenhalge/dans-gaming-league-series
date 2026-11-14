@@ -5,11 +5,9 @@ import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib
 import { isDiscordIdTaken } from '@/lib/discord-link';
 import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNameRole, getStoredNameRoleId } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
-import type { Database } from '@/lib/database.types';
+import { DISCORD_UNLINK_FIELDS, PlayerIdentityTakenError, updatePlayer, type PlayerUpdate } from '@/lib/player-identity';
 import { parsePlayerName, parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
-
-type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. A new name follows the
@@ -135,8 +133,7 @@ export async function PATCH(
   if ('discord_id' in body) {
     if (body.discord_id === null) {
       unlinkingNameRoleId = await getStoredNameRoleId(supabaseAdmin, targetId);
-      update.discord_id = null;
-      update.discord_name_role_id = null;
+      Object.assign(update, DISCORD_UNLINK_FIELDS);
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
       let taken: boolean;
       try {
@@ -170,32 +167,24 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('players')
-    .update(update)
-    .eq('id', targetId)
-    .select('*')
-    .maybeSingle();
-  if (error) {
-    // The DB's own unique constraints (name, players_steam_id_key, players_discord_id_key) are the
-    // backstop for this route's own pre-checks above racing a concurrent write — report it the same
-    // way a check that caught it up front would, not as a generic 500 with a raw Postgres message.
-    if ((error as { code?: string }).code === '23505') {
-      return NextResponse.json(
-        { error: 'That name, Steam ID, or Discord ID is already in use by another player.' },
-        { status: 409 },
-      );
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // The DB's own unique constraints (name, players_steam_id_key, players_discord_id_key) are the
+  // backstop for this route's own pre-checks above racing a concurrent write — updatePlayer() reports
+  // one the same way a check that caught it up front would, not as a generic 500.
+  let data: Awaited<ReturnType<typeof updatePlayer>>;
+  try {
+    data = await updatePlayer(supabaseAdmin, targetId, update);
+  } catch (err) {
+    if (err instanceof PlayerIdentityTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Updating the player failed' }, { status: 500 });
   }
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
   if (renamedFrom) {
-    await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
-    const currentNameRoleId = (data as { discord_name_role_id: string | null }).discord_name_role_id;
+    await recordNameChange(supabaseAdmin, targetId, renamedFrom, data.name);
+    const currentNameRoleId = data.discord_name_role_id;
     if (currentNameRoleId) {
       afterBestEffort(`discord-roles: rename name role for admin-renamed player ${targetId}`, () =>
-        renameNameRole(supabaseAdmin, targetId, currentNameRoleId, (data as { name: string }).name),
+        renameNameRole(supabaseAdmin, targetId, currentNameRoleId, data.name),
       );
     }
   }
@@ -205,12 +194,12 @@ export async function PATCH(
   // as the OAuth callback's own calls. Unlinking is deliberately not handled here for @Participants;
   // see players/me/discord/route.ts's comment. The name role, however, is deleted on unlink above.
   if ('discord_id' in body && body.discord_id !== null) {
-    const linkedDiscordId = (data as { discord_id: string | null }).discord_id;
+    const linkedDiscordId = data.discord_id;
     afterBestEffort(`discord-roles: sync @Participants for admin-linked player ${targetId}`, () =>
       syncParticipantRoleForPlayer(supabaseAdmin, targetId, linkedDiscordId),
     );
     afterBestEffort(`discord-roles: create name role for admin-linked player ${targetId}`, () =>
-      createNameRole(supabaseAdmin, targetId, linkedDiscordId, (data as { name: string }).name),
+      createNameRole(supabaseAdmin, targetId, linkedDiscordId, data.name),
     );
   }
   if (unlinkingNameRoleId) {
