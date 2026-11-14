@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ErrorText from './ErrorText';
 import { AddPlayerSelect, RosterPlayerRow } from './RosterPlayerRow';
 import { AdminMenu, type AdminMenuItem } from './AdminMenu';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { ACTIVE_COMMITMENT_BTN_CLS, COMMITMENT_LABEL, IDLE_COMMITMENT_BTN_CLS } from './ScrimCommitmentButtons';
 import { useScrimSignupWrite } from './useScrimSignupWrite';
 import { StatusPill } from './StatusPill';
@@ -26,8 +27,9 @@ interface Props {
 
 /** A scrim night's attendance: who's signed up, split into Definite and Maybe, with a "Here" pill on
  *  whoever has checked in, under an Attendance header with the count. An admin gets `AdminMenu`s: one on
- *  each row (check in or out while check-in is open, switch between definite and maybe, remove) and one
- *  on the header (Add player…, which opens the player picker in the menu). */
+ *  each row (check in or out while check-in is open, switch between definite and maybe, remove — which
+ *  asks for a confirm for the night's only player, whose removal deletes the night) and one on the header
+ *  (Add player…, which opens the player picker in the menu). */
 export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerId, admin, allPlayers, collapsible = false }: Props) {
   const { busy, error, pending, setCommitment, setCheckIn } = useScrimSignupWrite(nightId);
   const [pickedPlayerId, setPickedPlayerId] = useState('');
@@ -38,12 +40,37 @@ export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerI
 
   /** An admin's actions on one player's signup, held while any signup write is in flight. */
   function rowItems(s: ScrimSignupEntry, other: ScrimCommitment): AdminMenuItem[] {
+    // The night's only player: removing them deletes the night unless it has matches (`leave_scrim_night()`).
+    const remove: AdminMenuItem =
+      signups.length === 1
+        ? {
+            label: 'Remove…',
+            danger: true,
+            disabled: busy,
+            content: () => (
+              <div className="flex flex-col gap-2">
+                <p className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+                  {s.player_name} is the only player signed up, so removing them deletes the night unless it has matches.
+                </p>
+                <ArmedConfirmButton
+                  onConfirm={() => setCommitment(s.player_id, null)}
+                  busy={busy}
+                  error={error}
+                  triggerLabel="Remove"
+                  confirmLabel="Confirm remove"
+                  busyLabel="Removing…"
+                  variant="danger"
+                />
+              </div>
+            ),
+          }
+        : { label: 'Remove', onSelect: () => setCommitment(s.player_id, null), disabled: busy, danger: true };
     return [
       ...(checkInOpen
         ? [{ label: s.checked_in_at ? 'Check out' : 'Check in', onSelect: () => setCheckIn(s.player_id, !s.checked_in_at), disabled: busy }]
         : []),
       { label: `Make ${COMMITMENT_LABEL[other].toLowerCase()}`, onSelect: () => setCommitment(s.player_id, other), disabled: busy },
-      { label: 'Remove', onSelect: () => setCommitment(s.player_id, null), disabled: busy, danger: true },
+      remove,
     ];
   }
 
