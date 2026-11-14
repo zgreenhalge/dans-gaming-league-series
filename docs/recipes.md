@@ -171,9 +171,11 @@ and `src/app/api/scrims/matches/[id]/route.ts`, writing through `src/lib/scrim-n
    reads stay in `src/lib/queries/`; a read the write itself depends on sits beside it
    (`applyScrimSideChoice()`).
    - A table write ends its chain with `.throwOnError()` (`setScrimSignup()`, `applyScrimSideChoice()`).
-   - An RPC call checks its `{ error }` and throws `new Error(error.message)`
-     (`leaveScrimNight()`, `updateScrimMatch()`). Supabase returns that `error` as a plain
-     object, not an `Error`, so rethrowing it as-is loses its message at the route's catch.
+   - An RPC call with no refusal to map ends in `.throwOnError()` (`leaveScrimNight()`). One that
+     maps a refusal to a typed error checks its `{ error }` and throws the typed error, or
+     `new Error(error.message)` for anything else (`updateScrimMatch()`). Supabase returns that
+     `error` as a plain object, not an `Error`, so rethrowing it as-is loses its message at the
+     route's catch.
    - Rows that must change together are one Postgres function called through `.rpc()`
      (`start_scrim_night()` behind `startScrimNight()`, `queue_scrim_matches()` behind
      `queueScrimMatches()`), not a sequence of writes from the route.
@@ -202,7 +204,9 @@ and `src/app/api/scrims/matches/[id]/route.ts`, writing through `src/lib/scrim-n
      reload.
 4. **Test it.** The route gets a colocated `route.test.ts` (next recipe). To reach an error raised
    inside an RPC, the test's fake RPC handler throws `FakeRpcError`
-   (`src/lib/test-support/fakeSupabase.ts`): `src/app/api/scrims/route.test.ts` covers both the
+   (`src/lib/test-support/fakeSupabase.ts`; `.rpc(...).throwOnError()` and a table write's
+   `.throwOnError()` reject with an `Error` carrying the message and `code`, like supabase-js, so a
+   route's 500 can be asserted on its message): `src/app/api/scrims/route.test.ts` covers both the
    overlapping-night 409 (through `scrimNightRpcs`, `src/lib/test-support/scrimNightRpcs.ts`) and
    the 500 for any other failure. A write function that branches on what it reads gets its own test
    in `src/lib/<domain>.test.ts`, as `applyScrimSideChoice()` does in `src/lib/scrim-matches.test.ts`.
