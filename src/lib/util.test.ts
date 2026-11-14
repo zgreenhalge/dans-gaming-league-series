@@ -12,6 +12,7 @@
 
 import assert from 'node:assert/strict';
 import {
+  routeError,
   formatLeagueDate,
   formatLeagueDateTime,
   playersOnServer,
@@ -677,4 +678,12 @@ test('formatLeagueDate / formatLeagueDateTime: in the league timezone, not UTC, 
   const start = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
   assert.equal(formatLeagueDate(start), 'Thu, Nov 5');
   assert.equal(formatLeagueDateTime(start), 'Thu, Nov 5, 8:00 PM ET');
+});
+
+test('routeError: the route\'s { error } message, else the fallback for an empty, non-JSON, or error-less body', async () => {
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 400 });
+  assert.equal(await routeError(json({ error: 'Nope.' }), 'Fallback'), 'Nope.');
+  assert.equal(await routeError(json({}), 'Fallback'), 'Fallback');
+  assert.equal(await routeError(new Response('<html>502</html>', { status: 502 }), 'Fallback'), 'Fallback');
+  assert.equal(await routeError(new Response(null, { status: 500 }), 'Fallback'), 'Fallback');
 });
