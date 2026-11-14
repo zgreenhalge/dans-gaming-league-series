@@ -40,8 +40,7 @@ export async function setScrimSignup(db: SupabaseClient, nightId: number, player
 /** Drops `playerId` from a night (a no-op if they weren't signed up), removing the night once nobody
  *  is left and it has no matches (`leave_scrim_night()`). Returns whether the night was removed. */
 export async function leaveScrimNight(db: SupabaseClient, nightId: number, playerId: number): Promise<boolean> {
-  const { data, error } = await db.rpc('leave_scrim_night', { p_night_id: nightId, p_player_id: playerId });
-  if (error) throw new Error(error.message);
+  const { data } = await db.rpc('leave_scrim_night', { p_night_id: nightId, p_player_id: playerId }).throwOnError();
   return data as boolean;
 }
 

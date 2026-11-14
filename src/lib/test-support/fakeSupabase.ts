@@ -286,6 +286,18 @@ export interface FakeError {
   message: string;
 }
 
+/** What a `.throwOnError()` chain rejects with: an `Error` carrying the PostgREST `code`, as
+ *  supabase-js's `PostgrestError` does, so a caller that branches on `err instanceof Error` takes
+ *  the same path here as against a real database. */
+export class FakePostgrestError extends Error {
+  readonly code: string;
+  constructor({ code, message }: FakeError) {
+    super(message);
+    this.name = 'PostgrestError';
+    this.code = code;
+  }
+}
+
 class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; error: FakeError | null }> {
   private filters: Filter[] = [];
   private orClauses: OrClause[] | null = null;
@@ -441,7 +453,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   ): PromiseLike<TResult1 | TResult2> {
     return this.execute()
       .then((result) => {
-        if (this.shouldThrowOnError && result.error) throw result.error;
+        if (this.shouldThrowOnError && result.error) throw new FakePostgrestError(result.error);
         return result;
       })
       .then(onfulfilled, onrejected);
@@ -548,8 +560,38 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
 export type RpcHandler = (args: Record<string, unknown>, db: FakeDb) => unknown | Promise<unknown>;
 
 /** Throw from an `RpcHandler` to have `.rpc()` resolve with `{ data: null, error }` — the shape a real
- *  Postgres function's `raise exception` reaches the caller in. Any other thrown error rejects. */
-export class FakeRpcError extends Error {}
+ *  Postgres function's `raise exception` reaches the caller in (`code` defaults to `P0001`, the
+ *  SQLSTATE of a plain `raise exception`). Any other thrown error rejects. */
+export class FakeRpcError extends Error {
+  constructor(message: string, readonly code: string = 'P0001') {
+    super(message);
+  }
+}
+
+type FakeRpcResult = { data: unknown; error: FakeError | null };
+
+/** The thenable `.rpc()` returns. Awaited as is it resolves `{ data, error }`; after
+ *  `.throwOnError()` an `error` result rejects with a `FakePostgrestError` instead, mirroring
+ *  supabase-js. */
+class FakeRpcBuilder implements PromiseLike<FakeRpcResult> {
+  private shouldThrowOnError = false;
+  constructor(private run: () => Promise<FakeRpcResult>) {}
+  throwOnError(): this {
+    this.shouldThrowOnError = true;
+    return this;
+  }
+  then<TResult1 = FakeRpcResult, TResult2 = never>(
+    onfulfilled?: ((value: FakeRpcResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    return this.run()
+      .then((result) => {
+        if (this.shouldThrowOnError && result.error) throw new FakePostgrestError(result.error);
+        return result;
+      })
+      .then(onfulfilled, onrejected);
+  }
+}
 
 export class FakeSupabaseClient {
   /** Every fake db carries the `data_version` row the persistent read cache keys on, so a test can
@@ -563,22 +605,24 @@ export class FakeSupabaseClient {
   /** Looks up a handler registered under `name` (see `createFakeSupabaseClient`'s second argument)
    * and runs it against the live fake db. Throws synchronously if nothing was registered for `name`
    * — a test exercising an `.rpc()` call site must register a fake implementation for it. */
-  rpc(name: string, args: Record<string, unknown> = {}): PromiseLike<{ data: unknown; error: { message: string } | null }> {
+  rpc(name: string, args: Record<string, unknown> = {}): FakeRpcBuilder {
     const handler = this.rpcHandlers[name];
     if (!handler) {
       throw new Error(
         `fakeSupabase: no .rpc() handler registered for "${name}" — pass one via createFakeSupabaseClient(db, { ${name}: (args, db) => ... })`,
       );
     }
-    return Promise.resolve()
-      .then(() => handler(args, this.db))
-      .then(
-        (data) => ({ data, error: null }),
-        (err) => {
-          if (err instanceof FakeRpcError) return { data: null, error: { message: err.message } };
-          throw err;
-        },
-      );
+    return new FakeRpcBuilder(() =>
+      Promise.resolve()
+        .then(() => handler(args, this.db))
+        .then(
+          (data) => ({ data, error: null }),
+          (err) => {
+            if (err instanceof FakeRpcError) return { data: null, error: { code: err.code, message: err.message } };
+            throw err;
+          },
+        ),
+    );
   }
 }
 
@@ -620,7 +664,7 @@ function failingChain(error: FakeError): Record<string, unknown> {
           return (
             onfulfilled?: ((value: { data: null; error: FakeError }) => unknown) | null,
             onrejected?: ((reason: unknown) => unknown) | null,
-          ) => (shouldThrow ? Promise.reject(error) : Promise.resolve({ data: null, error })).then(onfulfilled, onrejected);
+          ) => (shouldThrow ? Promise.reject(new FakePostgrestError(error)) : Promise.resolve({ data: null, error })).then(onfulfilled, onrejected);
         }
         if (prop === 'throwOnError') {
           return () => {

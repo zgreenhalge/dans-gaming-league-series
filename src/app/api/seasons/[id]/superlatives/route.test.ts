@@ -9,7 +9,8 @@ import type { NextRequest } from 'next/server';
 import { jsonRequest } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import {
-  ADMIN_ID, ALICE_ID, GAUNTLET_SEASON_ID, REGULAR_SEASON_ID, installFeedbackFixture, resetFeedbackFixture,
+  ADMIN_ID, ALICE_ID, FEEDBACK_WRITE_FAILURE, GAUNTLET_SEASON_ID, REGULAR_SEASON_ID, installFeedbackFixture, makeFeedbackDb,
+  resetFeedbackFixture,
 } from '@/lib/test-support/feedbackFixture';
 import { POST, DELETE, PATCH, PUT } from './route';
 
@@ -123,6 +124,65 @@ test('a poll that has votes stays locked after voting closes', async () => {
   assert.equal((await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'C' })).status, 409);
   assert.equal((await call(DELETE, 'DELETE', REGULAR_SEASON_ID, { superlative_id: a })).status, 409);
   assert.equal((await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: a, title: 'D' })).status, 409);
+  resetFeedbackFixture();
+});
+
+/** A season's closed vote with two superlatives, for a test that then fails one write. */
+function seededDb() {
+  const db = makeFeedbackDb();
+  db.superlative_polls.push({ season_id: REGULAR_SEASON_ID, is_open: false });
+  db.superlatives.push(
+    { id: 1, season_id: REGULAR_SEASON_ID, position: 1, title: 'A' },
+    { id: 2, season_id: REGULAR_SEASON_ID, position: 2, title: 'B' },
+  );
+  return db;
+}
+
+async function assertWriteFailed(res: Response) {
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).error, FEEDBACK_WRITE_FAILURE);
+}
+
+test('POST — a failed poll write is a 500 with its message, and nothing is added', async () => {
+  const db = installFeedbackFixture(ADMIN_ID, { table: 'superlative_polls', method: 'upsert' });
+  await assertWriteFailed(await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'A' }));
+  assert.equal(db.superlatives.length, 0);
+  resetFeedbackFixture();
+});
+
+test('POST — a failed superlative insert is a 500 with its message', async () => {
+  const db = installFeedbackFixture(ADMIN_ID, { table: 'superlatives', method: 'insert' });
+  await assertWriteFailed(await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'A' }));
+  assert.equal(db.superlatives.length, 0);
+  resetFeedbackFixture();
+});
+
+test('POST — an insert that loses the position race is a 409', async () => {
+  installFeedbackFixture(ADMIN_ID, { table: 'superlatives', method: 'insert', code: '23505' });
+  const res = await call(POST, 'POST', REGULAR_SEASON_ID, { title: 'A' });
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /same time/);
+  resetFeedbackFixture();
+});
+
+test('DELETE — a failed delete is a 500 with its message, and the superlative stays', async () => {
+  const db = installFeedbackFixture(ADMIN_ID, { table: 'superlatives', method: 'delete' }, seededDb());
+  await assertWriteFailed(await call(DELETE, 'DELETE', REGULAR_SEASON_ID, { superlative_id: 1 }));
+  assert.equal(db.superlatives.length, 2);
+  resetFeedbackFixture();
+});
+
+test('PUT — a failed reorder is a 500 with its message, and the order is unchanged', async () => {
+  const db = installFeedbackFixture(ADMIN_ID, { rpc: 'reorder_superlatives' }, seededDb());
+  await assertWriteFailed(await call(PUT, 'PUT', REGULAR_SEASON_ID, { order: [2, 1] }));
+  assert.deepEqual(db.superlatives.map((s) => s.position), [1, 2]);
+  resetFeedbackFixture();
+});
+
+test('PATCH — a failed rename is a 500 with its message, and the title is unchanged', async () => {
+  const db = installFeedbackFixture(ADMIN_ID, { table: 'superlatives', method: 'update' }, seededDb());
+  await assertWriteFailed(await call(PATCH, 'PATCH', REGULAR_SEASON_ID, { superlative_id: 1, title: 'Renamed' }));
+  assert.equal(db.superlatives[0].title, 'A');
   resetFeedbackFixture();
 });
 
