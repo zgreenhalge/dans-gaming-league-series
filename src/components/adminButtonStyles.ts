@@ -13,6 +13,10 @@ export const ADMIN_PRIMARY_BUTTON_CLS =
 export const ADMIN_SMALL_BUTTON_CLS =
   'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors';
 
+/** The unboxed "Cancel" beside an admin form's Save, for a form that opens in place of a line. */
+export const ADMIN_CANCEL_BUTTON_CLS =
+  'tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors';
+
 /** `ADMIN_SMALL_BUTTON_CLS` in green — a selected or confirming small button (a scrim signup's
  * "Definite", "Add"). */
 export const ADMIN_SMALL_GREEN_BUTTON_CLS =
