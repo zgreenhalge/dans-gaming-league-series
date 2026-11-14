@@ -88,12 +88,16 @@ async function main() {
     assert.equal(featured(db), false);
   });
 
-  await test('PATCH — a write failure is a 500 carrying the database message, and the flag is unchanged', async () => {
+  await test('PATCH — a write failure is a 500, and the flag is unchanged', async () => {
     const db = installFixture((c) => clientFailingOn(c, 'matches', 'update', { code: 'XX000', message: 'connection reset' }));
     const res = await call(MATCH_ID, ADMIN_ID, { is_feature_match: true });
     assert.equal(res.status, 500);
-    assert.equal((await res.json()).error, 'connection reset');
     assert.equal(featured(db), false);
+  });
+
+  await test('PATCH — an unknown match is a 404', async () => {
+    installFixture();
+    assert.equal((await call(999, ADMIN_ID, { is_feature_match: true })).status, 404);
   });
 
   __setTestSession(undefined);

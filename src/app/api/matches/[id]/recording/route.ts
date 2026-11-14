@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireMatchAccess } from "@/lib/match-access";
 import { accessDenied } from "@/lib/access-control";
 import { getAdminClient } from "@/lib/supabase-admin";
+import { setMatchRecording } from "@/lib/match-day";
 import { parseRouteId } from "@/lib/util";
 
 // Set or clear a match's recording_url. Editable by admins and in-match players — the same
@@ -24,11 +25,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Missing string|null value" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
-    .from("matches")
-    .update({ recording_url: body.value })
-    .eq("id", matchId);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    if (!(await setMatchRecording(supabaseAdmin, matchId, body.value))) {
+      return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    }
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Saving the recording failed" }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

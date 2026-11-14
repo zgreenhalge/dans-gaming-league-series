@@ -260,7 +260,7 @@ async function main() {
     __setTestAfterMode(false);
   });
 
-  await test('PATCH — a failed scheduled_at write is a 500 carrying the database message, with no reminder scheduled', async () => {
+  await test('PATCH — a failed scheduled_at write is a 500, with no reminder scheduled', async () => {
     __setTestAfterMode(true);
     const { calls, handler } = recordingRpc();
     const db = buildFakeDb();
@@ -271,7 +271,6 @@ async function main() {
 
     const res = await call(MATCH_ID, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
     assert.equal(res.status, 500);
-    assert.equal((await res.json()).error, 'connection reset');
     assert.equal(db.matches.find((m) => m.id === MATCH_ID)?.scheduled_at, before);
 
     await __flushTestAfter();

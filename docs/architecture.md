@@ -114,10 +114,10 @@ mutation route writes through a lib function that throws on failure — see
 
 | Method | Path | Description |
 |---|---|---|
-| `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
+| `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion). A step filled for the first time only lands while its field is still empty, so a second submission of the same step is a 409 (`VetoStepTakenError`); overwriting a filled step is unconditional |
 | `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert and closes the match's Discord thread, if any, the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time — a gauntlet pod's Game 1 and Game 2 are each set independently here (see [Gauntlet bracket scheduling](#gauntlet-bracket-scheduling) for when they're instead paired 30 minutes apart automatically) |
-| `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
+| `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only). The veto, schedule, feature and recording writes are in `src/lib/match-day.ts` |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint one or more presigned Cloudflare R2 URLs to upload `.dem` file(s) — more than one for a match split across recordings by a server restart (see [`demo-ingestion.md`](./demo-ingestion.md#multi-segment-demos-a-match-split-by-a-server-restart)) |
 | `POST` | `/api/matches/[id]/demo/segments/finalize` | Write the manifest naming a multi-segment upload's segment keys, once every one is confirmed present in R2 ([`demo-ingestion.md`](./demo-ingestion.md#multi-segment-demos-a-match-split-by-a-server-restart)) |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo (single file, or every segment a manifest names) in-request, for editing an already-played match's stats from a fresh demo (see [`demo-ingestion.md`](./demo-ingestion.md)) |

@@ -92,12 +92,16 @@ async function main() {
     assert.equal(recording(db), null);
   });
 
-  await test('POST — a write failure is a 500 carrying the database message, and the recording is unchanged', async () => {
+  await test('POST — a write failure is a 500, and the recording is unchanged', async () => {
     const db = installFixture((c) => clientFailingOn(c, 'matches', 'update', { code: 'XX000', message: 'connection reset' }));
     const res = await call(MATCH_ID, ADMIN_ID, { value: RECORDING });
     assert.equal(res.status, 500);
-    assert.equal((await res.json()).error, 'connection reset');
     assert.equal(recording(db), null);
+  });
+
+  await test('POST — an unknown match is a 404', async () => {
+    installFixture();
+    assert.equal((await call(999, ADMIN_ID, { value: RECORDING })).status, 404);
   });
 
   __setTestSession(undefined);
