@@ -62,7 +62,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
   const currentPlayerId = session?.user?.playerId ?? null;
   const isAdmin = currentPlayerId != null && !!playersById.get(currentPlayerId)?.is_admin;
   const names = Object.fromEntries([...playersById].map(([id, p]) => [id, p.name]));
-  const model = buildScrimNightPageModel(night, { playerId: currentPlayerId, isAdmin }, scheduled);
+  const model = buildScrimNightPageModel(night, { playerId: currentPlayerId, isAdmin }, now, scheduled);
   const { pool, lobbyMatch, scoredMatchIds } = model;
   const [rounds, hasAdvancedStats, statsVersion] = await Promise.all([
     model.offerRounds ? getScheduleLabData(pool.map((p) => p.id)) : null,

@@ -17,7 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
 import { isPlayedScore } from './util';
 import { findScheduleCollision, type ScheduledMatchRef } from './server-schedule-collision';
-import { SCRIM_LEAGUE_CLEARANCE_MS } from './scrim-schedule';
+import { SCRIM_LEAGUE_CLEARANCE_MS, SCRIM_NIGHT_OVER_ERROR, hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
 import { fetchWorkshopItem } from './workshop';
 
 /** `match_server_state.server_state` values while a match holds the server. */
@@ -242,6 +242,38 @@ export function parseScrimRevision(value: unknown): number | null {
  *  page offer the controls on it. */
 export function canManageScrimMatch(viewer: { playerId: number | null; isAdmin: boolean }, playerIds: number[]): boolean {
   return viewer.isAdmin || (viewer.playerId != null && playerIds.includes(viewer.playerId));
+}
+
+/** Why `viewer` may not end `night` at `now`, or `null` when they may. Checked in order: the night is
+ *  still on (409 once it is over), it has started (409), the viewer is an admin or signed up for it
+ *  (403), and no match still needs the server (409) — finish or discard it first.
+ *  `requireScrimNightEndAccess()` answers with the refusal; `canEndScrimNight()` is the yes/no. */
+export function scrimNightEndRefusal(
+  night: ScrimNight,
+  signups: { player_id: number }[],
+  matches: ScrimMatchState[],
+  viewer: { playerId: number | null; isAdmin: boolean },
+  now: Date,
+): { status: 403 | 409; error: string } | null {
+  if (hasScrimNightEnded(night, now)) return { status: 409, error: SCRIM_NIGHT_OVER_ERROR };
+  if (!hasScrimNightStarted(night, now)) return { status: 409, error: 'That night has not started yet' };
+  if (!viewer.isAdmin && !signups.some((s) => s.player_id === viewer.playerId)) {
+    return { status: 403, error: 'Only players on the night can end it' };
+  }
+  if (matches.some(scrimMatchNeedsServer)) return { status: 409, error: "Finish or discard the night's waiting matches first" };
+  return null;
+}
+
+/** Whether `viewer` may end `night` at `now`: the one rule the night page offers End night on and the
+ *  end route enforces (`scrimNightEndRefusal()` finds nothing to refuse). */
+export function canEndScrimNight(
+  night: ScrimNight,
+  signups: { player_id: number }[],
+  matches: ScrimMatchState[],
+  viewer: { playerId: number | null; isAdmin: boolean },
+  now: Date,
+): boolean {
+  return scrimNightEndRefusal(night, signups, matches, viewer, now) === null;
 }
 
 /** Parses `{ shirts: [a, b], skins: [c, d] }` from a request body: two positive integer ids per side,
