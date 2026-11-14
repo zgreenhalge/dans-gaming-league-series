@@ -42,6 +42,7 @@ export function LaunchOptionsPicker({
     <>
       <select
         value={configSet}
+        aria-label="Config set"
         onChange={(e) => onConfigSetChange(e.target.value)}
         disabled={disabled}
         className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] disabled:opacity-50"

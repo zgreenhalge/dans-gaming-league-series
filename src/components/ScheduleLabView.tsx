@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   divisionSizesFor,
   formatIssues,
@@ -481,9 +481,12 @@ export function ScheduleLabView({
 }
 
 function Choice<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  const labelId = useId();
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="tracked text-[10px] text-[var(--color-text-secondary)]">{label}</span>
+    <div role="group" aria-labelledby={labelId} className="flex flex-col gap-1.5">
+      <SectionLabel as="span" id={labelId}>
+        {label}
+      </SectionLabel>
       <TabBar bordered>
         {options.map((o) => (
           <button key={o.value} type="button" role="tab" aria-selected={value === o.value} className={tabCls(value === o.value, { compact: true })} onClick={() => onChange(o.value)}>
