@@ -45,6 +45,9 @@ export function scrimNightEnd(night: ScrimNight): number {
   return Math.max(start, lastActive) + SCRIM_NIGHT_IDLE_MS;
 }
 
+/** The refusal for acting on a night that is over. */
+export const SCRIM_NIGHT_OVER_ERROR = 'That scrim night is over';
+
 /** Whether `night` is over: ended by hand, or idle for `SCRIM_NIGHT_IDLE_MS` (`scrimNightEnd()`). */
 export function hasScrimNightEnded(night: ScrimNight, now: Date): boolean {
   if (night.endedAt) return true;
