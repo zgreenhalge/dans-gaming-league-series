@@ -3,8 +3,9 @@
  * Component tests for `SeasonSetupDetails`: every viewer sees the same start date / map pool / buy-in
  * lines, and only an admin gets the setup `AdminMenu`, whose items open each line's editor in place
  * (saving PATCHes that field and closes the editor; a failed save keeps it open with the route's
- * error; while one is open the others are disabled), leave out the buy-in once it's fixed, and
- * expand Mark active… into the go-live confirm, with a Cancel.
+ * error; every item is held while one is open or while a save's refresh is pending), leave out the
+ * buy-in once it's fixed, expand Mark active… into the go-live confirm (Confirm Go Live, with a Cancel
+ * that closes the menu), and drop a failed activation's error once an editor is opened.
  * Run: npx vitest run src/components/SeasonSetupDetails.test.tsx
  */
 
@@ -13,7 +14,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SeasonSetupDetails } from './SeasonSetupDetails';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 function renderDetails(overrides: { isAdmin?: boolean; buyInEditable?: boolean; seasonStatus?: string } = {}) {
   render(
@@ -37,7 +39,20 @@ async function openMenu() {
   await userEvent.click(screen.getByRole('button', { name: 'Season setup admin actions' }));
 }
 
-afterEach(() => vi.unstubAllGlobals());
+/** Opens Mark active…, leaving its Confirm Go Live and Cancel showing. */
+async function openGoLive() {
+  await openMenu();
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Mark active…' }));
+}
+
+const expectItemsDisabled = (names: string[]) => {
+  for (const name of names) expect(screen.getByRole('menuitem', { name })).toBeDisabled();
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  refresh.mockReset();
+});
 
 describe('SeasonSetupDetails', () => {
   test('a player sees the setup lines and no admin menu', () => {
@@ -94,8 +109,7 @@ describe('SeasonSetupDetails', () => {
     const fetchMock = stubFetch();
     renderDetails();
 
-    await openMenu();
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Mark active…' }));
+    await openGoLive();
     expect(fetchMock).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
 
@@ -111,22 +125,52 @@ describe('SeasonSetupDetails', () => {
     const fetchMock = stubFetch();
     renderDetails();
 
-    await openMenu();
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Mark active…' }));
+    await openGoLive();
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(screen.queryByRole('group')).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("while one editor is open, the menu's other editors are disabled", async () => {
+  test('while one editor is open, every menu item is disabled, Mark active… included', async () => {
     renderDetails();
 
     await openMenu();
     await userEvent.click(screen.getByRole('menuitem', { name: 'Set map pool…' }));
     await openMenu();
 
-    expect(screen.getByRole('menuitem', { name: 'Edit buy-in…' })).toBeDisabled();
-    expect(screen.getByRole('menuitem', { name: 'Mark active…' })).toBeEnabled();
+    expectItemsDisabled(['Edit start date…', 'Edit buy-in…', 'Mark active…']);
+  });
+
+  test("after a save, the menu stays held until the page's refresh lands, so an editor can't reopen on the old values", async () => {
+    stubFetch();
+    // The pending promise stands in for the render work Next's refresh keeps the transition open for.
+    let landed!: () => void;
+    refresh.mockReturnValue(new Promise<void>((resolve) => (landed = resolve)));
+    renderDetails();
+
+    await openMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Edit start date…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText(/Starts:/);
+
+    await openMenu();
+    expectItemsDisabled(['Edit start date…', 'Set map pool…', 'Edit buy-in…', 'Mark active…']);
+
+    landed();
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Edit start date…' })).toBeEnabled());
+  });
+
+  test("a failed activation's error shows beside the lines and goes once an editor is opened", async () => {
+    stubFetch(409, { error: 'Set the map pool first.' });
+    renderDetails();
+
+    await openGoLive();
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm Go Live' }));
+    expect(await screen.findByText('Set the map pool first.')).toBeInTheDocument();
+
+    await openMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Set map pool…' }));
+    expect(screen.queryByText('Set the map pool first.')).toBeNull();
   });
 });

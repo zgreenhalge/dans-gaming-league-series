@@ -6,7 +6,7 @@ import { toSentenceCase } from '@/lib/maps';
 import { hasMapPool } from '@/lib/season-map-pool';
 import { formatBuyIn } from '@/lib/season-buy-in';
 import { AdminMenu, type AdminMenuItem } from './AdminMenu';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { ActivationWarning, useActivateSeason } from './useActivateSeason';
 import { SeasonStartDateForm } from './SeasonStartDateForm';
 import { SeasonMapPoolForm } from './SeasonMapPoolForm';
@@ -54,7 +54,7 @@ const TBD = <span className="opacity-60">TBD</span>;
  * the season isn't UPCOMING this renders nothing but a gauntlet-build warning from going live. */
 export function SeasonSetupDetails({ seasonId, seasonStatus, isAdmin, startDate, regular }: Props) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [refreshing, startTransition] = useTransition();
   const [editing, setEditing] = useState<Editing | null>(null);
   const activation = useActivateSeason(seasonId);
 
@@ -66,11 +66,17 @@ export function SeasonSetupDetails({ seasonId, seasonStatus, isAdmin, startDate,
     if (saved) startTransition(() => router.refresh());
   }
 
-  // While one editor is open the others stay shut, so switching can't drop its unsaved draft.
+  // Every item is held while an editor is open (switching or going live would drop its unsaved draft),
+  // while a save's refresh is pending (the lines and a reopened editor would show the old values) and
+  // while the season is activating.
+  const held = editing !== null || refreshing || activation.busy;
   const editItem = (label: string, which: Editing): AdminMenuItem => ({
     label,
-    onSelect: () => setEditing(which),
-    disabled: editing !== null,
+    onSelect: () => {
+      activation.clearError();
+      setEditing(which);
+    },
+    disabled: held,
   });
   const items: AdminMenuItem[] = [editItem(startDate ? 'Edit start date…' : 'Set start date…', 'startDate')];
   if (regular) {
@@ -78,31 +84,27 @@ export function SeasonSetupDetails({ seasonId, seasonStatus, isAdmin, startDate,
     if (regular.buyInEditable) items.push(editItem('Edit buy-in…', 'buyIn'));
     items.push({
       label: 'Mark active…',
-      disabled: activation.busy,
+      disabled: held,
       content: (close) => (
         <div className="flex flex-col gap-3">
           <p className="text-[12px] text-[var(--color-text-secondary)]">
             Takes the season live now. There&apos;s no undo.
           </p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                activation.activate();
-              }}
-              className={ADMIN_PRIMARY_BUTTON_CLS}
-            >
-              Confirm Go Live
-            </button>
-            <button
-              type="button"
-              onClick={() => close()}
-              className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+          {/* Already armed: opening this item is the deliberate step, and Cancel closes the menu. */}
+          <ArmedConfirmButton
+            armed
+            onArm={() => {}}
+            onCancel={() => close()}
+            onConfirm={() => {
+              close();
+              return activation.activate();
+            }}
+            busy={activation.busy}
+            triggerLabel="Mark Active"
+            confirmLabel="Confirm Go Live"
+            busyLabel="Activating…"
+            variant="primary"
+          />
         </div>
       ),
     });
