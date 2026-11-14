@@ -1827,6 +1827,10 @@ export type Database = {
         Args: { p_season_id: number }
         Returns: Json
       }
+      delete_upcoming_season: {
+        Args: { p_season_id: number }
+        Returns: undefined
+      }
       discard_scrim_match: {
         Args: { p_match_id: number; p_revision: number }
         Returns: undefined
