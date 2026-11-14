@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import ErrorText from './ErrorText';
-import { AddPlayerSelect, RosterPlayerRow } from './RosterPlayerRow';
+import { RosterPlayerRow, useAddPlayerMenuItem } from './RosterPlayerRow';
 import { AdminMenu, type AdminMenuItem } from './AdminMenu';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { ACTIVE_COMMITMENT_BTN_CLS, COMMITMENT_LABEL, IDLE_COMMITMENT_BTN_CLS } from './ScrimCommitmentButtons';
@@ -32,9 +32,6 @@ interface Props {
  *  (Add player…, which opens the player picker in the menu). */
 export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerId, admin, allPlayers, collapsible = false }: Props) {
   const { busy, error, pending, setCommitment, setCheckIn } = useScrimSignupWrite(nightId);
-  const [pickedPlayerId, setPickedPlayerId] = useState('');
-  // The picker keeps its pick while the menu is closed, until that player signs up some other way.
-  const addPlayerId = signups.some((s) => String(s.player_id) === pickedPlayerId) ? '' : pickedPlayerId;
   const [open, setOpen] = useState(true);
   const shown = open || !collapsible;
 
@@ -74,39 +71,19 @@ export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerI
     ];
   }
 
-  /** The night's admin actions: Add player… opens the player picker in the menu. */
-  const nightItems: AdminMenuItem[] = [
-    {
-      label: 'Add player…',
-      content: (close) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <AddPlayerSelect
-            players={allPlayers}
-            excludeIds={new Set(signups.map((s) => s.player_id))}
-            value={addPlayerId}
-            onChange={setPickedPlayerId}
-            placeholder="Sign up a player…"
-          />
-          {SCRIM_COMMITMENTS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => {
-                const playerId = Number(addPlayerId);
-                setPickedPlayerId('');
-                close();
-                setCommitment(playerId, c);
-              }}
-              disabled={!addPlayerId || pending != null}
-              className={addPlayerId ? ACTIVE_COMMITMENT_BTN_CLS[c] : IDLE_COMMITMENT_BTN_CLS}
-            >
-              Add as {COMMITMENT_LABEL[c].toLowerCase()}
-            </button>
-          ))}
-        </div>
-      ),
-    },
-  ];
+  // The night's admin actions: Add player… opens the player picker in the menu.
+  const addPlayerItem = useAddPlayerMenuItem({
+    players: allPlayers,
+    excludeIds: new Set(signups.map((s) => s.player_id)),
+    placeholder: 'Sign up a player…',
+    busy: pending != null,
+    actions: SCRIM_COMMITMENTS.map((c) => ({
+      label: `Add as ${COMMITMENT_LABEL[c].toLowerCase()}`,
+      onAdd: (playerId) => setCommitment(playerId, c),
+      activeCls: ACTIVE_COMMITMENT_BTN_CLS[c],
+      idleCls: IDLE_COMMITMENT_BTN_CLS,
+    })),
+  });
 
   function group(commitment: ScrimCommitment) {
     const entries = signups.filter((s) => s.commitment === commitment);
@@ -154,7 +131,7 @@ export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerI
         ) : (
           <div className={headerCls}>Attendance · {signups.length}</div>
         )}
-        {admin && <AdminMenu label="Attendance admin actions" items={nightItems} />}
+        {admin && <AdminMenu label="Attendance admin actions" items={[addPlayerItem]} />}
       </div>
       {shown && SCRIM_COMMITMENTS.map(group)}
       <ErrorText error={error} size={12} className="px-4 py-3" />

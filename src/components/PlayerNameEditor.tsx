@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MAX_LENGTH, PLAYER_NAME_RULE } from '@/lib/util';
 import ErrorText from '@/components/ErrorText';
+import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
 
 export default function PlayerNameEditor({ playerId, name }: { playerId: number; name: string }) {
   const router = useRouter();
@@ -101,7 +102,7 @@ export default function PlayerNameEditor({ playerId, name }: { playerId: number;
         <button
           onClick={cancel}
           disabled={busy}
-          className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+          className={CANCEL_BUTTON_CLS}
         >
           Cancel
         </button>

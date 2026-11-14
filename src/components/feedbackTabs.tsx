@@ -9,13 +9,13 @@ import { SurveyForm } from './SurveyForm';
 import { SuperlativesBallot } from './SuperlativesBallot';
 import { SuperlativeResultsPanel } from './SuperlativeResults';
 import { FeedbackFormFrame } from './FeedbackFormFrame';
-import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './adminButtonStyles';
 
 /** Admin-only link from a tab to its admin page (`/admin/seasons/<kind>/<id>`). */
 function manageLink(kind: 'survey' | 'superlatives', seasonId: number, isAdmin: boolean) {
   if (!isAdmin) return null;
   return (
-    <Link href={`/admin/seasons/${kind}/${seasonId}`} className={ADMIN_SMALL_BUTTON_CLS}>
+    <Link href={`/admin/seasons/${kind}/${seasonId}`} className={SMALL_BUTTON_CLS}>
       Manage →
     </Link>
   );

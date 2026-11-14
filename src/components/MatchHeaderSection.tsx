@@ -8,6 +8,7 @@ import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';
+import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 
 interface Props {
@@ -159,7 +160,7 @@ export default function MatchHeaderSection({
       )}
       <button
         onClick={cancel}
-        className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+        className={CANCEL_BUTTON_CLS}
       >
         Cancel
       </button>

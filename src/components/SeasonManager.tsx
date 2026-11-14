@@ -17,7 +17,7 @@ import { CreateGauntletForm } from './CreateGauntletForm';
 import { GauntletLifecycleList, type GauntletRow } from './GauntletLifecycleList';
 import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 import SectionLabel from './SectionLabel';
 
@@ -134,10 +134,10 @@ export function SeasonManager({
                   </div>
                   {!s.isGauntlet && s.status !== 'UPCOMING' && (
                     <div className="shrink-0 flex items-center gap-2">
-                      <Link href={`/admin/seasons/survey/${s.id}`} className={ADMIN_SMALL_BUTTON_CLS}>
+                      <Link href={`/admin/seasons/survey/${s.id}`} className={SMALL_BUTTON_CLS}>
                         Survey
                       </Link>
-                      <Link href={`/admin/seasons/superlatives/${s.id}`} className={ADMIN_SMALL_BUTTON_CLS}>
+                      <Link href={`/admin/seasons/superlatives/${s.id}`} className={SMALL_BUTTON_CLS}>
                         Superlatives
                       </Link>
                     </div>

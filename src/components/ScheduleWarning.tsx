@@ -10,6 +10,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
+import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
 import type { ScheduleWarning } from './useScheduleEditor';
 
 export function ScheduleCollisionMessage({
@@ -48,8 +49,7 @@ const VARIANT_STYLES = {
     text: 'text-[12px] text-[var(--color-accent-amber-fg)]',
     primaryButton:
       'tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-fg)] transition-colors',
-    secondaryButton:
-      'tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors',
+    secondaryButton: CANCEL_BUTTON_CLS,
   },
 } as const;
 

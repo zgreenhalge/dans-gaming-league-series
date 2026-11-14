@@ -9,7 +9,7 @@ import { LocalTime } from './LocalTime';
 import { LeagueGameMark } from './ScrimSeats';
 import { ScrimCommitmentButtons } from './ScrimCommitmentButtons';
 import { StatusPill } from './StatusPill';
-import { ADMIN_SMALL_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { useScrimSignupWrite } from './useScrimSignupWrite';
 import type { ScrimNightStatus } from '@/lib/scrim-night-page';
 
@@ -89,7 +89,7 @@ function ScrimCheckInButton({ nightId, playerId, checkedIn }: { nightId: number;
         type="button"
         onClick={() => setCheckIn(playerId, !checkedIn)}
         disabled={busy}
-        className={`${checkedIn ? ADMIN_SMALL_BUTTON_CLS : ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
+        className={`${checkedIn ? SMALL_BUTTON_CLS : SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}
       >
         {busy ? '…' : checkedIn ? 'Check out' : 'Check in'}
       </button>

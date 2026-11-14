@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import ErrorText from './ErrorText';
 import { SELECT_CLS } from './formStyles';
-import { ADMIN_SMALL_AMBER_BUTTON_CLS, ADMIN_SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_AMBER_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { scrimNightHref } from '@/lib/crumbs';
@@ -39,10 +39,10 @@ export function StartScrimNightForm({ playerId, day }: { playerId: number; day: 
           aria-label="Night start time"
           className={SELECT_CLS}
         />
-        <button type="button" onClick={() => start('definite')} disabled={busy || !time} className={`${ADMIN_SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}>
+        <button type="button" onClick={() => start('definite')} disabled={busy || !time} className={`${SMALL_GREEN_BUTTON_CLS} disabled:opacity-40`}>
           I&apos;m in
         </button>
-        <button type="button" onClick={() => start('maybe')} disabled={busy || !time} className={`${ADMIN_SMALL_AMBER_BUTTON_CLS} disabled:opacity-40`}>
+        <button type="button" onClick={() => start('maybe')} disabled={busy || !time} className={`${SMALL_AMBER_BUTTON_CLS} disabled:opacity-40`}>
           Maybe
         </button>
       </div>

@@ -8,7 +8,7 @@
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
 import { FeedbackResetControl } from './FeedbackResetControl';
 import ErrorText from '@/components/ErrorText';
 
@@ -56,7 +56,7 @@ export function FeedbackAdminControls({
           type="button"
           onClick={toggleOpen}
           disabled={busy}
-          className={`${isOpen ? ADMIN_SMALL_BUTTON_CLS : ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
+          className={`${isOpen ? SMALL_BUTTON_CLS : ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           {isOpen ? closeLabel : openLabel}
         </button>

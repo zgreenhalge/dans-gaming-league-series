@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { ADMIN_PRIMARY_BUTTON_CLS, ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
 import SectionLabel from './SectionLabel';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
@@ -127,7 +127,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
           type="button"
           onClick={() => setDrafts((prev) => [...prev, { kind: 'rating', prompt: '', key: `custom-${nextKey.current++}` }])}
           disabled={customCount >= MAX_CUSTOM_QUESTIONS}
-          className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40 mt-3`}
+          className={`${SMALL_BUTTON_CLS} disabled:opacity-40 mt-3`}
         >
           + Add question
         </button>
@@ -142,7 +142,7 @@ function SurveyBuilder({ seasonId, existing }: { seasonId: number; existing?: Su
         >
           {busy ? 'Saving…' : 'Save & open survey'}
         </button>
-        <button type="button" onClick={() => submit(false)} disabled={invalid || busy} className={`${ADMIN_SMALL_BUTTON_CLS} disabled:opacity-40`}>
+        <button type="button" onClick={() => submit(false)} disabled={invalid || busy} className={`${SMALL_BUTTON_CLS} disabled:opacity-40`}>
           Save questions
         </button>
         <ErrorText error={error} as="span" />

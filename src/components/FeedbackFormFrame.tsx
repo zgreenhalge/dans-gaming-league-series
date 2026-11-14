@@ -3,7 +3,7 @@
 // across the full tab width, then the body (capped to a readable width unless `wide`).
 
 import type { ReactNode } from 'react';
-import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './adminButtonStyles';
 
 export function FeedbackFormFrame({
   manage,
@@ -38,7 +38,7 @@ export function FeedbackFormFrame({
 function EditAnswersControl({ saved, onEdit }: { saved: boolean; onEdit: () => void }) {
   return (
     <>
-      <button type="button" onClick={onEdit} className={ADMIN_SMALL_BUTTON_CLS}>
+      <button type="button" onClick={onEdit} className={SMALL_BUTTON_CLS}>
         Edit
       </button>
       {saved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved</span>}

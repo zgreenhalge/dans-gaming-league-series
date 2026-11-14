@@ -9,7 +9,7 @@
 // too much to generalize (warnings, redirects, retries).
 
 import { useState } from 'react';
-import { ADMIN_SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 
 const CONFIRM_VARIANT: Record<'primary' | 'danger', string> = {
@@ -23,7 +23,7 @@ export const FORM_INPUT_CLS =
   'font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]';
 
 const TRIGGER_STYLE: Record<'bordered' | 'link', string> = {
-  bordered: ADMIN_SMALL_BUTTON_CLS,
+  bordered: SMALL_BUTTON_CLS,
   link: 'font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted',
 };
 

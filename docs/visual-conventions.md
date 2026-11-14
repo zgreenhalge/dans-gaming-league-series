@@ -356,7 +356,7 @@ conventions, distinct from the content-page patterns above:
   it sits on — one on each row for that row's actions, one on the section header for the list's own
   (adding an entry). The list reads the same for an admin as for a player until the menu opens. An
   item is one-click (`onSelect`, run after the menu closes) or expands in place of the list
-  (`content`, rendered with a `close` callback — `ScrimNightRoster`'s **Add player…** opens
+  (`content`, rendered with a `close` callback — the **Add player…** item both rosters share, `useAddPlayerMenuItem()` in `RosterPlayerRow.tsx`, opens
   `AddPlayerSelect` that way). An item that needs a confirm expands into an `ArmedConfirmButton` the same
   way (`ScrimPendingMatchActions`' Discard…; `ScrimNightRoster`'s Remove… for the night's only player, whose
   removal deletes a night with no matches — any other Remove is one click). The trigger carries `aria-haspopup="menu"`/`aria-expanded`; opening
