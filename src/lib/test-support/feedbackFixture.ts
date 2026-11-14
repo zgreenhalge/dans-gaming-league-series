@@ -4,7 +4,7 @@
 
 import { __setTestSession } from '../session';
 import { __setTestAdminClient } from '../supabase-admin';
-import { createFakeSupabaseClient, type FakeDb } from './fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, FakeRpcError, type FakeDb } from './fakeSupabase';
 import { superlativeRpcs } from './superlativeRpcs';
 import { surveyRpcs } from './surveyRpcs';
 import { sessionFor } from './nextRequest';
@@ -49,11 +49,30 @@ export function makeFeedbackDb(): FakeDb {
   };
 }
 
-/** Installs a fresh fixture as both Supabase clients and signs in as `playerId` (or nobody). */
-export function installFeedbackFixture(playerId: number | null): FakeDb {
-  const db = makeFeedbackDb();
-  const client = createFakeSupabaseClient(db, { ...superlativeRpcs, ...surveyRpcs });
-  __setTestAdminClient(client);
+/** A write that fails with `FEEDBACK_WRITE_FAILURE`'s message (and PostgREST `code`, `TEST` unless
+ *  given): one table's `method`, or the RPC `rpc`. */
+export type FeedbackWriteFailure =
+  | { table: string; method: 'insert' | 'update' | 'upsert' | 'delete'; code?: string }
+  | { rpc: string };
+
+export const FEEDBACK_WRITE_FAILURE = 'connection reset';
+
+/** Installs a fresh fixture (or `db`, a fixture the test has seeded) as both Supabase clients and
+ *  signs in as `playerId` (or nobody). A `failure` makes that one write fail instead of landing, for
+ *  a test of a route's 500. */
+export function installFeedbackFixture(playerId: number | null, failure?: FeedbackWriteFailure, db: FakeDb = makeFeedbackDb()): FakeDb {
+  const rpcs = { ...superlativeRpcs, ...surveyRpcs };
+  if (failure && 'rpc' in failure) {
+    rpcs[failure.rpc] = () => {
+      throw new FakeRpcError(FEEDBACK_WRITE_FAILURE);
+    };
+  }
+  const client = createFakeSupabaseClient(db, rpcs);
+  __setTestAdminClient(
+    failure && 'table' in failure
+      ? clientFailingOn(client, failure.table, failure.method, { code: failure.code ?? 'TEST', message: FEEDBACK_WRITE_FAILURE })
+      : client,
+  );
   __setTestSession(playerId == null ? null : sessionFor(playerId));
   return db;
 }

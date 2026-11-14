@@ -71,7 +71,9 @@ async function main() {
 
   await test('POST — a failed season insert is a 500, and no season is created', async () => {
     const db = installFixture({ table: 'seasons', method: 'insert' });
-    assert.equal((await call({ map_pool: [] })).status, 500);
+    const res = await call({ map_pool: [] });
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'connection reset');
     assert.equal(created(db), undefined);
   });
 

@@ -551,6 +551,13 @@ per `(superlative, voter)`. Everything around the content is written once:
   `superlative_polls.is_open`. The difference is confined to `isSurveyOpen()`, the two lifecycle
   adapters below, `getOpenFeedbackSeasonIds()`, and the player-side save RPCs; everything else reads an
   `isOpen` boolean.
+- **Edit writes** — the admin's content edits go through write modules that throw on failure:
+  `src/lib/survey-writes.ts` (`createSurvey()` throws `SurveyExistsError` for a raced insert,
+  `replaceSurveyQuestions()` throws `SurveyLockedError` when its RPC refuses) and
+  `src/lib/superlative-writes.ts` (`addSuperlative()`, which also creates the vote on the first one
+  and throws `SuperlativeRacedError` for a raced position, plus `removeSuperlative()`,
+  `renameSuperlative()` and `reorderSuperlatives()`). The routes map each typed error to a 409 and
+  any other failure to a 500 carrying its message.
 - **Route handlers** — `setFeedbackOpen()`, `resetFeedback()` and `saveFeedbackAnswers()`
   (`src/lib/feedback-lifecycle.ts`) run the lookup (404 if the season has none), the write, and the
   error mapping for both forms; `SURVEY_LIFECYCLE` and `SUPERLATIVES_LIFECYCLE` adapt each form's
