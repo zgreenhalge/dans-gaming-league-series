@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE } from '@/lib/feedback-lifecycle';
+import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE, writeFailed } from '@/lib/feedback-lifecycle';
 import { getSurveyForSeason } from '@/lib/queries';
 import { validateQuestionDrafts, type SurveyQuestionDraft } from '@/lib/survey';
 import { createSurvey, replaceSurveyQuestions, SurveyExistsError, SurveyLockedError } from '@/lib/survey-writes';
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, survey_id: surveyId }, { status: 201 });
   } catch (err) {
     if (err instanceof SurveyExistsError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Creating the survey failed' }, { status: 500 });
+    return writeFailed(err, 'Creating the survey failed');
   }
 }
 
@@ -73,7 +73,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof SurveyLockedError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the questions failed' }, { status: 500 });
+    return writeFailed(err, 'Saving the questions failed');
   }
 }
 

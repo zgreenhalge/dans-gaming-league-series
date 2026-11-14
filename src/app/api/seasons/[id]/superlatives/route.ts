@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
+import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE, writeFailed } from '@/lib/feedback-lifecycle';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
 import { addSuperlative, removeSuperlative, renameSuperlative, reorderSuperlatives, SuperlativeRacedError } from '@/lib/superlative-writes';
 import { accessDenied } from '@/lib/access-control';
 
 const LOCKED = { error: 'Voting has opened — superlatives can no longer be changed' };
-
-/** The 500 for a failed write, carrying the error's message. */
-function writeFailed(err: unknown, fallback: string) {
-  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
-}
 
 /** Adds a superlative (`{ title }`) to a season's vote, creating the vote (closed) if this is the
  *  first one. Every player who played the season can be nominated for it. Refused once voting has
