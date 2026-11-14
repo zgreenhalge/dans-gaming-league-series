@@ -6,7 +6,8 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { StageHeader } from '@/components/StageHeader';
 import { StageNavStrip } from '@/components/StageNavStrip';
 import { GroupPanel } from '@/components/GroupPanel';
-import { getSeedNames, resolveGroupPage } from '@/lib/queries';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
+import { getSeasonMatchesRealtimeFilter, getSeedNames, resolveGroupPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, groupHref, regularSeasonLink, stageHeading } from '@/lib/crumbs';
 import { describeMatchups, groupTitle } from '@/lib/seo/stage-meta';
@@ -22,8 +23,11 @@ const loadGroup = cache(async (idParam: string, podIdParam: string) => {
   const found = await resolveGroupPage(podId);
   if (!found) notFound();
   if (found.scope.hub.id !== seasonId) redirect(groupHref(found.scope.hub.id, podId));
-  const seedNames = found.view.group.matches.length === 0 ? await getSeedNames(found.scope.hub.id) : undefined;
-  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames };
+  const [seedNames, matchesFilter] = await Promise.all([
+    found.view.group.matches.length === 0 ? getSeedNames(found.scope.hub.id) : undefined,
+    getSeasonMatchesRealtimeFilter(found.scope.gauntlet ? [found.scope.gauntlet.id] : []),
+  ]);
+  return { hub: found.scope.hub, data: found.data, view: found.view, seedNames, matchesFilter, gauntletId: found.scope.gauntlet?.id ?? null };
 });
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -43,7 +47,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function GroupPage({ params }: { params: Promise<Params> }) {
   const { id, podId } = await params;
-  const [{ hub, data, view, seedNames }, session] = await Promise.all([loadGroup(id, podId), getServerSession(authOptions)]);
+  const [{ hub, data, view, seedNames, matchesFilter, gauntletId }, session] = await Promise.all([loadGroup(id, podId), getServerSession(authOptions)]);
   const currentPlayerId = session?.user?.playerId ?? null;
   const { group } = view;
   const { pod } = group;
@@ -58,6 +62,10 @@ export default async function GroupPage({ params }: { params: Promise<Params> })
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={buildCrumbs(trail)} />
+      {/* An earlier round's result fills this group's slots, so the page follows every gauntlet
+          match, and its pods for a group scheduled into a round's new week. */}
+      {matchesFilter && <RefreshOnServerState table="matches" filter={matchesFilter} />}
+      {gauntletId !== null && <RefreshOnServerState table="gauntlet_pods" filter={`season_id=eq.${gauntletId}`} />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
           heading={stageHeading(trail)}

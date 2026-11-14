@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `RefreshOnServerState`: it subscribes to its match's `match_server_state`
- * changes (and, with `followMatchRow`, its `matches` row) and refreshes the router on each, follows a
- * new `matchId`, and refreshes when the tab
- * becomes visible again and on its slow fallback interval while visible. `useRealtimeChanges` is
- * mocked to record each call, so a test can deliver a change by hand.
+ * Component tests for `RefreshOnServerState`: it subscribes to the given table and filter and
+ * refreshes the router once the events settle, follows a new filter, skips an unplayed row with
+ * `onlyPlayed`, and with `fallback` refreshes when the tab becomes visible again and on its slow
+ * interval while visible. `useRealtimeChanges` is mocked to record each call, so a test can deliver
+ * a change by hand.
  *
  * Run:  npx vitest run src/components/RefreshOnServerState.test.tsx
  */
@@ -16,25 +16,32 @@ import { RefreshOnServerState } from './RefreshOnServerState';
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
-type Subscription = { name: string; filter: { table: string; filter?: string }; handler: () => void };
-// The latest enabled subscription on each table; `last` is the `match_server_state` one.
-const realtime = vi.hoisted(() => ({ last: null as Subscription | null, matches: null as Subscription | null }));
+type Subscription = {
+  name: string;
+  filter: { event: string; table: string; filter?: string };
+  handler: (payload: { new: Record<string, unknown> }) => void;
+};
+const realtime = vi.hoisted(() => ({ last: null as Subscription | null }));
 vi.mock('./useRealtimeChanges', () => ({
-  useRealtimeChanges: (name: string, filter: Subscription['filter'], handler: Subscription['handler'], enabled = true) => {
-    if (!enabled) return;
-    if (filter.table === 'matches') realtime.matches = { name, filter, handler };
-    else realtime.last = { name, filter, handler };
+  useRealtimeChanges: (name: string, filter: Subscription['filter'], handler: Subscription['handler']) => {
+    realtime.last = { name, filter, handler };
   },
 }));
 
 function setVisibility(state: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => state === 'hidden' });
 }
+
+function deliver(row: Record<string, unknown> = {}) {
+  act(() => realtime.last!.handler({ new: row }));
+}
+
+const SETTLE_MS = 3_000;
 
 beforeEach(() => {
   refresh.mockReset();
   realtime.last = null;
-  realtime.matches = null;
   setVisibility('visible');
   vi.useFakeTimers();
 });
@@ -42,32 +49,56 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('RefreshOnServerState', () => {
-  test('a server state change for its match refreshes the page', () => {
-    render(<RefreshOnServerState matchId={7} />);
-    expect(realtime.last?.filter).toMatchObject({ table: 'match_server_state', filter: 'match_id=eq.7' });
+  test('subscribes to the given table, filter and event', () => {
+    render(<RefreshOnServerState table="scrim_nights" filter="id=eq.3" event="UPDATE" />);
+    expect(realtime.last?.filter).toEqual({ event: 'UPDATE', table: 'scrim_nights', filter: 'id=eq.3' });
+  });
+
+  test('a change refreshes the page once the events settle, once per burst', () => {
+    render(<RefreshOnServerState table="matches" filter="week_id=eq.4" />);
+    deliver();
+    act(() => void vi.advanceTimersByTime(SETTLE_MS - 1));
+    deliver();
+    act(() => void vi.advanceTimersByTime(SETTLE_MS - 1));
     expect(refresh).not.toHaveBeenCalled();
-    act(() => realtime.last!.handler());
+    act(() => void vi.advanceTimersByTime(1));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  test('only with followMatchRow does a change to the match\'s own row refresh the page', () => {
-    const { rerender } = render(<RefreshOnServerState matchId={7} />);
-    expect(realtime.matches).toBeNull();
-    rerender(<RefreshOnServerState matchId={7} followMatchRow />);
-    expect(realtime.matches?.filter).toMatchObject({ table: 'matches', filter: 'id=eq.7' });
-    act(() => realtime.matches!.handler());
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-
-  test('a new matchId subscribes to the new match', () => {
-    const { rerender } = render(<RefreshOnServerState matchId={7} />);
-    rerender(<RefreshOnServerState matchId={8} />);
+  test('a new filter subscribes on a new channel', () => {
+    const { rerender } = render(<RefreshOnServerState table="match_server_state" filter="match_id=eq.7" />);
+    rerender(<RefreshOnServerState table="match_server_state" filter="match_id=eq.8" />);
     expect(realtime.last?.filter.filter).toBe('match_id=eq.8');
-    expect(realtime.last?.name).toContain('8');
+    expect(realtime.last?.name).toContain('match_id=eq.8');
   });
 
-  test('the tab becoming visible again refreshes; going hidden does not', () => {
-    render(<RefreshOnServerState matchId={7} />);
+  test('onlyPlayed refreshes for a played score and skips an unplayed row', () => {
+    render(<RefreshOnServerState table="matches" filter="id=eq.5" onlyPlayed />);
+    deliver({ final_score: null });
+    act(() => void vi.advanceTimersByTime(SETTLE_MS));
+    expect(refresh).not.toHaveBeenCalled();
+    deliver({ final_score: '13-9' });
+    act(() => void vi.advanceTimersByTime(SETTLE_MS));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('unmounting before the events settle cancels the refresh', () => {
+    const { unmount } = render(<RefreshOnServerState table="matches" filter="id=eq.5" />);
+    deliver();
+    unmount();
+    act(() => void vi.advanceTimersByTime(SETTLE_MS));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  test('without fallback, the tab becoming visible and time passing do not refresh', () => {
+    render(<RefreshOnServerState table="matches" filter="week_id=eq.4" />);
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  test('with fallback, the tab becoming visible again refreshes; going hidden does not', () => {
+    render(<RefreshOnServerState table="match_server_state" filter="match_id=eq.7" fallback />);
     setVisibility('hidden');
     act(() => void document.dispatchEvent(new Event('visibilitychange')));
     expect(refresh).not.toHaveBeenCalled();
@@ -76,17 +107,18 @@ describe('RefreshOnServerState', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  test('a visible tab refreshes on the fallback interval; a hidden one does not', () => {
-    render(<RefreshOnServerState matchId={7} />);
+  test('with fallback, a visible tab refreshes on the interval; a hidden one does not', () => {
+    render(<RefreshOnServerState table="match_server_state" filter="match_id=eq.7" fallback />);
     act(() => void vi.advanceTimersByTime(30_000));
     expect(refresh).toHaveBeenCalledTimes(1);
     setVisibility('hidden');
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
     act(() => void vi.advanceTimersByTime(30_000));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  test('unmounting stops the visibility and interval refreshes', () => {
-    const { unmount } = render(<RefreshOnServerState matchId={7} />);
+  test('unmounting stops the fallback refreshes', () => {
+    const { unmount } = render(<RefreshOnServerState table="match_server_state" filter="match_id=eq.7" fallback />);
     unmount();
     document.dispatchEvent(new Event('visibilitychange'));
     vi.advanceTimersByTime(60_000);

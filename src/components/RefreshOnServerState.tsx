@@ -1,44 +1,65 @@
 'use client';
 
-import { startTransition, useEffect } from 'react';
+import { startTransition, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRealtimeChanges } from './useRealtimeChanges';
+import { useRealtimeChanges, type RealtimeChange } from './useRealtimeChanges';
+import { useVisibleInterval } from './useVisibleInterval';
+import { isPlayedScore } from '@/lib/util';
 
-/** How often a visible page re-renders when no Realtime event has arrived. */
+/** How often a visible page re-renders when no Realtime event has arrived, with `fallback`. */
 const FALLBACK_REFRESH_MS = 30_000;
 
-/** Re-renders the server page whenever the match's server state changes (it starts, its game ends, it
- *  stops), so what depends on it shows up for every viewer without a reload. Realtime delivers the
- *  change; a missed event is caught when the tab becomes visible again and by a slow refresh while it
- *  stays open. With `followMatchRow`, it also re-renders whenever the match's own `matches` row changes
- *  — a scrim match's lobby edits all bump its `scrim_revision` — so every viewer sees an edit at once.
- *  Renders nothing. */
-export function RefreshOnServerState({ matchId, followMatchRow = false }: { matchId: number; followMatchRow?: boolean }) {
+/** How long after the last event the page waits before it refreshes. A result is several writes in a
+ *  row (the match's score, then its players' stats), so the refresh lands once they have, and a burst
+ *  of events costs one refresh. */
+const SETTLE_MS = 3_000;
+
+/** Re-renders the server page whenever a row it depends on changes, so the change shows up for every
+ *  viewer without a reload. Realtime delivers the change on `table`, narrowed by `filter` (a
+ *  PostgREST-style row filter, e.g. `match_id=eq.42` or `week_id=in.(3,4)`) and `event`; the table
+ *  needs to be in the Realtime publication with `anon` able to select its primary key and filter
+ *  column (`docs/recipes.md`, "Add a new table"). Postgres can't filter a delete, so a `DELETE`
+ *  subscription takes no `filter` and hears every delete on the table. With `onlyPlayed`, only a row
+ *  whose `final_score` is a played score triggers the refresh. With `fallback`, a missed event is
+ *  also caught when the tab becomes visible again and by a slow refresh while it stays open — only
+ *  for a light page, since each refresh re-runs the whole server page. Renders nothing. */
+export function RefreshOnServerState({
+  table,
+  filter,
+  event = '*',
+  onlyPlayed = false,
+  fallback = false,
+}: {
+  table: string;
+  filter?: string;
+  event?: '*' | 'INSERT' | 'UPDATE' | 'DELETE';
+  onlyPlayed?: boolean;
+  fallback?: boolean;
+}) {
   const router = useRouter();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+
   useRealtimeChanges(
-    `match-server-refresh-${matchId}`,
-    { event: '*', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
-    () => startTransition(() => router.refresh()),
-  );
-  useRealtimeChanges(
-    `match-row-refresh-${matchId}`,
-    { event: '*', table: 'matches', filter: `id=eq.${matchId}` },
-    () => startTransition(() => router.refresh()),
-    followMatchRow,
+    `refresh:${table}:${event}:${filter ?? 'all'}`,
+    { event, table, filter },
+    (payload: RealtimeChange) => {
+      if (onlyPlayed && !isPlayedScore((payload.new as { final_score?: string | null }).final_score)) return;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => startTransition(() => router.refresh()), SETTLE_MS);
+    },
   );
 
-  useEffect(() => {
-    const refresh = () => startTransition(() => router.refresh());
-    const refreshIfVisible = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    document.addEventListener('visibilitychange', refreshIfVisible);
-    const id = setInterval(refreshIfVisible, FALLBACK_REFRESH_MS);
-    return () => {
-      document.removeEventListener('visibilitychange', refreshIfVisible);
-      clearInterval(id);
-    };
-  }, [router]);
+  return fallback ? <FallbackRefresh /> : null;
+}
 
+/** `RefreshOnServerState`'s fallback: a refresh when the tab becomes visible again and every
+ *  `FALLBACK_REFRESH_MS` while it stays visible. */
+function FallbackRefresh() {
+  const router = useRouter();
+  const refresh = useCallback(() => startTransition(() => router.refresh()), [router]);
+  useVisibleInterval(refresh, FALLBACK_REFRESH_MS);
   return null;
 }

@@ -340,11 +340,30 @@ check renders `<RefreshAt iso={…} serverNow={…} />` (`src/components/Refresh
   props, and the timer starts in an effect.
 
 `RefreshAt` is for the clock only. A page that changes when the database does (a match is scored, a
-server starts) needs Realtime or its own polling instead — `RefreshOnServerState` on the scrim night
-page, or a client component such as `MatchServerPanel` that follows its own row. Each
-`router.refresh()` re-runs the whole server page, so a state-driven refresh on a heavy page (the
-season hub, statistics) needs a narrow Realtime filter, no polling fallback, and the owner's approval
-for that page.
+server starts) needs Realtime or its own polling instead: a client component such as
+`MatchServerPanel` that follows its own row, or `<RefreshOnServerState table={…} filter={…} />`
+(`src/components/RefreshOnServerState.tsx`), which calls `router.refresh()` on a Realtime change to
+the rows the page depends on.
+
+- **Filter to exactly the rows the page shows.** `filter` is a PostgREST-style row filter —
+  `week_id=eq.42` on the week page, `week_id=in.(…)` (`getSeasonMatchesRealtimeFilter()`) on the
+  round, group and season hub pages, `id=eq.7` on the scrim match page. A delete can't be filtered, so
+  a page that must hear one renders a second `event="DELETE"` subscription with no `filter`, as the
+  scrim night page does for drop-outs.
+- **One refresh per burst.** It refreshes 3 seconds after the last event, so a result (the score,
+  then its players' stats) lands as one refresh with all of it.
+- **`onlyPlayed`** narrows the refresh to a row whose `final_score` is played — the season hub follows
+  results only.
+- **`fallback`** adds a refresh when the tab becomes visible and every 30 seconds while it is, for a
+  missed event. Only the scrim night's lobby uses it: each `router.refresh()` re-runs the whole server
+  page, so a heavy page (the season hub, statistics) takes a narrow filter and no fallback, and gets
+  the owner's approval before it follows the database at all.
+- **Lazily fetched tab data refetches on a new version.** `router.refresh()` updates server props but
+  keeps client state, so a client cache of fetched data (the season hub's tabs, `ScrimNightStats`)
+  is keyed by `getStatsVersion()`, which the refreshed page passes down.
+- **The table needs Realtime access.** It has to be in the `supabase_realtime` publication, with `anon`
+  able to select its primary key and every filter column ([`recipes.md`](./recipes.md), "Add a new
+  table").
 
 ## Identifiers vs. display names
 

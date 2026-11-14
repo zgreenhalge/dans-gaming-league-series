@@ -8,6 +8,7 @@ import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import { MatchMapBackdrop, MatchPanelSlot } from '@/components/MatchBackdrop';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { getSession } from '@/lib/session';
 import { getMapLookup, getMatchServerState, getPlayersById, getScrimMatchDetail } from '@/lib/queries';
@@ -76,6 +77,8 @@ export default async function ScrimMatchPage({ params }: { params: Promise<{ id:
           { label: `Match ${match.match_number}` },
         ]}
       />
+      {/* Until the match is scored, its result landing turns the page to the scored match. */}
+      {!played && <RefreshOnServerState table="matches" filter={`id=eq.${match.id}`} onlyPlayed />}
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <MatchMapBackdrop map={map} mapImg={mapImg}>
           <div className="pt-8 pb-6">
