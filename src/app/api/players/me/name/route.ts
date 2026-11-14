@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordNameChange, renameFields } from '@/lib/player-name-history';
+import { recordNameChange } from '@/lib/player-name-history';
+import { PlayerIdentityTakenError, renamePlayer } from '@/lib/player-identity';
 import { parsePlayerName } from '@/lib/util';
 import { renameNameRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
@@ -20,10 +21,10 @@ import { afterBestEffort } from '@/lib/after';
 // `recordNameChange()`) remains a pure audit trail, not the rate-limit's source of truth.
 //
 // The name-collision check similarly relies on the DB's case-insensitive unique index on
-// `lower(name)` (a `23505` on the write below) rather than a separate pre-check SELECT — the plain
-// `players.name` unique index is case-sensitive and wouldn't by itself catch a "bob" vs. existing
-// "Bob", but the write already has to handle a same-case collision this way regardless, so a
-// pre-check only adds a round-trip without letting that handling be dropped.
+// `lower(name)` (surfacing as a `PlayerIdentityTakenError` from `renamePlayer()`) rather than a
+// separate pre-check SELECT — the plain `players.name` unique index is case-sensitive and wouldn't by
+// itself catch a "bob" vs. existing "Bob", but the write already has to handle a same-case collision
+// this way regardless, so a pre-check only adds a round-trip without letting that handling be dropped.
 
 const RENAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -57,22 +58,15 @@ export async function PATCH(req: NextRequest) {
 
   const cutoffMs = Date.now() - RENAME_COOLDOWN_MS;
 
-  const { data: updated, error: updateError } = await supabaseAdmin
-    .from('players')
-    .update(renameFields(next))
-    .eq('id', playerId)
-    .or(`name_changed_at.is.null,name_changed_at.lte.${new Date(cutoffMs).toISOString()}`)
-    .select('name')
-    .maybeSingle();
-
-  if (updateError) {
-    if ((updateError as { code?: string }).code === '23505') {
-      return NextResponse.json({ error: 'That name is already taken.' }, { status: 409 });
-    }
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  let renamed: boolean;
+  try {
+    renamed = await renamePlayer(supabaseAdmin, playerId, next, new Date(cutoffMs));
+  } catch (err) {
+    if (err instanceof PlayerIdentityTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Renaming failed' }, { status: 500 });
   }
 
-  if (!updated) {
+  if (!renamed) {
     // The conditional UPDATE matched no row — the cooldown is active. If the name_changed_at read
     // above already looked ineligible (non-null and newer than the cutoff), that's exactly why the
     // update failed to match, and it's reused directly rather than re-fetched. But if that read

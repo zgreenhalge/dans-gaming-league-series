@@ -5,7 +5,7 @@
 // rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
-import { canManageScrimMatch, isScrimMatchEditable, scrimMatchNeedsServer } from './scrim-matches';
+import { canEndScrimNight, canManageScrimMatch, isScrimMatchEditable, scrimMatchNeedsServer, type ScrimViewer } from './scrim-matches';
 import { SCRIM_MATCH_SIZE, leagueMatchesDuring, type ScrimCommitment } from './scrim-schedule';
 import type { ScheduledMatchRef } from './server-schedule-collision';
 import { isPlayedScore } from './util';
@@ -16,12 +16,6 @@ export type ScrimNightTab = (typeof SCRIM_NIGHT_TABS)[number];
 /** Where the night is: not started, running, or over (`hasScrimNightEnded()`, read through the view's
  *  `current`). */
 export type ScrimNightState = 'upcoming' | 'live' | 'final';
-
-/** The signed-in viewer (`playerId` `null` when signed out) and whether they're an admin. */
-export interface ScrimNightViewer {
-  playerId: number | null;
-  isAdmin: boolean;
-}
 
 /** What the night's status bar (`ScrimNightStatusBar`) shows, the same over every tab. */
 export interface ScrimNightStatus {
@@ -72,8 +66,9 @@ export interface ScrimNightPageModel {
   scoredMatchIds: number[];
   /** The viewer may make the next match: checked in, or an admin. */
   canMake: boolean;
-  /** The viewer may end the night (`requireScrimNightEndAccess()`'s rules): it has started and isn't
-   *  over, no match is waiting for the server, and they're signed up or an admin. */
+  /** The viewer may end the night (`canEndScrimNight()`, which `requireScrimNightEndAccess()` enforces):
+   *  it has started and isn't over, they're signed up or an admin, and no match is waiting for the
+   *  server. */
   canEnd: boolean;
   /** Generate Rounds is offered where Next Match is: check-in open, no match waiting, four checked in. */
   offerRounds: boolean;
@@ -83,8 +78,9 @@ export interface ScrimNightPageModel {
   hasLobby: boolean;
 }
 
-/** `scheduled` is the league's scheduled, unplayed matches (`getScheduledUnplayedMatches()`). */
-export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNightViewer, scheduled: ScheduledMatchRef[] = []): ScrimNightPageModel {
+/** `now` is the instant `night` was read at (its `started`, `current` and `checkInOpen`); `scheduled` is
+ *  the league's scheduled, unplayed matches (`getScheduledUnplayedMatches()`). */
+export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimViewer, now: Date, scheduled: ScheduledMatchRef[] = []): ScrimNightPageModel {
   const { playerId, isAdmin } = viewer;
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
   // Matches play in order: the first still needing the server is the lobby's, the rest wait behind it.
@@ -93,7 +89,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
   const viewerCheckedIn = playerId != null && pool.some((p) => p.id === playerId);
   const canMake = isAdmin || viewerCheckedIn;
   const mine = night.signups.find((s) => s.player_id === playerId);
-  const canEnd = night.started && night.current && lobbyMatch == null && (isAdmin || mine != null);
+  const canEnd = canEndScrimNight(night.night, night.signups, night.matches, viewer, now);
   const hasLobby = lobbyMatch != null || (night.checkInOpen && (pool.length > 0 || canEnd));
   const orderStatus = (m: ScrimMatch): ScrimRunningOrderStatus =>
     isPlayedScore(m.final_score) ? 'played' : !scrimMatchNeedsServer(m) ? 'pending' : isScrimMatchEditable(m) ? 'next' : 'live';

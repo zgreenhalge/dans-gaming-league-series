@@ -13,6 +13,7 @@ import {
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { getLinkedRegularSeason } from '@/lib/queries/seasons';
+import { VetoStepTakenError, setVetoFields } from '@/lib/match-day';
 
 const VALID_FIELDS = [
   'shirts_ban',
@@ -121,9 +122,11 @@ export async function PATCH(
     if (!isAdmin) {
       return NextResponse.json({ error: 'Only admins can clear a pick/ban' }, { status: 403 });
     }
-    const clearUpdate: Partial<Record<VetoField, null>> = { [field]: null };
-    const { error } = await supabaseAdmin.from('matches').update(clearUpdate).eq('id', matchId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    try {
+      await setVetoFields(supabaseAdmin, matchId, { [field]: null });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Clearing the pick/ban failed' }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -220,9 +223,13 @@ export async function PATCH(
     }
   }
 
-  const { error } = await supabaseAdmin.from('matches').update(update).eq('id', matchId);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Filling a step for the first time only lands while it is still empty (the write checks, since two
+  // players can submit the same step at once); overwriting a value has no such condition.
+  try {
+    await setVetoFields(supabaseAdmin, matchId, update, currentValues[field] === null ? field : undefined);
+  } catch (err) {
+    if (err instanceof VetoStepTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the pick/ban failed' }, { status: 500 });
   }
 
   // Auto-provision the match server whenever the pick/ban is complete — not just on the first
