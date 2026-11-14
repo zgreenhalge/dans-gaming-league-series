@@ -1,5 +1,12 @@
-import { test, expect } from 'vitest';
-import { isValidNewMap, parseMapPoolInput } from './season-map-pool';
+import { test, expect, vi } from 'vitest';
+import { createFakeSupabaseClient, clientFailingOn, type FakeDb } from './test-support/fakeSupabase';
+import { isValidNewMap, parseMapPoolInput, upsertNewMaps } from './season-map-pool';
+
+// Steam is not reached: a map's preview image is the item's `previewUrl`, or null when it has none.
+vi.mock('./workshop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./workshop')>()),
+  fetchWorkshopItem: vi.fn(async () => ({ previewUrl: 'https://example.com/preview.jpg' })),
+}));
 
 const URL = 'https://steamcommunity.com/sharedfiles/filedetails/?id=123';
 
@@ -37,4 +44,23 @@ test('isValidNewMap: needs a non-blank name and a Steam Workshop item link', () 
   for (const bad of ['', 'steamcommunity.com/sharedfiles/filedetails/?id=1', 'http://steamcommunity.com/sharedfiles/filedetails/?id=1', 'https://example.com/?id=1']) {
     expect(isValidNewMap('Foo', bad)).toBe(false);
   }
+});
+
+test('upsertNewMaps: stores each new map trimmed and lowercased under its slug, with its preview image', async () => {
+  const db: FakeDb = { maps: [] };
+  await upsertNewMaps(createFakeSupabaseClient(db), [{ name: ' Foo Bar ', workshopUrl: `  ${URL}  ` }]);
+  expect(db.maps).toEqual([
+    expect.objectContaining({ name: 'foo bar', slug: 'foo-bar', workshop_url: URL, image_url: 'https://example.com/preview.jpg' }),
+  ]);
+});
+
+test('upsertNewMaps: with no new maps it writes nothing', async () => {
+  const db: FakeDb = { maps: [] };
+  await upsertNewMaps(createFakeSupabaseClient(db), []);
+  expect(db.maps).toEqual([]);
+});
+
+test('upsertNewMaps: a failed write throws an Error carrying the database message', async () => {
+  const failing = clientFailingOn(createFakeSupabaseClient({ maps: [] }), 'maps', 'upsert', { code: 'TEST', message: 'connection reset' });
+  await expect(upsertNewMaps(failing, [{ name: 'Foo', workshopUrl: URL }])).rejects.toThrow('connection reset');
 });

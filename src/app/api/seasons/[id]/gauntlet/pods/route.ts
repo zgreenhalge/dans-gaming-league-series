@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { saveManualDraft } from '@/lib/gauntlet-engine';
 import type { DraftPod, DraftSlot } from '@/lib/gauntlet-draft';
 import { recordOpsError } from '@/lib/ops-errors';
-import { parseRouteId } from '@/lib/util';
+import { isDateOnly, parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
 
 function parseSlot(value: unknown): DraftSlot | null {
@@ -69,8 +69,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const body = await req.json().catch(() => null);
-  const start_date: string | null = (body as { start_date?: string | null })?.start_date ?? null;
-  if (start_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(start_date)) {
+  const start_date: unknown = (body as { start_date?: unknown })?.start_date ?? null;
+  if (start_date !== null && !isDateOnly(start_date)) {
     return NextResponse.json({ error: 'Invalid date format (expected YYYY-MM-DD)' }, { status: 400 });
   }
 

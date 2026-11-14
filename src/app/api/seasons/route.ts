@@ -5,7 +5,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeasons } from '@/lib/queries';
 import { nextRegularSeasonName } from '@/lib/util';
 import type { Season } from '@/lib/types';
-import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
+import { parseMapPoolInput } from '@/lib/season-map-pool';
+import { createSeason } from '@/lib/season-setup';
 import { parseBuyInInput } from '@/lib/season-buy-in';
 
 export async function POST(req: NextRequest) {
@@ -34,27 +35,10 @@ export async function POST(req: NextRequest) {
 
   const name = nextRegularSeasonName(seasons);
 
-  const mapErr = await upsertNewMaps(supabaseAdmin, input.newMaps);
-  if (mapErr) {
-    return NextResponse.json({ error: mapErr }, { status: 500 });
+  try {
+    const created = await createSeason(supabaseAdmin, { name, mapPool: input.mapPool, buyInAmount: buyIn.amount, newMaps: input.newMaps });
+    return NextResponse.json(created, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Creating the season failed' }, { status: 500 });
   }
-
-  const { data: created, error: insertErr } = await supabaseAdmin
-    .from('seasons')
-    .insert({
-      name,
-      status: 'UPCOMING',
-      is_gauntlet: false,
-      map_pool: input.mapPool,
-      target_win_rounds: 13,
-      buy_in_amount: buyIn.amount,
-    })
-    .select('*')
-    .single();
-
-  if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
-  }
-
-  return NextResponse.json(created, { status: 201 });
 }

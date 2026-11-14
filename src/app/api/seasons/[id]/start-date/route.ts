@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { parseRouteId } from '@/lib/util';
+import { isDateOnly, parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
 
 export async function PATCH(
@@ -23,19 +23,23 @@ export async function PATCH(
     return NextResponse.json({ error: 'Missing start_date' }, { status: 400 });
   }
 
-  const start_date: string | null = body.start_date ?? null;
+  const start_date: unknown = body.start_date ?? null;
 
-  if (start_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(start_date)) {
+  if (start_date !== null && !isDateOnly(start_date)) {
     return NextResponse.json({ error: 'Invalid date format (expected YYYY-MM-DD)' }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('seasons')
     .update({ start_date })
-    .eq('id', seasonId);
+    .eq('id', seasonId)
+    .select('id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data?.length) {
+    return NextResponse.json({ error: 'Season not found' }, { status: 404 });
   }
 
   return NextResponse.json({ ok: true });
