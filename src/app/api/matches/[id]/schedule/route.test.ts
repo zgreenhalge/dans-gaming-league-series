@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
-import { createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
 import { jsonRequest, MALFORMED_ROUTE_IDS, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -257,6 +257,24 @@ async function main() {
       db.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === MATCH_ID && e.operation === 'discord_schedule_reminder' && e.dismissed_at === null),
       'the Vault-secret-missing error is still live — the route must not have cleared it',
     );
+    __setTestAfterMode(false);
+  });
+
+  await test('PATCH — a failed scheduled_at write is a 500, with no reminder scheduled', async () => {
+    __setTestAfterMode(true);
+    const { calls, handler } = recordingRpc();
+    const db = buildFakeDb();
+    __setTestAdminClient(
+      clientFailingOn(createFakeSupabaseClient(db, { schedule_match_reminder: handler }), 'matches', 'update', { code: 'XX000', message: 'connection reset' }),
+    );
+    const before = db.matches.find((m) => m.id === MATCH_ID)?.scheduled_at;
+
+    const res = await call(MATCH_ID, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
+    assert.equal(res.status, 500);
+    assert.equal(db.matches.find((m) => m.id === MATCH_ID)?.scheduled_at, before);
+
+    await __flushTestAfter();
+    assert.equal(calls.length, 0, 'a time that did not land gets no reminder');
     __setTestAfterMode(false);
   });
 

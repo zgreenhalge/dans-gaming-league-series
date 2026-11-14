@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
-import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
 import { signDiscordLinkState } from '@/lib/discordLinkState';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -131,6 +131,38 @@ async function main() {
     const res = await GET(new Request(callbackUrl({ code: 'abc', state })));
     assert.equal(res.headers.get('location'), `http://localhost:3000/players/${PLAYER_ID}?discord=taken`);
     assert.equal(liveOpsErrors(db, 'player', PLAYER_ID).length, 0);
+  });
+
+  await test('a unique violation on the link write (a concurrent link of the same account) redirects "taken", not logged as an error', async () => {
+    const { db, client } = freshDb();
+    __setTestAdminClient(clientFailingOn(client, 'players', 'update', { code: '23505', message: 'duplicate key' }));
+    process.env.DISCORD_CLIENT_ID = 'test-client-id';
+    process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
+    stubFetch({
+      'oauth2/token': { ok: true, json: { access_token: 'test-token' } },
+      'users/@me': { ok: true, json: { id: 'discord-user-3' } },
+    });
+    const state = signDiscordLinkState(PLAYER_ID);
+    const res = await GET(new Request(callbackUrl({ code: 'abc', state })));
+    assert.equal(res.headers.get('location'), `http://localhost:3000/players/${PLAYER_ID}?discord=taken`);
+    assert.equal(liveOpsErrors(db, 'player', PLAYER_ID).length, 0);
+  });
+
+  await test('any other failure of the link write redirects "error" and records a player-level ops_error', async () => {
+    const { db, client } = freshDb();
+    __setTestAdminClient(clientFailingOn(client, 'players', 'update', { code: 'XX000', message: 'connection reset' }));
+    process.env.DISCORD_CLIENT_ID = 'test-client-id';
+    process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
+    stubFetch({
+      'oauth2/token': { ok: true, json: { access_token: 'test-token' } },
+      'users/@me': { ok: true, json: { id: 'discord-user-3' } },
+    });
+    const state = signDiscordLinkState(PLAYER_ID);
+    const res = await GET(new Request(callbackUrl({ code: 'abc', state })));
+    assert.equal(res.headers.get('location'), `http://localhost:3000/players/${PLAYER_ID}?discord=error`);
+    const rows = liveOpsErrors(db, 'player', PLAYER_ID);
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /connection reset/);
   });
 
   __setTestAdminClient(undefined);
