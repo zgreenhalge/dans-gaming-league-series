@@ -686,4 +686,7 @@ test('routeError: the route\'s { error } message, else the fallback for an empty
   assert.equal(await routeError(json({}), 'Fallback'), 'Fallback');
   assert.equal(await routeError(new Response('<html>502</html>', { status: 502 }), 'Fallback'), 'Fallback');
   assert.equal(await routeError(new Response(null, { status: 500 }), 'Fallback'), 'Fallback');
+  assert.equal(await routeError(json(null), 'Fallback'), 'Fallback');
+  assert.equal(await routeError(json({ error: '' }), 'Fallback'), 'Fallback');
+  assert.equal(await routeError(json({ error: { code: 1 } }), 'Fallback'), 'Fallback');
 });
