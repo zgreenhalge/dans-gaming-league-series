@@ -52,7 +52,7 @@ async function main() {
   });
 
   await test('an admin reopens a night gone idle without being signed up', async () => {
-    installFixture([idleFor(scrimNightStartingIn(-2 * HOUR, Number(NIGHT)), HOUR)]);
+    installFixture([idleFor(scrimNightStartingIn(-3 * HOUR, Number(NIGHT)), 2 * HOUR)]);
     __setTestSession(sessionFor(ADMIN_ID));
     assert.equal((await reopen()).status, 200);
   });

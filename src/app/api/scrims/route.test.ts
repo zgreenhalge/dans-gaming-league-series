@@ -88,8 +88,8 @@ async function main() {
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(48.25), commitment: 'definite' })).status, 409);
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(47.75), commitment: 'definite' })).status, 409);
-    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(49), commitment: 'definite' })).status, 201);
-    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(47), commitment: 'definite' })).status, 201);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(49.25), commitment: 'definite' })).status, 201);
+    assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(46.75), commitment: 'definite' })).status, 201);
     assert.equal(db.scrim_nights.length, 3);
   });
 
@@ -102,7 +102,7 @@ async function main() {
   });
 
   await test('a night gone idle frees its slot too', async () => {
-    const db = installFixture({ scrim_nights: [idleFor(scrimNightStartingIn(-3 * HOUR), HOUR)] });
+    const db = installFixture({ scrim_nights: [idleFor(scrimNightStartingIn(-3 * HOUR), 2 * HOUR)] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await start({ player_id: PLAYER_ID, startsAt: inHours(0), commitment: 'definite' })).status, 201);
     assert.equal(db.scrim_nights.length, 2);

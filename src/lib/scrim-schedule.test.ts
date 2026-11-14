@@ -142,4 +142,20 @@ test("SCRIM_NIGHT_IDLE_MS matches the idle interval in the latest migration's sc
   assert.equal(minutes * 60_000, SCRIM_NIGHT_IDLE_MS);
 });
 
+test('only a match starting or being scored stamps a scrim night as active', () => {
+  const sql = migrationFiles().map(readMigration).filter((s) => /function public\.touch_scrim_night_on_activity\(/.test(s)).at(-1) ?? '';
+  const triggers = [...sql.matchAll(/create trigger (touch_scrim_night_on_\w+) after [^\n]* on public\.(\w+)/g)].map((m) => `${m[2]}:${m[1]}`).sort();
+  assert.deepEqual(triggers, [
+    'live_match_score:touch_scrim_night_on_live_score',
+    'match_server_state:touch_scrim_night_on_server_start',
+    'match_server_state:touch_scrim_night_on_server_state',
+    'matches:touch_scrim_night_on_score',
+  ]);
+  // A server counts as starting once it is provisioning or live; no other state is activity.
+  for (const name of ['touch_scrim_night_on_server_start', 'touch_scrim_night_on_server_state']) {
+    const block = new RegExp(`create trigger ${name}[\\s\\S]*?;`).exec(sql)?.[0] ?? '';
+    assert.match(block, /server_state in \('provisioning', 'live'\)/, name);
+  }
+});
+
 report();

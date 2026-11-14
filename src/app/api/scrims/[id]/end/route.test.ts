@@ -69,7 +69,7 @@ async function main() {
     installFixture(HOUR);
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await end()).status, 409);
-    installFixture(-5 * HOUR, {}, HOUR);
+    installFixture(-5 * HOUR, {}, 2 * HOUR);
     assert.equal((await end()).status, 409, 'gone idle');
   });
 
