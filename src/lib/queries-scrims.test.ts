@@ -22,7 +22,7 @@ function line(player_id: number, faction: 'SHIRTS' | 'SKINS', won: boolean, kill
 
 function scrimMatch(id: number, final_score: string | null, players: ScrimMatchPlayer[]): ScrimMatch {
   return {
-    id, night_id: 1, match_number: id, map: 'Foroglio', workshop_id: '111', side_choice: 'knife', skins_starting_side: null, final_score, server_state: null, players,
+    id, night_id: 1, match_number: id, revision: 0, map: 'Foroglio', workshop_id: '111', side_choice: 'knife', skins_starting_side: null, final_score, server_state: null, players,
     shirts: players.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id) as [number, number],
     skins: players.filter((p) => p.faction === 'SKINS').map((p) => p.player_id) as [number, number],
   };

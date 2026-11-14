@@ -97,6 +97,8 @@ export interface ScrimMatch {
   id: number;
   night_id: number;
   match_number: number;
+  /** `scrim_revision`: the version a change, discard or start sends back (`updateScrimMatch()`). */
+  revision: number;
   /** The match's map (`shirts_pick`), chosen in the lobby. */
   map: string | null;
   /** The workshop item the server loads for it (`scrim_workshop_id`). */
@@ -114,7 +116,7 @@ export interface ScrimMatch {
 }
 
 const SCRIM_MATCH_COLUMNS =
-  'id, scrim_night_id, match_number, shirts_pick, scrim_workshop_id, scrim_side_choice, skins_starting_side, final_score, ' +
+  'id, scrim_night_id, match_number, scrim_revision, shirts_pick, scrim_workshop_id, scrim_side_choice, skins_starting_side, final_score, ' +
   'player_match_stats(player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win), ' +
   'match_server_state(server_state)';
 
@@ -122,6 +124,7 @@ interface ScrimMatchRow {
   id: number;
   scrim_night_id: number;
   match_number: number;
+  scrim_revision: number;
   shirts_pick: string | null;
   scrim_workshop_id: string | null;
   scrim_side_choice: ScrimSideChoice;
@@ -139,6 +142,7 @@ function toScrimMatch(r: ScrimMatchRow): ScrimMatch {
     id: r.id,
     night_id: r.scrim_night_id,
     match_number: r.match_number,
+    revision: r.scrim_revision,
     map: r.shirts_pick,
     workshop_id: r.scrim_workshop_id,
     side_choice: r.scrim_side_choice,
@@ -293,6 +297,8 @@ export async function getPastScrimNights(now: Date): Promise<PastScrimNight[]> {
 export interface ScrimMatchDetail {
   id: number;
   match_number: number;
+  /** The version a start sends back (`claimScrimMatchStart()`). */
+  scrim_revision: number;
   night_id: number;
   /** When the match's night starts. */
   night_starts_at: string;
@@ -312,7 +318,7 @@ export const getScrimMatchDetail = cache(async (matchId: number): Promise<ScrimM
   const [{ data, error }, playersById] = await Promise.all([
     getAdminClient()
       .from('matches')
-      .select('id, match_number, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, ot_rounds_per_half, recording_url, scrim_night_id, scrim_nights(starts_at), player_match_stats(*)')
+      .select('id, match_number, scrim_revision, final_score, shirts_pick, skins_pick, skins_starting_side, round_history, ot_rounds_per_half, recording_url, scrim_night_id, scrim_nights(starts_at), player_match_stats(*)')
       .eq('id', matchId)
       .not('scrim_night_id', 'is', null)
       .maybeSingle(),

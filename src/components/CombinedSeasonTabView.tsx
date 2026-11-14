@@ -34,6 +34,7 @@ export default function CombinedSeasonTabView({
   seasonNumber,
   initialView,
   initialLightData,
+  statsVersion,
   feedbackTabs = NO_FEEDBACK_TABS,
 }: {
   leaderboard: LeaderboardRowWithId[];
@@ -57,6 +58,9 @@ export default function CombinedSeasonTabView({
    *  client-side, once, the first time it's actually opened. */
   initialView: DataTab;
   initialLightData: { kind: 'regular'; data: RegularSeasonLightView } | { kind: 'gauntlet'; data: GauntletSeasonLightView };
+  /** The content version the page rendered at (`getStatsVersion()`). When a refresh brings a new one,
+   *  every cached tab is dropped, so the showing tab's standings and stats refetch. */
+  statsVersion: string;
   /** The Survey / Superlatives tabs shown after Regular Season and Gauntlet, already rendered by the server. */
   feedbackTabs?: FeedbackTab[];
 }) {
@@ -117,12 +121,24 @@ export default function CombinedSeasonTabView({
       setLoadingKind((k) => (k === dataTab ? null : k));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataTab, retryNonce, regularSeasonId, gauntletSeasonId, seasonNumber]);
+  }, [dataTab, retryNonce, regularSeasonId, gauntletSeasonId, seasonNumber, statsVersion]);
 
-  const [statsCache, setStatsCache] = useState<StatsCache>({});
   const [statsLoadingKind, setStatsLoadingKind] = useState<DataTab | null>(null);
   const [statsLoadError, setStatsLoadError] = useState<DataTab | null>(null);
+  const [statsCache, setStatsCache] = useState<StatsCache>({});
   const [statsRetryNonce, setStatsRetryNonce] = useState(0);
+
+  // A refresh keeps this component's state, so a new content version is what drops the caches: the
+  // initial tab reseeds from the fresh server props and the effects refetch the rest. The loading
+  // flags clear too, since the version change cancels any fetch in flight.
+  const [cachedVersion, setCachedVersion] = useState(statsVersion);
+  if (cachedVersion !== statsVersion) {
+    setCachedVersion(statsVersion);
+    setLightCache({ [initialLightData.kind]: initialLightData.data });
+    setStatsCache({});
+    setLoadingKind(null);
+    setStatsLoadingKind(null);
+  }
 
   // `subTab` is shared across both top tabs (it doesn't reset on a topTab switch), so it can read
   // 'advanced' while the *active* tab's own light view has no advanced stats at all (e.g. switching
@@ -171,7 +187,7 @@ export default function CombinedSeasonTabView({
       setStatsLoadingKind((k) => (k === dataTab ? null : k));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subTab, dataTab, statsRetryNonce, regularSeasonId, gauntletSeasonId, activeHasAdvancedStats]);
+  }, [subTab, dataTab, statsRetryNonce, regularSeasonId, gauntletSeasonId, activeHasAdvancedStats, statsVersion]);
 
   // Seed number → player name from the regular season's own standings (already canonical-sorted,
   // i.e. seed order) — lets the gauntlet bracket diagram name an unseeded seed slot before the

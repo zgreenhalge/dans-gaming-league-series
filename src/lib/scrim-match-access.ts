@@ -1,14 +1,15 @@
 // Session gates for scrim night matches. Creating the night's next match is open to any checked-in
 // player or an admin, once check-in is open; ending the night is open to anyone signed up for it or an
 // admin, once it has started and no match is waiting for the server, and so is reopening it once it's
-// over. Changing, discarding or starting a match is open to the players in it or an admin — the same
-// "admin-or-in-match" shape `requireMatchAccess()` checks for every match.
+// over. Changing, discarding or starting a match is open to the players in it or an admin
+// (`canManageScrimMatch()`, the rule the night page and the match page offer those controls on) — the
+// same "admin-or-in-match" shape `requireMatchAccess()` checks for every match, which the shared
+// provision route starts it through.
 
 import { requireSession } from './session';
-import { requireMatchAccess } from './match-access';
 import { isPlayerAdmin, getScrimSignups, getScrimMatch, getScrimNightMatches, type ScrimMatch } from './queries';
 import { canReopenScrimNight, hasScrimNightEnded, hasScrimNightStarted, isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
-import { scrimMatchNeedsServer } from './scrim-matches';
+import { canManageScrimMatch, scrimMatchNeedsServer } from './scrim-matches';
 import { findCurrentScrimNight, findScrimNight } from './scrim-signup-access';
 import type { AccessResult } from './access-control';
 
@@ -94,11 +95,15 @@ export async function requireScrimNightReopenAccess(id: string, now: Date = new 
 
 export type ScrimMatchAccess = AccessResult<{ playerId: number; isAdmin: boolean; match: ScrimMatch }>;
 
-/** Gate for changing or discarding a scrim match: an admin or a player in it, and it must be a scrim
- *  match (404 otherwise). */
+/** Gate for changing or discarding a scrim match: signed in (401), a scrim match (404 otherwise), and
+ *  the requester may manage it (`canManageScrimMatch()`: an admin or a player in it; 403 otherwise). */
 export async function requireScrimMatchAccess(matchId: number): Promise<ScrimMatchAccess> {
-  const [access, match] = await Promise.all([requireMatchAccess(matchId), getScrimMatch(matchId)]);
-  if (!access.ok) return access;
+  const session = await requireSession();
+  const playerId = session?.user?.playerId;
+  if (!playerId) return { ok: false, status: 401, error: 'Unauthorized' };
+
+  const [isAdmin, match] = await Promise.all([isPlayerAdmin(playerId), getScrimMatch(matchId)]);
   if (!match) return { ok: false, status: 404, error: 'Scrim match not found' };
-  return { ok: true, playerId: access.playerId, isAdmin: access.isAdmin, match };
+  if (!canManageScrimMatch({ playerId, isAdmin }, [...match.shirts, ...match.skins])) return { ok: false, status: 403, error: 'Forbidden' };
+  return { ok: true, playerId, isAdmin, match };
 }

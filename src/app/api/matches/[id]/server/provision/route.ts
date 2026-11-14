@@ -4,7 +4,9 @@
 //
 // Body (optional): `{ force: true }` starts a league match on a server that is live outside any DGLS
 // match (a pug, someone warming up) — the confirmation the match panel sends after a forceable
-// `server_occupied` 409. Without it, `provisionMatchServer()` refuses a live server.
+// `server_occupied` 409. Without it, `provisionMatchServer()` refuses a live server. A scrim match's
+// body is `{ revision }` instead: the match's revision as the starter saw it (409 `match_changed`
+// when the lobby changed it since).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
@@ -25,7 +27,17 @@ import { parseRouteId, playersOnServer } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { accessDenied } from '@/lib/access-control';
-import { applyScrimSideChoice, leagueMatchBlockingScrim, scrimMatchPlaysAfter, scrimNightIdOf } from '@/lib/scrim-matches';
+import {
+  applyScrimSideChoice,
+  claimScrimMatchStart,
+  leagueMatchBlockingScrim,
+  parseScrimRevision,
+  scrimMatchPlaysAfter,
+  scrimNightIdOf,
+  SCRIM_MATCH_CHANGED_CODE,
+  SCRIM_REVISION_INVALID,
+  ScrimMatchChangedError,
+} from '@/lib/scrim-matches';
 import { SCRIM_LEAGUE_CLEARANCE_MS } from '@/lib/scrim-schedule';
 import { getScheduledUnplayedMatches, getScrimNightMatches } from '@/lib/queries';
 
@@ -53,8 +65,13 @@ export async function POST(
   // over: a night plays its matches in order, a league match always gets the server (no scrim match
   // starts within half an hour of one), and none starts while anyone is on the server — a DGLS match
   // or players outside one (`getServer()`'s player count, as the admin server console gates on).
+  const body = (await req.json().catch(() => null)) as { force?: unknown; revision?: unknown } | null;
   const nightId = await scrimNightIdOf(getAdminClient(), matchId);
   const isScrim = nightId !== null;
+  const revision = isScrim ? parseScrimRevision(body?.revision) : null;
+  if (isScrim && revision === null) {
+    return NextResponse.json({ error: SCRIM_REVISION_INVALID }, { status: 400 });
+  }
   if (isScrim) {
     const serverId = process.env.DATHOST_SERVER_ID;
     const [nightMatches, scheduled] = await Promise.all([getScrimNightMatches(nightId), getScheduledUnplayedMatches()]);
@@ -100,8 +117,7 @@ export async function POST(
   // A league match can take over a server that is live outside any DGLS match (another DGLS match
   // holding it was refused above), but only once the person starting it confirms (`force`), since
   // starting restarts it and kicks anyone on it.
-  const body = isScrim ? null : ((await req.json().catch(() => null)) as { force?: unknown } | null);
-  const takeOverLiveServer = body?.force === true;
+  const takeOverLiveServer = !isScrim && body?.force === true;
   const serverId = process.env.DATHOST_SERVER_ID;
   if (!isScrim && !takeOverLiveServer && serverId) {
     const live = await liveServerOutsideMatch(serverId);
@@ -114,11 +130,15 @@ export async function POST(
     }
   }
 
-  // A scrim match's lobby side choice becomes its starting side now, before the server boots and loads
-  // its config — so a random side is only flipped as the match starts.
+  // A scrim match claims its start (409 `match_changed` when someone changed it since its starter
+  // loaded it; the claim makes any change sent from before the start refuse), and its lobby side choice
+  // becomes its starting side now, before the server boots and loads its config — so a random side is
+  // only flipped as it starts.
   try {
+    if (revision !== null) await claimScrimMatchStart(getAdminClient(), matchId, revision);
     await applyScrimSideChoice(getAdminClient(), matchId);
   } catch (err) {
+    if (err instanceof ScrimMatchChangedError) return NextResponse.json({ error: err.message, code: SCRIM_MATCH_CHANGED_CODE }, { status: 409 });
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Setting the starting side failed' }, { status: 500 });
   }
 

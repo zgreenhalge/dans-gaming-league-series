@@ -50,17 +50,23 @@ function installFixture(checkedIn: number[], extra: Partial<FakeDb> = {}): { db:
     ...extra,
   };
   __setTestAdminClient(createFakeSupabaseClient(db, scrimMatchRpcs));
+  currentDb = db;
   return { db, date };
 }
+
+/** The installed fixture, so `patch()` and `discard()` can send a match's current revision. */
+let currentDb: FakeDb = {};
+const revisionOf = (id: number) => (currentDb.matches?.find((m) => m.id === id)?.scrim_revision as number | undefined) ?? 0;
 
 const create = (id: string) =>
   CREATE(jsonRequest(`http://localhost/api/scrims/${id}/matches`, 'POST', {}), { params: Promise.resolve({ id }) });
 const queue = (id: string, body: unknown) =>
   QUEUE(jsonRequest(`http://localhost/api/scrims/${id}/rounds`, 'POST', body), { params: Promise.resolve({ id }) });
-const patch = (id: number, body: unknown) =>
-  PATCH(jsonRequest(`http://localhost/api/scrims/matches/${id}`, 'PATCH', body), { params: Promise.resolve({ id: String(id) }) });
-const discard = (id: number) =>
-  DELETE(jsonRequest(`http://localhost/api/scrims/matches/${id}`, 'DELETE', {}), { params: Promise.resolve({ id: String(id) }) });
+/** PATCHes `body` from the match's current revision, unless `body` names one. */
+const patch = (id: number, body: object) =>
+  PATCH(jsonRequest(`http://localhost/api/scrims/matches/${id}`, 'PATCH', { revision: revisionOf(id), ...body }), { params: Promise.resolve({ id: String(id) }) });
+const discard = (id: number, revision = revisionOf(id)) =>
+  DELETE(jsonRequest(`http://localhost/api/scrims/matches/${id}`, 'DELETE', { revision }), { params: Promise.resolve({ id: String(id) }) });
 
 const lineupOf = (db: FakeDb, matchId: number) =>
   db.player_match_stats.filter((r) => r.match_id === matchId).map((r) => r.player_id as number).sort((a, b) => a - b);
@@ -210,6 +216,43 @@ async function main() {
     db.match_server_state.push({ match_id: matchId, server_state: 'failed' });
     __setTestSession(sessionFor(ADMIN_ID));
     assert.equal((await patch(matchId, { workshop: '3070000222' })).status, 200);
+  });
+
+  await test('patch/delete: an edit from a revision someone else moved on from is refused as changed; nothing is written', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5]);
+    const matchId = await makeMatch(db, date);
+    const match = db.matches.find((m) => m.id === matchId)!;
+    __setTestSession(sessionFor(ADMIN_ID));
+    assert.equal((await patch(matchId, { side: 'random', revision: 0 })).status, 200);
+    assert.equal(match.scrim_revision, 1);
+    const stale = await patch(matchId, { side: 'skins_t', revision: 0 });
+    assert.equal(stale.status, 409);
+    assert.deepEqual(await stale.json(), { error: 'This match was changed — reloaded', code: 'match_changed' });
+    assert.equal(match.scrim_side_choice, 'random');
+    assert.equal((await discard(matchId, 0)).status, 409);
+    assert.equal(db.matches.length, 1);
+    assert.equal((await patch(matchId, { side: 'skins_t', revision: 1 })).status, 200);
+  });
+
+  await test('patch/delete: 400 without a revision', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5]);
+    const matchId = await makeMatch(db, date);
+    __setTestSession(sessionFor(ADMIN_ID));
+    assert.equal((await patch(matchId, { side: 'random', revision: undefined })).status, 400);
+    assert.equal((await discard(matchId, 'x' as never)).status, 400);
+  });
+
+  await test('patch: map, side and lineup in one edit land together, as one revision', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5, 6]);
+    const matchId = await makeMatch(db, date);
+    const inMatch = lineupOf(db, matchId);
+    const benched = [2, 3, 4, 5, 6].find((id) => !inMatch.includes(id))!;
+    __setTestSession(sessionFor(ADMIN_ID));
+    const lineup = { shirts: [benched, inMatch[1]], skins: [inMatch[2], inMatch[3]] };
+    assert.equal((await patch(matchId, { workshop: '3070000222', side: 'shirts_t', lineup })).status, 200);
+    const match = db.matches.find((m) => m.id === matchId)!;
+    assert.deepEqual([match.scrim_workshop_id, match.scrim_side_choice, match.scrim_revision], ['3070000222', 'shirts_t', 1]);
+    assert.deepEqual(lineupOf(db, matchId), [...lineup.shirts, ...lineup.skins].sort((a, b) => a - b));
   });
 
   await test('patch: 404 for a league match', async () => {

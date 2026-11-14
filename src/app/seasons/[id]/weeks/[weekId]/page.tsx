@@ -9,6 +9,7 @@ import { WeekScorecard } from '@/components/StageScorecard';
 import { WeekMatchCard } from '@/components/ScheduleList';
 import EmptyState from '@/components/EmptyState';
 import { PlayerName } from '@/components/PlayerName';
+import { RefreshOnServerState } from '@/components/RefreshOnServerState';
 import { getFirstGauntletRound, resolveWeekPage } from '@/lib/queries';
 import { authOptions } from '@/lib/authOptions';
 import { buildCrumbs, gauntletLink, roundHref, stageHeading, weekHref } from '@/lib/crumbs';
@@ -60,6 +61,8 @@ export default async function WeekPage({ params }: { params: Promise<Params> }) 
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={buildCrumbs(trail)} />
+      {/* A match in the week being scored, picked or scheduled changes the scorecard and its card. */}
+      <RefreshOnServerState table="matches" filter={`week_id=eq.${week.id}`} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <StageHeader
           heading={stageHeading(trail)}
