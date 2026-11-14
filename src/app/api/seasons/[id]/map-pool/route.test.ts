@@ -6,12 +6,20 @@
  */
 
 import assert from 'node:assert/strict';
+import { vi } from 'vitest';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { PATCH } from './route';
+
+// Steam is not reached: a new map's preview image lookup finds nothing.
+vi.mock('@/lib/workshop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workshop')>()),
+  fetchWorkshopItem: vi.fn(async () => null),
+}));
+const NEW_MAP = { name: 'Foo', workshopUrl: 'https://steamcommunity.com/sharedfiles/filedetails/?id=123' };
 
 const ADMIN_ID = 1;
 const PLAYER_ID = 2;
@@ -20,7 +28,7 @@ const ACTIVE_ID = 11;
 const GAUNTLET_ID = 12;
 const FIVE = ['a', 'b', 'c', 'd', 'e'];
 
-function installFixture(): FakeDb {
+function installFixture(failOn?: { table: string; method: 'update' | 'upsert' }): FakeDb {
   const db: FakeDb = {
     players: [
       { id: ADMIN_ID, is_admin: true },
@@ -34,7 +42,7 @@ function installFixture(): FakeDb {
     maps: [],
   };
   const client = createFakeSupabaseClient(db);
-  __setTestAdminClient(client);
+  __setTestAdminClient(failOn ? clientFailingOn(client, failOn.table, failOn.method, { code: 'TEST', message: 'connection reset' }) : client);
   return db;
 }
 
@@ -98,6 +106,27 @@ async function main() {
   await test('PATCH — a gauntlet season is not found (404)', async () => {
     installFixture();
     assert.equal((await call(GAUNTLET_ID, ADMIN_ID, { map_pool: FIVE })).status, 404);
+  });
+
+  await test('PATCH — a failed new-map write is a 500 with its message, and the pool is unchanged', async () => {
+    const db = installFixture({ table: 'maps', method: 'upsert' });
+    const res = await call(UPCOMING_ID, ADMIN_ID, { map_pool: FIVE, new_maps: [NEW_MAP] });
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'connection reset');
+    assert.equal(db.seasons.find((s) => s.id === UPCOMING_ID)!.map_pool, null);
+  });
+
+  await test('PATCH — a failed pool update is a 500, and the pool is unchanged', async () => {
+    const db = installFixture({ table: 'seasons', method: 'update' });
+    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { map_pool: FIVE })).status, 500);
+    assert.equal(db.seasons.find((s) => s.id === UPCOMING_ID)!.map_pool, null);
+  });
+
+  await test('PATCH — new maps are added to the maps table with the pool (200)', async () => {
+    const db = installFixture();
+    assert.equal((await call(UPCOMING_ID, ADMIN_ID, { map_pool: FIVE, new_maps: [NEW_MAP] })).status, 200);
+    assert.deepEqual(db.maps.map((m) => m.slug), ['foo']);
+    assert.deepEqual(db.seasons.find((s) => s.id === UPCOMING_ID)!.map_pool, FIVE);
   });
 
   __setTestSession(undefined);

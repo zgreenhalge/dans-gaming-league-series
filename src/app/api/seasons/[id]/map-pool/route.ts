@@ -3,7 +3,8 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { parseRouteId } from '@/lib/util';
-import { parseMapPoolInput, upsertNewMaps } from '@/lib/season-map-pool';
+import { parseMapPoolInput } from '@/lib/season-map-pool';
+import { setSeasonMapPool } from '@/lib/season-setup';
 import { accessDenied } from '@/lib/access-control';
 
 /**
@@ -35,18 +36,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: input.error }, { status: 400 });
   }
 
-  const supabaseAdmin = getAdminClient();
-  const mapErr = await upsertNewMaps(supabaseAdmin, input.newMaps);
-  if (mapErr) {
-    return NextResponse.json({ error: mapErr }, { status: 500 });
-  }
-
-  const { error } = await supabaseAdmin
-    .from('seasons')
-    .update({ map_pool: input.mapPool })
-    .eq('id', seasonId);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await setSeasonMapPool(getAdminClient(), seasonId, input.mapPool, input.newMaps);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the map pool failed' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
