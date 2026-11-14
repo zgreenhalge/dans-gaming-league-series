@@ -180,11 +180,11 @@ export async function PATCH(
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
   if (renamedFrom) {
-    await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
-    const currentNameRoleId = (data as { discord_name_role_id: string | null }).discord_name_role_id;
+    await recordNameChange(supabaseAdmin, targetId, renamedFrom, data.name);
+    const currentNameRoleId = data.discord_name_role_id;
     if (currentNameRoleId) {
       afterBestEffort(`discord-roles: rename name role for admin-renamed player ${targetId}`, () =>
-        renameNameRole(supabaseAdmin, targetId, currentNameRoleId, (data as { name: string }).name),
+        renameNameRole(supabaseAdmin, targetId, currentNameRoleId, data.name),
       );
     }
   }
@@ -194,12 +194,12 @@ export async function PATCH(
   // as the OAuth callback's own calls. Unlinking is deliberately not handled here for @Participants;
   // see players/me/discord/route.ts's comment. The name role, however, is deleted on unlink above.
   if ('discord_id' in body && body.discord_id !== null) {
-    const linkedDiscordId = (data as { discord_id: string | null }).discord_id;
+    const linkedDiscordId = data.discord_id;
     afterBestEffort(`discord-roles: sync @Participants for admin-linked player ${targetId}`, () =>
       syncParticipantRoleForPlayer(supabaseAdmin, targetId, linkedDiscordId),
     );
     afterBestEffort(`discord-roles: create name role for admin-linked player ${targetId}`, () =>
-      createNameRole(supabaseAdmin, targetId, linkedDiscordId, (data as { name: string }).name),
+      createNameRole(supabaseAdmin, targetId, linkedDiscordId, data.name),
     );
   }
   if (unlinkingNameRoleId) {
