@@ -14,8 +14,10 @@
 // live.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRealtimeChanges } from './useRealtimeChanges';
 import type { ServerState } from '@/lib/dathost-lifecycle';
+import { SCRIM_MATCH_CHANGED_CODE } from '@/lib/scrim-matches';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import ErrorText from '@/components/ErrorText';
 
@@ -31,6 +33,7 @@ export default function MatchServerPanel({
   signInToJoin = false,
   autoProvisioning,
   initialState,
+  revision,
 }: {
   matchId: number;
   canManage: boolean;
@@ -46,7 +49,11 @@ export default function MatchServerPanel({
   /** The row's `server_state` as of the page render. Joiners re-read it, with the connect string,
    *  from the status route on mount. */
   initialState: ServerState;
+  /** A scrim match's revision as the page rendered it, sent with Start (`claimScrimMatchStart()`).
+   *  When the match changed since, the start is refused and the page reloads. */
+  revision?: number;
 }) {
+  const router = useRouter();
   const [state, setState] = useState<ServerState>(initialState);
   const [connect, setConnect] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -105,12 +112,14 @@ export default function MatchServerPanel({
       const res = await fetch(`/api/matches/${matchId}/server/provision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
+        body: JSON.stringify({ force, revision }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Could not start the server');
         setCanForce(body.forceable === true);
+        // Someone changed the scrim match since this page loaded: reload it to show what they did.
+        if (body.code === SCRIM_MATCH_CHANGED_CODE) router.refresh();
         // 409 = another match holds the shared server (#134). Not a failure — revert to idle so the
         // manager can retry once it frees up, instead of showing the "failed / Retry" state.
         setState(res.status === 409 ? 'idle' : 'failed');

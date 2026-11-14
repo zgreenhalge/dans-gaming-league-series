@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `RefreshOnServerState`: it subscribes to its match's `match_server_state`
- * changes and refreshes the router on each, follows a new `matchId`, and refreshes when the tab
+ * changes (and, with `followMatchRow`, its `matches` row) and refreshes the router on each, follows a
+ * new `matchId`, and refreshes when the tab
  * becomes visible again and on its slow fallback interval while visible. `useRealtimeChanges` is
  * mocked to record each call, so a test can deliver a change by hand.
  *
@@ -16,10 +17,13 @@ const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 type Subscription = { name: string; filter: { table: string; filter?: string }; handler: () => void };
-const realtime = vi.hoisted(() => ({ last: null as Subscription | null }));
+// The latest enabled subscription on each table; `last` is the `match_server_state` one.
+const realtime = vi.hoisted(() => ({ last: null as Subscription | null, matches: null as Subscription | null }));
 vi.mock('./useRealtimeChanges', () => ({
-  useRealtimeChanges: (name: string, filter: Subscription['filter'], handler: Subscription['handler']) => {
-    realtime.last = { name, filter, handler };
+  useRealtimeChanges: (name: string, filter: Subscription['filter'], handler: Subscription['handler'], enabled = true) => {
+    if (!enabled) return;
+    if (filter.table === 'matches') realtime.matches = { name, filter, handler };
+    else realtime.last = { name, filter, handler };
   },
 }));
 
@@ -30,6 +34,7 @@ function setVisibility(state: DocumentVisibilityState) {
 beforeEach(() => {
   refresh.mockReset();
   realtime.last = null;
+  realtime.matches = null;
   setVisibility('visible');
   vi.useFakeTimers();
 });
@@ -42,6 +47,15 @@ describe('RefreshOnServerState', () => {
     expect(realtime.last?.filter).toMatchObject({ table: 'match_server_state', filter: 'match_id=eq.7' });
     expect(refresh).not.toHaveBeenCalled();
     act(() => realtime.last!.handler());
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('only with followMatchRow does a change to the match\'s own row refresh the page', () => {
+    const { rerender } = render(<RefreshOnServerState matchId={7} />);
+    expect(realtime.matches).toBeNull();
+    rerender(<RefreshOnServerState matchId={7} followMatchRow />);
+    expect(realtime.matches?.filter).toMatchObject({ table: 'matches', filter: 'id=eq.7' });
+    act(() => realtime.matches!.handler());
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 

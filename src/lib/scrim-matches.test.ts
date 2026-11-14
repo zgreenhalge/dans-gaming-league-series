@@ -1,14 +1,74 @@
 /**
- * Scrim match lobby rules: which server states lock a match, the starting-side choices, and lineup
- * parsing.
+ * Scrim match lobby rules: which server states lock a match, who may manage one, the starting-side
+ * choices, lineup parsing, and the revision-checked writes' refusals.
  *
  * Run:  npx vitest run src/lib/scrim-matches.test.ts
  */
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { applyScrimSideChoice, scrimMatchPlaysAfter, isScrimMatchDiscardable, isScrimMatchEditable, leagueMatchBlockingScrim, parseScrimTeams, resolveScrimMap, resolveScrimSide, setScrimMatchSideChoice } from './scrim-matches';
+import {
+  applyScrimSideChoice,
+  canManageScrimMatch,
+  claimScrimMatchStart,
+  discardScrimMatch,
+  scrimMatchPlaysAfter,
+  isScrimMatchDiscardable,
+  isScrimMatchEditable,
+  leagueMatchBlockingScrim,
+  parseScrimRevision,
+  parseScrimTeams,
+  resolveScrimMap,
+  resolveScrimSide,
+  updateScrimMatch,
+  ScrimMatchChangedError,
+  ScrimMatchConflictError,
+} from './scrim-matches';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { scrimMatchRpcs } from './test-support/scrimMatchRpcs';
+
+test('canManageScrimMatch: an admin or one of its players; nobody signed out', () => {
+  assert.equal(canManageScrimMatch({ playerId: 1, isAdmin: true }, [2, 3, 4, 5]), true);
+  assert.equal(canManageScrimMatch({ playerId: 3, isAdmin: false }, [2, 3, 4, 5]), true);
+  assert.equal(canManageScrimMatch({ playerId: 9, isAdmin: false }, [2, 3, 4, 5]), false);
+  assert.equal(canManageScrimMatch({ playerId: null, isAdmin: false }, [2, 3, 4, 5]), false);
+});
+
+test('parseScrimRevision: a non-negative integer', () => {
+  assert.equal(parseScrimRevision(0), 0);
+  assert.equal(parseScrimRevision(7), 7);
+  for (const bad of [undefined, null, -1, 1.5, '3']) assert.equal(parseScrimRevision(bad), null, String(bad));
+});
+
+test('updateScrimMatch / discardScrimMatch / claimScrimMatchStart: each bumps or checks the revision; a stale one is refused as changed', async () => {
+  const db: FakeDb = {
+    matches: [{ id: 1, scrim_night_id: 5, scrim_revision: 0, scrim_side_choice: 'knife', skins_starting_side: null, final_score: null }],
+    player_match_stats: [],
+    match_server_state: [],
+  };
+  const client = createFakeSupabaseClient(db, scrimMatchRpcs) as never;
+  assert.equal(await updateScrimMatch(client, 1, 0, { side: 'random', map: { name: 'Foroglio', workshopId: '111' } }), 1);
+  assert.deepEqual([db.matches[0].scrim_side_choice, db.matches[0].shirts_pick, db.matches[0].scrim_workshop_id], ['random', 'Foroglio', '111']);
+  await assert.rejects(updateScrimMatch(client, 1, 0, { side: 'knife' }), ScrimMatchChangedError);
+  await assert.rejects(discardScrimMatch(client, 1, 0), ScrimMatchChangedError);
+  assert.equal(await claimScrimMatchStart(client, 1, 1), 2);
+  await assert.rejects(claimScrimMatchStart(client, 1, 1), ScrimMatchChangedError);
+  await discardScrimMatch(client, 1, 2);
+  assert.equal(db.matches.length, 0);
+  await assert.rejects(discardScrimMatch(client, 1, 2), ScrimMatchChangedError, 'a discarded match reads as changed');
+});
+
+test('updateScrimMatch / discardScrimMatch: a started match is refused as a conflict, not as changed', async () => {
+  const db: FakeDb = {
+    matches: [{ id: 1, scrim_night_id: 5, scrim_revision: 3, scrim_side_choice: 'knife', final_score: null }],
+    player_match_stats: [],
+    match_server_state: [{ match_id: 1, server_state: 'live' }],
+  };
+  const client = createFakeSupabaseClient(db, scrimMatchRpcs) as never;
+  for (const write of [updateScrimMatch(client, 1, 3, { side: 'random' }), discardScrimMatch(client, 1, 3)]) {
+    await assert.rejects(write, (err) => err instanceof ScrimMatchConflictError && !(err instanceof ScrimMatchChangedError));
+  }
+});
 
 test('isScrimMatchEditable: open until scored or started; a failed start reopens it', () => {
   assert.equal(isScrimMatchEditable({ final_score: null, server_state: null }), true);
@@ -53,12 +113,12 @@ test('applyScrimSideChoice: turns a scrim choice into the starting side; leaves 
 });
 
 test('applyScrimSideChoice: a random side already flipped is kept; a new choice clears it for the next start', async () => {
-  const db: FakeDb = { matches: [{ id: 1, scrim_night_id: 5, scrim_side_choice: 'random', skins_starting_side: null }] };
-  const client = createFakeSupabaseClient(db) as never;
+  const db: FakeDb = { matches: [{ id: 1, scrim_night_id: 5, scrim_side_choice: 'random', skins_starting_side: null, final_score: null }], match_server_state: [] };
+  const client = createFakeSupabaseClient(db, scrimMatchRpcs) as never;
   await applyScrimSideChoice(client, 1, () => 0.1);
   await applyScrimSideChoice(client, 1, () => 0.9);
   assert.equal(db.matches[0].skins_starting_side, 'T', 'starting again does not re-flip');
-  await setScrimMatchSideChoice(client, 1, 'random');
+  await updateScrimMatch(client, 1, 0, { side: 'random' });
   assert.equal(db.matches[0].skins_starting_side, null);
   await applyScrimSideChoice(client, 1, () => 0.9);
   assert.equal(db.matches[0].skins_starting_side, 'CT');
