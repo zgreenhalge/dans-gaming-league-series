@@ -10,7 +10,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { accessDenied } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
-import { parseScrimTeams, queueScrimMatches, ScrimMatchConflictError } from '@/lib/scrim-matches';
+import { parseScrimTeams, queueScrimMatches } from '@/lib/scrim-matches';
+import { scrimConflictResponse } from '@/lib/scrim-route-errors';
 import type { ScrimTeams } from '@/lib/scrim-matchmaking';
 
 /** The most matches one request may queue — above the largest plan the Schedule Lab builds (24 players,
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const matchIds = await queueScrimMatches(getAdminClient(), night.id, teams, maps);
     return NextResponse.json({ ok: true, matchIds }, { status: 201 });
   } catch (err) {
-    if (err instanceof ScrimMatchConflictError) return NextResponse.json({ error: err.message }, { status: 409 });
+    const conflict = scrimConflictResponse(err);
+    if (conflict) return conflict;
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Queueing the matches failed' }, { status: 500 });
   }
 }

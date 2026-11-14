@@ -34,10 +34,9 @@ import {
   parseScrimRevision,
   scrimMatchPlaysAfter,
   scrimNightIdOf,
-  SCRIM_MATCH_CHANGED_CODE,
   SCRIM_REVISION_INVALID,
-  ScrimMatchChangedError,
 } from '@/lib/scrim-matches';
+import { scrimConflictResponse } from '@/lib/scrim-route-errors';
 import { SCRIM_LEAGUE_CLEARANCE_MS } from '@/lib/scrim-schedule';
 import { getScheduledUnplayedMatches, getScrimNightMatches } from '@/lib/queries';
 
@@ -138,7 +137,8 @@ export async function POST(
     if (revision !== null) await claimScrimMatchStart(getAdminClient(), matchId, revision);
     await applyScrimSideChoice(getAdminClient(), matchId);
   } catch (err) {
-    if (err instanceof ScrimMatchChangedError) return NextResponse.json({ error: err.message, code: SCRIM_MATCH_CHANGED_CODE }, { status: 409 });
+    const conflict = scrimConflictResponse(err);
+    if (conflict) return conflict;
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Setting the starting side failed' }, { status: 500 });
   }
 
