@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { LocalTime } from './LocalTime';
 import { JobRetryButton } from './JobActions';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 export interface OpsErrorItem {
   id: number;
@@ -67,8 +68,7 @@ export const OPERATION_LABELS: Record<string, string> = {
 export async function dismissOpsError(id: number): Promise<{ ok: true } | { ok: false; error: string }> {
   const res = await fetch(`/api/ops-errors/${id}`, { method: 'DELETE' });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    return { ok: false, error: body.error ?? 'Failed to dismiss.' };
+    return { ok: false, error: await routeError(res, 'Failed to dismiss.') };
   }
   return { ok: true };
 }

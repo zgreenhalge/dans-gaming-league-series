@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 interface Props {
   seasonId: number;
@@ -41,9 +42,8 @@ export function SeasonScheduleEntryPoint({ seasonId, hasSchedule }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ doubleheaderPolicy }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Failed to generate the schedule.');
+        setError(await routeError(res, 'Failed to generate the schedule.'));
         return;
       }
       router.push(`/admin/seasons/schedule/${seasonId}`);

@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 const FEEDBACK: Record<string, { message: string; isError?: boolean }> = {
   linked: { message: 'Discord linked.' },
@@ -42,8 +43,7 @@ export default function DiscordLinkButton({
     try {
       const res = await fetch('/api/players/me/discord', { method: 'DELETE' });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? 'Failed to unlink');
+        setError(await routeError(res, 'Failed to unlink'));
         return;
       }
       setDismissed(true);

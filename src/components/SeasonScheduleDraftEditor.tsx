@@ -12,6 +12,7 @@ import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 import EmptyState from './EmptyState';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 interface Player {
   id: number;
@@ -124,12 +125,11 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
    * parsed body on success, or null (having already called setError) on failure. */
   async function callApi(url: string, options: RequestInit, fallbackError: string): Promise<Record<string, unknown> | null> {
     const res = await fetch(url, options);
-    const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError((body as { error?: string }).error ?? fallbackError);
+      setError(await routeError(res, fallbackError));
       return null;
     }
-    return body;
+    return (await res.json().catch(() => ({}))) as Record<string, unknown>;
   }
 
   async function generate() {

@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Player } from '@/lib/types';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 const cellBtn =
   'font-mono text-[11px] px-2 py-0.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40';
@@ -39,8 +40,7 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(j.error ?? 'Failed to update');
+        setError(await routeError(res, 'Failed to update'));
         return false;
       }
       router.refresh();
@@ -76,9 +76,13 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
     setError(null);
     try {
       const res = await fetch(`/api/players/${player.id}/claim-link`);
-      const j = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
-      if (!res.ok || !j.token) {
-        setError(j.error ?? 'Failed to generate claim link');
+      if (!res.ok) {
+        setError(await routeError(res, 'Failed to generate claim link'));
+        return;
+      }
+      const j = (await res.json().catch(() => ({}))) as { token?: string };
+      if (!j.token) {
+        setError('Failed to generate claim link');
         return;
       }
       await navigator.clipboard.writeText(`${window.location.origin}/?claim=${j.token}`);

@@ -7,6 +7,7 @@ import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { useAsyncAction } from './useAsyncAction';
 import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 export interface GauntletRow {
   regularSeasonId: number;
@@ -29,8 +30,8 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
   function seed() {
     return run(async () => {
       const res = await fetch(`/api/seasons/${season.regularSeasonId}/gauntlet/seed`, { method: 'POST' });
+      if (!res.ok) throw new Error(await routeError(res, 'Failed to seed gauntlet.'));
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? 'Failed to seed gauntlet.');
       setSeededResult(body.seed_bands as SeedBands);
       router.refresh();
     });
@@ -44,9 +45,8 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
         body: JSON.stringify({ force }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
         setForceArmed(false);
-        throw new Error(body.error ?? 'Failed to reset gauntlet.');
+        throw new Error(await routeError(res, 'Failed to reset gauntlet.'));
       }
       router.refresh();
     });

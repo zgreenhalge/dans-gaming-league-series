@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Modal from "./Modal";
 import ErrorText from '@/components/ErrorText';
 import SectionLabel from './SectionLabel';
+import { routeError } from '@/lib/util';
 
 // Parse a YouTube video ID out of the URL a user pastes from the browser bar or the
 // "Share" button. Returns null for anything that isn't a recognizable YouTube URL, so
@@ -76,8 +77,7 @@ export function RecordingUrlForm({ matchId, videoId }: { matchId: number; videoI
         body: JSON.stringify({ value }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "Failed to save recording.");
+        setError(await routeError(res, "Failed to save recording."));
         return false;
       }
       router.refresh();

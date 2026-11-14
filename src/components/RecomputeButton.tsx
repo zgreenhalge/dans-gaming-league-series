@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useAsyncAction } from './useAsyncAction';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 export function RecomputeButton() {
   const { busy, error, run } = useAsyncAction();
@@ -16,10 +17,7 @@ export function RecomputeButton() {
     setStarted(false);
     await run(async () => {
       const res = await fetch('/api/ehog/recompute/trigger', { method: 'POST' });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? 'Failed to start recompute');
-      }
+      if (!res.ok) throw new Error(await routeError(res, 'Failed to start recompute'));
       setStarted(true);
     });
   }
