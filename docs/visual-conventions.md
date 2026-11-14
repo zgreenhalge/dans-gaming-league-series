@@ -93,6 +93,10 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 ## Typography
 
 - **`.font-display`** / **`.font-mono`** — the two custom font families
+- **Fonts are self-hosted.** Bai Jamjuree (display), Geist (sans) and JetBrains Mono (mono) are latin-subset
+  woff2 files in `src/fonts/` (SIL OFL, licence texts alongside), loaded by `next/font/local` in
+  `src/app/layout.tsx`. Builds and the dev server make no request to Google Fonts. The OG-image cards
+  read separate TTFs from `src/assets/`.
 - **`.tracked`** / **`.tracked-wide`** — uppercase, letter-spaced "broadcast label" styling for
   small section headers/eyebrows. Table header cells are plain sans instead (see Table header cells)
 - **`SectionLabel`** (`src/components/SectionLabel.tsx`) — the small section label: `.tracked` at

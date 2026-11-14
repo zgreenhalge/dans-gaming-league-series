@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bai_Jamjuree, Geist, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import AuthProvider from "@/components/AuthProvider";
@@ -14,22 +14,27 @@ import "./globals.css";
 
 export const revalidate = 60;
 
-const display = Bai_Jamjuree({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+// Self-hosted (src/fonts/, SIL OFL) so builds and the dev server make no request to Google.
+const display = localFont({
+  src: [
+    { path: "../fonts/BaiJamjuree-500.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/BaiJamjuree-600.woff2", weight: "600", style: "normal" },
+    { path: "../fonts/BaiJamjuree-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-display",
   display: "swap",
 });
 
-const sans = Geist({
-  subsets: ["latin"],
+const sans = localFont({
+  src: "../fonts/Geist-Variable.woff2",
+  weight: "100 900",
   variable: "--font-sans",
   display: "swap",
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const mono = localFont({
+  src: "../fonts/JetBrainsMono-Variable.woff2",
+  weight: "100 800",
   variable: "--font-mono",
   display: "swap",
 });
