@@ -22,6 +22,7 @@ import {
   canonicalSortValues,
   fmtPct,
   fmtWindowDay,
+  fmtDateOnly,
   factionClass,
   formatCountdownClock,
   formatCountdownRelative,
@@ -493,6 +494,13 @@ test('canonicalSortValues: Wins → RWR% → ADR, all descending', () => {
 
 test('fmtWindowDay: formats a YYYY-MM-DD date without shifting the day', () => {
   assert.equal(fmtWindowDay('2026-10-12'), 'Oct 12');
+});
+
+test('fmtDateOnly: a YYYY-MM-DD date with its year, optionally with the weekday, without shifting the day', () => {
+  assert.equal(fmtDateOnly('2026-11-05'), 'Nov 5, 2026');
+  assert.equal(fmtDateOnly('2026-11-05', true), 'Thu, Nov 5, 2026');
+  assert.equal(fmtDateOnly('2027-01-01'), 'Jan 1, 2027');
+  assert.equal(fmtDateOnly('2026-12-31', true), 'Thu, Dec 31, 2026');
 });
 
 // --- fmtPct / factionClass / countdowns ---

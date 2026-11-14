@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toSentenceCase } from '@/lib/maps';
 import { hasMapPool } from '@/lib/season-map-pool';
 import { formatBuyIn } from '@/lib/season-buy-in';
+import { fmtDateOnly } from '@/lib/util';
 import { AdminMenu, type AdminMenuItem } from './AdminMenu';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { ActivationWarning, useActivateSeason } from './useActivateSeason';
@@ -32,16 +33,6 @@ interface Props {
 }
 
 type Editing = 'startDate' | 'mapPool' | 'buyIn';
-
-function fmtDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00Z').toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 const LINE_CLS = 'font-mono text-[11px] text-[var(--color-text-secondary)]';
 const TBD = <span className="opacity-60">TBD</span>;
@@ -116,7 +107,7 @@ export function SeasonSetupDetails({ seasonId, seasonStatus, isAdmin, startDate,
         {editing === 'startDate' ? (
           <SeasonStartDateForm seasonId={seasonId} startDate={startDate} onDone={done} />
         ) : (
-          <span className={LINE_CLS}>Starts: {startDate ? fmtDate(startDate) : TBD}</span>
+          <span className={LINE_CLS}>Starts: {startDate ? fmtDateOnly(startDate, true) : TBD}</span>
         )}
         {regular &&
           (editing === 'mapPool' ? (

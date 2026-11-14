@@ -19,7 +19,7 @@ import {
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { gauntletHref, seasonHref } from '@/lib/crumbs';
 import { TopbarShell } from '@/components/TopbarShell';
-import { nextRefreshInstant, seasonTitle } from '@/lib/util';
+import { fmtDateOnly, nextRefreshInstant, seasonTitle } from '@/lib/util';
 import { scrimNightEnd } from '@/lib/scrim-schedule';
 import { RefreshAt } from '@/components/RefreshAt';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
@@ -60,7 +60,7 @@ function UpcomingSeasonRow({
         <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
           {[
             leaderboard.length > 0 && `${leaderboard.length} players`,
-            season.start_date && new Date(season.start_date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
+            season.start_date && fmtDateOnly(season.start_date),
           ].filter(Boolean).join(' · ')}
         </div>
       </div>
