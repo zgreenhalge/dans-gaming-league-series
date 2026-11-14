@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { setMatchFeatured } from '@/lib/match-day';
 import { parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
 
@@ -27,12 +28,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Missing boolean is_feature_match' }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
-    .from('matches')
-    .update({ is_feature_match: body.is_feature_match })
-    .eq('id', matchId);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    if (!(await setMatchFeatured(supabaseAdmin, matchId, body.is_feature_match))) {
+      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the feature flag failed' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, is_feature_match: body.is_feature_match });

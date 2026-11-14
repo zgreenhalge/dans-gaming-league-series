@@ -21,6 +21,7 @@ import {
 } from '@/lib/gauntlet-draft';
 import ErrorText from '@/components/ErrorText';
 import SectionLabel from './SectionLabel';
+import { routeError } from '@/lib/util';
 
 interface Player {
   id: number;
@@ -171,11 +172,11 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pods }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Failed to save the bracket.');
+        setError(await routeError(res, 'Failed to save the bracket.'));
         return;
       }
+      const body = await res.json().catch(() => ({}));
       setWarnings(Array.isArray(body.warnings) ? body.warnings : []);
       router.refresh();
     } finally {

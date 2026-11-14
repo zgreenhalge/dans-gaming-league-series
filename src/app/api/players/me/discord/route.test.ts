@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
 import { sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -57,6 +57,20 @@ async function main() {
     assert.equal(res.status, 200);
     assert.equal(db.players.find((p) => p.id === PLAYER_ID)!.discord_id, null);
     assert.equal(calls.length, 0);
+  });
+
+  await test('a failed unlink write is a 500 carrying the database message, and the link stays', async () => {
+    const { db, client } = freshDb();
+    db.players.find((p) => p.id === PLAYER_ID)!.discord_id = 'discord-user-1';
+    __setTestAdminClient(clientFailingOn(client, 'players', 'update', { code: 'XX000', message: 'connection reset' }));
+    __setTestSession(sessionFor(PLAYER_ID));
+    stubFetch();
+
+    const res = await DELETE();
+
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'connection reset');
+    assert.equal(db.players.find((p) => p.id === PLAYER_ID)!.discord_id, 'discord-user-1');
   });
 
   __setTestSession(undefined);

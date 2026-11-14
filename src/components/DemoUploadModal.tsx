@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { factionClass } from '@/lib/util';
+import { factionClass, routeError } from '@/lib/util';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
@@ -159,8 +159,7 @@ export default function DemoUploadModal({
     setError(null);
     const parseRes = await fetch(`/api/matches/${matchId}/demo/parse`, { method: 'POST' });
     if (!parseRes.ok) {
-      const json = await parseRes.json().catch(() => ({}));
-      setError(json.error ?? 'Demo re-parse failed.');
+      setError(await routeError(parseRes, 'Demo re-parse failed.'));
       // Fall back to synthetic stats from existing data
       if (initialStats && initialStats.length > 0) {
         const syntheticParsed: ParsedResult = {
@@ -287,8 +286,7 @@ export default function DemoUploadModal({
       body: JSON.stringify({ count: files.length }),
     });
     if (!urlRes.ok) {
-      const json = await urlRes.json().catch(() => ({}));
-      setError(json.error ?? 'Failed to prepare upload.');
+      setError(await routeError(urlRes, 'Failed to prepare upload.'));
       setStage('idle');
       return;
     }
@@ -316,8 +314,7 @@ export default function DemoUploadModal({
         body: JSON.stringify({ paths: uploads.map((u) => u.path) }),
       });
       if (!finalizeRes.ok) {
-        const json = await finalizeRes.json().catch(() => ({}));
-        setError(json.error ?? 'Failed to finalize the multi-segment upload.');
+        setError(await routeError(finalizeRes, 'Failed to finalize the multi-segment upload.'));
         setStage('idle');
         return;
       }
@@ -329,8 +326,7 @@ export default function DemoUploadModal({
       setStage('parsing');
       const parseRes = await fetch(`/api/matches/${matchId}/demo/parse`, { method: 'POST' });
       if (!parseRes.ok) {
-        const json = await parseRes.json().catch(() => ({}));
-        setError(json.error ?? 'Demo parsing failed.');
+        setError(await routeError(parseRes, 'Demo parsing failed.'));
         setStage('idle');
         return;
       }
@@ -348,8 +344,7 @@ export default function DemoUploadModal({
     setStage('parsing');
     const dispatchRes = await fetch(`/api/matches/${matchId}/demo/dispatch`, { method: 'POST' });
     if (!dispatchRes.ok) {
-      const json = await dispatchRes.json().catch(() => ({}));
-      setError(json.error ?? 'Failed to start demo processing.');
+      setError(await routeError(dispatchRes, 'Failed to start demo processing.'));
       setStage('idle');
       return;
     }
@@ -406,8 +401,7 @@ export default function DemoUploadModal({
         }),
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        setError(json.error ?? 'Something went wrong.');
+        setError(await routeError(res, 'Something went wrong.'));
         setStage('preview');
         return;
       }

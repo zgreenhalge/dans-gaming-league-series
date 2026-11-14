@@ -6,7 +6,7 @@ import { useHasMounted } from "./useHasMounted";
 import Modal from "./Modal";
 import ErrorText from '@/components/ErrorText';
 import FieldLabel from './FieldLabel';
-import { isValidPlayerName, normalizePlayerName, PLAYER_NAME_MAX_LENGTH, PLAYER_NAME_RULE } from "@/lib/util";
+import { isValidPlayerName, normalizePlayerName, PLAYER_NAME_MAX_LENGTH, PLAYER_NAME_RULE, routeError } from "@/lib/util";
 
 const subscribeNever = () => () => {};
 
@@ -63,11 +63,11 @@ export default function RegisterModal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
+        setError(await routeError(res, "Something went wrong."));
         return;
       }
+      const data = await res.json();
       await update({ playerId: data.playerId, playerName: data.playerName });
     } catch {
       setError("Network error. Please try again.");

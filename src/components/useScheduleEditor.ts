@@ -8,6 +8,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/server-schedule-collision';
+import { routeError } from '@/lib/util';
 
 /** ISO → the `datetime-local` input value in the viewer's local time. */
 function toDatetimeLocal(iso: string): string {
@@ -121,8 +122,7 @@ export function useScheduleEditor(opts: {
         body: JSON.stringify({ scheduled_at: new Date(value).toISOString() }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to save.');
+        setError(await routeError(res, 'Failed to save.'));
         return;
       }
       setEditing(false);
@@ -142,8 +142,7 @@ export function useScheduleEditor(opts: {
         body: JSON.stringify({ scheduled_at: null }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to clear.');
+        setError(await routeError(res, 'Failed to clear.'));
         return;
       }
       setEditing(false);

@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 import SectionLabel from './SectionLabel';
+import { routeError } from '@/lib/util';
 
 interface ThreadResult {
   matchId: number;
@@ -51,13 +52,13 @@ export function DiscordThreadPublisher({ seasonId, periodLabel = 'Week' }: { sea
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ week }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Could not publish threads');
+        setError(await routeError(res, 'Could not publish threads'));
         setResults([]);
         setPublishedPeriod(null);
         return;
       }
+      const body = await res.json().catch(() => ({}));
       // A regular season's response carries weekNumber/matches; a gauntlet's carries
       // roundNumber/pods (publishWeekThreads()/publishPodThreads()) — read whichever is present
       // rather than branching on periodLabel, so the two response shapes can't drift out of sync

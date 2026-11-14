@@ -8,8 +8,8 @@
 
 import { requireSession } from './session';
 import { isPlayerAdmin, getScrimSignups, getScrimMatch, getScrimNightMatches, type ScrimMatch } from './queries';
-import { canReopenScrimNight, hasScrimNightEnded, hasScrimNightStarted, isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
-import { canManageScrimMatch, scrimMatchNeedsServer } from './scrim-matches';
+import { canReopenScrimNight, hasScrimNightEnded, isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
+import { canManageScrimMatch, scrimNightEndRefusal } from './scrim-matches';
 import { findCurrentScrimNight, findScrimNight } from './scrim-signup-access';
 import type { AccessResult } from './access-control';
 
@@ -59,20 +59,16 @@ export async function requireScrimNightMatchAccess(id: string, now: Date = new D
   return { ok: true, night, checkedIn };
 }
 
-/** Gate for ending a night early: it has started, the requester is signed up for it or an admin, and no
- *  match is still waiting for the server (finish or discard it first). */
+/** Gate for ending a night early: `canEndScrimNight()`'s rules, refused with `scrimNightEndRefusal()`'s
+ *  status and message — the night has started and isn't over, the requester is signed up for it or an
+ *  admin, and no match is still waiting for the server (finish or discard it first). */
 export async function requireScrimNightEndAccess(id: string, now: Date = new Date()): Promise<AccessResult<{ night: ScrimNight }>> {
-  const found = await findCurrentNightForPlayer(id, now);
+  const found = await findNightForPlayer(() => findScrimNight(id));
   if (!found.ok) return found;
   const { night, playerId, admin } = found;
-  if (!hasScrimNightStarted(night, now)) return { ok: false, status: 409, error: 'That night has not started yet' };
-  const [signedUp, matches] = await Promise.all([isSignedUp(night.id, playerId), getScrimNightMatches(night.id)]);
-  if (!admin && !signedUp) {
-    return { ok: false, status: 403, error: 'Only players on the night can end it' };
-  }
-  if (matches.some(scrimMatchNeedsServer)) {
-    return { ok: false, status: 409, error: "Finish or discard the night's waiting matches first" };
-  }
+  const [signups, matches] = await Promise.all([getScrimSignups(night.id), getScrimNightMatches(night.id)]);
+  const refusal = scrimNightEndRefusal(night, signups, matches, { playerId, isAdmin: admin }, now);
+  if (refusal) return { ok: false, ...refusal };
   return { ok: true, night };
 }
 

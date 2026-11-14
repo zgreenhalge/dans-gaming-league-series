@@ -10,6 +10,7 @@ import { SIDE_ICON } from './icons/SideIcons';
 import type { Match } from '@/lib/types';
 import ErrorText from '@/components/ErrorText';
 import { effectivePickedMap } from '@/lib/veto';
+import { routeError } from '@/lib/util';
 
 const REGULAR_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -170,8 +171,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         body: JSON.stringify({ field, value }),
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        setError(json.error ?? 'Something went wrong');
+        setError(await routeError(res, 'Something went wrong'));
         // Revert optimistic value on failure
         setOptimisticFields((prev) => { const next = new Map(prev); next.delete(field); return next; });
         return;
@@ -205,8 +205,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
             body: JSON.stringify({ field, value: null }),
           });
           if (!res.ok) {
-            const json = await res.json().catch(() => ({}));
-            setError(json.error ?? 'Something went wrong');
+            setError(await routeError(res, 'Something went wrong'));
             setOptimisticFields((prev) => { const n = new Map(prev); n.delete(field); return n; });
           }
         }),

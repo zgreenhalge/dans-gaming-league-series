@@ -9,6 +9,7 @@ import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useVisibleInterval } from '@/components/useVisibleInterval';
 import ErrorText from '@/components/ErrorText';
+import { routeError } from '@/lib/util';
 
 const ADMIN_REFRESH_INTERVAL_MS = 15_000;
 
@@ -40,8 +41,7 @@ export function JobRetryButton({
     try {
       const res = await fetch(dispatchUrl, { method: 'POST' });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(j.error ?? 'Could not start the job');
+        setError(await routeError(res, 'Could not start the job'));
         return;
       }
       router.refresh();
