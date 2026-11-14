@@ -17,8 +17,6 @@ export type ScrimNightTab = (typeof SCRIM_NIGHT_TABS)[number];
  *  `current`). */
 export type ScrimNightState = 'upcoming' | 'live' | 'final';
 
-export type ScrimNightViewer = ScrimViewer;
-
 /** What the night's status bar (`ScrimNightStatusBar`) shows, the same over every tab. */
 export interface ScrimNightStatus {
   state: ScrimNightState;
@@ -82,7 +80,7 @@ export interface ScrimNightPageModel {
 
 /** `now` is the instant `night` was read at (its `started`, `current` and `checkInOpen`); `scheduled` is
  *  the league's scheduled, unplayed matches (`getScheduledUnplayedMatches()`). */
-export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNightViewer, now: Date, scheduled: ScheduledMatchRef[] = []): ScrimNightPageModel {
+export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimViewer, now: Date, scheduled: ScheduledMatchRef[] = []): ScrimNightPageModel {
   const { playerId, isAdmin } = viewer;
   const pool = night.signups.filter((s) => s.checked_in_at).map((s) => ({ id: s.player_id, name: s.player_name }));
   // Matches play in order: the first still needing the server is the lobby's, the rest wait behind it.

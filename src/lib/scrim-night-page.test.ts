@@ -7,7 +7,8 @@
 
 import assert from 'node:assert/strict';
 import { test, report } from './test-support/miniTest';
-import { buildScrimNightPageModel, scrimNightTabOrder, type ScrimNightViewer } from './scrim-night-page';
+import { buildScrimNightPageModel, scrimNightTabOrder } from './scrim-night-page';
+import type { ScrimViewer } from './scrim-matches';
 import { scrimSignup } from './test-support/scrimFixtures';
 import type { ScrimLeaderboardRow, ScrimMatch, ScrimNightView } from './queries';
 import type { H2HData } from './h2h';
@@ -51,7 +52,7 @@ function night(overrides: Partial<ScrimNightView> = {}): ScrimNightView {
 /** Half an hour into the fixture night (it starts 20:00; it goes idle after an hour). */
 const NOW = new Date('2026-01-01T20:30:00Z');
 const NOT_STARTED = { id: 5, startsAt: '2026-01-01T21:00:00Z' };
-const build = (n: ScrimNightView, viewer: ScrimNightViewer, scheduled: ScheduledMatchRef[] = []) => buildScrimNightPageModel(n, viewer, NOW, scheduled);
+const build = (n: ScrimNightView, viewer: ScrimViewer, scheduled: ScheduledMatchRef[] = []) => buildScrimNightPageModel(n, viewer, NOW, scheduled);
 
 const standings =[{ player_id: 1 } as ScrimLeaderboardRow];
 const ADMIN = { playerId: 9, isAdmin: true };
@@ -113,7 +114,7 @@ test('a queued match is discardable by its players or an admin, not by anyone el
 });
 
 test('the lobby match is managed by its players or an admin, not by anyone else', () => {
-  const canManageLobby = (viewer: ScrimNightViewer, matches = [match(1, null, null, [1, 2, 3, 4])]) =>
+  const canManageLobby = (viewer: ScrimViewer, matches = [match(1, null, null, [1, 2, 3, 4])]) =>
     build(night({ matches }), viewer).canManageLobby;
   assert.equal(canManageLobby(PLAYER(2)), true);
   assert.equal(canManageLobby(ADMIN), true);
