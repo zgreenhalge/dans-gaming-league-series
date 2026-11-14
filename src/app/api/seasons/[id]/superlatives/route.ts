@@ -4,9 +4,15 @@ import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
+import { addSuperlative, removeSuperlative, renameSuperlative, reorderSuperlatives, SuperlativeRacedError } from '@/lib/superlative-writes';
 import { accessDenied } from '@/lib/access-control';
 
 const LOCKED = { error: 'Voting has opened — superlatives can no longer be changed' };
+
+/** The 500 for a failed write, carrying the error's message. */
+function writeFailed(err: unknown, fallback: string) {
+  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
+}
 
 /** Adds a superlative (`{ title }`) to a season's vote, creating the vote (closed) if this is the
  *  first one. Every player who played the season can be nominated for it. Refused once voting has
@@ -22,27 +28,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const poll = await getSuperlativePoll(seasonId);
   if (poll && (await isSuperlativePollLocked(poll))) return NextResponse.json(LOCKED, { status: 409 });
-  if (!poll) {
-    const { error: pollErr } = await getAdminClient()
-      .from('superlative_polls')
-      .upsert({ season_id: seasonId }, { onConflict: 'season_id', ignoreDuplicates: true });
-    if (pollErr) return NextResponse.json({ error: pollErr.message }, { status: 500 });
-  }
   if (poll?.superlatives.some((s) => s.title.toLowerCase() === title.value.toLowerCase())) {
     return NextResponse.json({ error: 'That superlative already exists' }, { status: 409 });
   }
 
-  const position = Math.max(0, ...(poll?.superlatives.map((s) => s.position) ?? [])) + 1;
-  const { data, error } = await getAdminClient()
-    .from('superlatives')
-    .insert({ season_id: seasonId, position, title: title.value })
-    .select('id')
-    .single();
-  if (error) {
-    const raced = (error as { code?: string }).code === '23505';
-    return NextResponse.json({ error: raced ? 'Another superlative was added at the same time — try again' : error.message }, { status: raced ? 409 : 500 });
+  try {
+    const superlativeId = await addSuperlative(getAdminClient(), seasonId, title.value, poll);
+    return NextResponse.json({ ok: true, superlative_id: superlativeId }, { status: 201 });
+  } catch (err) {
+    if (err instanceof SuperlativeRacedError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return writeFailed(err, 'Adding the superlative failed');
   }
-  return NextResponse.json({ ok: true, superlative_id: data.id }, { status: 201 });
 }
 
 /** Removes a superlative (`{ superlative_id }`), refused once voting has opened. */
@@ -61,9 +57,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
   if (await isSuperlativePollLocked(poll)) return NextResponse.json(LOCKED, { status: 409 });
 
-  const { error } = await getAdminClient().from('superlatives').delete().eq('id', superlativeId).eq('season_id', seasonId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  try {
+    await removeSuperlative(getAdminClient(), seasonId, superlativeId);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return writeFailed(err, 'Removing the superlative failed');
+  }
 }
 
 /** Reorders the season's superlatives (`{ order: [superlative_id, …] }`, every id once). */
@@ -79,9 +78,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!order.ok) return NextResponse.json({ error: order.error }, { status: 400 });
   if (await isSuperlativePollLocked(poll)) return NextResponse.json(LOCKED, { status: 409 });
 
-  const { error } = await getAdminClient().rpc('reorder_superlatives', { p_season_id: seasonId, p_order: order.value });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  try {
+    await reorderSuperlatives(getAdminClient(), seasonId, order.value);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return writeFailed(err, 'Reordering the superlatives failed');
+  }
 }
 
 /** Renames a superlative (`{ superlative_id, title }`) or opens/closes voting (`{ open: boolean }`).
@@ -108,9 +110,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (poll.superlatives.some((s) => s.id !== target.id && s.title.toLowerCase() === title.value.toLowerCase())) {
       return NextResponse.json({ error: 'That superlative already exists' }, { status: 409 });
     }
-    const { error } = await getAdminClient().from('superlatives').update({ title: title.value }).eq('id', target.id).eq('season_id', seasonId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    try {
+      await renameSuperlative(getAdminClient(), seasonId, target.id, title.value);
+      return NextResponse.json({ ok: true });
+    } catch (err) {
+      return writeFailed(err, 'Renaming the superlative failed');
+    }
   }
   return setFeedbackOpen(SUPERLATIVES_LIFECYCLE, seasonId, open === true, poll);
 }

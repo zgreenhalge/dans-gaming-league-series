@@ -8,7 +8,8 @@ import type { NextRequest } from 'next/server';
 import { jsonRequest } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import {
-  ADMIN_ID, ALICE_ID, GAUNTLET_SEASON_ID, REGULAR_SEASON_ID, installFeedbackFixture, resetFeedbackFixture,
+  ADMIN_ID, ALICE_ID, FEEDBACK_WRITE_FAILURE, GAUNTLET_SEASON_ID, REGULAR_SEASON_ID, installFeedbackFixture, makeFeedbackDb,
+  resetFeedbackFixture,
 } from '@/lib/test-support/feedbackFixture';
 import { CORE_SURVEY_QUESTIONS } from '@/lib/survey';
 import { POST, PATCH, PUT, DELETE } from './route';
@@ -147,6 +148,34 @@ test('PUT — a refused save leaves the stored questions and open state untouche
   const res = await call(PUT, 'PUT', REGULAR_SEASON_ID, { questions: [{ kind: 'yes_no', prompt: 'Again?' }], open: true });
   assert.equal(res.status, 409);
   assert.deepEqual(db.surveys[0], before);
+  resetFeedbackFixture();
+});
+
+test('POST — a failed survey insert is a 500 with its message, and no survey is created', async () => {
+  const db = installFeedbackFixture(ADMIN_ID, { table: 'surveys', method: 'insert' });
+  const res = await call(POST, 'POST', REGULAR_SEASON_ID, {});
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).error, FEEDBACK_WRITE_FAILURE);
+  assert.equal(db.surveys.length, 0);
+  resetFeedbackFixture();
+});
+
+test('POST — an insert that loses the one-survey-per-season race is a 409', async () => {
+  installFeedbackFixture(ADMIN_ID, { table: 'surveys', method: 'insert', code: '23505' });
+  const res = await call(POST, 'POST', REGULAR_SEASON_ID, {});
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).error, 'This season already has a survey');
+  resetFeedbackFixture();
+});
+
+test('PUT — a failed question save is a 500 with its message, and the questions are unchanged', async () => {
+  const db = makeFeedbackDb();
+  db.surveys.push({ id: 1, season_id: REGULAR_SEASON_ID, questions: [], closed_at: '2026-01-01T00:00:00Z' });
+  installFeedbackFixture(ADMIN_ID, { rpc: 'replace_survey_questions' }, db);
+  const res = await call(PUT, 'PUT', REGULAR_SEASON_ID, { questions: [{ kind: 'yes_no', prompt: 'Again?' }] });
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).error, FEEDBACK_WRITE_FAILURE);
+  assert.deepEqual(db.surveys[0].questions, []);
   resetFeedbackFixture();
 });
 

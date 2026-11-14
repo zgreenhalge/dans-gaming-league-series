@@ -3,8 +3,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE } from '@/lib/feedback-lifecycle';
 import { getSurveyForSeason } from '@/lib/queries';
-import type { Json } from '@/lib/database.types';
-import { buildSurveyQuestions, validateQuestionDrafts, type SurveyQuestionDraft } from '@/lib/survey';
+import { validateQuestionDrafts, type SurveyQuestionDraft } from '@/lib/survey';
+import { createSurvey, replaceSurveyQuestions, SurveyExistsError, SurveyLockedError } from '@/lib/survey-writes';
 import { accessDenied } from '@/lib/access-control';
 
 /** Reads the `{ questions, open? }` body shared by POST and PUT. */
@@ -34,24 +34,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'This season already has a survey' }, { status: 409 });
   }
 
-  const { data: survey, error } = await getAdminClient()
-    .from('surveys')
-    .insert({
-      season_id: seasonId,
-      questions: buildSurveyQuestions(body.drafts) as unknown as Json,
-      closed_at: body.open === false ? new Date().toISOString() : null,
-    })
-    .select('id')
-    .single();
-  if (error) {
-    const taken = (error as { code?: string }).code === '23505';
-    return NextResponse.json(
-      { error: taken ? 'This season already has a survey' : error.message },
-      { status: taken ? 409 : 500 },
-    );
+  try {
+    const surveyId = await createSurvey(getAdminClient(), seasonId, body.drafts, body.open !== false);
+    return NextResponse.json({ ok: true, survey_id: surveyId }, { status: 201 });
+  } catch (err) {
+    if (err instanceof SurveyExistsError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Creating the survey failed' }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true, survey_id: survey.id }, { status: 201 });
 }
 
 /** Closes or reopens a season's survey (`{ open: boolean }`). Closing keeps every answer; players
@@ -79,18 +68,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const existing = await getSurveyForSeason(access.seasonId);
   if (!existing) return NextResponse.json({ error: 'This season has no survey' }, { status: 404 });
 
-  // One conditional write: `replace_survey_questions()` saves only while the survey is closed with
-  // no response, and returns false — nothing written — otherwise.
-  const { data: saved, error } = await getAdminClient().rpc('replace_survey_questions', {
-    p_survey_id: existing.id,
-    p_questions: buildSurveyQuestions(body.drafts) as unknown as Json,
-    p_open: body.open === true,
-  });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!saved) {
-    return NextResponse.json({ error: 'The survey has opened — its questions can no longer be changed' }, { status: 409 });
+  try {
+    await replaceSurveyQuestions(getAdminClient(), existing.id, body.drafts, body.open === true);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    if (err instanceof SurveyLockedError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the questions failed' }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
 }
 
 /** Admin reset: closes the survey and deletes every response, as one `reset_survey()` RPC call
