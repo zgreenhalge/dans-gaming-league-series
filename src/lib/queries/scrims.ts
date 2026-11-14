@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import {
+  canReopenScrimNight,
   hasScrimNightEnded,
   hasScrimNightStarted,
   isScrimCheckInOpen,
@@ -30,15 +31,12 @@ export interface ScrimSignupEntry {
 
 /** Every scrim night, in id order. */
 export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): Promise<ScrimNight[]> => {
-  type Row = { id: number; starts_at: string; ended_at: string | null };
+  type Row = { id: number; starts_at: string; ended_at: string | null; last_active_at: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    asPage(getAdminClient().from('scrim_nights').select('id, starts_at, ended_at').order('id').range(from, to)),
+    asPage(getAdminClient().from('scrim_nights').select('id, starts_at, ended_at, last_active_at').order('id').range(from, to)),
   );
-  return rows.map((r) => ({
-    id: r.id,
-    startsAt: new Date(r.starts_at).toISOString(),
-    endedAt: r.ended_at ? new Date(r.ended_at).toISOString() : null,
-  }));
+  const iso = (t: string | null) => (t ? new Date(t).toISOString() : null);
+  return rows.map((r) => ({ id: r.id, startsAt: new Date(r.starts_at).toISOString(), endedAt: iso(r.ended_at), lastActiveAt: iso(r.last_active_at) }));
 });
 
 /** A night's signups: definite before maybe, then in signup order. A signup whose player row is
@@ -234,6 +232,8 @@ export function scrimLeaderboardToStatLines(rows: ScrimLeaderboardRow[]): Leader
 export interface ScrimNightView extends UpcomingScrimNight {
   /** Not yet ended: upcoming or running, as opposed to over. */
   current: boolean;
+  /** Over, and still within reach of reopening (`canReopenScrimNight()`). */
+  reopenable: boolean;
   matches: ScrimMatch[];
   leaderboard: ScrimLeaderboardRow[];
   /** The night's partner and opponent records (`computeH2H()` over its scored matches). */
@@ -253,6 +253,7 @@ export async function getScrimNight(nightId: number, now: Date): Promise<ScrimNi
   return {
     ...toUpcomingScrimNight(night, signups, now),
     current: !hasScrimNightEnded(night, now),
+    reopenable: canReopenScrimNight(night, now),
     matches,
     leaderboard: buildScrimNightLeaderboard(matches, playersById),
     h2h: computeH2H(scrimMatchesToH2HInput(matches), playersById),

@@ -1275,16 +1275,19 @@ export type Database = {
         Row: {
           ended_at: string | null
           id: number
+          last_active_at: string | null
           starts_at: string
         }
         Insert: {
           ended_at?: string | null
           id?: number
+          last_active_at?: string | null
           starts_at: string
         }
         Update: {
           ended_at?: string | null
           id?: number
+          last_active_at?: string | null
           starts_at?: string
         }
         Relationships: []
@@ -1862,6 +1865,10 @@ export type Database = {
         }
         Returns: Json
       }
+      reopen_scrim_night: {
+        Args: { p_night_id: number }
+        Returns: undefined
+      }
       reorder_superlatives: {
         Args: { p_order: number[]; p_season_id: number }
         Returns: undefined
@@ -1898,6 +1905,10 @@ export type Database = {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
+      scrim_night_end: {
+        Args: { p_ended_at: string; p_last_active_at: string; p_starts_at: string }
+        Returns: string
+      }
       set_scrim_match_lineup: {
         Args: { p_match_id: number; p_shirts: number[]; p_skins: number[] }
         Returns: undefined
@@ -1907,8 +1918,12 @@ export type Database = {
         Returns: Json
       }
       start_scrim_night: {
-        Args: { p_commitment: string; p_night_minutes: number; p_player_id: number; p_starts_at: string }
+        Args: { p_commitment: string; p_player_id: number; p_starts_at: string }
         Returns: number
+      }
+      touch_scrim_night: {
+        Args: { p_night_id: number }
+        Returns: undefined
       }
       update_scrim_match: {
         Args: {

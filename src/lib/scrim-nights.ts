@@ -1,9 +1,9 @@
 // Writes for scrim nights: starting one, its signups, check-in, dropping out (which removes a night
-// nobody is left in), and ending one early. Reads live in `src/lib/queries/scrims.ts`; the timing logic in
-// `scrim-schedule.ts`. Every write throws on failure so the calling route reports it.
+// nobody is left in), ending one and reopening it. Reads live in `src/lib/queries/scrims.ts`; the timing
+// logic in `scrim-schedule.ts`. Every write throws on failure so the calling route reports it.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { SCRIM_NIGHT_LENGTH_MS, type ScrimCommitment } from './scrim-schedule';
+import type { ScrimCommitment } from './scrim-schedule';
 
 /** Thrown by `startScrimNight()` when the new night's slot overlaps another night's (`scrimNightEnd()`). */
 export class OverlappingScrimNightError extends Error {
@@ -18,7 +18,6 @@ export class OverlappingScrimNightError extends Error {
 export async function startScrimNight(db: SupabaseClient, startsAt: string, playerId: number, commitment: ScrimCommitment): Promise<number> {
   const { data, error } = await db.rpc('start_scrim_night', {
     p_starts_at: startsAt,
-    p_night_minutes: SCRIM_NIGHT_LENGTH_MS / 60_000,
     p_player_id: playerId,
     p_commitment: commitment,
   });
@@ -62,8 +61,8 @@ export async function setScrimCheckIn(db: SupabaseClient, nightId: number, playe
   }
 }
 
-/** Ends a running night now, so its signups, check-in and lobby close ahead of the clock. A night that
- *  has already ended keeps its original end. */
+/** Ends a running night now, so its signups, check-in and lobby close. A night that has already been
+ *  ended keeps its original end. */
 export async function endScrimNight(db: SupabaseClient, nightId: number): Promise<void> {
   await db
     .from('scrim_nights')
@@ -71,4 +70,22 @@ export async function endScrimNight(db: SupabaseClient, nightId: number): Promis
     .eq('id', nightId)
     .is('ended_at', null)
     .throwOnError();
+}
+
+/** Thrown by `reopenScrimNight()` when another night holds the shared server now. */
+export class CurrentScrimNightError extends Error {
+  constructor() {
+    super('Another scrim night is on the server now — it has to end before this one can reopen.');
+    this.name = 'CurrentScrimNightError';
+  }
+}
+
+/** Reopens a night that is over (`reopen_scrim_night()`): clears `ended_at` and counts now as activity,
+ *  so it is current again until it is ended or goes idle. */
+export async function reopenScrimNight(db: SupabaseClient, nightId: number): Promise<void> {
+  const { error } = await db.rpc('reopen_scrim_night', { p_night_id: nightId });
+  if (error) {
+    if (error.message.includes('current-scrim-night')) throw new CurrentScrimNightError();
+    throw new Error(error.message);
+  }
 }

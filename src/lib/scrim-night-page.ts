@@ -35,6 +35,9 @@ export interface ScrimNightStatus {
   /** The viewer's own commitment, `null` before they sign up: signed in, with the night not over (signups
    *  close when it ends); `null` otherwise. */
   commitment: { playerId: number; commitment: ScrimCommitment | null } | null;
+  /** The viewer may reopen the night (`requireScrimNightReopenAccess()`'s rules): it is over but still
+   *  reopenable (`canReopenScrimNight()`), and they're signed up or an admin. */
+  canReopen: boolean;
 }
 
 /** Where a match stands in the night's running order: scored, over with no score yet (the demo is
@@ -64,8 +67,7 @@ export interface ScrimNightPageModel {
    *  (`canManageScrimMatch()`). */
   queued: { match: ScrimMatch; canDiscard: boolean }[];
   /** The night's running order: the matches whose game is over (played or pending) in play order, then
-   *  the one on the server, then those still to start — these only while check-in is open, since a match
-   *  can start only then. */
+   *  the one on the server, then those still to start. */
   runningOrder: ScrimRunningOrderEntry[];
   scoredMatchIds: number[];
   /** The viewer may make the next match: checked in, or an admin. */
@@ -75,8 +77,9 @@ export interface ScrimNightPageModel {
   canEnd: boolean;
   /** Generate Rounds is offered where Next Match is: check-in open, no match waiting, four checked in. */
   offerRounds: boolean;
-  /** The lobby exists while check-in is open and someone has checked in, a match is waiting, or the
-   *  viewer may end the night (End night is in the lobby). */
+  /** The lobby exists while a match is waiting — even once the night is over, since a match already
+   *  made can always be started — or while check-in is open and someone has checked in or the viewer
+   *  may end the night (End night is in the lobby). */
   hasLobby: boolean;
 }
 
@@ -91,16 +94,15 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
   const canMake = isAdmin || viewerCheckedIn;
   const mine = night.signups.find((s) => s.player_id === playerId);
   const canEnd = night.started && night.current && lobbyMatch == null && (isAdmin || mine != null);
-  const hasLobby = night.checkInOpen && (pool.length > 0 || lobbyMatch != null || canEnd);
+  const hasLobby = lobbyMatch != null || (night.checkInOpen && (pool.length > 0 || canEnd));
   const orderStatus = (m: ScrimMatch): ScrimRunningOrderStatus =>
     isPlayedScore(m.final_score) ? 'played' : !scrimMatchNeedsServer(m) ? 'pending' : isScrimMatchEditable(m) ? 'next' : 'live';
   // Matches play in order, but one can finish while an earlier one still waits for the server (a failed
-  // start), so the finished ones lead and the rest follow, each group in play order. A match still to
-  // start shows only while check-in is open, since only then can it start.
-  const entries = night.matches
-    .map((m) => ({ match: m, status: orderStatus(m) }))
-    .filter((e) => e.status !== 'next' || night.checkInOpen)
-    .map((e) => ({ ...e, resolve: isAdmin && e.status === 'pending' }));
+  // start), so the finished ones lead and the rest follow, each group in play order.
+  const entries = night.matches.map((m) => {
+    const status = orderStatus(m);
+    return { match: m, status, resolve: isAdmin && status === 'pending' };
+  });
   const finished = (e: ScrimRunningOrderEntry) => e.status === 'played' || e.status === 'pending';
   return {
     status: {
@@ -109,6 +111,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimNig
       leagueMatches: night.current ? leagueMatchesDuring(night.night, scheduled) : [],
       checkIn: playerId != null && night.checkInOpen ? { playerId, checkedIn: viewerCheckedIn } : null,
       commitment: playerId != null && night.current ? { playerId, commitment: mine?.commitment ?? null } : null,
+      canReopen: night.reopenable && (isAdmin || mine != null),
     },
     rosterAdmin: isAdmin && night.current,
     pool,

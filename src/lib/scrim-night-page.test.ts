@@ -38,6 +38,7 @@ function night(overrides: Partial<ScrimNightView> = {}): ScrimNightView {
     started: true,
     checkInOpen: true,
     current: true,
+    reopenable: false,
     signups: [1, 2, 3, 4].map((id) => scrimSignup(id, 'definite', { checked_in_at: '2026-01-01T19:45:00Z' })),
     matches: [],
     leaderboard: [],
@@ -71,10 +72,22 @@ test('the running order: a match that finished while an earlier one waits for th
   assert.deepEqual(order.map((e) => [e.match.id, e.status]), [[2, 'played'], [1, 'next']]);
 });
 
-test('the running order: matches still to start drop out once check-in closes', () => {
+test('a match already made stays startable once the night is over: the lobby holds it and the running order keeps it', () => {
   const matches = [match(1, '13-9', 'done'), match(2, null, null)];
-  const order = buildScrimNightPageModel(night({ matches, current: false, checkInOpen: false }), PLAYER(1)).runningOrder;
-  assert.deepEqual(order.map((e) => e.match.id), [1]);
+  const model = buildScrimNightPageModel(night({ matches, current: false, checkInOpen: false }), ADMIN);
+  assert.deepEqual(model.runningOrder.map((e) => [e.match.id, e.status]), [[1, 'played'], [2, 'next']]);
+  assert.equal(model.lobbyMatch?.id, 2);
+  assert.equal(model.hasLobby, true);
+  assert.equal(model.canEnd, false);
+});
+
+test('reopening: a night that is over and reopenable, for anyone signed up or an admin', () => {
+  const over = night({ current: false, checkInOpen: false, reopenable: true });
+  assert.equal(buildScrimNightPageModel(over, PLAYER(1)).status.canReopen, true);
+  assert.equal(buildScrimNightPageModel(over, ADMIN).status.canReopen, true);
+  assert.equal(buildScrimNightPageModel(over, PLAYER(7)).status.canReopen, false);
+  assert.equal(buildScrimNightPageModel(over, SIGNED_OUT).status.canReopen, false);
+  assert.equal(buildScrimNightPageModel(night({ current: false, checkInOpen: false }), ADMIN).status.canReopen, false, 'past the span');
 });
 
 test('the running order: an admin resolves each pending row, and only those', () => {
