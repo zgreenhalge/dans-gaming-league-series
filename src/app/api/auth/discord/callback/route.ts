@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { verifyDiscordLinkState } from "@/lib/discordLinkState";
 import { isDiscordIdTaken } from "@/lib/discord-link";
+import { PlayerIdentityTakenError, linkDiscordId } from "@/lib/player-identity";
 import { recordOpsError, clearOpsError } from "@/lib/ops-errors";
 import { syncParticipantRoleForPlayer, createNameRole } from "@/lib/discord-roles";
 import { afterBestEffort } from "@/lib/after";
@@ -89,18 +90,15 @@ export async function GET(request: Request) {
       return redirectToProfile(playerId, "taken");
     }
 
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from("players")
-      .update({ discord_id: discordUser.id })
-      .eq("id", playerId)
-      .select("id, name")
-      .maybeSingle();
-    if (updateError) {
+    let updated: Awaited<ReturnType<typeof linkDiscordId>>;
+    try {
+      updated = await linkDiscordId(supabaseAdmin, playerId, discordUser.id);
+    } catch (e) {
       // The DB's own players_discord_id_key constraint is the backstop for the isDiscordIdTaken()
       // check above racing a concurrent link attempt for the same Discord account — report it the
       // same way as a check that caught it up front, not as a logged failure.
-      if ((updateError as { code?: string }).code === "23505") return redirectToProfile(playerId, "taken");
-      return redirectWithError(playerId, `players update failed: ${updateError.message}`);
+      if (e instanceof PlayerIdentityTakenError) return redirectToProfile(playerId, "taken");
+      return redirectWithError(playerId, `players update failed: ${(e as Error).message}`);
     }
     // No matching row (e.g. the player was deleted mid-flow) isn't a Supabase `error` — check
     // explicitly rather than reporting "linked" for a write that touched nothing.
@@ -114,7 +112,7 @@ export async function GET(request: Request) {
       syncParticipantRoleForPlayer(supabaseAdmin, playerId, discordUser.id!),
     );
     afterBestEffort(`discord-roles: create name role for newly-linked player ${playerId}`, () =>
-      createNameRole(supabaseAdmin, playerId, discordUser.id!, (updated as { name: string }).name),
+      createNameRole(supabaseAdmin, playerId, discordUser.id!, updated.name),
     );
     return redirectToProfile(playerId, "linked");
   } catch (e) {

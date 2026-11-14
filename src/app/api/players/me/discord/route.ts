@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { deleteNameRole, getStoredNameRoleId } from "@/lib/discord-roles";
+import { unlinkDiscordId } from "@/lib/player-identity";
 import { afterBestEffort } from "@/lib/after";
 
 // Self-service Discord unlink (#394) — clears the caller's own players.discord_id. Linking itself
@@ -26,11 +27,11 @@ export async function DELETE() {
 
   const nameRoleId = await getStoredNameRoleId(supabaseAdmin, playerId);
 
-  const { error } = await supabaseAdmin
-    .from("players")
-    .update({ discord_id: null, discord_name_role_id: null })
-    .eq("id", playerId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await unlinkDiscordId(supabaseAdmin, playerId);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Unlinking failed" }, { status: 500 });
+  }
 
   if (nameRoleId) {
     afterBestEffort(`discord-roles: delete name role for self-unlinked player ${playerId}`, () =>

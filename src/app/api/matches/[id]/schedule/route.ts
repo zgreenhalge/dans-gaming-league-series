@@ -3,6 +3,7 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { accessDenied } from '@/lib/access-control';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
+import { setMatchScheduledAt } from '@/lib/match-day';
 import { after } from '@/lib/after';
 import { parseRouteId } from '@/lib/util';
 
@@ -40,13 +41,10 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
-    .from('matches')
-    .update({ scheduled_at })
-    .eq('id', matchId);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await setMatchScheduledAt(supabaseAdmin, matchId, scheduled_at);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the time failed' }, { status: 500 });
   }
 
   // Deferred past the response, same as score/route.ts's own post-commit side effects: (re)schedules
