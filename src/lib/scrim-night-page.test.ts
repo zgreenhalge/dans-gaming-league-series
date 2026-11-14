@@ -54,7 +54,7 @@ const NOW = new Date('2026-01-01T20:30:00Z');
 const NOT_STARTED = { id: 5, startsAt: '2026-01-01T21:00:00Z' };
 const build = (n: ScrimNightView, viewer: ScrimViewer, scheduled: ScheduledMatchRef[] = []) => buildScrimNightPageModel(n, viewer, NOW, scheduled);
 
-const standings =[{ player_id: 1 } as ScrimLeaderboardRow];
+const standings = [{ player_id: 1 } as ScrimLeaderboardRow];
 const ADMIN = { playerId: 9, isAdmin: true };
 const PLAYER = (id: number) => ({ playerId: id, isAdmin: false });
 const SIGNED_OUT = { playerId: null, isAdmin: false };
