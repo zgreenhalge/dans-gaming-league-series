@@ -78,7 +78,8 @@ export function PlayerSummaryBlock({
 
 /**
  * `PlayerSummaryBlock`'s loading stand-in: the same name, EHOG badge, tiles and Form row as pulsing
- * bars and a spinning ring where the avatar goes, so the layout holds still when the data arrives. Sits on a `bg-secondary` surface.
+ * bars and a spinning ring where the avatar goes, so the layout holds still when the data arrives.
+ * Sits on a `bg-secondary` surface.
  */
 export function PlayerSummaryBlockSkeleton({ compact = false }: { compact?: boolean }) {
   const bar = (className: string) => <SkeletonBar tone="raised" className={className} />;
