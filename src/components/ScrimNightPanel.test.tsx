@@ -3,7 +3,8 @@
  * Component tests for `ScrimNightPanel` and the `ScrimNightRoster` it holds: the attendance toggle (the lists start open, the toggle folds
  * them away and back, and its label carries the signup count either way), and the admin menus (only an
  * admin has them; a row's menu sends that player's change once, and every row's actions hold while a
- * write is in flight; the header's Add player… picker signs a player up).
+ * write is in flight; the header's Add player… picker signs a player up; removing the night's only
+ * player asks for a confirm that says it deletes the night, while any other Remove is one click).
  *
  * Run:  npx vitest run src/components/ScrimNightPanel.test.tsx
  */
@@ -15,11 +16,15 @@ import { ScrimNightPanel } from './ScrimNightPanel';
 import type { UpcomingScrimNight } from '@/lib/queries';
 import { scrimSignup } from '@/lib/test-support/scrimFixtures';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push }) }));
 const sendJsonRequest = vi.hoisted(() => vi.fn(async () => null));
 vi.mock('./sendJsonRequest', () => ({ sendJsonRequest }));
 
-afterEach(() => sendJsonRequest.mockClear());
+afterEach(() => {
+  sendJsonRequest.mockClear();
+  push.mockClear();
+});
 
 const upcoming: UpcomingScrimNight = {
   night: { id: 5, startsAt: '2026-01-01T20:00:00Z' },
@@ -82,6 +87,46 @@ describe('ScrimNightPanel admin menus', () => {
     finish();
     await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeEnabled());
     expect(sendJsonRequest).toHaveBeenCalledTimes(1);
+  });
+
+  describe("removing the night's only player", () => {
+    const alone: UpcomingScrimNight = { ...upcoming, signups: [upcoming.signups[0]] };
+
+    test('Remove… asks first, naming the night, and sends nothing until confirmed', async () => {
+      render(<ScrimNightPanel upcoming={alone} currentPlayerId={null} isAdmin allPlayers={players} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Admin actions for Alice' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Remove…' }));
+      expect(sendJsonRequest).not.toHaveBeenCalled();
+
+      expect(screen.getByText(/Alice is the only player signed up, so removing them deletes the night unless it has matches/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+      expect(sendJsonRequest).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(sendJsonRequest).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    });
+
+    test('confirming removes the player and leaves for /scrims once the night is gone', async () => {
+      sendJsonRequest.mockResolvedValueOnce({ nightRemoved: true } as never);
+      render(<ScrimNightPanel upcoming={alone} currentPlayerId={null} isAdmin allPlayers={players} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Admin actions for Alice' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Remove…' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Confirm remove' }));
+
+      await waitFor(() => expect(sendJsonRequest).toHaveBeenCalledTimes(1));
+      expect(sendJsonRequest).toHaveBeenCalledWith('DELETE', '/api/scrims/5/signups', { player_id: 1 });
+      await waitFor(() => expect(push).toHaveBeenCalledWith('/scrims'));
+    });
+
+    test('with other players signed up, Remove is still one click', async () => {
+      render(<ScrimNightPanel upcoming={upcoming} currentPlayerId={null} isAdmin allPlayers={players} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Admin actions for Bob' }));
+      expect(screen.queryByRole('menuitem', { name: 'Remove…' })).toBeNull();
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+
+      await waitFor(() => expect(sendJsonRequest).toHaveBeenCalledWith('DELETE', '/api/scrims/5/signups', { player_id: 2 }));
+    });
   });
 
   test("the header's Add player… opens the picker and signs the picked player up", async () => {
