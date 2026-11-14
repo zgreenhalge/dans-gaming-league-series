@@ -24,24 +24,17 @@ import {
   parseScrimTeams,
   resolveScrimMap,
   updateScrimMatch,
-  ScrimMatchChangedError,
-  ScrimMatchConflictError,
   SCRIM_MATCH_LOCKED,
   SCRIM_MATCH_NOT_DISCARDABLE,
-  SCRIM_MATCH_CHANGED_CODE,
   SCRIM_REVISION_INVALID,
   SCRIM_SIDE_CHOICES,
   type ScrimSideChoice,
 } from '@/lib/scrim-matches';
+import { scrimConflictResponse } from '@/lib/scrim-route-errors';
 
-/** The response for a write that threw: 409 for a refusal (`code: 'match_changed'` when the match
- *  moved on, so the client reloads), 500 otherwise. */
+/** The response for a write that threw: 409 for a refused write, 500 for anything else. */
 function writeFailed(err: unknown, fallback: string): NextResponse {
-  if (err instanceof ScrimMatchChangedError) {
-    return NextResponse.json({ error: err.message, code: SCRIM_MATCH_CHANGED_CODE }, { status: 409 });
-  }
-  if (err instanceof ScrimMatchConflictError) return NextResponse.json({ error: err.message }, { status: 409 });
-  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
+  return scrimConflictResponse(err) ?? NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

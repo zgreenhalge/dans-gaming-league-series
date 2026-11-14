@@ -16,7 +16,7 @@ import {
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { UpcomingSeasonTag } from '@/components/UpcomingSeasonTag';
 import { StatusPill } from '@/components/StatusPill';
-import { seasonTitle, extractSeasonNumber, canonicalSort } from '@/lib/util';
+import { seasonTitle, extractSeasonNumber, canonicalSort, fmtDateOnly } from '@/lib/util';
 import SectionLabel from '@/components/SectionLabel';
 
 export const metadata = {
@@ -90,10 +90,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
 function UpcomingSeasonRow({ season, leaderboard, needsSignup }: { season: Season; leaderboard: LeaderboardRowWithId[]; needsSignup: boolean }) {
   const meta = [
     leaderboard.length > 0 && `${leaderboard.length} players`,
-    season.start_date &&
-      new Date(season.start_date + 'T00:00:00Z').toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
-      }),
+    season.start_date && fmtDateOnly(season.start_date),
   ].filter(Boolean).join(' · ');
 
   return (

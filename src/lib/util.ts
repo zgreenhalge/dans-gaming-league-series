@@ -202,6 +202,18 @@ export function fmtWindowDay(dateStr: string): string {
   return fmtWindowDate(new Date(`${dateStr}T12:00:00Z`));
 }
 
+/** A `YYYY-MM-DD` date string (a `seasons.start_date`) with its year: `Nov 5, 2026`, or with `withWeekday`,
+ *  `Thu, Nov 5, 2026`. Read in UTC, so the day never shifts with the viewer's timezone. */
+export function fmtDateOnly(dateStr: string, withWeekday = false): string {
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: withWeekday ? 'short' : undefined,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** A rate as a whole-number percent (`"43%"`), or `—` when the denominator is zero. */
 export function fmtPct(num: number, den: number): string {
   if (den === 0) return '—';

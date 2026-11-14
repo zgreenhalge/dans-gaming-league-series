@@ -21,7 +21,7 @@ import { SCRIM_LEAGUE_CLEARANCE_MS } from './scrim-schedule';
 import { fetchWorkshopItem } from './workshop';
 
 /** `match_server_state.server_state` values while a match holds the server. */
-const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down']);
+export const RUNNING_SERVER_STATES = new Set(['provisioning', 'live', 'tearing_down']);
 
 type ScrimMatchState = { final_score: string | null; server_state: string | null };
 
