@@ -55,7 +55,7 @@ export function AdminConsole({
   season: PanelData<{
     allSeasons: SeasonSummary[];
     gauntletsInProgress: GauntletRow[];
-    seasonOpsErrors: OpsErrorItem[];
+    seasonOpsErrors: PanelData<OpsErrorItem[]>;
     nextSeasonName: string;
   }>;
 }) {

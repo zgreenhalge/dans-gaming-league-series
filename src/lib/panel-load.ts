@@ -34,3 +34,10 @@ export async function loadPanel<T>(label: string, read: () => Promise<T>): Promi
     return { ok: false, error: message, label };
   }
 }
+
+/** Derives one panel's data from another's: `derive` runs on a loaded panel, and a failed one passes
+ *  its error through under `label` — so a panel built on another's read fails visibly with it instead
+ *  of rendering as if that read were empty. */
+export function mapPanel<T, U>(panel: PanelData<T>, label: string, derive: (data: T) => U): PanelData<U> {
+  return panel.ok ? { ok: true, data: derive(panel.data) } : { ...panel, label };
+}

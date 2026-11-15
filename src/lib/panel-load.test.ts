@@ -6,7 +6,7 @@
 
 import { describe, expect, test, vi } from 'vitest';
 import { redirect } from 'next/navigation';
-import { loadPanel } from './panel-load';
+import { loadPanel, mapPanel } from './panel-load';
 
 describe('loadPanel', () => {
   test('a resolved read wraps as { ok: true, data }', async () => {
@@ -34,5 +34,17 @@ describe('loadPanel', () => {
     await expect(loadPanel('players', async () => redirect('/'))).rejects.toMatchObject({
       digest: expect.stringContaining('NEXT_REDIRECT'),
     });
+  });
+});
+
+describe('mapPanel', () => {
+  test('a loaded panel is derived from', () => {
+    expect(mapPanel({ ok: true, data: [1, 2, 3] }, 'odds', (xs) => xs.filter((x) => x % 2))).toEqual({ ok: true, data: [1, 3] });
+  });
+
+  test('a failed panel keeps its error under the new label and never runs derive', () => {
+    const derive = vi.fn();
+    expect(mapPanel({ ok: false, error: 'boom', label: 'players' }, 'odds', derive)).toEqual({ ok: false, error: 'boom', label: 'odds' });
+    expect(derive).not.toHaveBeenCalled();
   });
 });

@@ -9,14 +9,14 @@ import {
   getAdminPlayers,
   getMapsForWorkshopPicker,
   getSeasons,
-  type OpsErrorRow,
   getGauntletSeasonProgress,
 } from '@/lib/queries';
 import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
 import { listConfigSets } from '@/lib/dathost-config';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { buildRegularToGauntletMap, nextRegularSeasonName } from '@/lib/util';
-import { loadPanel } from '@/lib/panel-load';
+import { loadPanel, mapPanel, type PanelData } from '@/lib/panel-load';
+import type { OpsErrorItem } from '@/components/OpsErrorList';
 import type { GauntletRow } from '@/components/GauntletLifecycleList';
 
 export const metadata = {
@@ -27,15 +27,18 @@ export const metadata = {
 // Live operational surface — don't cache.
 export const dynamic = 'force-dynamic';
 
-/** The Season panel's data: season lifecycle + gauntlet pairing, plus the season-scoped ops errors. */
-async function loadSeasonPanel(opsErrorsRead: Promise<OpsErrorRow[]>) {
+/** The Season panel's data: season lifecycle + gauntlet pairing, plus the season-scoped ops errors,
+ *  which are their own `PanelData` so a failed ops-errors read leaves the seasons rendering. */
+async function loadSeasonPanel(opsErrorsPanel: Promise<PanelData<OpsErrorItem[]>>) {
   const seasons = await getSeasons();
   // Season lifecycle + gauntlet pairing — same derivation the old /admin/seasons/gauntlet page used.
   const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
   const gauntletSeasons = seasons.filter((s) => s.is_gauntlet);
   const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
-  const seasonOpsErrors = (await opsErrorsRead).filter((e) => e.entityType === 'season');
+  const seasonOpsErrors = mapPanel(await opsErrorsPanel, 'season ops errors', (errors) =>
+    errors.filter((e) => e.entityType === 'season'),
+  );
   // A paired gauntlet stays "in progress" for the admin console until it archives — a regular season
   // itself archives the moment its last match is played, typically before its gauntlet has even
   // started, so gating this on the regular season's own status would strand its build/seed/reset and
@@ -100,8 +103,8 @@ export default async function AdminPage() {
   const adminClient = getAdminClient();
   // Each panel's reads are isolated by `loadPanel()`: a failed read renders as an inline error in
   // its own panel while the rest of the console stays usable. The ops-errors read feeds both the
-  // Activity feed and the Season panel, so it runs once and both wrap the same promise.
-  const opsErrorsRead = getOpsErrors();
+  // Activity feed and the Season panel, so it runs once and both use the same `PanelData`.
+  const opsErrorsPanel = loadPanel('ops errors', getOpsErrors);
   const [serverActive, serverPickers, jobs, opsErrors, opsErrorHistory, matches, players, season] = await Promise.all([
     loadPanel('the server status', () => getActiveServerMatch(adminClient)),
     loadPanel('the config-set and map pickers', async () => {
@@ -109,11 +112,11 @@ export default async function AdminPage() {
       return { configSets, maps };
     }),
     loadPanel('background jobs', getBackgroundJobs),
-    loadPanel('ops errors', () => opsErrorsRead),
+    opsErrorsPanel,
     loadPanel('failure history', getOpsErrorHistory),
     loadPanel('matches', getAdminMatches),
     loadPanel('players', getAdminPlayers),
-    loadPanel('seasons', () => loadSeasonPanel(opsErrorsRead)),
+    loadPanel('seasons', () => loadSeasonPanel(opsErrorsPanel)),
   ]);
 
   return (
