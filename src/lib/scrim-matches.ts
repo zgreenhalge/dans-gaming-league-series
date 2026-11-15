@@ -222,11 +222,14 @@ export async function discardScrimMatch(db: SupabaseClient, matchId: number, rev
 }
 
 /** Claims a scrim match's start from `revision` (`claim_scrim_match_start()`), bumping it so a change
- *  or discard sent from the version before the start is refused. Throws `ScrimMatchChangedError` when
- *  the match has moved on. Returns the new revision. */
-export async function claimScrimMatchStart(db: SupabaseClient, matchId: number, revision: number): Promise<number> {
+ *  or discard sent from the version before the start is refused. A match whose last start failed to
+ *  boot is claimed from its current revision whatever `revision` is (`null` included), so a retry
+ *  needn't know the revision the failed start left. Throws `ScrimMatchChangedError` when the match has
+ *  moved on, and `ScrimMatchConflictError` once it is scored or already starting or running. Returns
+ *  the new revision. */
+export async function claimScrimMatchStart(db: SupabaseClient, matchId: number, revision: number | null): Promise<number> {
   const { data, error } = await db.rpc('claim_scrim_match_start', { p_match_id: matchId, p_revision: revision });
-  if (error) throw scrimMatchRpcError(error.message);
+  if (error) throw scrimMatchRpcError(error.message, { 'scrim-match-locked': SCRIM_MATCH_LOCKED });
   return data as number;
 }
 

@@ -42,6 +42,26 @@ test('parseScrimRevision: a non-negative integer', () => {
   for (const bad of [undefined, null, -1, 1.5, '3']) assert.equal(parseScrimRevision(bad), null, String(bad));
 });
 
+test('claimScrimMatchStart: a failed boot is claimed again from the current revision, any other state needs the one it saw', async () => {
+  const db: FakeDb = {
+    matches: [{ id: 1, scrim_night_id: 5, scrim_revision: 3, final_score: null }],
+    match_server_state: [{ match_id: 1, server_state: 'idle' }],
+  };
+  const client = createFakeSupabaseClient(db, scrimMatchRpcs) as never;
+  await assert.rejects(claimScrimMatchStart(client, 1, null), ScrimMatchChangedError, 'no revision, not failed');
+  db.match_server_state[0].server_state = 'failed';
+  assert.equal(await claimScrimMatchStart(client, 1, null), 4, 'failed: claimed from the current revision with none sent');
+  assert.equal(db.match_server_state[0].server_state, 'provisioning', 'the claim takes the match out of failed');
+  await assert.rejects(claimScrimMatchStart(client, 1, null), ScrimMatchConflictError, 'a second retry is refused, not booted twice');
+  db.match_server_state[0].server_state = 'failed';
+  assert.equal(await claimScrimMatchStart(client, 1, 0), 5, 'failed: a stale revision is ignored');
+  db.match_server_state[0].server_state = 'provisioning';
+  await assert.rejects(claimScrimMatchStart(client, 1, 5), ScrimMatchConflictError, 'already starting');
+  db.match_server_state[0].server_state = 'failed';
+  db.matches[0].final_score = '13-9';
+  await assert.rejects(claimScrimMatchStart(client, 1, null), ScrimMatchConflictError, 'scored');
+});
+
 test('updateScrimMatch / discardScrimMatch / claimScrimMatchStart: each bumps or checks the revision; a stale one is refused as changed', async () => {
   const db: FakeDb = {
     matches: [{ id: 1, scrim_night_id: 5, scrim_revision: 0, scrim_side_choice: 'knife', skins_starting_side: null, final_score: null }],

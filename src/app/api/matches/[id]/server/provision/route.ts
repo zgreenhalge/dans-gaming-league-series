@@ -6,7 +6,8 @@
 // match (a pug, someone warming up) — the confirmation the match panel sends after a forceable
 // `server_occupied` 409. Without it, `provisionMatchServer()` refuses a live server. A scrim match's
 // body is `{ revision }` instead: the match's revision as the starter saw it (409 `match_changed`
-// when the lobby changed it since).
+// when the lobby changed it since). A scrim match whose boot failed is retried with no body, from
+// whatever its revision now is.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
@@ -17,6 +18,7 @@ import {
   findServerOccupant,
   provisionErrorHandler,
   getActiveServerMatch,
+  fetchServerStateRow,
   teardownMatchServer,
   liveServerOutsideMatch,
   occupancyMessage,
@@ -68,7 +70,10 @@ export async function POST(
   const nightId = await scrimNightIdOf(getAdminClient(), matchId);
   const isScrim = nightId !== null;
   const revision = isScrim ? parseScrimRevision(body?.revision) : null;
-  if (isScrim && revision === null) {
+  // A start whose boot failed is retried without a revision (the admin ops list sends none): the
+  // claim reads the current one.
+  const retryingFailedStart = isScrim && revision === null && (await fetchServerStateRow(getAdminClient(), matchId))?.server_state === 'failed';
+  if (isScrim && revision === null && !retryingFailedStart) {
     return NextResponse.json({ error: SCRIM_REVISION_INVALID }, { status: 400 });
   }
   if (isScrim) {
@@ -139,9 +144,14 @@ export async function POST(
   // becomes its starting side now, before the server boots and loads its config — so a random side is
   // only flipped as it starts.
   try {
-    if (revision !== null) await claimScrimMatchStart(getAdminClient(), matchId, revision);
+    if (isScrim) await claimScrimMatchStart(getAdminClient(), matchId, revision);
     await applyScrimSideChoice(getAdminClient(), matchId);
   } catch (err) {
+    // The claim took a failed match to `provisioning`; with no boot coming, put it back so it can be retried.
+    if (retryingFailedStart) {
+      const { error } = await getAdminClient().from('match_server_state').update({ server_state: 'failed' }).eq('match_id', matchId).eq('server_state', 'provisioning');
+      if (error) console.error(`Restoring failed server state for match ${matchId} failed:`, error.message);
+    }
     const conflict = scrimConflictResponse(err);
     if (conflict) return conflict;
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Setting the starting side failed' }, { status: 500 });
