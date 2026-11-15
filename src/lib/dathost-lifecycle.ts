@@ -504,7 +504,8 @@ export interface ActiveServerMatch {
 /**
  * The match currently holding the shared server (reconciled against real DatHost state), or `null` if
  * it's idle. For the admin server console (#134/#135) — the single-server model means at most
- * one occupant. Returns `null` when hosting isn't configured. `preFetchedServer` is passed through to
+ * one occupant. Returns `null` when hosting isn't configured. Rejects when the `match_server_state`
+ * read fails — `null` means "idle", never "unreadable". `preFetchedServer` is passed through to
  * `getReconciledServerState()`.
  */
 export async function getActiveServerMatch(
@@ -519,7 +520,8 @@ export async function getActiveServerMatch(
     .eq('dathost_server_id', serverId)
     .in('server_state', OCCUPYING_STATES as unknown as string[])
     .order('server_started_at', { ascending: false })
-    .limit(1);
+    .limit(1)
+    .throwOnError();
   const rows = (data ?? []) as unknown as (MatchServerStateRow & {
     match_id: number;
     matches: {
