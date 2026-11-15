@@ -23,6 +23,10 @@ export async function GET(
   if (!access.ok) return accessDenied(access);
 
   // Reconciles a stale `live` against real DatHost state (#135) so the UI never offers a dead server.
-  const view = await getReconciledServerState(getAdminClient(), matchId);
-  return NextResponse.json(view);
+  try {
+    const view = await getReconciledServerState(getAdminClient(), matchId);
+    return NextResponse.json(view);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Reading the server state failed' }, { status: 500 });
+  }
 }
