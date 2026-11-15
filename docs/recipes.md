@@ -283,6 +283,9 @@ Every `public` table has row level security on, so a new table is created closed
 5. Regenerate `src/lib/database.types.ts` and document the table in
    [`architecture.md`](./architecture.md)'s Database section.
 
+A migration that adds a function or trigger also adds a pgTAP test for it under
+`supabase/tests/database/` ([`e2e.md`](./e2e.md#database-tests-pgtap)).
+
 ## Recipe: Add a new map
 
 Pure asset task, no query changes:
