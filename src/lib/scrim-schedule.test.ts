@@ -12,6 +12,8 @@ import {
   hasScrimNightStarted,
   isScrimCheckInOpen,
   leagueMatchesDuring,
+  scrimLeagueWindow,
+  scrimNightLeagueWindow,
   parseCommitment,
   scrimNightBoundaries,
   scrimNightEnd,
@@ -130,6 +132,11 @@ test('leagueMatchesDuring: an active night reaches the clearance past its idle e
   assert.deepEqual(leagueMatchesDuring(active, [m(lateEnd - 1, 1), m(lateEnd, 2)]).map((x) => x.id), [1]);
   const ended = { ...NIGHT, endedAt: at(HOUR).toISOString() };
   assert.deepEqual(leagueMatchesDuring(ended, [m(HOUR - 1, 1), m(HOUR + SCRIM_LEAGUE_CLEARANCE_MS - 1, 2), m(HOUR + SCRIM_LEAGUE_CLEARANCE_MS, 3)]).map((x) => x.id), [1, 2]);
+});
+
+test('scrimLeagueWindow / scrimNightLeagueWindow: the clearance either side of the play span', () => {
+  assert.deepEqual(scrimLeagueWindow(1_000_000, 5_000_000), [1_000_000 - SCRIM_LEAGUE_CLEARANCE_MS, 5_000_000 + SCRIM_LEAGUE_CLEARANCE_MS]);
+  assert.deepEqual(scrimNightLeagueWindow(NIGHT), scrimLeagueWindow(Date.parse(NIGHT.startsAt), scrimNightEnd(NIGHT)));
 });
 
 test('scrimNightEnd: endedAt when set (never before the start), else idle after the latest activity', () => {

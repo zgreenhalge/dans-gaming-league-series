@@ -86,13 +86,24 @@ export function scrimNightBoundaries(night: ScrimNight): number[] {
  *  20 minutes, and a league match always gets the one shared server. */
 export const SCRIM_LEAGUE_CLEARANCE_MS = 30 * 60 * 1000;
 
-/** The scheduled league matches that fall in `night` — from `SCRIM_LEAGUE_CLEARANCE_MS` before it
- *  starts until `SCRIM_LEAGUE_CLEARANCE_MS` after its projected end (`scrimNightEnd()`) — soonest first:
+/** The `[startMs, endMs]` span, in epoch ms, in which a scheduled league match conflicts with scrim
+ *  play running from `fromMs` to `toMs`: `SCRIM_LEAGUE_CLEARANCE_MS` before the first until that long
+ *  after the last. The one definition behind the night page's league-match list
+ *  (`scrimNightLeagueWindow()`) and the server-start block (`leagueMatchBlockingScrim()`). */
+export function scrimLeagueWindow(fromMs: number, toMs: number): [number, number] {
+  return [fromMs - SCRIM_LEAGUE_CLEARANCE_MS, toMs + SCRIM_LEAGUE_CLEARANCE_MS];
+}
+
+/** `scrimLeagueWindow()` over `night`, from its start to its projected end (`scrimNightEnd()`). */
+export function scrimNightLeagueWindow(night: ScrimNight): [number, number] {
+  return scrimLeagueWindow(Date.parse(night.startsAt), scrimNightEnd(night));
+}
+
+/** The scheduled league matches that fall in `night`'s `scrimNightLeagueWindow()`, soonest first:
  *  the server breaks the lobby shows. A match just past the end still blocks the night's last scrim
  *  match, so it counts. */
 export function leagueMatchesDuring(night: ScrimNight, matches: ScheduledMatchRef[]): ScheduledMatchRef[] {
-  const start = Date.parse(night.startsAt) - SCRIM_LEAGUE_CLEARANCE_MS;
-  const end = scrimNightEnd(night) + SCRIM_LEAGUE_CLEARANCE_MS;
+  const [start, end] = scrimNightLeagueWindow(night);
   return matches
     .filter((m) => {
       const t = Date.parse(m.scheduledAt);
