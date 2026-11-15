@@ -162,8 +162,7 @@ export function ServerConsolePanel({
     setStopping(false);
   };
 
-  // Defaults to the first config set, derived rather than seeded so it still applies when the pickers
-  // load after the first render (a failed read that later succeeds).
+  // The chosen config set defaults to the first one the pickers offer.
   const [chosenConfigSet, setConfigSet] = useState('');
   const configSet = chosenConfigSet || configSets[0]?.key || '';
   const [mapChoice, setMapChoice] = useState('');
@@ -693,46 +692,46 @@ export function ServerConsolePanel({
       >
         <PanelGate panel={pickers}>
           {() => (
-          <div className="flex flex-col gap-2">
-            <LaunchOptionsPicker
-              configSets={configSets}
-              configSet={configSet}
-              onConfigSetChange={setConfigSet}
-              maps={maps}
-              mapChoice={mapChoice}
-              onMapChoiceChange={setMapChoice}
-              customMapId={customMapId}
-              onCustomMapIdChange={setCustomMapId}
-              customMapInvalid={customMapInvalid}
-              playout={playout}
-              onPlayoutChange={setPlayout}
-              friendly={friendly}
-              onFriendlyChange={setFriendly}
-            />
-            <div className="flex gap-2">
-              {canStart && !starting && !stopping && (
+            <div className="flex flex-col gap-2">
+              <LaunchOptionsPicker
+                configSets={configSets}
+                configSet={configSet}
+                onConfigSetChange={setConfigSet}
+                maps={maps}
+                mapChoice={mapChoice}
+                onMapChoiceChange={setMapChoice}
+                customMapId={customMapId}
+                onCustomMapIdChange={setCustomMapId}
+                customMapInvalid={customMapInvalid}
+                playout={playout}
+                onPlayoutChange={setPlayout}
+                friendly={friendly}
+                onFriendlyChange={setFriendly}
+              />
+              <div className="flex gap-2">
+                {canStart && !starting && !stopping && (
+                  <button
+                    onClick={() => startServer()}
+                    disabled={startStopBusy || !configSet || !resolvedMapId}
+                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
+                  >
+                    {startStopBusy ? '…' : 'Start'}
+                  </button>
+                )}
                 <button
-                  onClick={() => startServer()}
-                  disabled={startStopBusy || !configSet || !resolvedMapId}
-                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
+                  onClick={() => applyConfig()}
+                  disabled={!configSet || !resolvedMapId || applyBusy}
+                  title="Reassert settings on the server without starting it"
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
                 >
-                  {startStopBusy ? '…' : 'Start'}
+                  {applyBusy ? 'Applying…' : 'Apply config set'}
                 </button>
+              </div>
+              <ErrorText error={applyError} />
+              {applySuccess && !applyError && (
+                <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
               )}
-              <button
-                onClick={() => applyConfig()}
-                disabled={!configSet || !resolvedMapId || applyBusy}
-                title="Reassert settings on the server without starting it"
-                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-              >
-                {applyBusy ? 'Applying…' : 'Apply config set'}
-              </button>
             </div>
-            <ErrorText error={applyError} />
-            {applySuccess && !applyError && (
-              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
-            )}
-          </div>
           )}
         </PanelGate>
 
