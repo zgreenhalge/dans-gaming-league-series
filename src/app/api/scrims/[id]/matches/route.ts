@@ -6,13 +6,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from '@/lib/queries';
 import { pickNextScrimMatch } from '@/lib/scrim-matchmaking';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { queueScrimMatches } from '@/lib/scrim-matches';
-import { scrimConflictResponse } from '@/lib/scrim-route-errors';
+import { scrimWriteFailed } from '@/lib/scrim-route-errors';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireScrimNightMatchAccess((await params).id);
@@ -32,8 +32,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const [matchId] = await queueScrimMatches(getAdminClient(), night.id, [plan], maps);
     return NextResponse.json({ ok: true, matchId }, { status: 201 });
   } catch (err) {
-    const conflict = scrimConflictResponse(err);
-    if (conflict) return conflict;
-    return writeFailed(err, 'Making the match failed');
+    return scrimWriteFailed(err, 'Making the match failed');
   }
 }

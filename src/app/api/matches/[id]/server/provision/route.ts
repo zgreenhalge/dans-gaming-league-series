@@ -38,7 +38,7 @@ import {
   scrimNightIdOf,
   SCRIM_REVISION_INVALID,
 } from '@/lib/scrim-matches';
-import { scrimConflictResponse } from '@/lib/scrim-route-errors';
+import { scrimWriteFailed } from '@/lib/scrim-route-errors';
 import { SCRIM_LEAGUE_CLEARANCE_MS } from '@/lib/scrim-schedule';
 import { getScheduledUnplayedMatches, getScrimNightMatches } from '@/lib/queries';
 
@@ -152,9 +152,7 @@ export async function POST(
       const { error } = await getAdminClient().from('match_server_state').update({ server_state: 'failed' }).eq('match_id', matchId).eq('server_state', 'provisioning');
       if (error) console.error(`Restoring failed server state for match ${matchId} failed:`, error.message);
     }
-    const conflict = scrimConflictResponse(err);
-    if (conflict) return conflict;
-    return writeFailed(err, 'Setting the starting side failed');
+    return scrimWriteFailed(err, 'Setting the starting side failed');
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { writeFailed } from './access-control';
 import { SCRIM_MATCH_CHANGED_CODE, ScrimMatchChangedError, ScrimMatchConflictError } from './scrim-matches';
 
 /** The 409 for a refused scrim match write, or `null` for any other error, which the caller answers
@@ -11,4 +12,9 @@ export function scrimConflictResponse(err: unknown): NextResponse | null {
   }
   if (err instanceof ScrimMatchConflictError) return NextResponse.json({ error: err.message }, { status: 409 });
   return null;
+}
+
+/** The response for a scrim write that threw: the 409 for a refused write, else `writeFailed()`'s 500. */
+export function scrimWriteFailed(err: unknown, fallback: string): NextResponse {
+  return scrimConflictResponse(err) ?? writeFailed(err, fallback);
 }

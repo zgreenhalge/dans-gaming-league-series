@@ -21,7 +21,7 @@ export class PlayerIdentityTakenError extends Error {
 }
 
 /** The error a failed `players` write throws. A unique violation (`23505`) becomes a
- *  `PlayerIdentityTakenError`; any other failure is rethrown as the `Error` the client rejected with. */
+ *  `PlayerIdentityTakenError`; any other failure is passed through unchanged. */
 function identityWriteError(e: unknown, takenMessage?: string): unknown {
   if ((e as { code?: string } | null)?.code === '23505') return new PlayerIdentityTakenError(takenMessage);
   return e;

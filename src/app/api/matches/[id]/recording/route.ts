@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMatchAccess } from "@/lib/match-access";
-import { accessDenied } from "@/lib/access-control";
+import { accessDenied, writeFailed } from "@/lib/access-control";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { setMatchRecording } from "@/lib/match-day";
 import { parseRouteId } from "@/lib/util";
-import { writeFailed } from '@/lib/access-control';
 
 // Set or clear a match's recording_url. Editable by admins and in-match players — the same
 // gate the score route uses, since a recording is part of a match's result.

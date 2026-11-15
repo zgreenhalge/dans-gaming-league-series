@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
 import { parseRouteId } from '@/lib/util';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { workshopIdFromInput } from '@/lib/workshop';
@@ -30,12 +30,7 @@ import {
   SCRIM_SIDE_CHOICES,
   type ScrimSideChoice,
 } from '@/lib/scrim-matches';
-import { scrimConflictResponse } from '@/lib/scrim-route-errors';
-
-/** The response for a write that threw: 409 for a refused write, 500 for anything else. */
-function scrimWriteFailed(err: unknown, fallback: string): NextResponse {
-  return scrimConflictResponse(err) ?? writeFailed(err, fallback);
-}
+import { scrimWriteFailed } from '@/lib/scrim-route-errors';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const matchId = parseRouteId((await params).id);

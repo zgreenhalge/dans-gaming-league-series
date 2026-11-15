@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
 import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
-import { writeFailed } from '@/lib/access-control';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
 import { addSuperlative, removeSuperlative, renameSuperlative, reorderSuperlatives, SuperlativeRacedError } from '@/lib/superlative-writes';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 
 const LOCKED = { error: 'Voting has opened — superlatives can no longer be changed' };
 
