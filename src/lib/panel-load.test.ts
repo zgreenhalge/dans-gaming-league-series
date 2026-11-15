@@ -13,16 +13,18 @@ describe('loadPanel', () => {
     expect(await loadPanel('players', async () => [1, 2])).toEqual({ ok: true, data: [1, 2] });
   });
 
-  test('a rejected read becomes { ok: false, error } and is logged', async () => {
+  test('a rejected read becomes { ok: false, error, label } and is logged under the label', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      expect(await loadPanel('players', () => Promise.reject(new Error('boom')))).toEqual({ ok: false, error: 'boom' });
+      expect(await loadPanel('players', () => Promise.reject(new Error('boom')))).toEqual({ ok: false, error: 'boom', label: 'players' });
       expect(await loadPanel('players', () => Promise.reject({ code: 'X', message: 'connection reset' }))).toEqual({
         ok: false,
         error: 'connection reset',
+        label: 'players',
       });
-      expect(await loadPanel('players', () => Promise.reject('plain'))).toEqual({ ok: false, error: 'plain' });
+      expect(await loadPanel('players', () => Promise.reject('plain'))).toEqual({ ok: false, error: 'plain', label: 'players' });
       expect(log).toHaveBeenCalledTimes(3);
+      expect(log.mock.calls[0][0]).toBe('players failed to load:');
     } finally {
       log.mockRestore();
     }

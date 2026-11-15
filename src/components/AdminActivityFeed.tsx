@@ -474,15 +474,15 @@ export function AdminActivityFeed({
       </TabBar>
 
       {view === 'history' ? (
-        <PanelGate label="failure history" panel={opsErrorHistory}>
+        <PanelGate panel={opsErrorHistory}>
           {(rows) => <HistoryTable rows={rows} />}
         </PanelGate>
       ) : (
         <>
           {(!jobsPanel.ok || !opsErrorsPanel.ok) && (
             <div className="flex flex-col gap-2 mb-2">
-              {!jobsPanel.ok && <PanelError label="background jobs" error={jobsPanel.error} />}
-              {!opsErrorsPanel.ok && <PanelError label="ops errors" error={opsErrorsPanel.error} />}
+              {!jobsPanel.ok && <PanelError failure={jobsPanel} />}
+              {!opsErrorsPanel.ok && <PanelError failure={opsErrorsPanel} />}
             </div>
           )}
           <div className="flex items-center gap-2 mb-2 flex-wrap">

@@ -103,7 +103,7 @@ export default async function AdminPage() {
   // Activity feed and the Season panel, so it runs once and both wrap the same promise.
   const opsErrorsRead = getOpsErrors();
   const [server, jobs, opsErrors, opsErrorHistory, matches, players, season] = await Promise.all([
-    loadPanel('server panel', async () => {
+    loadPanel('the server panel', async () => {
       const [active, configSets, maps] = await Promise.all([
         getActiveServerMatch(adminClient),
         listConfigSets(adminClient),
@@ -113,7 +113,7 @@ export default async function AdminPage() {
     }),
     loadPanel('background jobs', getBackgroundJobs),
     loadPanel('ops errors', () => opsErrorsRead),
-    loadPanel('ops error history', getOpsErrorHistory),
+    loadPanel('failure history', getOpsErrorHistory),
     loadPanel('matches', getAdminMatches),
     loadPanel('players', getAdminPlayers),
     loadPanel('seasons', () => loadSeasonPanel(opsErrorsRead)),

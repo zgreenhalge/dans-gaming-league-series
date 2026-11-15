@@ -2,10 +2,10 @@
 // succeeded, an inline error box when it failed — so one broken read leaves the other panels usable.
 
 import type { ReactNode } from 'react';
-import type { PanelData } from '@/lib/panel-load';
+import type { PanelData, PanelFailure } from '@/lib/panel-load';
 import ErrorText from './ErrorText';
 
-export function PanelError({ label, error }: { label: string; error: string }) {
+export function PanelError({ failure: { label, error } }: { failure: PanelFailure }) {
   return (
     <div role="alert" className="border border-[var(--color-accent-red-border)] bg-[var(--color-accent-red-bg)] rounded px-3 py-2.5">
       <div className="font-display text-[13px] font-semibold">Couldn&apos;t load {label}</div>
@@ -14,14 +14,6 @@ export function PanelError({ label, error }: { label: string; error: string }) {
   );
 }
 
-export function PanelGate<T>({
-  label,
-  panel,
-  children,
-}: {
-  label: string;
-  panel: PanelData<T>;
-  children: (data: T) => ReactNode;
-}) {
-  return panel.ok ? <>{children(panel.data)}</> : <PanelError label={label} error={panel.error} />;
+export function PanelGate<T>({ panel, children }: { panel: PanelData<T>; children: (data: T) => ReactNode }) {
+  return panel.ok ? <>{children(panel.data)}</> : <PanelError failure={panel} />;
 }

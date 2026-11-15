@@ -7,11 +7,16 @@ import { unstable_rethrow } from 'next/navigation';
 // Next.js control-flow errors (redirect, notFound, request-time bailouts) are rethrown, not shown.
 // The failure is still surfaced — in the panel, and in the server log — never dropped.
 
-/** One panel's loaded data, or the message of the read that failed. Plain data, so it crosses the
- *  server → client component boundary. */
-export type PanelData<T> = { ok: true; data: T } | { ok: false; error: string };
+/** A failed panel read: the error message and the panel's `label`, the one name the log line and the
+ *  on-screen "Couldn't load {label}" both use. */
+export type PanelFailure = { ok: false; error: string; label: string };
 
-/** Runs `read` and wraps its result; a rejection becomes `{ ok: false, error }` and is logged.
+/** One panel's loaded data, or the failure of the read. Plain data, so it crosses the
+ *  server → client component boundary. */
+export type PanelData<T> = { ok: true; data: T } | PanelFailure;
+
+/** Runs `read` and wraps its result; a rejection becomes `{ ok: false, error, label }` and is logged.
+ *  `label` names the panel as it reads after "Couldn't load" ("the server panel", "matches").
  *  Next.js control-flow errors propagate untouched. */
 export async function loadPanel<T>(label: string, read: () => Promise<T>): Promise<PanelData<T>> {
   try {
@@ -25,7 +30,7 @@ export async function loadPanel<T>(label: string, read: () => Promise<T>): Promi
         : typeof err === 'object' && err !== null && 'message' in err
           ? String(err.message)
           : String(err);
-    console.error(`[admin] ${label} failed to load:`, err);
-    return { ok: false, error: message };
+    console.error(`${label} failed to load:`, err);
+    return { ok: false, error: message, label };
   }
 }

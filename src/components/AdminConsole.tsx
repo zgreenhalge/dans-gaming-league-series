@@ -88,7 +88,7 @@ export function AdminConsole({
 
   return (
     <div className="flex flex-col gap-6">
-      <PanelGate label="the server panel" panel={server}>
+      <PanelGate panel={server}>
         {(s) => <ServerConsolePanel active={s.active} configSets={s.configSets} maps={s.maps} />}
       </PanelGate>
 
@@ -122,19 +122,19 @@ export function AdminConsole({
           </TabBar>
 
           {manageType === 'match' && (
-            <PanelGate label="matches" panel={matches}>
+            <PanelGate panel={matches}>
               {(rows) => (
                 <MatchManager key={jumpNonce} matches={rows} initialQuery={jumpQueryFor('match')} demoMatchIds={demoMatchIds} />
               )}
             </PanelGate>
           )}
           {manageType === 'player' && (
-            <PanelGate label="players" panel={players}>
+            <PanelGate panel={players}>
               {(rows) => <PlayerManager key={jumpNonce} players={rows} selfId={selfId} initialQuery={jumpQueryFor('player')} />}
             </PanelGate>
           )}
           {manageType === 'season' && (
-            <PanelGate label="seasons" panel={season}>
+            <PanelGate panel={season}>
               {(data) => (
                 <SeasonManager
                   key={jumpNonce}

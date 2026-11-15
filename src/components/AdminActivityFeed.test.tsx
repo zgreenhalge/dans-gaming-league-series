@@ -33,7 +33,7 @@ describe('AdminActivityFeed', () => {
   test('a failed jobs read shows an inline error and still renders the ops errors', async () => {
     render(
       <AdminActivityFeed
-        jobs={{ ok: false, error: 'jobs table unreadable' }}
+        jobs={{ ok: false, error: 'jobs table unreadable', label: 'background jobs' }}
         opsErrors={{ ok: true, data: [opsError] }}
         opsErrorHistory={{ ok: true, data: [] }}
         onJump={noop}
@@ -48,7 +48,7 @@ describe('AdminActivityFeed', () => {
     render(
       <AdminActivityFeed
         jobs={{ ok: true, data: [] }}
-        opsErrors={{ ok: false, error: 'ops read failed' }}
+        opsErrors={{ ok: false, error: 'ops read failed', label: 'ops errors' }}
         opsErrorHistory={{ ok: true, data: [] }}
         onJump={noop}
       />,
@@ -61,7 +61,7 @@ describe('AdminActivityFeed', () => {
       <AdminActivityFeed
         jobs={{ ok: true, data: [] }}
         opsErrors={{ ok: true, data: [] }}
-        opsErrorHistory={{ ok: false, error: 'history failed' }}
+        opsErrorHistory={{ ok: false, error: 'history failed', label: 'failure history' }}
         onJump={noop}
       />,
     );
