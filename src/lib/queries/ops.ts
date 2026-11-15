@@ -55,7 +55,7 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
     ),
   );
   const { data: seasonRows } = seasonIds.length
-    ? await getAdminClient().from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
+    ? await getAdminClient().from('seasons').select('id, name, is_gauntlet').in('id', seasonIds).throwOnError()
     : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
   const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
   const seasonById = new Map(seasons.map((s) => [s.id, s]));
@@ -117,107 +117,104 @@ function buildJobSubject(
 /**
  * All background jobs across every pipeline, newest activity first. The admin jobs
  * dashboard (#145) is the single notification channel for anything that would otherwise
- * fail silently. Defensive: returns `[]` if `background_jobs` isn't present yet so the
- * page never hard-fails.
+ * fail silently. A failed read throws rather than returning `[]`, so an unreadable table never
+ * looks like "no jobs"; the caller decides how to show the failure (the admin console renders it
+ * inline in its own panel).
  */
 export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
-  try {
-    type JobRow = {
-      job_type: BackgroundJobType;
-      match_id: number | null;
-      map_id: number | null;
-      status: string | null;
-      stage: string | null;
-      error_message: string | null;
-      gh_run_url: string | null;
-      created_at: string | null;
-      updated_at: string | null;
-      started_at: string | null;
-      finished_at: string | null;
-    };
-    const jobRows = await fetchAllPages<JobRow>((from, to) =>
-      asPage(
-        getAdminClient()
-          .from('background_jobs')
-          .select(
-            'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
-          )
-          .in('job_type', [...BACKGROUND_JOB_TYPES])
-          .order('updated_at', { ascending: false })
-          .order('id')
-          .range(from, to),
+  type JobRow = {
+    job_type: BackgroundJobType;
+    match_id: number | null;
+    map_id: number | null;
+    status: string | null;
+    stage: string | null;
+    error_message: string | null;
+    gh_run_url: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+  };
+  const jobRows = await fetchAllPages<JobRow>((from, to) =>
+    asPage(
+      getAdminClient()
+        .from('background_jobs')
+        .select(
+          'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+        )
+        .in('job_type', [...BACKGROUND_JOB_TYPES])
+        .order('updated_at', { ascending: false })
+        .order('id')
+        .range(from, to),
+    ),
+  );
+
+  // Batch subject context: match → week → season for match-keyed jobs, and maps for radar.
+  const matchIds = Array.from(
+    new Set(jobRows.filter((j) => j.match_id != null).map((j) => j.match_id as number)),
+  );
+  const mapIds = Array.from(
+    new Set(jobRows.filter((j) => j.map_id != null).map((j) => j.map_id as number)),
+  );
+
+  const matchCtx = await loadMatchJobContext(matchIds);
+
+  const { data: mapRows } = mapIds.length
+    ? await getAdminClient().from('maps').select('id, name, slug').in('id', mapIds)
+    : { data: [] as { id: number; name: string; slug: string }[] };
+  const mapById = new Map(
+    ((mapRows ?? []) as { id: number; name: string; slug: string }[]).map((m) => [m.id, m]),
+  );
+
+  // Enrich staged demo-ingest jobs with parse warnings / quarantine flags from R2 (bounded:
+  // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
+  const staged = jobRows.filter(
+    (j) =>
+      j.job_type === DEMO_INGEST_JOB_TYPE &&
+      j.match_id != null &&
+      DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''),
+  );
+  const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[]; hasPayload: boolean }>();
+  await Promise.all(
+    staged.map(async (j) => {
+      const matchId = j.match_id as number;
+      try {
+        const buf = await getR2Object(demoResultKey(matchId));
+        if (!buf) return;
+        const r = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
+        detailByMatch.set(matchId, {
+          warnings: r.warnings ?? [],
+          quarantineFlags: r.quarantineFlags ?? [],
+          hasPayload: r.payload != null,
+        });
+      } catch {
+        /* corrupt/partial artifact — leave detail empty, status still shows */
+      }
+    }),
+  );
+
+  return jobRows.map((j): BackgroundJobRow => {
+    const detail = j.match_id != null ? detailByMatch.get(j.match_id) : undefined;
+    return {
+      jobType: j.job_type,
+      status: j.status ?? 'unknown',
+      stage: j.stage,
+      errorMessage: j.error_message,
+      ghRunUrl: j.gh_run_url,
+      createdAt: j.created_at,
+      updatedAt: j.updated_at,
+      startedAt: j.started_at,
+      finishedAt: j.finished_at,
+      subject: buildJobSubject(
+        { jobType: j.job_type, matchId: j.match_id, mapId: j.map_id },
+        matchCtx,
+        mapById,
       ),
-    );
-
-    // Batch subject context: match → week → season for match-keyed jobs, and maps for radar.
-    const matchIds = Array.from(
-      new Set(jobRows.filter((j) => j.match_id != null).map((j) => j.match_id as number)),
-    );
-    const mapIds = Array.from(
-      new Set(jobRows.filter((j) => j.map_id != null).map((j) => j.map_id as number)),
-    );
-
-    const matchCtx = await loadMatchJobContext(matchIds);
-
-    const { data: mapRows } = mapIds.length
-      ? await getAdminClient().from('maps').select('id, name, slug').in('id', mapIds)
-      : { data: [] as { id: number; name: string; slug: string }[] };
-    const mapById = new Map(
-      ((mapRows ?? []) as { id: number; name: string; slug: string }[]).map((m) => [m.id, m]),
-    );
-
-    // Enrich staged demo-ingest jobs with parse warnings / quarantine flags from R2 (bounded:
-    // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
-    const staged = jobRows.filter(
-      (j) =>
-        j.job_type === DEMO_INGEST_JOB_TYPE &&
-        j.match_id != null &&
-        DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''),
-    );
-    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[]; hasPayload: boolean }>();
-    await Promise.all(
-      staged.map(async (j) => {
-        const matchId = j.match_id as number;
-        try {
-          const buf = await getR2Object(demoResultKey(matchId));
-          if (!buf) return;
-          const r = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
-          detailByMatch.set(matchId, {
-            warnings: r.warnings ?? [],
-            quarantineFlags: r.quarantineFlags ?? [],
-            hasPayload: r.payload != null,
-          });
-        } catch {
-          /* corrupt/partial artifact — leave detail empty, status still shows */
-        }
-      }),
-    );
-
-    return jobRows.map((j): BackgroundJobRow => {
-      const detail = j.match_id != null ? detailByMatch.get(j.match_id) : undefined;
-      return {
-        jobType: j.job_type,
-        status: j.status ?? 'unknown',
-        stage: j.stage,
-        errorMessage: j.error_message,
-        ghRunUrl: j.gh_run_url,
-        createdAt: j.created_at,
-        updatedAt: j.updated_at,
-        startedAt: j.started_at,
-        finishedAt: j.finished_at,
-        subject: buildJobSubject(
-          { jobType: j.job_type, matchId: j.match_id, mapId: j.map_id },
-          matchCtx,
-          mapById,
-        ),
-        warnings: detail?.warnings ?? [],
-        quarantineFlags: detail?.quarantineFlags ?? [],
-        hasPayload: detail?.hasPayload ?? false,
-      };
-    });
-  } catch {
-    return [];
-  }
+      warnings: detail?.warnings ?? [],
+      quarantineFlags: detail?.quarantineFlags ?? [],
+      hasPayload: detail?.hasPayload ?? false,
+    };
+  });
 }
 
 export interface OpsErrorRow {
