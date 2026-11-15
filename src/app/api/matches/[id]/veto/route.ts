@@ -238,7 +238,16 @@ export async function PATCH(
   // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
   const merged = { ...m, ...update } as VetoFields;
   if (isVetoComplete(merged, isGauntlet)) {
-    const srv = await fetchServerStateRow(supabaseAdmin, matchId);
+    let srv: Awaited<ReturnType<typeof fetchServerStateRow>>;
+    try {
+      srv = await fetchServerStateRow(supabaseAdmin, matchId);
+    } catch (err) {
+      // The pick/ban is saved; only the decision to auto-provision is unknown, so it must not proceed.
+      return NextResponse.json(
+        { error: `Saved, but checking the match server failed: ${err instanceof Error ? err.message : 'unknown error'}` },
+        { status: 500 },
+      );
+    }
     const serverBusy = srv?.server_state === 'provisioning' || srv?.server_state === 'live';
     const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;
     const ctx = matchzyConfigContext(base, matchId);
