@@ -82,7 +82,7 @@ export class CurrentScrimNightError extends Error {
 /** Thrown by `reopenScrimNight()` when the night is not over (or is gone), e.g. a concurrent Reopen got there first. */
 export class ScrimNightNotOverError extends Error {
   constructor() {
-    super('That night is not over');
+    super('That night is still on');
     this.name = 'ScrimNightNotOverError';
   }
 }

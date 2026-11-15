@@ -2,7 +2,7 @@
 -- Run with `npx supabase test db` against the local stack (docs/e2e.md). Everything happens inside
 -- one transaction that rolls back, so the stack's data is untouched.
 begin;
-select plan(7);
+select plan(9);
 
 -- Fixtures: any night already on the local stack is cleared first, inside the transaction.
 --   9001 started 2 hours ago, ended by hand an hour ago  (the night under test)
@@ -28,6 +28,12 @@ select throws_ok($$select reopen_scrim_night(9001)$$, 'P0001', 'scrim-night-not-
 select is((select ended_at is null from scrim_nights where id = 9001), true, 'a refused reopen changes nothing');
 delete from scrim_nights;
 select throws_ok($$select reopen_scrim_night(9001)$$, 'P0001', 'scrim-night-not-over', 'a missing night is refused');
+
+-- A night gone idle (never ended by hand, nothing active for over an hour) is over too.
+delete from scrim_nights;
+insert into scrim_nights (id, starts_at, ended_at, last_active_at) values (9004, now() - interval '5 hours', null, now() - interval '3 hours');
+select lives_ok($$select reopen_scrim_night(9004)$$, 'an idle night is reopened');
+select is((select last_active_at > now() - interval '1 minute' from scrim_nights where id = 9004), true, 'reopening an idle night stamps last_active_at');
 
 select * from finish();
 rollback;

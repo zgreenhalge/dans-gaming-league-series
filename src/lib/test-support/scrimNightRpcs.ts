@@ -1,6 +1,7 @@
 /**
  * Test-local fakes for the `start_scrim_night` / `reopen_scrim_night` / `leave_scrim_night` Postgres
- * RPCs (`supabase/migrations/20261110120000_scrim_night_idle_end.sql`) — see fakeSupabase.ts's header
+ * RPCs (`supabase/migrations/20261110120000_scrim_night_idle_end.sql`; `reopen_scrim_night()` in
+ * `supabase/migrations/20261115120000_reopen_scrim_night_coded_refusal.sql`) — see fakeSupabase.ts's header
  * on why `.rpc()` needs a per-name fake. Mirrors each function's refusals as `FakeRpcError`s.
  */
 
