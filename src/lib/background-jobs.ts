@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dispatchWorkflow } from './gh-dispatch';
 import { JOB_IN_PROGRESS_STATUSES, isStale } from './jobs';
+import { recordOpsError } from './ops-errors';
 
 /** A denormalized status column mirroring a `background_jobs` row for cheap reads elsewhere (e.g.
  *  `matches.replay_status`), kept in sync alongside the job row. */
@@ -103,6 +104,39 @@ export async function recordJobStatus(
     { onConflict: `job_type,${key.column}` },
   );
   return error ? { error: error.message } : {};
+}
+
+/**
+ * Claim the `background_jobs` row for `(jobType, matchId)` exactly once, atomically. A plain
+ * check-then-act (SELECT for an in-flight row, then upsert) can't tell two concurrent deliveries of
+ * the same event apart — both would pass the check and both dispatch — so the claim itself is the
+ * check: `ignoreDuplicates` makes the INSERT land only if no row exists yet for
+ * `(job_type, match_id)`, and exactly one caller sees a non-empty result. Resolves `true` for that
+ * caller and `false` for every other (the job is already claimed, in flight or run once before).
+ * `fields` carries the initial `status`/`stage` the claimed row starts in.
+ *
+ * A failed claim write also resolves `false` — the caller has nothing to dispatch — after recording
+ * a `<jobType>_claim` ops error, so a dropped claim is visible to an admin rather than only logged.
+ */
+export async function claimJob(
+  admin: SupabaseClient,
+  jobType: string,
+  matchId: number,
+  fields: { status: string; stage: string },
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from('background_jobs')
+    .upsert(
+      { job_type: jobType, match_id: matchId, ...fields, error_message: null, created_at: now, updated_at: now },
+      { onConflict: 'job_type,match_id', ignoreDuplicates: true },
+    )
+    .select('match_id');
+  if (error) {
+    await recordOpsError(admin, 'match', matchId, `${jobType}_claim`, `Could not claim ${jobType} job: ${error.message}`);
+    return false;
+  }
+  return !!data && data.length > 0;
 }
 
 /** Bind `recordJobStatus` to a fixed `(jobType, key)`, throwing if the write fails — for a GitHub

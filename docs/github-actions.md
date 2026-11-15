@@ -48,9 +48,11 @@ lives in Actions.
      immediately un-stales the row — `started_at`/`created_at` aren't reliably reset per redispatch (and
      `demo_ingest`'s `created_at` is deliberately preserved across retries, see `getJobCreatedAt()`'s
      doc comment), so basing this on either would have a redispatched row reading stale again the
-     instant it lands, before the Action even starts. The atomic first-landing upsert some routes use
-     instead (and the auth check every route does) is the part that's genuinely per-route and stays
-     hand-written at the call site.
+     instant it lands, before the Action even starts. The atomic first-landing claim some routes use
+     instead is `claimJob()` (`src/lib/background-jobs.ts`): the first caller for a `(job_type,
+     match_id)` gets `true`, every other gets `false`, and a failed claim write is recorded as a
+     `<job_type>_claim` ops error. The auth check every route does is the part that's genuinely
+     per-route and stays hand-written at the call site.
    - claims the row (`recordJobStatus` in `src/lib/background-jobs.ts`) to `queued`, then dispatches
      the workflow via `dispatchAndRecordFailure`, which rolls the row — and a subject column
      (`matches.replay_status`, etc.), when given one — back to `failed` if the dispatch call itself
@@ -67,7 +69,7 @@ lives in Actions.
      the caller on a failed dispatch and never wrote a row to unwind), there's no rollback to do — call
      `dispatchWorkflow` directly and `recordJobStatus` only in the success branch. A third shape covers
      a claimed row where failure needs neither a rollback nor to reach the caller: `ingest/matchzy-log`'s
-     `demo_ingest` path claims `received` before dispatching, and on a failed dispatch just logs and
+     `demo_ingest` path claims `received` (via `claimJob()`) before dispatching, and on a failed dispatch just logs and
      leaves the row at `received` — the Action's own pull from DatHost hasn't even started yet at that
      point, so a stale `received` row is a correct "not started" state, not a wedge, and the manual
      `demo/dispatch` route is the
@@ -169,7 +171,7 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
 3. **Trigger** — a session-gated dispatch route (mirror `replay/dispatch`) or a machine-auth route
    reacting to a game-server event (mirror `ingest/matchzy-log`). Keep the route's own duplicate-guard,
    and claim/dispatch/rollback
-   through `src/lib/background-jobs.ts` (`recordJobStatus`, `advanceJobStatus`,
+   through `src/lib/background-jobs.ts` (`recordJobStatus`, `claimJob`, `advanceJobStatus`,
    `dispatchAndRecordFailure`) rather than re-upserting `background_jobs` by hand.
 4. **Status surface** — read via a new additive getter mirroring `getReplayJobState`; add a domain
    mirror column only if a hot page needs it.
