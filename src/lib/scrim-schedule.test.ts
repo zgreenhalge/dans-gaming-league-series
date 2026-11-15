@@ -108,11 +108,11 @@ test('parseCommitment: definite or maybe only', () => {
   assert.equal(parseCommitment('yes'), null);
 });
 
-test('leagueMatchesDuring: league matches from the clearance before the start until the clearance after the night's projected end, soonest first', () => {
+test('leagueMatchesDuring: league matches from the clearance before the start until the clearance after the projected end, soonest first', () => {
   const at = (offsetMs: number, id: number) => ({ id, label: `M${id}`, scheduledAt: at0(offsetMs) });
   const at0 = (offsetMs: number) => new Date(Date.parse(START) + offsetMs).toISOString();
   const matches = [
-    at(2 * 60 * 60 * 1000, 2),
+    at(HOUR / 2, 2),
     at(-SCRIM_LEAGUE_CLEARANCE_MS, 1),
     at(-SCRIM_LEAGUE_CLEARANCE_MS - 60_000, 0),
     at(SCRIM_NIGHT_IDLE_MS, 3),
@@ -120,7 +120,7 @@ test('leagueMatchesDuring: league matches from the clearance before the start un
     at(SCRIM_NIGHT_IDLE_MS + SCRIM_LEAGUE_CLEARANCE_MS, 5),
     at(SCRIM_NIGHT_SPAN_MS, 6),
   ];
-  assert.deepEqual(leagueMatchesDuring(NIGHT, matches).map((m) => m.id), [1, 2]);
+  assert.deepEqual(leagueMatchesDuring(NIGHT, matches).map((m) => m.id), [1, 2, 3, 4]);
 });
 
 test('leagueMatchesDuring: an active night reaches the clearance past its idle end; an ended one past endedAt', () => {

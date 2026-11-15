@@ -155,7 +155,8 @@ test('the status bar: the night\'s state, and the checked-in count while check-i
 
 test('the status bar: league matches during a night that has not ended, soonest first', () => {
   const scheduled = [
-    { id: 2, label: 'B', scheduledAt: '2026-01-01T22:00:00Z' },
+    { id: 2, label: 'B', scheduledAt: '2026-01-01T21:15:00Z' },
+    { id: 4, label: 'D', scheduledAt: '2026-01-01T21:30:00Z' },
     { id: 1, label: 'A', scheduledAt: '2026-01-01T20:30:00Z' },
     { id: 3, label: 'C', scheduledAt: '2026-01-03T20:00:00Z' },
   ];
