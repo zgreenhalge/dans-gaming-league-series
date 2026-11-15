@@ -380,7 +380,11 @@ Manage:
   disagree on which fields get re-asserted. It does *not* load a match config, so run **Apply match
   settings** after it if a match is mid-setup. The **Compare to live config** block runs
   `diffConfigSet` read-only for the selected config set (settings + every cfg file, cvar-by-cvar), the
-  same comparison the `dathost-golden-diff` CLI renders. Kept live by polling
+  same comparison the `dathost-golden-diff` CLI renders. The occupant read (`getActiveServerMatch`) and
+  the picker reads (`listConfigSets`, `getMapsForWorkshopPicker`) load separately (`loadPanel()`): a
+  failed picker read leaves the occupant view and its controls in place with an inline error where the
+  pickers would be (Start and Apply config set go with them), and a failed occupant read is an inline
+  error, never an idle server. Kept live by polling
   `GET /api/admin/server/status` while the tab is visible — every 2s while a Start/Stop is settling,
   every 15s otherwise. Also hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`, its own collapsed-by-
   default panel) — enable/disable the `dathost-cleanup` workflow, set its interval, and a **Run now**

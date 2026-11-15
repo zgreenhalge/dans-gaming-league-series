@@ -15,6 +15,8 @@ import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
 import { listConfigSets } from '@/lib/dathost-config';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { buildRegularToGauntletMap, nextRegularSeasonName } from '@/lib/util';
+import { loadPanel, mapPanel, type PanelData } from '@/lib/panel-load';
+import type { OpsErrorItem } from '@/components/OpsErrorList';
 import type { GauntletRow } from '@/components/GauntletLifecycleList';
 
 export const metadata = {
@@ -25,37 +27,18 @@ export const metadata = {
 // Live operational surface — don't cache.
 export const dynamic = 'force-dynamic';
 
-/**
- * Unified admin console (issue #262). One page, replacing the seven separate admin routes: a
- * standalone Server panel, an Activity feed (background jobs + ops errors), and Manage
- * (Match/Player/Season). This server component only gates access and fetches — `AdminConsole` owns
- * all the interactive composition, reusing the same panels/forms the old routes used unmodified.
- */
-export default async function AdminPage() {
-  // Admin gate lives in this route group's layout.tsx (#336) — sessionPlayerId() trusts that
-  // guarantee instead of re-deriving and re-checking it.
-  const selfId = await sessionPlayerId();
-
-  const adminClient = getAdminClient();
-  const [jobs, opsErrors, opsErrorHistory, matches, players, activeServerMatch, workshopMaps, seasons, configSets] =
-    await Promise.all([
-      getBackgroundJobs(),
-      getOpsErrors(),
-      getOpsErrorHistory(),
-      getAdminMatches(),
-      getAdminPlayers(),
-      getActiveServerMatch(adminClient),
-      getMapsForWorkshopPicker(),
-      getSeasons(),
-      listConfigSets(adminClient),
-    ]);
-
+/** The Season panel's data: season lifecycle + gauntlet pairing, plus the season-scoped ops errors,
+ *  which are their own `PanelData` so a failed ops-errors read leaves the seasons rendering. */
+async function loadSeasonPanel(opsErrorsPanel: Promise<PanelData<OpsErrorItem[]>>) {
+  const seasons = await getSeasons();
   // Season lifecycle + gauntlet pairing — same derivation the old /admin/seasons/gauntlet page used.
   const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
   const gauntletSeasons = seasons.filter((s) => s.is_gauntlet);
   const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
-  const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
+  const seasonOpsErrors = mapPanel(await opsErrorsPanel, 'season ops errors', (errors) =>
+    errors.filter((e) => e.entityType === 'season'),
+  );
   // A paired gauntlet stays "in progress" for the admin console until it archives — a regular season
   // itself archives the moment its last match is played, typically before its gauntlet has even
   // started, so gating this on the regular season's own status would strand its build/seed/reset and
@@ -103,6 +86,39 @@ export default async function AdminPage() {
       };
     });
 
+  return { allSeasons, gauntletsInProgress, seasonOpsErrors, nextSeasonName };
+}
+
+/**
+ * Unified admin console (issue #262). One page, replacing the seven separate admin routes: a
+ * standalone Server panel, an Activity feed (background jobs + ops errors), and Manage
+ * (Match/Player/Season). This server component only gates access and fetches — `AdminConsole` owns
+ * all the interactive composition, reusing the same panels/forms the old routes used unmodified.
+ */
+export default async function AdminPage() {
+  // Admin gate lives in this route group's layout.tsx (#336) — sessionPlayerId() trusts that
+  // guarantee instead of re-deriving and re-checking it.
+  const selfId = await sessionPlayerId();
+
+  const adminClient = getAdminClient();
+  // Each panel's reads are isolated by `loadPanel()`: a failed read renders as an inline error in
+  // its own panel while the rest of the console stays usable. The ops-errors read feeds both the
+  // Activity feed and the Season panel, so it runs once and both use the same `PanelData`.
+  const opsErrorsPanel = loadPanel('ops errors', getOpsErrors);
+  const [serverActive, serverPickers, jobs, opsErrors, opsErrorHistory, matches, players, season] = await Promise.all([
+    loadPanel('the server status', () => getActiveServerMatch(adminClient)),
+    loadPanel('the config-set and map pickers', async () => {
+      const [configSets, maps] = await Promise.all([listConfigSets(adminClient), getMapsForWorkshopPicker()]);
+      return { configSets, maps };
+    }),
+    loadPanel('background jobs', getBackgroundJobs),
+    opsErrorsPanel,
+    loadPanel('failure history', getOpsErrorHistory),
+    loadPanel('matches', getAdminMatches),
+    loadPanel('players', getAdminPlayers),
+    loadPanel('seasons', () => loadSeasonPanel(opsErrorsPanel)),
+  ]);
+
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Admin' }]} />
@@ -118,13 +134,9 @@ export default async function AdminPage() {
           matches={matches}
           players={players}
           selfId={selfId}
-          server={{ active: activeServerMatch, configSets, maps: workshopMaps }}
-          season={{
-            allSeasons,
-            gauntletsInProgress,
-            seasonOpsErrors,
-            nextSeasonName,
-          }}
+          serverActive={serverActive}
+          serverPickers={serverPickers}
+          season={season}
         />
       </main>
     </div>

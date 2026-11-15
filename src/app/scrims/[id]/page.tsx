@@ -151,14 +151,28 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
           </>
         )}
 
+        {/* A match made by someone else (Next Match, Generate Rounds) appears for every viewer, so
+            nobody makes a duplicate. */}
+        {!hasScrimNightEnded(night.night, now) && (
+          <RefreshOnServerState table="matches" event="INSERT" filter={`scrim_night_id=eq.${night.night.id}`} />
+        )}
+
+        {/* A discarded match leaves every viewer's page, the lobby and the queue behind it. A delete
+            can't be filtered, so a discard on any night refreshes the page; a night that is over
+            keeps it, since a match already made can still be discarded. */}
+        <RefreshOnServerState table="matches" event="DELETE" />
+
+        {/* The night's own row is followed whether or not it is over, so End night and Reopen reach
+            every viewer. */}
+        <RefreshOnServerState table="scrim_nights" event="UPDATE" filter={`id=eq.${night.night.id}`} />
+
         {/* Until the night is over, signups, check-ins and drop-outs change the roster and the
-            lobby's pool, and End night closes the night, for every viewer. A delete can't be
-            filtered, so a drop-out from any night refreshes the page. */}
+            lobby's pool for every viewer. A delete can't be filtered, so a drop-out from any night
+            refreshes the page. */}
         {!hasScrimNightEnded(night.night, now) && (
           <>
             <RefreshOnServerState table="scrim_signups" filter={`night_id=eq.${night.night.id}`} />
             <RefreshOnServerState table="scrim_signups" event="DELETE" />
-            <RefreshOnServerState table="scrim_nights" event="UPDATE" filter={`id=eq.${night.night.id}`} />
           </>
         )}
 

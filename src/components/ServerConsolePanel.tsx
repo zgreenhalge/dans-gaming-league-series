@@ -33,6 +33,8 @@ import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
 import ErrorText from '@/components/ErrorText';
+import { PanelError, PanelGate } from '@/components/PanelGate';
+import type { PanelData } from '@/lib/panel-load';
 
 // Safety cap for the start/stop spinner — matches DatHost's own ready timeout (waitUntilReady). If an
 // action hasn't visibly settled by now, drop the spinner and show whatever raw state we have.
@@ -118,16 +120,18 @@ function lastRunSummary(lastRun: DathostCleanupStatus['lastRun']): string {
   return `${outcome} · ${when} · ${trigger}`;
 }
 
+/** `active` and `pickers` are loaded separately (`loadPanel()`), so a failed picker read leaves the
+ *  occupant view and its controls in place, with an inline error where the pickers would be. */
 export function ServerConsolePanel({
-  active: initialActive,
-  configSets,
-  maps,
+  active: activeRead,
+  pickers,
 }: {
-  active: ActiveServerMatch | null;
-  configSets: ConfigSetOption[];
-  maps: WorkshopMapOption[];
+  active: PanelData<ActiveServerMatch | null>;
+  pickers: PanelData<{ configSets: ConfigSetOption[]; maps: WorkshopMapOption[] }>;
 }) {
   const router = useRouter();
+  // The picker controls render only when `pickers` loaded (inside its `PanelGate`).
+  const { configSets, maps } = pickers.ok ? pickers.data : { configSets: [], maps: [] };
 
   const [status, setStatus] = useState<AdminServerStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -158,7 +162,9 @@ export function ServerConsolePanel({
     setStopping(false);
   };
 
-  const [configSet, setConfigSet] = useState(configSets[0]?.key ?? '');
+  // The chosen config set defaults to the first one the pickers offer.
+  const [chosenConfigSet, setConfigSet] = useState('');
+  const configSet = chosenConfigSet || configSets[0]?.key || '';
   const [mapChoice, setMapChoice] = useState('');
   const [customMapId, setCustomMapId] = useState('');
   const [playout, setPlayout] = useState(false);
@@ -537,8 +543,10 @@ export function ServerConsolePanel({
   const server = status?.server ?? null;
   const configured = status?.configured ?? true;
   // Prefer status.active (fresher — refetched on load/poll/action) once we have it at all; only fall
-  // back to the server-rendered initial prop before the first client fetch resolves.
-  const active = status ? status.active : initialActive;
+  // back to the server-rendered read before the first client fetch resolves. A failed server-rendered
+  // read is an error (`activeFailure`), never an idle server.
+  const active = status ? status.active : activeRead.ok ? activeRead.data : null;
+  const activeFailure = !status && !activeRead.ok ? activeRead : null;
   const canStart = configured && !!server && isServerOff(server);
   const canStop = configured && !!server && !isServerOff(server);
   const casualUse = !!(configured && server && !active && playersOnServer(server) > 0);
@@ -579,6 +587,7 @@ export function ServerConsolePanel({
               DatHost server
             </div>
 
+            {activeFailure && <PanelError failure={activeFailure} />}
             {active && (
               <>
                 <Link href={`/matches/${active.matchId}`} className="font-display text-[16px] font-semibold hover:underline">
@@ -681,46 +690,50 @@ export function ServerConsolePanel({
           )
         }
       >
-        <div className="flex flex-col gap-2">
-          <LaunchOptionsPicker
-            configSets={configSets}
-            configSet={configSet}
-            onConfigSetChange={setConfigSet}
-            maps={maps}
-            mapChoice={mapChoice}
-            onMapChoiceChange={setMapChoice}
-            customMapId={customMapId}
-            onCustomMapIdChange={setCustomMapId}
-            customMapInvalid={customMapInvalid}
-            playout={playout}
-            onPlayoutChange={setPlayout}
-            friendly={friendly}
-            onFriendlyChange={setFriendly}
-          />
-          <div className="flex gap-2">
-            {canStart && !starting && !stopping && (
-              <button
-                onClick={() => startServer()}
-                disabled={startStopBusy || !configSet || !resolvedMapId}
-                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
-              >
-                {startStopBusy ? '…' : 'Start'}
-              </button>
-            )}
-            <button
-              onClick={() => applyConfig()}
-              disabled={!configSet || !resolvedMapId || applyBusy}
-              title="Reassert settings on the server without starting it"
-              className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-            >
-              {applyBusy ? 'Applying…' : 'Apply config set'}
-            </button>
-          </div>
-          <ErrorText error={applyError} />
-          {applySuccess && !applyError && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
+        <PanelGate panel={pickers}>
+          {() => (
+            <div className="flex flex-col gap-2">
+              <LaunchOptionsPicker
+                configSets={configSets}
+                configSet={configSet}
+                onConfigSetChange={setConfigSet}
+                maps={maps}
+                mapChoice={mapChoice}
+                onMapChoiceChange={setMapChoice}
+                customMapId={customMapId}
+                onCustomMapIdChange={setCustomMapId}
+                customMapInvalid={customMapInvalid}
+                playout={playout}
+                onPlayoutChange={setPlayout}
+                friendly={friendly}
+                onFriendlyChange={setFriendly}
+              />
+              <div className="flex gap-2">
+                {canStart && !starting && !stopping && (
+                  <button
+                    onClick={() => startServer()}
+                    disabled={startStopBusy || !configSet || !resolvedMapId}
+                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
+                  >
+                    {startStopBusy ? '…' : 'Start'}
+                  </button>
+                )}
+                <button
+                  onClick={() => applyConfig()}
+                  disabled={!configSet || !resolvedMapId || applyBusy}
+                  title="Reassert settings on the server without starting it"
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+                >
+                  {applyBusy ? 'Applying…' : 'Apply config set'}
+                </button>
+              </div>
+              <ErrorText error={applyError} />
+              {applySuccess && !applyError && (
+                <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
+              )}
+            </div>
           )}
-        </div>
+        </PanelGate>
 
         <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
           <div className="flex items-center justify-end gap-4">

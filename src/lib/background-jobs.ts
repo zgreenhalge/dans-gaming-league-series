@@ -105,6 +105,39 @@ export async function recordJobStatus(
   return error ? { error: error.message } : {};
 }
 
+/** What `claimJob()` resolved: this caller won the claim, another caller already holds it, or the
+ *  claim write itself failed (`error` is the database message). */
+export type ClaimResult = 'claimed' | 'duplicate' | { error: string };
+
+/**
+ * Claim the `background_jobs` row for `(jobType, matchId)` exactly once, atomically. A plain
+ * check-then-act (SELECT for an in-flight row, then upsert) can't tell two concurrent deliveries of
+ * the same event apart — both would pass the check and both dispatch — so the claim itself is the
+ * check: `ignoreDuplicates` makes the INSERT land only if no row exists yet for
+ * `(job_type, match_id)`, and exactly one caller sees a non-empty result. Resolves `'claimed'` for
+ * that caller and `'duplicate'` for every other (the job is already claimed, in flight or run once
+ * before), or `{ error }` when the write itself failed — the caller decides what a failed claim
+ * means (e.g. recording it under `jobClaimOperation()`). `fields` carries the initial
+ * `status`/`stage` the claimed row starts in.
+ */
+export async function claimJob(
+  admin: SupabaseClient,
+  jobType: string,
+  matchId: number,
+  fields: { status: string; stage: string },
+): Promise<ClaimResult> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from('background_jobs')
+    .upsert(
+      { job_type: jobType, match_id: matchId, ...fields, error_message: null, created_at: now, updated_at: now },
+      { onConflict: 'job_type,match_id', ignoreDuplicates: true },
+    )
+    .select('match_id');
+  if (error) return { error: error.message };
+  return data && data.length > 0 ? 'claimed' : 'duplicate';
+}
+
 /** Bind `recordJobStatus` to a fixed `(jobType, key)`, throwing if the write fails — for a GitHub
  *  Actions job script's per-stage writes, where a corrupted status row should abort the run (via the
  *  script's own top-level `catch`) rather than continue past it silently. */
