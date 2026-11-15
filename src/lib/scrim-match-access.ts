@@ -8,8 +8,8 @@
 
 import { requireSession } from './session';
 import { isPlayerAdmin, getScrimSignups, getScrimMatch, getScrimNightMatches, type ScrimMatch } from './queries';
-import { canReopenScrimNight, hasScrimNightEnded, isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
-import { canManageScrimMatch, scrimNightEndRefusal } from './scrim-matches';
+import { isScrimCheckInOpen, type ScrimNight } from './scrim-schedule';
+import { canManageScrimMatch, scrimNightEndRefusal, scrimNightReopenRefusal } from './scrim-matches';
 import { findCurrentScrimNight, findScrimNight } from './scrim-signup-access';
 import type { AccessResult } from './access-control';
 
@@ -35,11 +35,6 @@ async function findNightForPlayer(
  *  (`findCurrentScrimNight()`). */
 function findCurrentNightForPlayer(id: string, now: Date) {
   return findNightForPlayer(() => findCurrentScrimNight(id, now));
-}
-
-/** Whether `playerId` is signed up for night `nightId` — what End night and Reopen ask of a non-admin. */
-async function isSignedUp(nightId: number, playerId: number): Promise<boolean> {
-  return (await getScrimSignups(nightId)).some((s) => s.player_id === playerId);
 }
 
 export type ScrimNightMatchAccess = AccessResult<{ night: ScrimNight; checkedIn: number[] }>;
@@ -72,20 +67,17 @@ export async function requireScrimNightEndAccess(id: string, now: Date = new Dat
   return { ok: true, night };
 }
 
-/** Gate for reopening a night that is over, like End night's: the requester is signed up for it or an
- *  admin, and it is still reopenable (`canReopenScrimNight()`). Whether another night holds the server
- *  is `reopen_scrim_night()`'s check. */
+/** Gate for reopening a night that is over: `canViewerReopenScrimNight()`'s rules, refused with
+ *  `scrimNightReopenRefusal()`'s status and message. Whether another night holds the server is
+ *  `reopen_scrim_night()`'s check. */
 export async function requireScrimNightReopenAccess(id: string, now: Date = new Date()): Promise<AccessResult<{ night: ScrimNight }>> {
   const found = await findNightForPlayer(() => findScrimNight(id));
   if (!found.ok) return found;
   const { night, playerId, admin } = found;
-  if (!admin && !(await isSignedUp(night.id, playerId))) {
-    return { ok: false, status: 403, error: 'Only players on the night can reopen it' };
-  }
-  if (!canReopenScrimNight(night, now)) {
-    const over = hasScrimNightEnded(night, now);
-    return { ok: false, status: 409, error: over ? 'That night is too long ago to reopen' : 'That night is still on' };
-  }
+  // An admin needs no signup, so skip reading them.
+  const signups = admin ? [] : await getScrimSignups(night.id);
+  const refusal = scrimNightReopenRefusal(night, signups, { playerId, isAdmin: admin }, now);
+  if (refusal) return { ok: false, ...refusal };
   return { ok: true, night };
 }
 

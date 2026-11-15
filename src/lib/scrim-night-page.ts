@@ -5,7 +5,7 @@
 // rendering anything.
 
 import type { ScrimMatch, ScrimNightView } from './queries';
-import { canEndScrimNight, canManageScrimMatch, isScrimMatchEditable, scrimMatchNeedsServer, type ScrimViewer } from './scrim-matches';
+import { canEndScrimNight, canManageScrimMatch, canViewerReopenScrimNight, isScrimMatchEditable, scrimMatchNeedsServer, type ScrimViewer } from './scrim-matches';
 import { SCRIM_MATCH_SIZE, leagueMatchesDuring, type ScrimCommitment } from './scrim-schedule';
 import type { ScheduledMatchRef } from './server-schedule-collision';
 import { isPlayedScore } from './util';
@@ -29,8 +29,8 @@ export interface ScrimNightStatus {
   /** The viewer's own commitment, `null` before they sign up: signed in, with the night not over (signups
    *  close when it ends); `null` otherwise. */
   commitment: { playerId: number; commitment: ScrimCommitment | null } | null;
-  /** The viewer may reopen the night (`requireScrimNightReopenAccess()`'s rules): it is over but still
-   *  reopenable (`canReopenScrimNight()`), and they're signed up or an admin. */
+  /** The viewer may reopen the night (`canViewerReopenScrimNight()`, which
+   *  `requireScrimNightReopenAccess()` enforces). */
   canReopen: boolean;
 }
 
@@ -107,7 +107,7 @@ export function buildScrimNightPageModel(night: ScrimNightView, viewer: ScrimVie
       leagueMatches: night.current ? leagueMatchesDuring(night.night, scheduled) : [],
       checkIn: playerId != null && night.checkInOpen ? { playerId, checkedIn: viewerCheckedIn } : null,
       commitment: playerId != null && night.current ? { playerId, commitment: mine?.commitment ?? null } : null,
-      canReopen: night.reopenable && (isAdmin || mine != null),
+      canReopen: canViewerReopenScrimNight(night.night, night.signups, viewer, now),
     },
     rosterAdmin: isAdmin && night.current,
     pool,
