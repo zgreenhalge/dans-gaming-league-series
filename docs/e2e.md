@@ -49,6 +49,17 @@ migration files. When a change lands that way, port it into a new file under `su
 (or regenerate the baseline) so this local schema doesn't drift from production — a stale local
 schema would make E2E runs silently stop testing what the app actually does.
 
+**A migration's name is its identifier, not its version.** A file's `<version>_<name>.sql` prefix is
+the version the local stack records for it (`supabase start` applies every file under
+`supabase/migrations/`, oldest filename first). The live project records its own version for the same
+migration, the timestamp at which `apply_migration` ran it (`20261107160000_scrim_night_overlap_by_end.sql`
+is `20261107170622` live), so versions differ between the two and the live order can differ from the
+filename order. Nothing compares them: no CI step, script, or test reads the live history, and
+`src/lib/migrations-data-version.test.ts` matches migrations by filename. Cite and match a migration by
+its name (`scrim_night_overlap_by_end`). To confirm one is applied to the live project, look for that
+name in the Supabase MCP `list_migrations` output (a read-only tool). Don't rename a file to the live
+version: the filename is what docs and tests cite.
+
 ## Running locally
 
 ```
@@ -152,6 +163,24 @@ matches two, and the action or assertion fails strict mode at once. Scope such l
 visible page — `page.getByRole('main').getByText(…)` (`getByRole` skips hidden elements) — or use
 a role locator outright.
 
+## Database tests (pgTAP)
+
+`supabase/tests/database/*.test.sql` are pgTAP files that exercise migration SQL (functions, triggers,
+grants) directly in Postgres, which the route tests' `fakeSupabase` mirrors can't see. `supabase test
+db` runs them against the running local stack (`npm run db:start` first; the first run pulls the
+`pg_prove` image):
+
+```
+npx supabase db reset      # after pulling or adding migrations, so the stack has the current schema
+npx supabase test db
+```
+
+Each file is one transaction that ends in `rollback`, so the stack's data is left as it was, and builds
+its own fixtures with explicit high ids (`9001`, ...) on top of `seed.sql`'s players. It declares its
+`plan()` count, and `delete_upcoming_season.test.sql` is the pattern to copy: each refusal raises its
+code and changes nothing, and success removes only the target's rows. The `e2e` job runs the same
+command right after `supabase start`.
+
 ## CI placement
 
 `e2e` is a job in `.github/workflows/ci.yml`, gated on the same `changes.outputs.frontend` path
@@ -160,7 +189,7 @@ docs-only changes), same as any other check, no manual trigger or label needed. 
 local Docker-based stack made this cheap enough to run on every push: no Supabase branch to
 provision per run, no state-pollution risk against a shared project, and the whole job (image pulls,
 `supabase start`, Playwright browsers, the suite itself) runs in a couple of minutes. It installs the
-Supabase CLI (`supabase/setup-cli`, pinned in `ci.yml`), runs `supabase start`, pulls
+Supabase CLI (`supabase/setup-cli`, pinned in `ci.yml`), runs `supabase start`, runs the pgTAP tests (`supabase test db`), pulls
 `NEXT_PUBLIC_SUPABASE_URL` from `supabase status -o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the
 anon/service_role keys by sourcing `supabase/local.env` into `$GITHUB_ENV` (not parsed from CLI
 output — see the "Running locally" section for why), verifies none of the three ended up empty
