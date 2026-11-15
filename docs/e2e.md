@@ -49,6 +49,17 @@ migration files. When a change lands that way, port it into a new file under `su
 (or regenerate the baseline) so this local schema doesn't drift from production — a stale local
 schema would make E2E runs silently stop testing what the app actually does.
 
+**A migration's name is its identifier, not its version.** A file's `<version>_<name>.sql` prefix is
+the version the local stack records for it (`supabase start` applies every file under
+`supabase/migrations/`, oldest filename first). The live project records its own version for the same
+migration, the timestamp at which `apply_migration` ran it (`20261107160000_scrim_night_overlap_by_end.sql`
+is `20261107170622` live), so versions differ between the two and the live order can differ from the
+filename order. Nothing compares them: no CI step, script, or test reads the live history, and
+`src/lib/migrations-data-version.test.ts` matches migrations by filename. Cite and match a migration by
+its name (`scrim_night_overlap_by_end`). To confirm one is applied to the live project, look for that
+name in the Supabase MCP `list_migrations` output (a read-only tool). Don't rename a file to the live
+version: the filename is what docs and tests cite.
+
 ## Running locally
 
 ```

@@ -258,7 +258,7 @@ and its `UPCOMING`-only status gate.
 Every `public` table has row level security on, so a new table is created closed.
 
 1. **Write the migration** under `supabase/migrations/` (apply it to the live project per
-   [`AGENTS.md`](../AGENTS.md)'s live-approval rule). The same file that runs `create table` must
+   [`AGENTS.md`](../AGENTS.md)'s live-approval rule; the live project records its own version, so the name identifies the migration there, see [`e2e.md`](./e2e.md#database-isolation-a-local-supabase-stack-never-production)). The same file that runs `create table` must
    run `alter table public.<table> enable row level security;`. A table created without it is
    readable and writable by anyone holding the public anon key, and `src/lib/migrations-rls.test.ts`
    (part of `npm test`, so CI) fails on any migration that creates a `public` table without it.
