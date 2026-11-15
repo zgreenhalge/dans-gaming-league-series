@@ -20,8 +20,8 @@ export const REPLAY_EXTRACT_JOB_TYPE: BackgroundJobType = 'replay_extract';
 export const EHOG_RECOMPUTE_JOB_TYPE: BackgroundJobType = 'ehog_recompute';
 
 /** The `ops_errors.operation` a job type's claim failure is recorded under. One definition shared by
- *  the route that records it and `operationLabel()` (`OpsErrorList.tsx`) that labels it, so a new job
- *  type needs no hand-written label entry. */
+ *  the route that records it and `OPERATION_LABELS` (`OpsErrorList.tsx`), which derives each job
+ *  type's label from it, so a new job type needs no hand-written label entry. */
 export function jobClaimOperation(jobType: string): string {
   return `${jobType}_claim`;
 }

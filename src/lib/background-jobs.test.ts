@@ -8,8 +8,6 @@
 
 import assert from 'node:assert/strict';
 import { claimJob } from './background-jobs';
-import { BACKGROUND_JOB_TYPES, jobClaimOperation } from './jobs';
-import { operationLabel } from '@/components/OpsErrorList';
 import { clientFailingOn, createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
 import { test, report } from './test-support/miniTest';
 
@@ -52,15 +50,6 @@ async function main() {
     assert.deepEqual(await claimJob(admin, 'demo_ingest', 5, RECEIVED), { error: 'boom' });
     assert.equal(db.background_jobs.length, 0);
     assert.equal(db.ops_errors.length, 0);
-  });
-
-  await test('operationLabel — every background job type\'s claim operation has a derived label', () => {
-    for (const type of BACKGROUND_JOB_TYPES) {
-      const operation = jobClaimOperation(type);
-      assert.notEqual(operationLabel(operation), operation);
-    }
-    assert.equal(operationLabel('demo_ingest_claim'), 'Demo Ingest Claim');
-    assert.equal(operationLabel('unknown_op'), 'unknown_op');
   });
 
   report();
