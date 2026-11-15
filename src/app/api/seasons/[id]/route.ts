@@ -3,7 +3,8 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { deleteUpcomingSeason, SeasonDeleteRefusedError } from '@/lib/season-setup';
 import { parseRouteId } from '@/lib/util';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 /**
  * Deletes an UPCOMING regular season outright (`deleteUpcomingSeason()`: its schedule draft, roster and
@@ -28,7 +29,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (err instanceof SeasonDeleteRefusedError) {
       return NextResponse.json({ error: err.message }, { status: err.reason === 'not-found' ? 404 : 400 });
     }
-    return writeFailed(err, 'Deleting the season failed');
+    return internalError(err, 'Deleting the season failed');
   }
 
   return NextResponse.json({ ok: true });

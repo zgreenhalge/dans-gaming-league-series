@@ -30,7 +30,7 @@ import {
   SCRIM_SIDE_CHOICES,
   type ScrimSideChoice,
 } from '@/lib/scrim-matches';
-import { scrimWriteFailed } from '@/lib/scrim-route-errors';
+import { scrimErrorResponse } from '@/lib/scrim-route-errors';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const matchId = parseRouteId((await params).id);
@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const next = await updateScrimMatch(getAdminClient(), matchId, revision, { map, side: side as ScrimSideChoice | undefined, lineup });
     return NextResponse.json({ ok: true, revision: next });
   } catch (err) {
-    return scrimWriteFailed(err, 'Updating the match failed');
+    return scrimErrorResponse(err, 'Updating the match failed');
   }
 }
 
@@ -89,7 +89,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await discardScrimMatch(getAdminClient(), matchId, revision);
   } catch (err) {
-    return scrimWriteFailed(err, 'Discarding the match failed');
+    return scrimErrorResponse(err, 'Discarding the match failed');
   }
   return NextResponse.json({ ok: true });
 }

@@ -6,7 +6,7 @@ import { PlayerIdentityTakenError, renamePlayer } from '@/lib/player-identity';
 import { parsePlayerName } from '@/lib/util';
 import { renameNameRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
-import { writeFailed } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 // Self-service rename (issue #268): a player changes their own display name, in place on their
 // profile page. Distinct from the admin-only `PATCH /api/players/[id]` — that route can rename any
@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest) {
     renamed = await renamePlayer(supabaseAdmin, playerId, next, new Date(cutoffMs));
   } catch (err) {
     if (err instanceof PlayerIdentityTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return writeFailed(err, 'Renaming failed');
+    return internalError(err, 'Renaming failed');
   }
 
   if (!renamed) {

@@ -4,7 +4,8 @@
 
 import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import { requireScrimNightEndAccess } from '@/lib/scrim-match-access';
 import { endScrimNight } from '@/lib/scrim-nights';
 
@@ -15,7 +16,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     await endScrimNight(getAdminClient(), access.night.id);
   } catch (err) {
-    return writeFailed(err, 'Ending the night failed');
+    return internalError(err, 'Ending the night failed');
   }
   return NextResponse.json({ ok: true });
 }

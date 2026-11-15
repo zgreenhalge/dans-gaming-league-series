@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMatchAccess } from '@/lib/match-access';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
 import { setMatchScheduledAt } from '@/lib/match-day';
@@ -44,7 +45,7 @@ export async function PATCH(
   try {
     await setMatchScheduledAt(supabaseAdmin, matchId, scheduled_at);
   } catch (err) {
-    return writeFailed(err, 'Saving the time failed');
+    return internalError(err, 'Saving the time failed');
   }
 
   // Deferred past the response, same as score/route.ts's own post-commit side effects: (re)schedules

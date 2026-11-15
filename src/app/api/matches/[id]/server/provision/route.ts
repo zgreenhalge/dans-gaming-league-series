@@ -28,7 +28,8 @@ import { getServer } from '@/lib/dathost';
 import { parseRouteId, playersOnServer } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import {
   applyScrimSideChoice,
   claimScrimMatchStart,
@@ -38,7 +39,7 @@ import {
   scrimNightIdOf,
   SCRIM_REVISION_INVALID,
 } from '@/lib/scrim-matches';
-import { scrimWriteFailed } from '@/lib/scrim-route-errors';
+import { scrimErrorResponse } from '@/lib/scrim-route-errors';
 import { SCRIM_LEAGUE_CLEARANCE_MS } from '@/lib/scrim-schedule';
 import { getScheduledUnplayedMatches, getScrimNightMatches } from '@/lib/queries';
 
@@ -114,7 +115,7 @@ export async function POST(
   try {
     occupant = await findServerOccupant(getAdminClient(), matchId);
   } catch (err) {
-    return writeFailed(err, 'Checking the server failed');
+    return internalError(err, 'Checking the server failed');
   }
   if (occupant !== null) {
     return NextResponse.json(
@@ -152,7 +153,7 @@ export async function POST(
       const { error } = await getAdminClient().from('match_server_state').update({ server_state: 'failed' }).eq('match_id', matchId).eq('server_state', 'provisioning');
       if (error) console.error(`Restoring failed server state for match ${matchId} failed:`, error.message);
     }
-    return scrimWriteFailed(err, 'Setting the starting side failed');
+    return scrimErrorResponse(err, 'Setting the starting side failed');
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.

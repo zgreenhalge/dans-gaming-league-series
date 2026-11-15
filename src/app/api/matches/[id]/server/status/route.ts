@@ -7,7 +7,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getReconciledServerState } from '@/lib/dathost-lifecycle';
 import { requireServerStatusAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 export async function GET(
   _req: NextRequest,
@@ -27,6 +28,6 @@ export async function GET(
     const view = await getReconciledServerState(getAdminClient(), matchId);
     return NextResponse.json(view);
   } catch (err) {
-    return writeFailed(err, 'Reading the server state failed');
+    return internalError(err, 'Reading the server state failed');
   }
 }

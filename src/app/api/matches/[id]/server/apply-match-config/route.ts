@@ -11,7 +11,8 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { dathostServerId, loadMatch } from '@/lib/dathost';
 import { matchzyConfigContext, findServerOccupant } from '@/lib/dathost-lifecycle';
 import { parseRouteId } from '@/lib/util';
-import { accessDenied, writeFailed } from '@/lib/access-control';
+import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 export async function POST(
   req: NextRequest,
@@ -37,7 +38,7 @@ export async function POST(
   try {
     occupant = await findServerOccupant(getAdminClient(), matchId);
   } catch (err) {
-    return writeFailed(err, 'Checking the server failed');
+    return internalError(err, 'Checking the server failed');
   }
   if (occupant !== null) {
     return NextResponse.json(
