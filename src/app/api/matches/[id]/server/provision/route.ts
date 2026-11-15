@@ -110,7 +110,12 @@ export async function POST(
 
   // Refuse up front if another match holds the shared server (#134), so the panel gets a clear 409
   // instead of a silent no-op. `provisionMatchServer` re-checks authoritatively to close the race.
-  const occupant = await findServerOccupant(getAdminClient(), matchId);
+  let occupant: number | null;
+  try {
+    occupant = await findServerOccupant(getAdminClient(), matchId);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Checking the server failed' }, { status: 500 });
+  }
   if (occupant !== null) {
     return NextResponse.json(
       { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },

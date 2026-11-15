@@ -146,7 +146,8 @@ export class ServerBusyError extends Error {
 /**
  * The id of another match currently occupying the shared server, or `null` if it's free (#134).
  * Since all matches reuse ONE server, any *other* match in an occupying state holds it. Returns
- * `null` when hosting isn't configured (no server to contend for).
+ * `null` when hosting isn't configured (no server to contend for). Rejects when the
+ * `match_server_state` read fails — `null` means "free", never "unreadable".
  */
 export async function findServerOccupant(
   supabaseAdmin: SupabaseClient,
@@ -160,7 +161,8 @@ export async function findServerOccupant(
     .eq('dathost_server_id', serverId)
     .in('server_state', OCCUPYING_STATES as unknown as string[])
     .neq('match_id', exceptMatchId)
-    .limit(1);
+    .limit(1)
+    .throwOnError();
   const rows = (data ?? []) as { match_id: number }[];
   return rows.length ? rows[0].match_id : null;
 }
@@ -178,7 +180,8 @@ export interface MatchServerStateRow {
 const SERVER_STATE_COLUMNS = 'server_state, connect_string, server_started_at, dathost_server_id, teardown_at';
 
 /** Raw read of a match's `match_server_state` row (no DatHost reconciliation) — `null` if the match
- *  has never been provisioned (`idle`). Shared by every caller that needs the DB value as-is (e.g. the
+ *  has never been provisioned (`idle`). Rejects when the read fails — `null` means "idle", never
+ *  "unreadable". Shared by every caller that needs the DB value as-is (e.g. the
  *  veto route's busy-check, which deliberately skips `getReconciledServerState`'s DatHost round-trip
  *  on this latency-sensitive path). */
 export async function fetchServerStateRow(
@@ -189,7 +192,8 @@ export async function fetchServerStateRow(
     .from('match_server_state')
     .select(SERVER_STATE_COLUMNS)
     .eq('match_id', matchId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   return data as MatchServerStateRow | null;
 }
 
