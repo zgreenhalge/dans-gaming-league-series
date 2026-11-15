@@ -223,20 +223,9 @@ async function main() {
 
   await test('PATCH — a failed name-role read on unlink is a 500 and nothing is written', async () => {
     // Only the name-role read fails — the admin gate's own players read has to succeed first.
-    const db = installFixture((c) => ({
-      from: (t: string) => {
-        const builder = c.from(t);
-        if (t !== 'players') return builder;
-        const select = builder.select.bind(builder);
-        return Object.assign(builder, {
-          select: (cols?: string) =>
-            cols === 'discord_name_role_id'
-              ? clientFailingOn(c, 'players', 'select', { code: 'XX000', message: 'read failed' }).from('players').select(cols)
-              : select(cols),
-        });
-      },
-      rpc: c.rpc.bind(c),
-    }) as unknown as typeof c);
+    const db = installFixture((c) =>
+      clientFailingOn(c, 'players', 'select', { code: 'XX000', message: 'read failed' }, (cols) => cols === 'discord_name_role_id'),
+    );
     playerRow(db, BOB_ID).discord_name_role_id = 'role-1';
     const res = await call(BOB_ID, ADMIN_ID, { discord_id: null });
     assert.equal(res.status, 500);
