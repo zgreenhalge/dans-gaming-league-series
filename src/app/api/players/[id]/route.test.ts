@@ -221,6 +221,19 @@ async function main() {
     assert.equal(bob.discord_name_role_id, null);
   });
 
+  await test('PATCH — a failed name-role read on unlink is a 500 and nothing is written', async () => {
+    // Only the name-role read fails — the admin gate's own players read has to succeed first.
+    const db = installFixture((c) =>
+      clientFailingOn(c, 'players', 'select', { code: 'XX000', message: 'read failed' }, (cols) => cols === 'discord_name_role_id'),
+    );
+    playerRow(db, BOB_ID).discord_name_role_id = 'role-1';
+    const res = await call(BOB_ID, ADMIN_ID, { discord_id: null });
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'read failed');
+    assert.equal(playerRow(db, BOB_ID).discord_id, DISCORD_B);
+    assert.equal(playerRow(db, BOB_ID).discord_name_role_id, 'role-1');
+  });
+
   await test('PATCH — seed_ehog must be null or strictly between 10 and 100 (400)', async () => {
     const db = installFixture();
     for (const bad of [10, 100, 5, 250, '50', undefined]) {

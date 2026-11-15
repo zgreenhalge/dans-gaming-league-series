@@ -73,6 +73,24 @@ async function main() {
     assert.equal(db.players.find((p) => p.id === PLAYER_ID)!.discord_id, 'discord-user-1');
   });
 
+  await test('a failed name-role read is a 500 before any write, so the link and role id stay', async () => {
+    const { db, client } = freshDb();
+    const alice = db.players.find((p) => p.id === PLAYER_ID)!;
+    alice.discord_id = 'discord-user-1';
+    alice.discord_name_role_id = 'role-1';
+    __setTestAdminClient(clientFailingOn(client, 'players', 'select', { code: 'XX000', message: 'read failed' }));
+    __setTestSession(sessionFor(PLAYER_ID));
+    const { calls } = stubFetch();
+
+    const res = await DELETE();
+
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'read failed');
+    assert.equal(alice.discord_id, 'discord-user-1');
+    assert.equal(alice.discord_name_role_id, 'role-1');
+    assert.equal(calls.length, 0);
+  });
+
   __setTestSession(undefined);
   __setTestAdminClient(undefined);
   report();

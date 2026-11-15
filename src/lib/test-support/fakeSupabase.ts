@@ -689,18 +689,23 @@ function failingChain(error: FakeError): Record<string, unknown> {
  * method on the same table, and every other table, still goes through the real builder, so chained
  * access that doesn't touch `method` keeps working. A failing `'select'` also fails a write that
  * chains `.select()` on the same table (`.insert(...).select('id')`), since the write returns the
- * same builder. */
+ * same builder. `onlyWhen` narrows the failure to calls whose arguments it accepts (e.g. one
+ * column list out of several `select()`s on the same table); other calls run the real builder. */
 export function clientFailingOn(
   client: SupabaseClient,
   table: string,
   method: 'select' | 'insert' | 'update' | 'upsert' | 'delete',
   error: FakeError,
+  onlyWhen?: (...args: unknown[]) => boolean,
 ): SupabaseClient {
   return {
     from: (t: string) => {
       const builder = client.from(t);
       if (t !== table) return builder;
-      return Object.assign(builder, { [method]: () => failingChain(error) });
+      const real = (builder as unknown as Record<string, (...args: unknown[]) => unknown>)[method].bind(builder);
+      return Object.assign(builder, {
+        [method]: (...args: unknown[]) => (!onlyWhen || onlyWhen(...args) ? failingChain(error) : real(...args)),
+      });
     },
     rpc: client.rpc.bind(client),
   } as unknown as SupabaseClient;

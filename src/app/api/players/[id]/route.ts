@@ -132,7 +132,11 @@ export async function PATCH(
   // does delete the player's name-color role, since that role only makes sense while linked.
   if ('discord_id' in body) {
     if (body.discord_id === null) {
-      unlinkingNameRoleId = await getStoredNameRoleId(supabaseAdmin, targetId);
+      try {
+        unlinkingNameRoleId = await getStoredNameRoleId(supabaseAdmin, targetId);
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not read the stored name role' }, { status: 500 });
+      }
       Object.assign(update, DISCORD_UNLINK_FIELDS);
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
       let taken: boolean;
