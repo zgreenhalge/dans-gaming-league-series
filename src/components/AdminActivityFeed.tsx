@@ -479,14 +479,10 @@ export function AdminActivityFeed({
         </PanelGate>
       ) : (
         <>
-          {!jobsPanel.ok && (
-            <div className="mb-2">
-              <PanelError label="background jobs" error={jobsPanel.error} />
-            </div>
-          )}
-          {!opsErrorsPanel.ok && (
-            <div className="mb-2">
-              <PanelError label="ops errors" error={opsErrorsPanel.error} />
+          {(!jobsPanel.ok || !opsErrorsPanel.ok) && (
+            <div className="flex flex-col gap-2 mb-2">
+              {!jobsPanel.ok && <PanelError label="background jobs" error={jobsPanel.error} />}
+              {!opsErrorsPanel.ok && <PanelError label="ops errors" error={opsErrorsPanel.error} />}
             </div>
           )}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
