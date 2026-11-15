@@ -142,6 +142,11 @@ export async function POST(
     if (isScrim) await claimScrimMatchStart(getAdminClient(), matchId, revision);
     await applyScrimSideChoice(getAdminClient(), matchId);
   } catch (err) {
+    // The claim took a failed match to `provisioning`; with no boot coming, put it back so it can be retried.
+    if (retryingFailedStart) {
+      const { error } = await getAdminClient().from('match_server_state').update({ server_state: 'failed' }).eq('match_id', matchId).eq('server_state', 'provisioning');
+      if (error) console.error(`Restoring failed server state for match ${matchId} failed:`, error.message);
+    }
     const conflict = scrimConflictResponse(err);
     if (conflict) return conflict;
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Setting the starting side failed' }, { status: 500 });

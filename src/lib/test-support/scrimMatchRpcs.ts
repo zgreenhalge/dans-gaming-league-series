@@ -93,6 +93,7 @@ export const scrimMatchRpcs: Record<string, RpcHandler> = {
     const current = ((db.matches ?? []).find((m) => m.id === matchId)?.scrim_revision as number | undefined) ?? 0;
     const match = matchAtRevision(db, matchId, state === 'failed' ? current : ((args.p_revision as number | null) ?? -1));
     if (match.final_score != null || (state && ['provisioning', 'live', 'tearing_down', 'done'].includes(state))) throw new FakeRpcError('scrim-match-locked');
+    if (state === 'failed') (db.match_server_state ?? []).find((s) => s.match_id === matchId)!.server_state = 'provisioning';
     return bumpRevision(match);
   },
 };

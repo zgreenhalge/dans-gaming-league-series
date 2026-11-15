@@ -51,6 +51,9 @@ test('claimScrimMatchStart: a failed boot is claimed again from the current revi
   await assert.rejects(claimScrimMatchStart(client, 1, null), ScrimMatchChangedError, 'no revision, not failed');
   db.match_server_state[0].server_state = 'failed';
   assert.equal(await claimScrimMatchStart(client, 1, null), 4, 'failed: claimed from the current revision with none sent');
+  assert.equal(db.match_server_state[0].server_state, 'provisioning', 'the claim takes the match out of failed');
+  await assert.rejects(claimScrimMatchStart(client, 1, null), ScrimMatchConflictError, 'a second retry is refused, not booted twice');
+  db.match_server_state[0].server_state = 'failed';
   assert.equal(await claimScrimMatchStart(client, 1, 0), 5, 'failed: a stale revision is ignored');
   db.match_server_state[0].server_state = 'provisioning';
   await assert.rejects(claimScrimMatchStart(client, 1, 5), ScrimMatchConflictError, 'already starting');
