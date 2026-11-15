@@ -56,6 +56,15 @@ async function main() {
     assert.match(String(db.ops_errors[0].message), /boom/);
   });
 
+  await test('claimJob — a winning claim dismisses that match\'s earlier <jobType>_claim ops error', async () => {
+    const db: FakeDb = { background_jobs: [], ops_errors: [] };
+    const failing = clientFailingOn(createFakeSupabaseClient(db), 'background_jobs', 'upsert', { code: 'TEST', message: 'boom' });
+    assert.equal(await claimJob(failing, 'demo_ingest', 5, RECEIVED), false);
+    assert.equal(db.ops_errors[0].dismissed_at ?? null, null);
+    assert.equal(await claimJob(createFakeSupabaseClient(db), 'demo_ingest', 5, RECEIVED), true);
+    assert.ok(db.ops_errors[0].dismissed_at);
+  });
+
   report();
 }
 

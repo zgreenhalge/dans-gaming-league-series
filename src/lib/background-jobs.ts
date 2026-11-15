@@ -8,7 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dispatchWorkflow } from './gh-dispatch';
 import { JOB_IN_PROGRESS_STATUSES, isStale } from './jobs';
-import { recordOpsError } from './ops-errors';
+import { clearOpsError, recordOpsError } from './ops-errors';
 
 /** A denormalized status column mirroring a `background_jobs` row for cheap reads elsewhere (e.g.
  *  `matches.replay_status`), kept in sync alongside the job row. */
@@ -116,7 +116,8 @@ export async function recordJobStatus(
  * `fields` carries the initial `status`/`stage` the claimed row starts in.
  *
  * A failed claim write also resolves `false` — the caller has nothing to dispatch — after recording
- * a `<jobType>_claim` ops error, so a dropped claim is visible to an admin rather than only logged.
+ * a `<jobType>_claim` ops error, so a dropped claim is visible to an admin rather than only logged;
+ * a later winning claim for the same match clears that error.
  */
 export async function claimJob(
   admin: SupabaseClient,
@@ -136,7 +137,9 @@ export async function claimJob(
     await recordOpsError(admin, 'match', matchId, `${jobType}_claim`, `Could not claim ${jobType} job: ${error.message}`);
     return false;
   }
-  return !!data && data.length > 0;
+  const claimed = !!data && data.length > 0;
+  if (claimed) await clearOpsError(admin, 'match', matchId, `${jobType}_claim`);
+  return claimed;
 }
 
 /** Bind `recordJobStatus` to a fixed `(jobType, key)`, throwing if the write fails — for a GitHub
