@@ -28,7 +28,7 @@ export interface ScrimNight {
 export const SCRIM_NIGHT_IDLE_MS = 60 * 60 * 1000;
 
 /** How long after its start a night counts as that night: an ended night can be reopened within it
- *  (`canReopenScrimNight()`), and the league matches in it show on the night (`leagueMatchesDuring()`). */
+ *  (`canReopenScrimNight()`). */
 export const SCRIM_NIGHT_SPAN_MS = 12 * 60 * 60 * 1000;
 
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
@@ -87,10 +87,12 @@ export function scrimNightBoundaries(night: ScrimNight): number[] {
 export const SCRIM_LEAGUE_CLEARANCE_MS = 30 * 60 * 1000;
 
 /** The scheduled league matches that fall in `night` — from `SCRIM_LEAGUE_CLEARANCE_MS` before it
- *  starts until `SCRIM_NIGHT_SPAN_MS` after — soonest first: the server breaks the lobby shows. */
+ *  starts until `SCRIM_LEAGUE_CLEARANCE_MS` after its projected end (`scrimNightEnd()`) — soonest first:
+ *  the server breaks the lobby shows. A match just past the end still blocks the night's last scrim
+ *  match, so it counts. */
 export function leagueMatchesDuring(night: ScrimNight, matches: ScheduledMatchRef[]): ScheduledMatchRef[] {
   const start = Date.parse(night.startsAt) - SCRIM_LEAGUE_CLEARANCE_MS;
-  const end = Date.parse(night.startsAt) + SCRIM_NIGHT_SPAN_MS;
+  const end = scrimNightEnd(night) + SCRIM_LEAGUE_CLEARANCE_MS;
   return matches
     .filter((m) => {
       const t = Date.parse(m.scheduledAt);

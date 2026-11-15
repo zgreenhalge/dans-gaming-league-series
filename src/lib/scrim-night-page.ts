@@ -22,7 +22,7 @@ export interface ScrimNightStatus {
   state: ScrimNightState;
   /** How many have checked in, while check-in is open; `null` otherwise. */
   checkedInCount: number | null;
-  /** League matches scheduled during a night that hasn't ended (`leagueMatchesDuring()`). */
+  /** League matches scheduled during a night that hasn't ended, up to the clearance past its projected end (`leagueMatchesDuring()`). */
   leagueMatches: ScheduledMatchRef[];
   /** The viewer's own Check in / Check out: signed in, with check-in open; `null` otherwise. */
   checkIn: { playerId: number; checkedIn: boolean } | null;
