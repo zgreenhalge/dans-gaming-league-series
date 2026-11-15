@@ -1,7 +1,6 @@
 import { cache } from 'react';
 import { getAdminClient } from '../supabase-admin';
 import {
-  canReopenScrimNight,
   hasScrimNightEnded,
   hasScrimNightStarted,
   isScrimCheckInOpen,
@@ -232,8 +231,6 @@ export function scrimLeaderboardToStatLines(rows: ScrimLeaderboardRow[]): Leader
 export interface ScrimNightView extends UpcomingScrimNight {
   /** Not yet ended: upcoming or running, as opposed to over. */
   current: boolean;
-  /** Over, and still within reach of reopening (`canReopenScrimNight()`). */
-  reopenable: boolean;
   matches: ScrimMatch[];
   leaderboard: ScrimLeaderboardRow[];
   /** The night's partner and opponent records (`computeH2H()` over its scored matches). */
@@ -253,7 +250,6 @@ export async function getScrimNight(nightId: number, now: Date): Promise<ScrimNi
   return {
     ...toUpcomingScrimNight(night, signups, now),
     current: !hasScrimNightEnded(night, now),
-    reopenable: canReopenScrimNight(night, now),
     matches,
     leaderboard: buildScrimNightLeaderboard(matches, playersById),
     h2h: computeH2H(scrimMatchesToH2HInput(matches), playersById),

@@ -40,7 +40,6 @@ function night(overrides: Partial<ScrimNightView> = {}): ScrimNightView {
     started: true,
     checkInOpen: true,
     current: true,
-    reopenable: false,
     signups: [1, 2, 3, 4].map((id) => scrimSignup(id, 'definite', { checked_in_at: '2026-01-01T19:45:00Z' })),
     matches: [],
     leaderboard: [],
@@ -88,13 +87,14 @@ test('a match already made stays startable once the night is over: the lobby hol
   assert.equal(model.canEnd, false);
 });
 
-test('reopening: a night that is over and reopenable, for anyone signed up or an admin', () => {
-  const over = night({ current: false, checkInOpen: false, reopenable: true });
+test('reopening: a night that is over and within its span, for anyone signed up or an admin', () => {
+  const over = night({ current: false, checkInOpen: false, night: { id: 5, startsAt: '2026-01-01T20:00:00Z', endedAt: '2026-01-01T20:10:00Z' } });
   assert.equal(build(over, PLAYER(1)).status.canReopen, true);
   assert.equal(build(over, ADMIN).status.canReopen, true);
   assert.equal(build(over, PLAYER(7)).status.canReopen, false);
   assert.equal(build(over, SIGNED_OUT).status.canReopen, false);
-  assert.equal(build(night({ current: false, checkInOpen: false }), ADMIN).status.canReopen, false, 'past the span');
+  assert.equal(build(night(), ADMIN).status.canReopen, false, 'still on');
+  assert.equal(buildScrimNightPageModel(over, ADMIN, new Date('2026-01-02T08:00:00Z')).status.canReopen, false, 'past the span');
 });
 
 test('the running order: an admin resolves each pending row, and only those', () => {

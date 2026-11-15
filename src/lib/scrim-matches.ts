@@ -17,7 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
 import { isPlayedScore } from './util';
 import { findScheduleCollision, type ScheduledMatchRef } from './server-schedule-collision';
-import { SCRIM_NIGHT_OVER_ERROR, hasScrimNightEnded, hasScrimNightStarted, scrimLeagueWindow, type ScrimNight } from './scrim-schedule';
+import { SCRIM_NIGHT_OVER_ERROR, canReopenScrimNight, hasScrimNightEnded, hasScrimNightStarted, scrimLeagueWindow, type ScrimNight } from './scrim-schedule';
 import { fetchWorkshopItem } from './workshop';
 
 /** `match_server_state.server_state` values while a match holds the server. */
@@ -252,6 +252,16 @@ export function canManageScrimMatch(viewer: ScrimViewer, playerIds: number[]): b
   return viewer.isAdmin || (viewer.playerId != null && playerIds.includes(viewer.playerId));
 }
 
+/** Whether `playerId` is among a night's `signups`. */
+export function isSignedUpForNight(signups: { player_id: number }[], playerId: number | null): boolean {
+  return playerId != null && signups.some((s) => s.player_id === playerId);
+}
+
+/** Whether `viewer` is an admin or signed up for the night — what End night and Reopen ask of a viewer. */
+function isAdminOrSignedUp(viewer: ScrimViewer, signups: { player_id: number }[]): boolean {
+  return viewer.isAdmin || isSignedUpForNight(signups, viewer.playerId);
+}
+
 /** Why `viewer` may not end `night` at `now`, or `null` when they may. Checked in order: the night is
  *  still on (409 once it is over), it has started (409), the viewer is an admin or signed up for it
  *  (403), and no match still needs the server (409) — finish or discard it first.
@@ -265,11 +275,33 @@ export function scrimNightEndRefusal(
 ): { status: 403 | 409; error: string } | null {
   if (hasScrimNightEnded(night, now)) return { status: 409, error: SCRIM_NIGHT_OVER_ERROR };
   if (!hasScrimNightStarted(night, now)) return { status: 409, error: 'That night has not started yet' };
-  if (!viewer.isAdmin && !signups.some((s) => s.player_id === viewer.playerId)) {
-    return { status: 403, error: 'Only players on the night can end it' };
-  }
+  if (!isAdminOrSignedUp(viewer, signups)) return { status: 403, error: 'Only players on the night can end it' };
   if (matches.some(scrimMatchNeedsServer)) return { status: 409, error: "Finish or discard the night's waiting matches first" };
   return null;
+}
+
+/** Why `viewer` may not reopen `night` at `now`, or `null` when they may. Checked in order: the viewer
+ *  is an admin or signed up for it (403), then it is over (409 while it is still on) and within
+ *  `SCRIM_NIGHT_SPAN_MS` of its start (409 once it is too long ago). `requireScrimNightReopenAccess()`
+ *  answers with the refusal; `canViewerReopenScrimNight()` is the yes/no. Whether another night holds
+ *  the server is `reopen_scrim_night()`'s check. */
+export function scrimNightReopenRefusal(
+  night: ScrimNight,
+  signups: { player_id: number }[],
+  viewer: ScrimViewer,
+  now: Date,
+): { status: 403 | 409; error: string } | null {
+  if (!isAdminOrSignedUp(viewer, signups)) return { status: 403, error: 'Only players on the night can reopen it' };
+  if (!canReopenScrimNight(night, now)) {
+    return { status: 409, error: hasScrimNightEnded(night, now) ? 'That night is too long ago to reopen' : 'That night is still on' };
+  }
+  return null;
+}
+
+/** Whether `viewer` may reopen `night` at `now`: the one rule the night page offers Reopen on and the
+ *  reopen route enforces (`scrimNightReopenRefusal()` finds nothing to refuse). */
+export function canViewerReopenScrimNight(night: ScrimNight, signups: { player_id: number }[], viewer: ScrimViewer, now: Date): boolean {
+  return scrimNightReopenRefusal(night, signups, viewer, now) === null;
 }
 
 /** Whether `viewer` may end `night` at `now`: the one rule the night page offers End night on and the
