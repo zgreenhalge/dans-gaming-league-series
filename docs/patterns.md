@@ -108,7 +108,7 @@ looks like "no rows". Where that error goes is decided by the page, by one rule:
   panel's read in `loadPanel()` (`src/lib/panel-load.ts`) and render it through `PanelGate`
   (`src/components/PanelGate.tsx`): a failed read becomes an inline "Couldn't load …" box in that panel
   while the rest of the console stays usable, and is logged (Next.js redirect/notFound errors pass
-  through untouched). The label passed to `loadPanel()` ("the server panel") rides in the failure
+  through untouched). The label passed to `loadPanel()` ("the server status") rides in the failure
   value, so the log line and the on-screen error name the failure alike and the render site passes none.
   A part of a panel that rests on its own read (the Season tab's ops errors) is its own `PanelData`
   inside the panel's data — `mapPanel()` derives it from a shared read — and renders as an inline error

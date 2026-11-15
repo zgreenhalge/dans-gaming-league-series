@@ -16,7 +16,7 @@ export type PanelFailure = { ok: false; error: string; label: string };
 export type PanelData<T> = { ok: true; data: T } | PanelFailure;
 
 /** Runs `read` and wraps its result; a rejection becomes `{ ok: false, error, label }` and is logged.
- *  `label` names the panel as it reads after "Couldn't load" ("the server panel", "matches").
+ *  `label` names the panel as it reads after "Couldn't load" ("the server status", "matches").
  *  Next.js control-flow errors propagate untouched. */
 export async function loadPanel<T>(label: string, read: () => Promise<T>): Promise<PanelData<T>> {
   try {
