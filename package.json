@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "demo-fixtures:fetch": "tsx scripts/fetch-demo-fixtures.ts",
     "db:start": "sh -c 'command -v supabase >/dev/null 2>&1 && exec supabase start || exec npx --yes supabase start'",
-    "db:stop": "sh -c 'command -v supabase >/dev/null 2>&1 && exec supabase stop || exec npx --yes supabase stop'"
+    "db:stop": "sh -c 'command -v supabase >/dev/null 2>&1 && exec supabase stop || exec npx --yes supabase stop'",
+    "db:test": "sh -c 'command -v supabase >/dev/null 2>&1 && exec supabase test db || exec npx --yes supabase test db'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1069.0",

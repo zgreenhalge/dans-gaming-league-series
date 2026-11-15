@@ -1,7 +1,7 @@
 /**
  * Route-handler tests for POST /api/scrims/[id]/reopen: only a night that is over, and still within
  * `SCRIM_NIGHT_SPAN_MS` of its start; only an admin or a player signed up for it; refused while
- * another night holds the server; and reopening clears `ended_at` and counts as activity.
+ * another night holds the server or a concurrent reopen got there first; and reopening clears `ended_at` and counts as activity.
  *
  * Run:  npx vitest run src/app/api/scrims/[id]/reopen/route.test.ts
  */
@@ -79,6 +79,24 @@ async function main() {
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await reopen()).status, 409);
     assert.ok(db.scrim_nights[0].ended_at);
+  });
+
+  await test('409 when a concurrent reopen lands between the access check and the RPC', async () => {
+    const db = installFixture([ended()]);
+    const real = scrimNightRpcs.reopen_scrim_night;
+    __setTestAdminClient(
+      createFakeSupabaseClient(db, {
+        ...scrimNightRpcs,
+        reopen_scrim_night: (args, fdb) => {
+          real(args, fdb); // the other player's Reopen wins first
+          return real(args, fdb);
+        },
+      }),
+    );
+    __setTestSession(sessionFor(PLAYER_ID));
+    const res = await reopen();
+    assert.equal(res.status, 409);
+    assert.match((await res.json()).error, /still on/);
   });
 
   await test('404 for a night that does not exist', async () => {

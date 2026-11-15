@@ -28,7 +28,7 @@ export interface ScrimNight {
 export const SCRIM_NIGHT_IDLE_MS = 60 * 60 * 1000;
 
 /** How long after its start a night counts as that night: an ended night can be reopened within it
- *  (`canReopenScrimNight()`), and the league matches in it show on the night (`leagueMatchesDuring()`). */
+ *  (`canReopenScrimNight()`). */
 export const SCRIM_NIGHT_SPAN_MS = 12 * 60 * 60 * 1000;
 
 /** How long before a night starts players can check in. Check-in stays open until the night ends. */
@@ -86,11 +86,24 @@ export function scrimNightBoundaries(night: ScrimNight): number[] {
  *  20 minutes, and a league match always gets the one shared server. */
 export const SCRIM_LEAGUE_CLEARANCE_MS = 30 * 60 * 1000;
 
-/** The scheduled league matches that fall in `night` — from `SCRIM_LEAGUE_CLEARANCE_MS` before it
- *  starts until `SCRIM_NIGHT_SPAN_MS` after — soonest first: the server breaks the lobby shows. */
+/** The `[startMs, endMs]` span, in epoch ms, in which a scheduled league match conflicts with scrim
+ *  play running from `fromMs` to `toMs`: `SCRIM_LEAGUE_CLEARANCE_MS` before the first until that long
+ *  after the last. The one definition behind the night page's league-match list
+ *  (`scrimNightLeagueWindow()`) and the server-start block (`leagueMatchBlockingScrim()`); each decides for itself whether a match exactly on an edge is in. */
+export function scrimLeagueWindow(fromMs: number, toMs: number): [number, number] {
+  return [fromMs - SCRIM_LEAGUE_CLEARANCE_MS, toMs + SCRIM_LEAGUE_CLEARANCE_MS];
+}
+
+/** `scrimLeagueWindow()` over `night`, from its start to its projected end (`scrimNightEnd()`). */
+export function scrimNightLeagueWindow(night: ScrimNight): [number, number] {
+  return scrimLeagueWindow(Date.parse(night.startsAt), scrimNightEnd(night));
+}
+
+/** The scheduled league matches that fall in `night`'s `scrimNightLeagueWindow()`, soonest first:
+ *  the server breaks the lobby shows. A match just past the end still blocks the night's last scrim
+ *  match, so it counts. */
 export function leagueMatchesDuring(night: ScrimNight, matches: ScheduledMatchRef[]): ScheduledMatchRef[] {
-  const start = Date.parse(night.startsAt) - SCRIM_LEAGUE_CLEARANCE_MS;
-  const end = Date.parse(night.startsAt) + SCRIM_NIGHT_SPAN_MS;
+  const [start, end] = scrimNightLeagueWindow(night);
   return matches
     .filter((m) => {
       const t = Date.parse(m.scheduledAt);

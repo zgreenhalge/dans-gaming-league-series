@@ -37,6 +37,8 @@ import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
 import type { OpsErrorHistoryRow } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
+import { PanelError, PanelGate } from './PanelGate';
+import type { PanelData } from '@/lib/panel-load';
 
 type View = 'events' | 'history';
 type Tag = 'errored' | 'progress' | 'completed';
@@ -357,17 +359,25 @@ function HistoryTable({ rows }: { rows: OpsErrorHistoryRow[] }) {
   );
 }
 
+// Stable empty lists for a source whose read failed, so the memos below don't re-run each render.
+const NO_JOBS: BackgroundJobRow[] = [];
+const NO_OPS_ERRORS: OpsErrorItem[] = [];
+
 export function AdminActivityFeed({
-  jobs,
-  opsErrors,
+  jobs: jobsPanel,
+  opsErrors: opsErrorsPanel,
   opsErrorHistory,
   onJump,
 }: {
-  jobs: BackgroundJobRow[];
-  opsErrors: OpsErrorItem[];
-  opsErrorHistory: OpsErrorHistoryRow[];
+  jobs: PanelData<BackgroundJobRow[]>;
+  opsErrors: PanelData<OpsErrorItem[]>;
+  opsErrorHistory: PanelData<OpsErrorHistoryRow[]>;
   onJump: (type: 'match' | 'player' | 'season', query: string) => void;
 }) {
+  // The two live sources fail independently: the merged list shows whichever loaded, and a failed
+  // source shows its own error above it rather than reading as "nothing to show".
+  const jobs = jobsPanel.ok ? jobsPanel.data : NO_JOBS;
+  const opsErrors = opsErrorsPanel.ok ? opsErrorsPanel.data : NO_OPS_ERRORS;
   const router = useRouter();
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const liveOpsErrors = useMemo(() => opsErrors.filter((e) => !dismissed.has(e.id)), [opsErrors, dismissed]);
@@ -464,9 +474,17 @@ export function AdminActivityFeed({
       </TabBar>
 
       {view === 'history' ? (
-        <HistoryTable rows={opsErrorHistory} />
+        <PanelGate panel={opsErrorHistory}>
+          {(rows) => <HistoryTable rows={rows} />}
+        </PanelGate>
       ) : (
         <>
+          {(!jobsPanel.ok || !opsErrorsPanel.ok) && (
+            <div className="flex flex-col gap-2 mb-2">
+              {!jobsPanel.ok && <PanelError failure={jobsPanel} />}
+              {!opsErrorsPanel.ok && <PanelError failure={opsErrorsPanel} />}
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             {TAG_FILTERS.map((f) => (
               <FilterChip key={f.value} value={f.value} label={`${f.label} (${counts[f.value]})`} active={tagFilter.has(f.value)} onClick={toggleTag} />
@@ -484,7 +502,7 @@ export function AdminActivityFeed({
           </div>
 
           {visible.length === 0 ? (
-            <EmptyState size="lg" message={events.length === 0 ? 'Nothing to show.' : 'Nothing matches this filter.'} />
+            <EmptyState size="lg" message={events.length === 0 ? (jobsPanel.ok && opsErrorsPanel.ok ? 'Nothing to show.' : 'Nothing loaded.') : 'Nothing matches this filter.'} />
           ) : (
             <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
               {visible.map((e) =>
