@@ -288,13 +288,15 @@ export async function renameNameRole(
 
 /** Reads a player's currently-stored name-color role id, if any — the pre-update read every unlink
  *  path needs before nulling `discord_name_role_id`, since the column's post-update value is gone by
- *  the time a caller could otherwise read it. */
+ *  the time a caller could otherwise read it. Throws on a read error: a swallowed failure would let
+ *  the unlink clear the stored id without the Discord role ever being deleted. */
 export async function getStoredNameRoleId(supabaseAdmin: SupabaseClient, playerId: number): Promise<string | null> {
   const { data } = await supabaseAdmin
     .from('players')
     .select('discord_name_role_id')
     .eq('id', playerId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
   return (data as { discord_name_role_id: string | null } | null)?.discord_name_role_id ?? null;
 }
 

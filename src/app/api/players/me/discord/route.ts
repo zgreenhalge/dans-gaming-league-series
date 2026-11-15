@@ -25,7 +25,12 @@ export async function DELETE() {
   const playerId = session?.user?.playerId;
   if (!playerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const nameRoleId = await getStoredNameRoleId(supabaseAdmin, playerId);
+  let nameRoleId: string | null;
+  try {
+    nameRoleId = await getStoredNameRoleId(supabaseAdmin, playerId);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Could not read the stored name role" }, { status: 500 });
+  }
 
   try {
     await unlinkDiscordId(supabaseAdmin, playerId);
