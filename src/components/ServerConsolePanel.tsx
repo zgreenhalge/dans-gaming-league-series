@@ -162,7 +162,10 @@ export function ServerConsolePanel({
     setStopping(false);
   };
 
-  const [configSet, setConfigSet] = useState(configSets[0]?.key ?? '');
+  // Defaults to the first config set, derived rather than seeded so it still applies when the pickers
+  // load after the first render (a failed read that later succeeds).
+  const [chosenConfigSet, setConfigSet] = useState('');
+  const configSet = chosenConfigSet || configSets[0]?.key || '';
   const [mapChoice, setMapChoice] = useState('');
   const [customMapId, setCustomMapId] = useState('');
   const [playout, setPlayout] = useState(false);

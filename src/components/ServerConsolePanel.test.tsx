@@ -52,4 +52,12 @@ describe('ServerConsolePanel', () => {
     expect(screen.queryByRole('button', { name: 'Tear down' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Apply config set' })).toBeInTheDocument();
   });
+
+  test('pickers that load after a failed first render default to the first config set', () => {
+    const { rerender } = render(
+      <ServerConsolePanel active={{ ok: true, data: null }} pickers={{ ok: false, error: 'boom', label: 'the config-set and map pickers' }} />,
+    );
+    rerender(<ServerConsolePanel active={{ ok: true, data: null }} pickers={pickersOk} />);
+    expect(screen.getByRole('combobox', { name: /config set/i })).toHaveValue('golden');
+  });
 });
