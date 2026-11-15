@@ -46,7 +46,7 @@ async function main() {
 
   await test('claimJob — a failed claim write returns false and records a <jobType>_claim ops error', async () => {
     const db: FakeDb = { background_jobs: [], ops_errors: [] };
-    const admin = clientFailingOn(createFakeSupabaseClient(db), 'background_jobs', 'upsert', { message: 'boom' });
+    const admin = clientFailingOn(createFakeSupabaseClient(db), 'background_jobs', 'upsert', { code: 'TEST', message: 'boom' });
     assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), false);
     assert.equal(db.background_jobs.length, 0);
     assert.equal(db.ops_errors.length, 1);
