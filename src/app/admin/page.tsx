@@ -102,14 +102,11 @@ export default async function AdminPage() {
   // its own panel while the rest of the console stays usable. The ops-errors read feeds both the
   // Activity feed and the Season panel, so it runs once and both wrap the same promise.
   const opsErrorsRead = getOpsErrors();
-  const [server, jobs, opsErrors, opsErrorHistory, matches, players, season] = await Promise.all([
-    loadPanel('the server panel', async () => {
-      const [active, configSets, maps] = await Promise.all([
-        getActiveServerMatch(adminClient),
-        listConfigSets(adminClient),
-        getMapsForWorkshopPicker(),
-      ]);
-      return { active, configSets, maps };
+  const [serverActive, serverPickers, jobs, opsErrors, opsErrorHistory, matches, players, season] = await Promise.all([
+    loadPanel('the server status', () => getActiveServerMatch(adminClient)),
+    loadPanel('the config-set and map pickers', async () => {
+      const [configSets, maps] = await Promise.all([listConfigSets(adminClient), getMapsForWorkshopPicker()]);
+      return { configSets, maps };
     }),
     loadPanel('background jobs', getBackgroundJobs),
     loadPanel('ops errors', () => opsErrorsRead),
@@ -134,7 +131,8 @@ export default async function AdminPage() {
           matches={matches}
           players={players}
           selfId={selfId}
-          server={server}
+          serverActive={serverActive}
+          serverPickers={serverPickers}
           season={season}
         />
       </main>

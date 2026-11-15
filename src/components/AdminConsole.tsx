@@ -40,7 +40,8 @@ export function AdminConsole({
   matches,
   players,
   selfId,
-  server,
+  serverActive,
+  serverPickers,
   season,
 }: {
   jobs: PanelData<BackgroundJobRow[]>;
@@ -49,7 +50,8 @@ export function AdminConsole({
   matches: PanelData<AdminMatchRow[]>;
   players: PanelData<Player[]>;
   selfId: number | null;
-  server: PanelData<{ active: ActiveServerMatch | null; configSets: ConfigSetOption[]; maps: WorkshopMapOption[] }>;
+  serverActive: PanelData<ActiveServerMatch | null>;
+  serverPickers: PanelData<{ configSets: ConfigSetOption[]; maps: WorkshopMapOption[] }>;
   season: PanelData<{
     allSeasons: SeasonSummary[];
     gauntletsInProgress: GauntletRow[];
@@ -88,9 +90,7 @@ export function AdminConsole({
 
   return (
     <div className="flex flex-col gap-6">
-      <PanelGate panel={server}>
-        {(s) => <ServerConsolePanel active={s.active} configSets={s.configSets} maps={s.maps} />}
-      </PanelGate>
+      <ServerConsolePanel active={serverActive} pickers={serverPickers} />
 
       <QuickActionsPanel demoMatchIds={demoMatchIds} />
 
