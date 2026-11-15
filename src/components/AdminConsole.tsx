@@ -22,6 +22,8 @@ import { PlayerManager } from './PlayerManager';
 import { SeasonManager, type SeasonSummary } from './SeasonManager';
 import type { OpsErrorItem } from './OpsErrorList';
 import type { GauntletRow } from './GauntletLifecycleList';
+import { PanelGate } from './PanelGate';
+import type { PanelData } from '@/lib/panel-load';
 import type { BackgroundJobRow } from '@/lib/jobs';
 import type { AdminMatchRow, WorkshopMapOption, OpsErrorHistoryRow } from '@/lib/queries';
 import type { Player } from '@/lib/types';
@@ -41,19 +43,19 @@ export function AdminConsole({
   server,
   season,
 }: {
-  jobs: BackgroundJobRow[];
-  opsErrors: OpsErrorItem[];
-  opsErrorHistory: OpsErrorHistoryRow[];
-  matches: AdminMatchRow[];
-  players: Player[];
+  jobs: PanelData<BackgroundJobRow[]>;
+  opsErrors: PanelData<OpsErrorItem[]>;
+  opsErrorHistory: PanelData<OpsErrorHistoryRow[]>;
+  matches: PanelData<AdminMatchRow[]>;
+  players: PanelData<Player[]>;
   selfId: number | null;
-  server: { active: ActiveServerMatch | null; configSets: ConfigSetOption[]; maps: WorkshopMapOption[] };
-  season: {
+  server: PanelData<{ active: ActiveServerMatch | null; configSets: ConfigSetOption[]; maps: WorkshopMapOption[] }>;
+  season: PanelData<{
     allSeasons: SeasonSummary[];
     gauntletsInProgress: GauntletRow[];
     seasonOpsErrors: OpsErrorItem[];
     nextSeasonName: string;
-  };
+  }>;
 }) {
   const searchParams = useSearchParams();
   const [section, setSection] = useState<Section>(
@@ -86,7 +88,9 @@ export function AdminConsole({
 
   return (
     <div className="flex flex-col gap-6">
-      <ServerConsolePanel active={server.active} configSets={server.configSets} maps={server.maps} />
+      <PanelGate label="the server panel" panel={server}>
+        {(s) => <ServerConsolePanel active={s.active} configSets={s.configSets} maps={s.maps} />}
+      </PanelGate>
 
       <QuickActionsPanel demoMatchIds={demoMatchIds} />
 
@@ -118,20 +122,30 @@ export function AdminConsole({
           </TabBar>
 
           {manageType === 'match' && (
-            <MatchManager key={jumpNonce} matches={matches} initialQuery={jumpQueryFor('match')} demoMatchIds={demoMatchIds} />
+            <PanelGate label="matches" panel={matches}>
+              {(rows) => (
+                <MatchManager key={jumpNonce} matches={rows} initialQuery={jumpQueryFor('match')} demoMatchIds={demoMatchIds} />
+              )}
+            </PanelGate>
           )}
           {manageType === 'player' && (
-            <PlayerManager key={jumpNonce} players={players} selfId={selfId} initialQuery={jumpQueryFor('player')} />
+            <PanelGate label="players" panel={players}>
+              {(rows) => <PlayerManager key={jumpNonce} players={rows} selfId={selfId} initialQuery={jumpQueryFor('player')} />}
+            </PanelGate>
           )}
           {manageType === 'season' && (
-            <SeasonManager
-              key={jumpNonce}
-              allSeasons={season.allSeasons}
-              gauntletsInProgress={season.gauntletsInProgress}
-              seasonOpsErrors={season.seasonOpsErrors}
-              nextSeasonName={season.nextSeasonName}
-              focusLabel={jumpQueryFor('season')}
-            />
+            <PanelGate label="seasons" panel={season}>
+              {(data) => (
+                <SeasonManager
+                  key={jumpNonce}
+                  allSeasons={data.allSeasons}
+                  gauntletsInProgress={data.gauntletsInProgress}
+                  seasonOpsErrors={data.seasonOpsErrors}
+                  nextSeasonName={data.nextSeasonName}
+                  focusLabel={jumpQueryFor('season')}
+                />
+              )}
+            </PanelGate>
           )}
         </div>
       )}
