@@ -176,6 +176,19 @@ its own fixtures with explicit high ids (`9001`, ...) on top of `seed.sql`'s pla
 `plan()` count, and `delete_upcoming_season.test.sql` is the pattern to copy: each refusal raises its
 code and changes nothing, and success removes only the target's rows.
 
+One file per area:
+
+| File | Covers |
+|---|---|
+| `delete_upcoming_season.test.sql` | `delete_upcoming_season()`: each refusal deletes nothing; success removes only that season's draft and roster |
+| `reopen_scrim_night.test.sql` | `reopen_scrim_night()`: refused while another night is current, restamps `last_active_at` |
+| `scrim_night_activity.test.sql` | which writes stamp `scrim_nights.last_active_at` (server `provisioning`/`live`, scores) and which don't (check-in, check-out, making a match); an ended or idle night isn't revived |
+| `scrim_match_revisions.test.sql` | `update_scrim_match()`, `discard_scrim_match()`, `claim_scrim_match_start()`: a stale revision is refused, a claim bumps it, a match on the server or scored refuses all three |
+| `anon_grants.test.sql` | the tables and columns `anon` can read, no write or function execute for the API roles, RLS on every table |
+
+A new test earns its place by failing when the thing it covers breaks: before committing one, break the
+function or grant on a scratch stack and confirm the file goes red.
+
 ## CI placement
 
 `e2e` is a job in `.github/workflows/ci.yml`, gated on the same `changes.outputs.frontend` path
