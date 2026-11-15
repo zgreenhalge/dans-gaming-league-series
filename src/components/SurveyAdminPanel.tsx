@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './buttonStyles';
 import SectionLabel from './SectionLabel';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';

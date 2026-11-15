@@ -9,7 +9,7 @@ import { SurveyForm } from './SurveyForm';
 import { SuperlativesBallot } from './SuperlativesBallot';
 import { SuperlativeResultsPanel } from './SuperlativeResults';
 import { FeedbackFormFrame } from './FeedbackFormFrame';
-import { SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './buttonStyles';
 
 /** Admin-only link from a tab to its admin page (`/admin/seasons/<kind>/<id>`). */
 function manageLink(kind: 'survey' | 'superlatives', seasonId: number, isAdmin: boolean) {

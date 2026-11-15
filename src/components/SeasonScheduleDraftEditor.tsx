@@ -10,7 +10,7 @@ import {
 } from '@/lib/season-schedule-validation';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 import EmptyState from './EmptyState';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import ErrorText from '@/components/ErrorText';
 import { routeError } from '@/lib/util';
 

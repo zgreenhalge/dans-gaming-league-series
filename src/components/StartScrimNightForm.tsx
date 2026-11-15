@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import ErrorText from './ErrorText';
 import { SELECT_CLS } from './formStyles';
-import { SMALL_AMBER_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_AMBER_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './buttonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { scrimNightHref } from '@/lib/crumbs';

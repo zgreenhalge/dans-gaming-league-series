@@ -3,7 +3,7 @@
 // across the full tab width, then the body (capped to a readable width unless `wide`).
 
 import type { ReactNode } from 'react';
-import { SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './buttonStyles';
 
 export function FeedbackFormFrame({
   manage,

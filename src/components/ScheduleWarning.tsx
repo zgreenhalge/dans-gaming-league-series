@@ -10,7 +10,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
-import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS } from './buttonStyles';
 import type { ScheduleWarning } from './useScheduleEditor';
 
 export function ScheduleCollisionMessage({

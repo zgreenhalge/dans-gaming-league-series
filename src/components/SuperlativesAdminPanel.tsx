@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
-import { SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './buttonStyles';
 import { FeedbackAdminControls } from './FeedbackAdminControls';
 import { RemoveXButton } from './RemoveXButton';
 import { SortableList } from './SortableList';

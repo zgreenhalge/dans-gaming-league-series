@@ -8,7 +8,7 @@ import ErrorText from './ErrorText';
 import MatchServerPanel from './MatchServerPanel';
 import { CUSTOM_MAP_CHOICE, MapPicker } from './MapPicker';
 import { SELECT_CLS } from './formStyles';
-import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './buttonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
 import { MatchCard } from './MatchCard';
 import { CollapsiblePanel } from './CollapsiblePanel';

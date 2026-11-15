@@ -9,7 +9,7 @@
 // too much to generalize (warnings, redirects, retries).
 
 import { useState } from 'react';
-import { SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './buttonStyles';
 import ErrorText from '@/components/ErrorText';
 
 const CONFIRM_VARIANT: Record<'primary' | 'danger', string> = {

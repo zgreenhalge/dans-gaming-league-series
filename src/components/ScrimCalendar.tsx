@@ -6,7 +6,7 @@ import { ScrimNightPanel } from './ScrimNightPanel';
 import { ScrimPastNights } from './ScrimPastNights';
 import { StartScrimNightForm } from './StartScrimNightForm';
 import { SkeletonBar } from './Skeleton';
-import { SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS } from './buttonStyles';
 import { useHasMounted } from './useHasMounted';
 import { DAY_FILL_CLS, Seats } from './ScrimSeats';
 import { dayNightFill } from '@/lib/scrim-seats';

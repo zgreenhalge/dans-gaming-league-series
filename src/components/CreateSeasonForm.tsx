@@ -2,7 +2,7 @@
 
 import { useId, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import { parseBuyInText } from '@/lib/season-buy-in';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';
 import ErrorText from '@/components/ErrorText';

@@ -18,7 +18,7 @@
 // the score route (`closeMatchThread()`/`closeGauntletPodThreadIfDone()`), not from here.
 
 import { useState } from 'react';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import ErrorText from '@/components/ErrorText';
 import SectionLabel from './SectionLabel';
 import { routeError } from '@/lib/util';

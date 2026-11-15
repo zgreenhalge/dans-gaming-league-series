@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { parseBuyInText } from '@/lib/season-buy-in';
-import { CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import { FORM_INPUT_CLS } from './ArmedConfirmButton';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';

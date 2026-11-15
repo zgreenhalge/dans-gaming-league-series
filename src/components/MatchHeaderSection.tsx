@@ -8,7 +8,7 @@ import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';
-import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS } from './buttonStyles';
 import ErrorText from '@/components/ErrorText';
 
 interface Props {
