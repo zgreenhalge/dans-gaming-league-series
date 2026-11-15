@@ -33,7 +33,12 @@ export async function POST(
     return NextResponse.json({ error: 'Server hosting not configured' }, { status: 503 });
   }
 
-  const occupant = await findServerOccupant(getAdminClient(), matchId);
+  let occupant: number | null;
+  try {
+    occupant = await findServerOccupant(getAdminClient(), matchId);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Checking the server failed' }, { status: 500 });
+  }
   if (occupant !== null) {
     return NextResponse.json(
       { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
