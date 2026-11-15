@@ -443,7 +443,7 @@ to set its own override (a real match's per-match cvar here, or a pug launch's `
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/matches/[id]/server/status` | session (admin/in-match; any signed-in player for a scrim match) | reconciled server state for the panel |
-| POST | `/api/matches/[id]/server/provision` | session | provision (202; boots in `after()`; 409 if busy; `{ force: true }` takes over a server live outside a DGLS match; a scrim match sends `{ revision }` and gets 409 `match_changed` when its lobby changed it since) |
+| POST | `/api/matches/[id]/server/provision` | session | provision (202; boots in `after()`; 409 if busy; `{ force: true }` takes over a server live outside a DGLS match; a scrim match sends `{ revision }` and gets 409 `match_changed` when its lobby changed it since; one whose boot failed is retried with no body, claimed from its current revision by `claim_scrim_match_start()`) |
 | POST | `/api/matches/[id]/server/apply-match-config` | session | re-push the match's loadmatch config (409 if busy) |
 | POST | `/api/matches/[id]/server/teardown` | session | stop the server |
 | GET | `/api/admin/server/config-diff` | admin | read-only config-set drift vs. live (`diffConfigSet`, `?configSet=` defaults to `golden`) |

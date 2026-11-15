@@ -1812,7 +1812,7 @@ export type Database = {
     }
     Functions: {
       claim_scrim_match_start: {
-        Args: { p_match_id: number; p_revision: number }
+        Args: { p_match_id: number; p_revision?: number }
         Returns: number
       }
       clear_season_schedule_draft: {
