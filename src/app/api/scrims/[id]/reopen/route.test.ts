@@ -81,6 +81,23 @@ async function main() {
     assert.ok(db.scrim_nights[0].ended_at);
   });
 
+  await test('409 when a concurrent reopen lands between the access check and the RPC', async () => {
+    const db = installFixture([ended()]);
+    const real = scrimNightRpcs.reopen_scrim_night;
+    __setTestAdminClient(
+      createFakeSupabaseClient(db, {
+        reopen_scrim_night: (args, fdb) => {
+          real(args, fdb); // the other player's Reopen wins first
+          return real(args, fdb);
+        },
+      }),
+    );
+    __setTestSession(sessionFor(PLAYER_ID));
+    const res = await reopen();
+    assert.equal(res.status, 409);
+    assert.match((await res.json()).error, /not over/);
+  });
+
   await test('404 for a night that does not exist', async () => {
     installFixture([ended()]);
     __setTestSession(sessionFor(PLAYER_ID));

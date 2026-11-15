@@ -43,7 +43,7 @@ export const scrimNightRpcs: Record<string, RpcHandler> = {
     if ((db.scrim_nights ?? []).some((n) => n.id !== args.p_night_id && holdsServerFrom(n, now))) {
       throw new FakeRpcError('current-scrim-night');
     }
-    if (!night) throw new FakeRpcError(`Scrim night ${args.p_night_id} not found`);
+    if (!night || scrimNightEnd(toNight(night)) > Date.parse(now)) throw new FakeRpcError('scrim-night-not-over');
     night.ended_at = null;
     night.last_active_at = now;
     return null;

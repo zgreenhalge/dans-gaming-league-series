@@ -79,12 +79,21 @@ export class CurrentScrimNightError extends Error {
   }
 }
 
+/** Thrown by `reopenScrimNight()` when the night is not over (or is gone), e.g. a concurrent Reopen got there first. */
+export class ScrimNightNotOverError extends Error {
+  constructor() {
+    super('That night is not over');
+    this.name = 'ScrimNightNotOverError';
+  }
+}
+
 /** Reopens a night that is over (`reopen_scrim_night()`): clears `ended_at` and counts now as activity,
  *  so it is current again until it is ended or goes idle. */
 export async function reopenScrimNight(db: SupabaseClient, nightId: number): Promise<void> {
   const { error } = await db.rpc('reopen_scrim_night', { p_night_id: nightId });
   if (error) {
     if (error.message.includes('current-scrim-night')) throw new CurrentScrimNightError();
+    if (error.message.includes('scrim-night-not-over')) throw new ScrimNightNotOverError();
     throw new Error(error.message);
   }
 }
