@@ -6,6 +6,7 @@ import { LocalTime } from './LocalTime';
 import { JobRetryButton } from './JobActions';
 import ErrorText from '@/components/ErrorText';
 import { routeError } from '@/lib/util';
+import { BACKGROUND_JOB_TYPES, jobClaimOperation } from '@/lib/jobs';
 
 export interface OpsErrorItem {
   id: number;
@@ -52,8 +53,13 @@ export const OPERATION_LABELS: Record<string, string> = {
   steam_id_learn: 'Steam ID Learning',
   server_provision: 'Server Provision',
   server_teardown: 'Server Teardown',
-  demo_ingest_claim: 'Demo Ingest Claim',
-  replay_extract_claim: 'Replay Extract Claim',
+  // Each background job type's claim failure, labeled from the type (`demo_ingest` → "Demo Ingest Claim").
+  ...Object.fromEntries(
+    BACKGROUND_JOB_TYPES.map((type) => [
+      jobClaimOperation(type),
+      `${type.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')} Claim`,
+    ]),
+  ),
   sabremetrics_persist: 'Sabremetrics',
   weapon_stats_persist: 'Weapon Stats',
   live_score_clear: 'Live Score Clear',
