@@ -89,7 +89,7 @@ export const SCRIM_LEAGUE_CLEARANCE_MS = 30 * 60 * 1000;
 /** The `[startMs, endMs]` span, in epoch ms, in which a scheduled league match conflicts with scrim
  *  play running from `fromMs` to `toMs`: `SCRIM_LEAGUE_CLEARANCE_MS` before the first until that long
  *  after the last. The one definition behind the night page's league-match list
- *  (`scrimNightLeagueWindow()`) and the server-start block (`leagueMatchBlockingScrim()`). */
+ *  (`scrimNightLeagueWindow()`) and the server-start block (`leagueMatchBlockingScrim()`); each decides for itself whether a match exactly on an edge is in. */
 export function scrimLeagueWindow(fromMs: number, toMs: number): [number, number] {
   return [fromMs - SCRIM_LEAGUE_CLEARANCE_MS, toMs + SCRIM_LEAGUE_CLEARANCE_MS];
 }

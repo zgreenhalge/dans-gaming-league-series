@@ -153,7 +153,7 @@ export default async function ScrimNightPage({ params }: { params: Promise<{ id:
 
         {/* A match made by someone else (Next Match, Generate Rounds) appears for every viewer, so
             nobody makes a duplicate. */}
-        {(lobbyMatch || !hasScrimNightEnded(night.night, now)) && (
+        {!hasScrimNightEnded(night.night, now) && (
           <RefreshOnServerState table="matches" event="INSERT" filter={`scrim_night_id=eq.${night.night.id}`} />
         )}
 
