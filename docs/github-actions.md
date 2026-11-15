@@ -69,8 +69,8 @@ lives in Actions.
      the caller on a failed dispatch and never wrote a row to unwind), there's no rollback to do — call
      `dispatchWorkflow` directly and `recordJobStatus` only in the success branch. A third shape covers
      a claimed row where failure needs neither a rollback nor to reach the caller: `ingest/matchzy-log`'s
-     `demo_ingest` path claims `received` (via `claimJob()`) before dispatching, and on a failed dispatch just logs and
-     leaves the row at `received` — the Action's own pull from DatHost hasn't even started yet at that
+     `demo_ingest` path claims `received` (via `claimJob()`) before dispatching, and on a failed
+     dispatch just logs and leaves the row at `received` — the Action's own pull from DatHost hasn't even started yet at that
      point, so a stale `received` row is a correct "not started" state, not a wedge, and the manual
      `demo/dispatch` route is the
      retry path. On success it calls `advanceJobStatus` (not `recordJobStatus`) to move `received` →
