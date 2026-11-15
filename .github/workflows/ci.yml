@@ -131,7 +131,7 @@ jobs:
 
       # pgTAP files under supabase/tests/database/ run against the stack just started (docs/e2e.md).
       - name: Run database tests
-        run: supabase test db
+        run: npm run db:test
 
       - name: Export local Supabase connection env vars
         # `-o env` quotes every value (`API_URL="http://..."`). `$GITHUB_ENV` isn't shell-parsed —

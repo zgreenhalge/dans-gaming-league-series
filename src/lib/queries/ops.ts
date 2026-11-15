@@ -117,9 +117,8 @@ function buildJobSubject(
 /**
  * All background jobs across every pipeline, newest activity first. The admin jobs
  * dashboard (#145) is the single notification channel for anything that would otherwise
- * fail silently. A failed read throws rather than returning `[]`, so an unreadable table never
- * looks like "no jobs"; the caller decides how to show the failure (the admin console renders it
- * inline in its own panel).
+ * fail silently. A failed read throws, so an unreadable table never looks like "no jobs"; the
+ * caller decides how to show the failure (the admin console renders it inline in its own panel).
  */
 export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
   type JobRow = {
