@@ -6,6 +6,7 @@ import { LocalTime } from './LocalTime';
 import { JobRetryButton } from './JobActions';
 import ErrorText from '@/components/ErrorText';
 import { routeError } from '@/lib/util';
+import { BACKGROUND_JOB_TYPES, jobClaimOperation } from '@/lib/jobs';
 
 export interface OpsErrorItem {
   id: number;
@@ -52,8 +53,6 @@ export const OPERATION_LABELS: Record<string, string> = {
   steam_id_learn: 'Steam ID Learning',
   server_provision: 'Server Provision',
   server_teardown: 'Server Teardown',
-  demo_ingest_claim: 'Demo Ingest Claim',
-  replay_extract_claim: 'Replay Extract Claim',
   sabremetrics_persist: 'Sabremetrics',
   weapon_stats_persist: 'Weapon Stats',
   live_score_clear: 'Live Score Clear',
@@ -64,6 +63,20 @@ export const OPERATION_LABELS: Record<string, string> = {
   schedule_confirm: 'Schedule Confirm',
   schedule_confirm_cleanup: 'Schedule Confirm Cleanup',
 };
+
+/** Each background job type's claim-failure operation, labeled from the job type itself
+ *  (`demo_ingest` → "Demo Ingest Claim"), so a new job type needs no hand-written entry. */
+const CLAIM_OPERATION_LABELS: Record<string, string> = Object.fromEntries(
+  BACKGROUND_JOB_TYPES.map((type) => [
+    jobClaimOperation(type),
+    `${type.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')} Claim`,
+  ]),
+);
+
+/** The display label for an `ops_errors.operation`, falling back to the raw key. */
+export function operationLabel(operation: string): string {
+  return OPERATION_LABELS[operation] ?? CLAIM_OPERATION_LABELS[operation] ?? operation;
+}
 
 /** Dismiss one live `ops_errors` row. Shared by every surface that renders one (this list, and the
  * Activity feed's merged Errored tier) so the request/response handling can't drift between them. */
@@ -103,7 +116,7 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
           <div className="flex items-center gap-2">
             <span className="font-display text-[14px] font-semibold">{item.label}</span>
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">
-              {OPERATION_LABELS[item.operation] ?? item.operation}
+              {operationLabel(item.operation)}
             </span>
           </div>
           <div className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mt-1 max-w-[520px]">

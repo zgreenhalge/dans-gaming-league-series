@@ -34,7 +34,7 @@ import {
 } from '@/lib/jobs';
 import { IngestJobActions } from './IngestJobActions';
 import { JobRetryButton, JobsLiveRefresh } from './JobActions';
-import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
+import { operationLabel, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
 import type { OpsErrorHistoryRow } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
 import { PanelError, PanelGate } from './PanelGate';
@@ -284,7 +284,7 @@ function OpsEventRow({ event, onJump, onDismissed }: {
             </span>
             <span className="font-display text-[13px] font-semibold truncate">{err.label}</span>
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">
-              {OPERATION_LABELS[err.operation] ?? err.operation}
+              {operationLabel(err.operation)}
             </span>
           </div>
           <ErrorText error={err.message} className="mt-1 break-words max-w-[520px]" />
@@ -349,7 +349,7 @@ function HistoryTable({ rows }: { rows: OpsErrorHistoryRow[] }) {
           {rows.map((r) => (
             <tr key={`${r.weekStart}:${r.operation}`} className="border-t border-[var(--color-border-tertiary)]">
               <td className="font-mono text-[11px] text-[var(--color-text-secondary)] px-3 py-2 tabular-nums">{r.weekStart}</td>
-              <td className="font-display text-[13px] px-3 py-2">{OPERATION_LABELS[r.operation] ?? r.operation}</td>
+              <td className="font-display text-[13px] px-3 py-2">{operationLabel(r.operation)}</td>
               <td className="font-mono text-[13px] px-3 py-2 text-right tabular-nums">{r.count}</td>
             </tr>
           ))}

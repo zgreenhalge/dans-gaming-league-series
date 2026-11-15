@@ -19,6 +19,13 @@ export const REPLAY_EXTRACT_JOB_TYPE: BackgroundJobType = 'replay_extract';
 /** `ehog_recompute`'s job-type literal, shared so `triggerRatingRecompute()` doesn't redeclare it. */
 export const EHOG_RECOMPUTE_JOB_TYPE: BackgroundJobType = 'ehog_recompute';
 
+/** The `ops_errors.operation` a job type's claim failure is recorded under. One definition shared by
+ *  the route that records it and `operationLabel()` (`OpsErrorList.tsx`) that labels it, so a new job
+ *  type needs no hand-written label entry. */
+export function jobClaimOperation(jobType: string): string {
+  return `${jobType}_claim`;
+}
+
 /** Short badge per pipeline, for a scannable mixed list. */
 export const JOB_TYPE_LABEL: Record<BackgroundJobType, string> = {
   demo_ingest: 'demo',

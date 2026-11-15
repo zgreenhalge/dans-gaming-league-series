@@ -50,9 +50,10 @@ lives in Actions.
      doc comment), so basing this on either would have a redispatched row reading stale again the
      instant it lands, before the Action even starts. The atomic first-landing claim some routes use
      instead is `claimJob()` (`src/lib/background-jobs.ts`): the first caller for a `(job_type,
-     match_id)` gets `true`, every other gets `false`, and a failed claim write is recorded as a
-     `<job_type>_claim` ops error. The auth check every route does is the part that's genuinely
-     per-route and stays hand-written at the call site.
+     match_id)` gets `'claimed'`, every other gets `'duplicate'`, and a failed write gets `{ error }` —
+     which the route records as a `jobClaimOperation()` (`<job_type>_claim`) ops error. The auth
+     check every route does is the part that's genuinely per-route and stays hand-written at the
+     call site.
    - claims the row (`recordJobStatus` in `src/lib/background-jobs.ts`) to `queued`, then dispatches
      the workflow via `dispatchAndRecordFailure`, which rolls the row — and a subject column
      (`matches.replay_status`, etc.), when given one — back to `failed` if the dispatch call itself
