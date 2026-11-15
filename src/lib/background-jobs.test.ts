@@ -1,7 +1,7 @@
 /**
  * Regression harness for `claimJob()` (src/lib/background-jobs.ts) — the once-per-`(job_type,
- * match_id)` claim every auto-dispatch route races on: the first claim wins, a second returns
- * `false`, and a failed claim write surfaces as an ops error rather than a silent no-op.
+ * match_id)` claim every auto-dispatch route races on: the first claim wins, a second reports
+ * `'duplicate'`, and a failed claim write reports `{ error }` rather than looking like a lost race.
  *
  * Run:  npx vitest run src/lib/background-jobs.test.ts
  */
@@ -17,7 +17,7 @@ async function main() {
   await test('claimJob — the first claim wins and writes the initial status/stage', async () => {
     const db: FakeDb = { background_jobs: [] };
     const admin = createFakeSupabaseClient(db);
-    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), true);
+    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), 'claimed');
     assert.equal(db.background_jobs.length, 1);
     assert.equal(db.background_jobs[0].job_type, 'demo_ingest');
     assert.equal(db.background_jobs[0].match_id, 5);
@@ -25,12 +25,12 @@ async function main() {
     assert.equal(db.background_jobs[0].stage, 'received');
   });
 
-  await test('claimJob — a second claim for the same (job_type, match) returns false and leaves the row alone', async () => {
+  await test('claimJob — a second claim for the same (job_type, match) returns duplicate and leaves the row alone', async () => {
     const db: FakeDb = { background_jobs: [] };
     const admin = createFakeSupabaseClient(db);
-    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), true);
+    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), 'claimed');
     db.background_jobs[0].status = 'running';
-    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), false);
+    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), 'duplicate');
     assert.equal(db.background_jobs.length, 1);
     assert.equal(db.background_jobs[0].status, 'running');
   });
@@ -38,31 +38,18 @@ async function main() {
   await test('claimJob — a different job type or match claims independently', async () => {
     const db: FakeDb = { background_jobs: [] };
     const admin = createFakeSupabaseClient(db);
-    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), true);
-    assert.equal(await claimJob(admin, 'replay_extract', 5, { status: 'queued', stage: 'validate' }), true);
-    assert.equal(await claimJob(admin, 'demo_ingest', 6, RECEIVED), true);
+    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), 'claimed');
+    assert.equal(await claimJob(admin, 'replay_extract', 5, { status: 'queued', stage: 'validate' }), 'claimed');
+    assert.equal(await claimJob(admin, 'demo_ingest', 6, RECEIVED), 'claimed');
     assert.equal(db.background_jobs.length, 3);
   });
 
-  await test('claimJob — a failed claim write returns false and records a <jobType>_claim ops error', async () => {
+  await test('claimJob — a failed claim write reports { error } and writes nothing, no ops error', async () => {
     const db: FakeDb = { background_jobs: [], ops_errors: [] };
     const admin = clientFailingOn(createFakeSupabaseClient(db), 'background_jobs', 'upsert', { code: 'TEST', message: 'boom' });
-    assert.equal(await claimJob(admin, 'demo_ingest', 5, RECEIVED), false);
+    assert.deepEqual(await claimJob(admin, 'demo_ingest', 5, RECEIVED), { error: 'boom' });
     assert.equal(db.background_jobs.length, 0);
-    assert.equal(db.ops_errors.length, 1);
-    assert.equal(db.ops_errors[0].entity_type, 'match');
-    assert.equal(db.ops_errors[0].entity_id, 5);
-    assert.equal(db.ops_errors[0].operation, 'demo_ingest_claim');
-    assert.match(String(db.ops_errors[0].message), /boom/);
-  });
-
-  await test('claimJob — a winning claim dismisses that match\'s earlier <jobType>_claim ops error', async () => {
-    const db: FakeDb = { background_jobs: [], ops_errors: [] };
-    const failing = clientFailingOn(createFakeSupabaseClient(db), 'background_jobs', 'upsert', { code: 'TEST', message: 'boom' });
-    assert.equal(await claimJob(failing, 'demo_ingest', 5, RECEIVED), false);
-    assert.equal(db.ops_errors[0].dismissed_at ?? null, null);
-    assert.equal(await claimJob(createFakeSupabaseClient(db), 'demo_ingest', 5, RECEIVED), true);
-    assert.ok(db.ops_errors[0].dismissed_at);
+    assert.equal(db.ops_errors.length, 0);
   });
 
   report();

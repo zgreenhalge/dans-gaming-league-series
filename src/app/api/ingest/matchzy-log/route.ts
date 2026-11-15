@@ -25,13 +25,32 @@ import { advanceJobStatus, claimJob, dispatchAndRecordFailure, matchJobKey, mirr
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
-import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
+import { REPLAY_EXTRACT_JOB_TYPE, jobClaimOperation } from '@/lib/jobs';
 import { afterBestEffort } from '@/lib/after';
 
-/** Claims the demo-ingest job (`claimJob()`: exactly one of two concurrent map_result deliveries for
+/** `claimJob()` for a match's job, owning the ops-error side: a failed claim write is recorded under
+ *  `jobClaimOperation(jobType)` so a dropped claim is visible to an admin, and a winning claim clears
+ *  that match's earlier one. Resolves `true` only for the caller that won the claim. */
+async function claimJobOrRecord(
+  supabaseAdmin: SupabaseClient,
+  jobType: string,
+  matchId: number,
+  fields: { status: string; stage: string },
+): Promise<boolean> {
+  const claim = await claimJob(supabaseAdmin, jobType, matchId, fields);
+  const operation = jobClaimOperation(jobType);
+  if (typeof claim === 'object') {
+    await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Could not claim ${jobType} job: ${claim.error}`);
+    return false;
+  }
+  if (claim === 'claimed') await clearOpsError(supabaseAdmin, 'match', matchId, operation);
+  return claim === 'claimed';
+}
+
+/** Claims the demo-ingest job (`claimJobOrRecord()`: exactly one of two concurrent map_result deliveries for
  *  the same match wins) before dispatching. */
 async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const claimed = await claimJob(supabaseAdmin, DEMO_INGEST_JOB_TYPE, matchId, { status: 'received', stage: 'received' });
+  const claimed = await claimJobOrRecord(supabaseAdmin, DEMO_INGEST_JOB_TYPE, matchId, { status: 'received', stage: 'received' });
   if (!claimed) return; // already claimed (in flight, or ran once) or the claim failed (recorded as an ops error)
 
   const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });
@@ -58,7 +77,7 @@ async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number
 async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   if (process.env.REPLAY_AUTO_DISPATCH === 'false') return;
 
-  const claimed = await claimJob(supabaseAdmin, REPLAY_EXTRACT_JOB_TYPE, matchId, { status: 'queued', stage: 'validate' });
+  const claimed = await claimJobOrRecord(supabaseAdmin, REPLAY_EXTRACT_JOB_TYPE, matchId, { status: 'queued', stage: 'validate' });
   if (!claimed) return;
 
   const subject = { table: 'matches', column: 'replay_status', id: matchId };
