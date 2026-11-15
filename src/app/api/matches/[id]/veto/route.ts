@@ -9,6 +9,7 @@ import {
   matchzyConfigContext,
   provisionErrorHandler,
   fetchServerStateRow,
+  type MatchServerStateRow,
 } from '@/lib/dathost-lifecycle';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
@@ -238,7 +239,7 @@ export async function PATCH(
   // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
   const merged = { ...m, ...update } as VetoFields;
   if (isVetoComplete(merged, isGauntlet)) {
-    let srv: Awaited<ReturnType<typeof fetchServerStateRow>>;
+    let srv: MatchServerStateRow | null;
     try {
       srv = await fetchServerStateRow(supabaseAdmin, matchId);
     } catch (err) {

@@ -277,22 +277,26 @@ async function testGetActiveServerMatch() {
 }
 
 async function testServerStateFailedReads() {
-  const failure = { code: '57014', message: 'statement timeout' };
+  const failingClient = () =>
+    clientFailingOn(createFakeSupabaseClient({ match_server_state: [] }), 'match_server_state', 'select', {
+      code: '57014',
+      message: 'statement timeout',
+    });
 
   await test('findServerOccupant: rejects when the match_server_state read fails, never returns null', async () => {
-    const client = clientFailingOn(createFakeSupabaseClient({ match_server_state: [] }), 'match_server_state', 'select', failure);
+    const client = failingClient();
     await withEnvAsync({ DATHOST_SERVER_ID: 'srv-1' }, async () => {
       await assert.rejects(() => findServerOccupant(client, 100), /statement timeout/);
     });
   });
 
   await test('fetchServerStateRow: rejects when the match_server_state read fails, never returns null', async () => {
-    const client = clientFailingOn(createFakeSupabaseClient({ match_server_state: [] }), 'match_server_state', 'select', failure);
+    const client = failingClient();
     await assert.rejects(() => fetchServerStateRow(client, 100), /statement timeout/);
   });
 
   await test('getReconciledServerState: rejects when the match_server_state read fails instead of reporting idle', async () => {
-    const client = clientFailingOn(createFakeSupabaseClient({ match_server_state: [] }), 'match_server_state', 'select', failure);
+    const client = failingClient();
     await assert.rejects(() => getReconciledServerState(client, 100), /statement timeout/);
   });
 }
