@@ -107,7 +107,8 @@ looks like "no rows". Where that error goes is decided by the page, by one rule:
 - **A page of independent panels isolates each panel** — the admin console (`/admin`). Wrap each
   panel's read in `loadPanel()` (`src/lib/panel-load.ts`) and render it through `PanelGate`
   (`src/components/PanelGate.tsx`): a failed read becomes an inline "Couldn't load …" box in that panel
-  while the rest of the console stays usable, and is logged. The console is where ops failures get
+  while the rest of the console stays usable, and is logged (Next.js redirect/notFound errors pass
+  through untouched). The console is where ops failures get
   investigated, so it must not go down with one broken read.
 - **Everything else lets the throw reach the error boundary** — including an admin check on a shared
   page. `/seasons` awaits `isPlayerAdmin()` without a catch: a page that silently dropped its admin

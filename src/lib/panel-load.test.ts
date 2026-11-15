@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
+import { redirect } from 'next/navigation';
 import { loadPanel } from './panel-load';
 
 describe('loadPanel', () => {
@@ -25,5 +26,11 @@ describe('loadPanel', () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  test('a Next.js control-flow error (redirect) is rethrown, not wrapped', async () => {
+    await expect(loadPanel('players', async () => redirect('/'))).rejects.toMatchObject({
+      digest: expect.stringContaining('NEXT_REDIRECT'),
+    });
   });
 });
