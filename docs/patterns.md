@@ -381,7 +381,7 @@ the rows the page depends on.
   `week_id=eq.42` on the week page, `week_id=in.(…)` (`getSeasonMatchesRealtimeFilter()`) on the
   round, group and season hub pages, `id=eq.7` on the scrim match page. A delete can't be filtered, so
   a page that must hear one renders a second `event="DELETE"` subscription with no `filter`, as the
-  scrim night page does for drop-outs.
+  scrim night page does for drop-outs and discarded matches.
 - **One refresh per burst.** It refreshes 3 seconds after the last event, so a result (the score,
   then its players' stats) lands as one refresh with all of it.
 - **`onlyPlayed`** narrows the refresh to a row whose `final_score` is played — the season hub follows
