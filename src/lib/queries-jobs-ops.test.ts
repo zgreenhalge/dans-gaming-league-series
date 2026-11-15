@@ -34,6 +34,15 @@ async function main() {
     }
   });
 
+  await test('getBackgroundJobs() — a failed maps lookup rejects instead of degrading labels', async () => {
+    __setTestAdminClient(clientFailingOn(fakeClient, 'maps', 'select', { code: 'TEST', message: 'maps unreadable' }));
+    try {
+      await assert.rejects(() => getBackgroundJobs(), { message: 'maps unreadable' });
+    } finally {
+      __setTestAdminClient(fakeClient);
+    }
+  });
+
   await test('getOpsErrors() — all 3 entity types resolve a label, newest first, snapshot', async () => {
     const errors = await getOpsErrors();
     assert.equal(errors.length, 3);

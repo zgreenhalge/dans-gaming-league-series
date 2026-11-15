@@ -502,7 +502,7 @@ export function AdminActivityFeed({
           </div>
 
           {visible.length === 0 ? (
-            <EmptyState size="lg" message={events.length === 0 ? 'Nothing to show.' : 'Nothing matches this filter.'} />
+            <EmptyState size="lg" message={events.length === 0 ? (jobsPanel.ok && opsErrorsPanel.ok ? 'Nothing to show.' : 'Nothing loaded.') : 'Nothing matches this filter.'} />
           ) : (
             <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
               {visible.map((e) =>

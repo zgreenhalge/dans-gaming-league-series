@@ -160,7 +160,7 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
   const matchCtx = await loadMatchJobContext(matchIds);
 
   const { data: mapRows } = mapIds.length
-    ? await getAdminClient().from('maps').select('id, name, slug').in('id', mapIds)
+    ? await getAdminClient().from('maps').select('id, name, slug').in('id', mapIds).throwOnError()
     : { data: [] as { id: number; name: string; slug: string }[] };
   const mapById = new Map(
     ((mapRows ?? []) as { id: number; name: string; slug: string }[]).map((m) => [m.id, m]),
