@@ -17,7 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ScrimTeams } from './scrim-matchmaking';
 import { isPlayedScore } from './util';
 import { findScheduleCollision, type ScheduledMatchRef } from './server-schedule-collision';
-import { SCRIM_LEAGUE_CLEARANCE_MS, SCRIM_NIGHT_OVER_ERROR, hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
+import { SCRIM_NIGHT_OVER_ERROR, hasScrimNightEnded, hasScrimNightStarted, scrimLeagueWindow, type ScrimNight } from './scrim-schedule';
 import { fetchWorkshopItem } from './workshop';
 
 /** `match_server_state.server_state` values while a match holds the server. */
@@ -104,11 +104,13 @@ export function scrimMatchPlaysAfter(matches: (ScrimMatchState & { id: number; m
   return first < match.match_number ? first : null;
 }
 
-/** The scheduled league match strictly within `SCRIM_LEAGUE_CLEARANCE_MS` of `now`, either side —
- *  one about to start, or one that started a moment ago and is still being played — or `null`. A
- *  scrim match can't start while there is one: the league match gets the one shared server. */
+/** The scheduled league match strictly inside `scrimLeagueWindow()` of `now` — one about to start, or
+ *  one that started a moment ago and is still being played — nearest first, or `null`. A scrim match
+ *  can't start while there is one: the league match gets the one shared server. */
 export function leagueMatchBlockingScrim(scheduled: ScheduledMatchRef[], now: Date): ScheduledMatchRef | null {
-  return findScheduleCollision(now.toISOString(), scheduled, SCRIM_LEAGUE_CLEARANCE_MS);
+  const nowMs = now.getTime();
+  const [start] = scrimLeagueWindow(nowMs, nowMs);
+  return findScheduleCollision(now.toISOString(), scheduled, nowMs - start);
 }
 
 /** Thrown by `queueScrimMatches()` when the night can't take new matches yet: it already has a match

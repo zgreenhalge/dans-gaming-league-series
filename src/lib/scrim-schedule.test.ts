@@ -25,6 +25,7 @@ import {
   SCRIM_NIGHT_SPAN_MS,
   canReopenScrimNight,
 } from './scrim-schedule';
+import { leagueMatchBlockingScrim } from './scrim-matches';
 import { latestMigrationDefining } from './test-support/migrationSql';
 
 const START = '2026-11-06T01:00:00.000Z'; // Thu Nov 5, 8pm Eastern
@@ -130,6 +131,17 @@ test('leagueMatchesDuring: an active night reaches the clearance past its idle e
   assert.deepEqual(leagueMatchesDuring(active, [m(lateEnd - 1, 1), m(lateEnd, 2)]).map((x) => x.id), [1]);
   const ended = { ...NIGHT, endedAt: at(HOUR).toISOString() };
   assert.deepEqual(leagueMatchesDuring(ended, [m(HOUR - 1, 1), m(HOUR + SCRIM_LEAGUE_CLEARANCE_MS - 1, 2), m(HOUR + SCRIM_LEAGUE_CLEARANCE_MS, 3)]).map((x) => x.id), [1, 2]);
+});
+
+test('a league match that blocks a scrim match during the night is one the night lists', () => {
+  const step = SCRIM_LEAGUE_CLEARANCE_MS / 2;
+  for (let now = at(0).getTime(); now < scrimNightEnd(NIGHT); now += step) {
+    for (const delta of [-SCRIM_LEAGUE_CLEARANCE_MS + 1, 0, SCRIM_LEAGUE_CLEARANCE_MS - 1]) {
+      const m = { id: 1, label: 'League', scheduledAt: new Date(now + delta).toISOString() };
+      const blocked = leagueMatchBlockingScrim([m], new Date(now)) !== null;
+      assert.equal(blocked && leagueMatchesDuring(NIGHT, [m]).length === 0, false, `now ${now}, delta ${delta}`);
+    }
+  }
 });
 
 test('scrimNightEnd: endedAt when set (never before the start), else idle after the latest activity', () => {
