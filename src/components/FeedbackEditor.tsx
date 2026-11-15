@@ -10,7 +10,7 @@ import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import { FeedbackFormFrame } from './FeedbackFormFrame';
 import ErrorText from '@/components/ErrorText';
 

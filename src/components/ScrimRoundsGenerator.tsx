@@ -2,7 +2,7 @@
 
 import { ScheduleLabView, type PlanPeriod } from './ScheduleLabView';
 import ErrorText from './ErrorText';
-import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './buttonStyles';
 import { useRefreshingAction } from './useRefreshingAction';
 import type { ScheduleLabPlayer, ScheduleLabRoster } from '@/lib/queries';
 import type { FormatPlan, FormatRecord } from '@/lib/season-format';

@@ -403,7 +403,7 @@ conventions, distinct from the content-page patterns above:
   small button, admin or player-facing, is the bordered `SMALL_BUTTON_CLS` (an Edit or Manage button,
   a row action, Join / Leave Season), with `SMALL_GREEN_BUTTON_CLS` / `SMALL_AMBER_BUTTON_CLS` for a
   selected or confirming one, and the unboxed Cancel beside a form's Save is `CANCEL_BUTTON_CLS`. All live in
-  `src/components/adminButtonStyles.ts` (a plain module, so server components can import the strings;
+  `src/components/buttonStyles.ts` (a plain module, so server components can import the strings;
   a constant exported from a `'use client'` file is a client reference there) — use them rather than a
   re-typed class string per form, appending any call-site-specific modifier (`disabled:opacity-40`,
   `self-start`) on top rather than forking the base style.

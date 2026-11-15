@@ -8,7 +8,7 @@
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from './useAsyncAction';
 import { sendJsonRequest } from './sendJsonRequest';
-import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './buttonStyles';
 import { FeedbackResetControl } from './FeedbackResetControl';
 import ErrorText from '@/components/ErrorText';
 

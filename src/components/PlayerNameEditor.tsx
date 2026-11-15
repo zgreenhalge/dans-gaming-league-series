@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MAX_LENGTH, PLAYER_NAME_RULE } from '@/lib/util';
 import ErrorText from '@/components/ErrorText';
-import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS } from './buttonStyles';
 
 export default function PlayerNameEditor({ playerId, name }: { playerId: number; name: string }) {
   const router = useRouter();

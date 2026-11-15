@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import EmptyState from './EmptyState';
 import { RosterPlayerRow, useAddPlayerMenuItem } from './RosterPlayerRow';
 import { AdminMenu } from './AdminMenu';
-import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './buttonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { formatBuyIn } from '@/lib/season-buy-in';

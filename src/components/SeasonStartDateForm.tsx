@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
-import { CANCEL_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS } from './buttonStyles';
 import ErrorText from '@/components/ErrorText';
 
 interface Props {

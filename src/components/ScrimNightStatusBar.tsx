@@ -9,7 +9,7 @@ import { LocalTime } from './LocalTime';
 import { LeagueGameMark } from './ScrimSeats';
 import { ScrimCommitmentButtons } from './ScrimCommitmentButtons';
 import { StatusPill } from './StatusPill';
-import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './buttonStyles';
 import { useScrimSignupWrite } from './useScrimSignupWrite';
 import type { ScrimNightStatus } from '@/lib/scrim-night-page';
 

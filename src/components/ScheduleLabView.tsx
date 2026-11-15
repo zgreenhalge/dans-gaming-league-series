@@ -32,7 +32,7 @@ import SectionLabel from './SectionLabel';
 import { Stepper } from './Stepper';
 import EmptyState from './EmptyState';
 import ErrorText from './ErrorText';
-import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './buttonStyles';
 import { SELECT_CLS } from './formStyles';
 import { RemoveXButton } from './RemoveXButton';
 

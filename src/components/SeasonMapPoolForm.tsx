@@ -1,6 +1,6 @@
 'use client';
 
-import { CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { CANCEL_BUTTON_CLS, ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import { sendJsonRequest } from './sendJsonRequest';
 import { useAsyncAction } from './useAsyncAction';
 import { MapPoolPicker, useMapPoolSelection } from './MapPoolPicker';

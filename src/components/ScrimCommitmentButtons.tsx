@@ -1,7 +1,7 @@
 'use client';
 
 import ErrorText from './ErrorText';
-import { SMALL_AMBER_BUTTON_CLS, SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './adminButtonStyles';
+import { SMALL_AMBER_BUTTON_CLS, SMALL_BUTTON_CLS, SMALL_GREEN_BUTTON_CLS } from './buttonStyles';
 import { useScrimSignupWrite } from './useScrimSignupWrite';
 import { SCRIM_COMMITMENTS, type ScrimCommitment } from '@/lib/scrim-schedule';
 

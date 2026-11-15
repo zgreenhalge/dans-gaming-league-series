@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import EmptyState from './EmptyState';
-import { ADMIN_PRIMARY_BUTTON_CLS } from './adminButtonStyles';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './buttonStyles';
 import type { BracketPod } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
 import FieldLabel from './FieldLabel';
