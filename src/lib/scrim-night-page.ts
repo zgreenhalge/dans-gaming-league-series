@@ -30,8 +30,7 @@ export interface ScrimNightStatus {
    *  close when it ends); `null` otherwise. */
   commitment: { playerId: number; commitment: ScrimCommitment | null } | null;
   /** The viewer may reopen the night (`canViewerReopenScrimNight()`, which
-   *  `requireScrimNightReopenAccess()` enforces): it is over but still reopenable
-   *  (`canReopenScrimNight()`), and they're signed up or an admin. */
+   *  `requireScrimNightReopenAccess()` enforces). */
   canReopen: boolean;
 }
 

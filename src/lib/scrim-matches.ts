@@ -252,14 +252,9 @@ export function canManageScrimMatch(viewer: ScrimViewer, playerIds: number[]): b
   return viewer.isAdmin || (viewer.playerId != null && playerIds.includes(viewer.playerId));
 }
 
-/** Whether `playerId` is among a night's `signups`. */
-export function isSignedUpForNight(signups: { player_id: number }[], playerId: number | null): boolean {
-  return playerId != null && signups.some((s) => s.player_id === playerId);
-}
-
 /** Whether `viewer` is an admin or signed up for the night — what End night and Reopen ask of a viewer. */
 function isAdminOrSignedUp(viewer: ScrimViewer, signups: { player_id: number }[]): boolean {
-  return viewer.isAdmin || isSignedUpForNight(signups, viewer.playerId);
+  return viewer.isAdmin || (viewer.playerId != null && signups.some((s) => s.player_id === viewer.playerId));
 }
 
 /** Why `viewer` may not end `night` at `now`, or `null` when they may. Checked in order: the night is
