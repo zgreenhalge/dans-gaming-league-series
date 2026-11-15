@@ -28,7 +28,7 @@ import { getServer } from '@/lib/dathost';
 import { parseRouteId, playersOnServer } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 import {
   applyScrimSideChoice,
   claimScrimMatchStart,
@@ -114,7 +114,7 @@ export async function POST(
   try {
     occupant = await findServerOccupant(getAdminClient(), matchId);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Checking the server failed' }, { status: 500 });
+    return writeFailed(err, 'Checking the server failed');
   }
   if (occupant !== null) {
     return NextResponse.json(
@@ -154,7 +154,7 @@ export async function POST(
     }
     const conflict = scrimConflictResponse(err);
     if (conflict) return conflict;
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Setting the starting side failed' }, { status: 500 });
+    return writeFailed(err, 'Setting the starting side failed');
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.

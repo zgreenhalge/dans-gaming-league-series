@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from '@/lib/queries';
 import { pickNextScrimMatch } from '@/lib/scrim-matchmaking';
@@ -34,6 +34,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   } catch (err) {
     const conflict = scrimConflictResponse(err);
     if (conflict) return conflict;
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Making the match failed' }, { status: 500 });
+    return writeFailed(err, 'Making the match failed');
   }
 }

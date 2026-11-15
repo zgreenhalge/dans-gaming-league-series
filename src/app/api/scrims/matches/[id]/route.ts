@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 import { parseRouteId } from '@/lib/util';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { workshopIdFromInput } from '@/lib/workshop';
@@ -33,8 +33,8 @@ import {
 import { scrimConflictResponse } from '@/lib/scrim-route-errors';
 
 /** The response for a write that threw: 409 for a refused write, 500 for anything else. */
-function writeFailed(err: unknown, fallback: string): NextResponse {
-  return scrimConflictResponse(err) ?? NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
+function scrimWriteFailed(err: unknown, fallback: string): NextResponse {
+  return scrimConflictResponse(err) ?? writeFailed(err, fallback);
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const next = await updateScrimMatch(getAdminClient(), matchId, revision, { map, side: side as ScrimSideChoice | undefined, lineup });
     return NextResponse.json({ ok: true, revision: next });
   } catch (err) {
-    return writeFailed(err, 'Updating the match failed');
+    return scrimWriteFailed(err, 'Updating the match failed');
   }
 }
 
@@ -94,7 +94,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await discardScrimMatch(getAdminClient(), matchId, revision);
   } catch (err) {
-    return writeFailed(err, 'Discarding the match failed');
+    return scrimWriteFailed(err, 'Discarding the match failed');
   }
   return NextResponse.json({ ok: true });
 }

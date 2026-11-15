@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE, writeFailed } from '@/lib/feedback-lifecycle';
+import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
+import { writeFailed } from '@/lib/access-control';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
 import { addSuperlative, removeSuperlative, renameSuperlative, reorderSuperlatives, SuperlativeRacedError } from '@/lib/superlative-writes';

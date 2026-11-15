@@ -18,6 +18,11 @@ export function accessDenied(access: Extract<AccessResult, { ok: false }>) {
   return NextResponse.json({ error: access.error }, { status: access.status });
 }
 
+/** The 500 for a write that threw: the error's message, or `fallback` when the rejection isn't an `Error`. */
+export function writeFailed(err: unknown, fallback: string) {
+  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
+}
+
 /**
  * The player an "admin-or-self" request acts for: the body's `player_id`, which must be the requester
  * themselves unless they're an admin. 400 without a valid `player_id`, 403 for a non-admin naming

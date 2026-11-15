@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 import { requireScrimNightMatchAccess } from '@/lib/scrim-match-access';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { parseScrimTeams, queueScrimMatches } from '@/lib/scrim-matches';
@@ -42,6 +42,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     const conflict = scrimConflictResponse(err);
     if (conflict) return conflict;
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Queueing the matches failed' }, { status: 500 });
+    return writeFailed(err, 'Queueing the matches failed');
   }
 }

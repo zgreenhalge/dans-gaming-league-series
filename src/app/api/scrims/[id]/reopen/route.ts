@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 import { requireScrimNightReopenAccess } from '@/lib/scrim-match-access';
 import { CurrentScrimNightError, reopenScrimNight, ScrimNightNotOverError } from '@/lib/scrim-nights';
 
@@ -17,7 +17,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     await reopenScrimNight(getAdminClient(), access.night.id);
   } catch (err) {
     if (err instanceof CurrentScrimNightError || err instanceof ScrimNightNotOverError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Reopening the night failed' }, { status: 500 });
+    return writeFailed(err, 'Reopening the night failed');
   }
   return NextResponse.json({ ok: true });
 }

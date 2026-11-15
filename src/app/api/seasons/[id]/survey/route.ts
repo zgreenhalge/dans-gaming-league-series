@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE, writeFailed } from '@/lib/feedback-lifecycle';
+import { resetFeedback, setFeedbackOpen, SURVEY_LIFECYCLE } from '@/lib/feedback-lifecycle';
+import { writeFailed } from '@/lib/access-control';
 import { getSurveyForSeason } from '@/lib/queries';
 import { validateQuestionDrafts, type SurveyQuestionDraft } from '@/lib/survey';
 import { createSurvey, replaceSurveyQuestions, SurveyExistsError, SurveyLockedError } from '@/lib/survey-writes';

@@ -7,7 +7,7 @@ import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNam
 import { afterBestEffort } from '@/lib/after';
 import { DISCORD_UNLINK_FIELDS, PlayerIdentityTakenError, updatePlayer, type PlayerUpdate } from '@/lib/player-identity';
 import { parsePlayerName, parseRouteId } from '@/lib/util';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. A new name follows the
@@ -135,7 +135,7 @@ export async function PATCH(
       try {
         unlinkingNameRoleId = await getStoredNameRoleId(supabaseAdmin, targetId);
       } catch (e) {
-        return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not read the stored name role' }, { status: 500 });
+        return writeFailed(e, 'Could not read the stored name role');
       }
       Object.assign(update, DISCORD_UNLINK_FIELDS);
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
@@ -143,7 +143,7 @@ export async function PATCH(
       try {
         taken = await isDiscordIdTaken(supabaseAdmin, body.discord_id, targetId);
       } catch (e) {
-        return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not verify Discord ID' }, { status: 500 });
+        return writeFailed(e, 'Could not verify Discord ID');
       }
       if (taken) {
         return NextResponse.json({ error: 'That Discord account is already linked to another player.' }, { status: 409 });
@@ -179,7 +179,7 @@ export async function PATCH(
     data = await updatePlayer(supabaseAdmin, targetId, update);
   } catch (err) {
     if (err instanceof PlayerIdentityTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Updating the player failed' }, { status: 500 });
+    return writeFailed(err, 'Updating the player failed');
   }
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 

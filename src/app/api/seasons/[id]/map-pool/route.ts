@@ -5,7 +5,7 @@ import { getSeason } from '@/lib/queries';
 import { parseRouteId } from '@/lib/util';
 import { parseMapPoolInput } from '@/lib/season-map-pool';
 import { setSeasonMapPool } from '@/lib/season-setup';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 
 /**
  * Sets (or clears, with an empty `map_pool`) an UPCOMING regular season's map pool — a season can
@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     await setSeasonMapPool(getAdminClient(), seasonId, input.mapPool, input.newMaps);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the map pool failed' }, { status: 500 });
+    return writeFailed(err, 'Saving the map pool failed');
   }
 
   return NextResponse.json({ ok: true });

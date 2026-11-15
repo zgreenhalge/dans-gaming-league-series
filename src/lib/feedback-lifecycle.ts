@@ -11,6 +11,7 @@
 // the player-side save RPCs test the matching column in SQL.
 
 import { NextResponse } from 'next/server';
+import { writeFailed } from './access-control';
 import { getAdminClient } from './supabase-admin';
 import { getSuperlativePoll, getSurveyForSeason, isSurveyOpen } from './queries';
 import type { SuperlativePoll, Survey } from './queries';
@@ -94,16 +95,6 @@ export const SUPERLATIVES_LIFECYCLE: FeedbackLifecycle<SuperlativePoll> = {
   },
 };
 
-/** The 500 for a write that threw: its message, or `fallback` for a non-`Error`. Used by the survey
- *  and superlatives routes' edit writes (`survey-writes.ts`, `superlative-writes.ts`). */
-export function writeFailed(err: unknown, fallback: string) {
-  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
-}
-
-function failure(error: { message: string }) {
-  return NextResponse.json({ error: error.message }, { status: 500 });
-}
-
 /** Opens or closes a season's form. Closing keeps every answer; players just can no longer submit or
  *  edit. Pass `known` when the route has already loaded the form. */
 export async function setFeedbackOpen<Form>(
@@ -118,7 +109,7 @@ export async function setFeedbackOpen<Form>(
   if (blocked) return NextResponse.json({ error: blocked }, { status: 400 });
 
   const { error } = await lifecycle.setOpen(seasonId, form, open);
-  return error ? failure(error) : NextResponse.json({ ok: true });
+  return error ? writeFailed(error, error.message) : NextResponse.json({ ok: true });
 }
 
 /** Admin reset: closes a season's form and deletes every answer as one all-or-nothing RPC call. The
@@ -128,7 +119,7 @@ export async function resetFeedback<Form>(lifecycle: FeedbackLifecycle<Form>, se
   if (!form) return NextResponse.json({ error: lifecycle.missing }, { status: 404 });
 
   const { error } = await lifecycle.reset(seasonId, form);
-  return error ? failure(error) : NextResponse.json({ ok: true });
+  return error ? writeFailed(error, error.message) : NextResponse.json({ ok: true });
 }
 
 /** Saves the signed-in player's answers, replacing any they already saved — answers left out are
@@ -147,6 +138,6 @@ export async function saveFeedbackAnswers<Form>(
   if ('invalid' in attempt) return NextResponse.json({ error: attempt.invalid }, { status: 400 });
 
   const { data: saved, error } = await attempt.write;
-  if (error) return failure(error);
+  if (error) return writeFailed(error, error.message);
   return saved ? NextResponse.json({ ok: true }) : NextResponse.json({ error: lifecycle.closed }, { status: 409 });
 }

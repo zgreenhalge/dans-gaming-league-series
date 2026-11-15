@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { accessDenied } from '@/lib/access-control';
+import { accessDenied, writeFailed } from '@/lib/access-control';
 import { requireScrimSignupAccess } from '@/lib/scrim-signup-access';
 import { isScrimCheckInOpen } from '@/lib/scrim-schedule';
 import { setScrimCheckIn } from '@/lib/scrim-nights';
@@ -25,7 +25,7 @@ async function handle(req: NextRequest, params: Promise<{ id: string }>, checked
   try {
     await setScrimCheckIn(getAdminClient(), access.night.id, access.targetPlayerId, checkedIn);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Check-in failed' }, { status: 500 });
+    return writeFailed(err, 'Check-in failed');
   }
   return NextResponse.json({ ok: true });
 }
