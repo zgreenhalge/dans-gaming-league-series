@@ -72,7 +72,7 @@ export async function POST(
   const revision = isScrim ? parseScrimRevision(body?.revision) : null;
   // A start whose boot failed is retried without a revision (the admin ops list sends none): the
   // claim reads the current one.
-  const retryingFailedStart = isScrim && (await fetchServerStateRow(getAdminClient(), matchId))?.server_state === 'failed';
+  const retryingFailedStart = isScrim && revision === null && (await fetchServerStateRow(getAdminClient(), matchId))?.server_state === 'failed';
   if (isScrim && revision === null && !retryingFailedStart) {
     return NextResponse.json({ error: SCRIM_REVISION_INVALID }, { status: 400 });
   }

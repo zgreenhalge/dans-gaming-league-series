@@ -90,9 +90,8 @@ export const scrimMatchRpcs: Record<string, RpcHandler> = {
     const matchId = args.p_match_id as number;
     const state = serverStateOf(db, matchId);
     // A failed boot is retried from the current revision; any other start needs the revision it saw.
-    const match = state === 'failed'
-      ? matchAtRevision(db, matchId, (((db.matches ?? []).find((m) => m.id === matchId)?.scrim_revision as number | undefined) ?? 0))
-      : matchAtRevision(db, matchId, (args.p_revision as number | null) ?? -1);
+    const current = ((db.matches ?? []).find((m) => m.id === matchId)?.scrim_revision as number | undefined) ?? 0;
+    const match = matchAtRevision(db, matchId, state === 'failed' ? current : ((args.p_revision as number | null) ?? -1));
     if (match.final_score != null || (state && ['provisioning', 'live', 'tearing_down', 'done'].includes(state))) throw new FakeRpcError('scrim-match-locked');
     return bumpRevision(match);
   },
