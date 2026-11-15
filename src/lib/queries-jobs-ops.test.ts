@@ -8,11 +8,12 @@
 
 import assert from 'node:assert/strict';
 import { __setTestAdminClient } from './supabase-admin';
-import { createFakeSupabaseClient } from './test-support/fakeSupabase';
+import { clientFailingOn, createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 
-__setTestAdminClient(createFakeSupabaseClient(buildFakeDb()));
+const fakeClient = createFakeSupabaseClient(buildFakeDb());
+__setTestAdminClient(fakeClient);
 
 import { getBackgroundJobs, getOpsErrors } from './queries';
 import { test, report } from './test-support/miniTest';
@@ -22,6 +23,24 @@ async function main() {
     const jobs = await getBackgroundJobs();
     assert.equal(jobs.length, 5);
     matchesSnapshot('getBackgroundJobs', jobs);
+  });
+
+  await test('getBackgroundJobs() — a failed read rejects instead of returning an empty list', async () => {
+    __setTestAdminClient(clientFailingOn(fakeClient, 'background_jobs', 'select', { code: 'TEST', message: 'connection reset' }));
+    try {
+      await assert.rejects(() => getBackgroundJobs(), { message: 'connection reset' });
+    } finally {
+      __setTestAdminClient(fakeClient);
+    }
+  });
+
+  await test('getBackgroundJobs() — a failed maps lookup rejects instead of degrading labels', async () => {
+    __setTestAdminClient(clientFailingOn(fakeClient, 'maps', 'select', { code: 'TEST', message: 'maps unreadable' }));
+    try {
+      await assert.rejects(() => getBackgroundJobs(), { message: 'maps unreadable' });
+    } finally {
+      __setTestAdminClient(fakeClient);
+    }
   });
 
   await test('getOpsErrors() — all 3 entity types resolve a label, newest first, snapshot', async () => {

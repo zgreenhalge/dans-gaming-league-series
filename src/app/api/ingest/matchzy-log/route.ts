@@ -21,38 +21,18 @@ import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzy
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
 import { notifyMatchLiveScore } from '@/lib/discord-notify';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey, mirrorSubjectStatus } from '@/lib/background-jobs';
+import { advanceJobStatus, claimJob, dispatchAndRecordFailure, matchJobKey, mirrorSubjectStatus } from '@/lib/background-jobs';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
 import { afterBestEffort } from '@/lib/after';
 
-/** Claims the demo-ingest job atomically before dispatching — a plain check-then-act (SELECT to see
- *  if a job's already in flight, then upsert) can't tell two concurrent map_result deliveries for the
- *  same match (e.g. a MatchZy retry racing the original) apart: both would pass the check and both
- *  dispatch. `ignoreDuplicates` makes the claim itself the check — the INSERT only lands if no row
- *  exists yet for `(job_type, match_id)`, so exactly one caller ever sees a non-empty `claimed`. */
+/** Claims the demo-ingest job (`claimJob()`: exactly one of two concurrent map_result deliveries for
+ *  the same match wins) before dispatching. */
 async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const { data: claimed, error: claimErr } = await supabaseAdmin
-    .from('background_jobs')
-    .upsert(
-      {
-        job_type: DEMO_INGEST_JOB_TYPE,
-        match_id: matchId,
-        status: 'received',
-        stage: 'received',
-        error_message: null,
-        created_at: new Date().toISOString(),
-      },
-      { onConflict: 'job_type,match_id', ignoreDuplicates: true },
-    )
-    .select('match_id');
-  if (claimErr) {
-    console.error(`matchzy-log: could not claim demo-ingest job for match ${matchId}: ${claimErr.message}`);
-    return;
-  }
-  if (!claimed || claimed.length === 0) return; // already claimed — in flight, or already ran once
+  const claimed = await claimJob(supabaseAdmin, DEMO_INGEST_JOB_TYPE, matchId, { status: 'received', stage: 'received' });
+  if (!claimed) return; // already claimed (in flight, or ran once) or the claim failed (recorded as an ops error)
 
   const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });
   if (dispatch.ok) {
@@ -78,27 +58,8 @@ async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number
 async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   if (process.env.REPLAY_AUTO_DISPATCH === 'false') return;
 
-  const now = new Date().toISOString();
-  const { data: claimed, error: claimErr } = await supabaseAdmin
-    .from('background_jobs')
-    .upsert(
-      {
-        job_type: REPLAY_EXTRACT_JOB_TYPE,
-        match_id: matchId,
-        status: 'queued',
-        stage: 'validate',
-        error_message: null,
-        created_at: now,
-        updated_at: now,
-      },
-      { onConflict: 'job_type,match_id', ignoreDuplicates: true },
-    )
-    .select('match_id');
-  if (claimErr) {
-    console.error(`matchzy-log: could not claim replay-extract job for match ${matchId}: ${claimErr.message}`);
-    return;
-  }
-  if (!claimed || claimed.length === 0) return;
+  const claimed = await claimJob(supabaseAdmin, REPLAY_EXTRACT_JOB_TYPE, matchId, { status: 'queued', stage: 'validate' });
+  if (!claimed) return;
 
   const subject = { table: 'matches', column: 'replay_status', id: matchId };
   const { error: statusErr } = await mirrorSubjectStatus(supabaseAdmin, subject, 'queued');

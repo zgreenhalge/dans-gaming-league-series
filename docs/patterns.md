@@ -98,6 +98,28 @@ a non-JSON body and returns the fallback, so every surface words the same failur
 than the message from the error body (a `code`, `forceable`, `nextEligibleAt`) parses the body itself.
 Whichever path a call site takes, it still shows the error to the user.
 
+## A failed read throws; only a panel boundary may catch it
+
+Server reads (`fetchAllPages()`, `isPlayerAdmin()`, `getBackgroundJobs()`, and the rest of
+`src/lib/queries/`) throw when they fail instead of returning empty data, so an unreadable table never
+looks like "no rows". Where that error goes is decided by the page, by one rule:
+
+- **A page of independent panels isolates each panel** — the admin console (`/admin`). Wrap each
+  panel's read in `loadPanel()` (`src/lib/panel-load.ts`) and render it through `PanelGate`
+  (`src/components/PanelGate.tsx`): a failed read becomes an inline "Couldn't load …" box in that panel
+  while the rest of the console stays usable, and is logged (Next.js redirect/notFound errors pass
+  through untouched). The label passed to `loadPanel()` ("the server status") rides in the failure
+  value, so the log line and the on-screen error name the failure alike and the render site passes none.
+  A part of a panel that rests on its own read (the Season tab's ops errors) is its own `PanelData`
+  inside the panel's data — `mapPanel()` derives it from a shared read — and renders as an inline error
+  beside the rest of the panel, never as an empty list.
+  The console is where ops failures get investigated, so it must not go down with one broken read.
+- **Everything else lets the throw reach the error boundary** — including an admin check on a shared
+  page. `/seasons` awaits `isPlayerAdmin()` without a catch: a page that silently dropped its admin
+  controls would hide the failure from the one person who could act on it.
+- **A query helper never returns `[]`/`null` to mean "the read failed"** — `getBackgroundJobs()` throws
+  like the others, and the jobs panel shows its own error.
+
 ## Test external IO by extracting the logic around it, not by mocking the call
 
 When a module wraps an external HTTP call (DatHost, GitHub Actions dispatch, R2, Steam), the call
@@ -359,7 +381,7 @@ the rows the page depends on.
   `week_id=eq.42` on the week page, `week_id=in.(…)` (`getSeasonMatchesRealtimeFilter()`) on the
   round, group and season hub pages, `id=eq.7` on the scrim match page. A delete can't be filtered, so
   a page that must hear one renders a second `event="DELETE"` subscription with no `filter`, as the
-  scrim night page does for drop-outs.
+  scrim night page does for drop-outs and discarded matches.
 - **One refresh per burst.** It refreshes 3 seconds after the last event, so a result (the score,
   then its players' stats) lands as one refresh with all of it.
 - **`onlyPlayed`** narrows the refresh to a row whose `final_score` is played — the season hub follows

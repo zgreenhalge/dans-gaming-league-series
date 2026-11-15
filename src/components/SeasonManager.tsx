@@ -20,6 +20,8 @@ import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 import { ADMIN_PRIMARY_BUTTON_CLS, SMALL_BUTTON_CLS } from './adminButtonStyles';
 import ErrorText from '@/components/ErrorText';
 import SectionLabel from './SectionLabel';
+import { PanelGate } from './PanelGate';
+import type { PanelData } from '@/lib/panel-load';
 
 export interface SeasonSummary {
   id: number;
@@ -45,13 +47,14 @@ export function SeasonManager({
 }: {
   allSeasons: SeasonSummary[];
   gauntletsInProgress: GauntletRow[];
-  seasonOpsErrors: OpsErrorItem[];
+  seasonOpsErrors: PanelData<OpsErrorItem[]>;
   nextSeasonName: string;
   /** Set when an Activity-tab ops error jumps here — opens and scrolls the matching season into view. */
   focusLabel?: string;
 }) {
   const gauntletByRegularId = new Map(gauntletsInProgress.map((g) => [g.regularSeasonId, g]));
-  const errorsByLabel = new Map(seasonOpsErrors.map((e) => [e.label, e]));
+  // Per-season warnings come from the loaded ops errors; a failed read shows its error above instead.
+  const errorsByLabel = new Map((seasonOpsErrors.ok ? seasonOpsErrors.data : []).map((e) => [e.label, e]));
 
   // Every ACTIVE regular season is expandable, and so is an ARCHIVED one whose paired gauntlet is
   // still open (`gauntletByRegularId` only carries seasons whose gauntlet lifecycle isn't done yet —
@@ -80,7 +83,7 @@ export function SeasonManager({
 
   return (
     <div className="flex flex-col gap-6">
-      <OpsErrorList items={seasonOpsErrors} />
+      <PanelGate panel={seasonOpsErrors}>{(items) => <OpsErrorList items={items} />}</PanelGate>
 
       <div>
         <SectionLabel className="mb-3">Seasons</SectionLabel>
