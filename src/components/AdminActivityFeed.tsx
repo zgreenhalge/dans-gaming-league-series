@@ -37,6 +37,8 @@ import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
 import type { OpsErrorHistoryRow } from '@/lib/queries';
 import ErrorText from '@/components/ErrorText';
+import { PanelError, PanelGate } from './PanelGate';
+import type { PanelData } from '@/lib/panel-load';
 
 type View = 'events' | 'history';
 type Tag = 'errored' | 'progress' | 'completed';
@@ -357,17 +359,25 @@ function HistoryTable({ rows }: { rows: OpsErrorHistoryRow[] }) {
   );
 }
 
+// Stable empty lists for a source whose read failed, so the memos below don't re-run each render.
+const NO_JOBS: BackgroundJobRow[] = [];
+const NO_OPS_ERRORS: OpsErrorItem[] = [];
+
 export function AdminActivityFeed({
-  jobs,
-  opsErrors,
+  jobs: jobsPanel,
+  opsErrors: opsErrorsPanel,
   opsErrorHistory,
   onJump,
 }: {
-  jobs: BackgroundJobRow[];
-  opsErrors: OpsErrorItem[];
-  opsErrorHistory: OpsErrorHistoryRow[];
+  jobs: PanelData<BackgroundJobRow[]>;
+  opsErrors: PanelData<OpsErrorItem[]>;
+  opsErrorHistory: PanelData<OpsErrorHistoryRow[]>;
   onJump: (type: 'match' | 'player' | 'season', query: string) => void;
 }) {
+  // The two live sources fail independently: the merged list shows whichever loaded, and a failed
+  // source shows its own error above it rather than reading as "nothing to show".
+  const jobs = jobsPanel.ok ? jobsPanel.data : NO_JOBS;
+  const opsErrors = opsErrorsPanel.ok ? opsErrorsPanel.data : NO_OPS_ERRORS;
   const router = useRouter();
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const liveOpsErrors = useMemo(() => opsErrors.filter((e) => !dismissed.has(e.id)), [opsErrors, dismissed]);
@@ -464,9 +474,21 @@ export function AdminActivityFeed({
       </TabBar>
 
       {view === 'history' ? (
-        <HistoryTable rows={opsErrorHistory} />
+        <PanelGate label="failure history" panel={opsErrorHistory}>
+          {(rows) => <HistoryTable rows={rows} />}
+        </PanelGate>
       ) : (
         <>
+          {!jobsPanel.ok && (
+            <div className="mb-2">
+              <PanelError label="background jobs" error={jobsPanel.error} />
+            </div>
+          )}
+          {!opsErrorsPanel.ok && (
+            <div className="mb-2">
+              <PanelError label="ops errors" error={opsErrorsPanel.error} />
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             {TAG_FILTERS.map((f) => (
               <FilterChip key={f.value} value={f.value} label={`${f.label} (${counts[f.value]})`} active={tagFilter.has(f.value)} onClick={toggleTag} />
