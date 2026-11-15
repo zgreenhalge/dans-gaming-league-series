@@ -511,8 +511,12 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
       for (const incoming of this.upsertRows) {
         const existing = table.find((row) => this.upsertConflict.every((col) => row[col] === incoming[col]));
         if (existing) {
-          if (!this.upsertIgnoreDuplicates) Object.assign(existing, incoming);
-          results.push(existing);
+          // A real `ignoreDuplicates` upsert returns only the rows it inserted, so a skipped
+          // duplicate is absent from the `.select()` result — that's how a caller tells it lost.
+          if (!this.upsertIgnoreDuplicates) {
+            Object.assign(existing, incoming);
+            results.push(existing);
+          }
         } else {
           const row: Row = { ...incoming };
           if (row.id === undefined) row.id = nextId(table);
