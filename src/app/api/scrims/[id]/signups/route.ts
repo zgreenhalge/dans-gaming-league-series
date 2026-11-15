@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import { requireScrimSignupAccess } from '@/lib/scrim-signup-access';
 import { parseCommitment } from '@/lib/scrim-schedule';
 import { leaveScrimNight, setScrimSignup } from '@/lib/scrim-nights';
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     await setScrimSignup(getAdminClient(), access.night.id, access.targetPlayerId, commitment);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Signup failed' }, { status: 500 });
+    return internalError(err, 'Signup failed');
   }
   return NextResponse.json({ ok: true }, { status: 201 });
 }
@@ -38,6 +39,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const nightRemoved = await leaveScrimNight(getAdminClient(), access.night.id, access.targetPlayerId);
     return NextResponse.json({ ok: true, nightRemoved });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Dropping out failed' }, { status: 500 });
+    return internalError(err, 'Dropping out failed');
   }
 }

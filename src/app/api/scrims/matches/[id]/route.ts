@@ -30,12 +30,7 @@ import {
   SCRIM_SIDE_CHOICES,
   type ScrimSideChoice,
 } from '@/lib/scrim-matches';
-import { scrimConflictResponse } from '@/lib/scrim-route-errors';
-
-/** The response for a write that threw: 409 for a refused write, 500 for anything else. */
-function writeFailed(err: unknown, fallback: string): NextResponse {
-  return scrimConflictResponse(err) ?? NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
-}
+import { scrimErrorResponse } from '@/lib/scrim-route-errors';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const matchId = parseRouteId((await params).id);
@@ -78,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const next = await updateScrimMatch(getAdminClient(), matchId, revision, { map, side: side as ScrimSideChoice | undefined, lineup });
     return NextResponse.json({ ok: true, revision: next });
   } catch (err) {
-    return writeFailed(err, 'Updating the match failed');
+    return scrimErrorResponse(err, 'Updating the match failed');
   }
 }
 
@@ -94,7 +89,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await discardScrimMatch(getAdminClient(), matchId, revision);
   } catch (err) {
-    return writeFailed(err, 'Discarding the match failed');
+    return scrimErrorResponse(err, 'Discarding the match failed');
   }
   return NextResponse.json({ ok: true });
 }

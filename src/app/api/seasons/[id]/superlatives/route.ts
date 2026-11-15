@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireSeasonFeedbackAdmin } from '@/lib/feedback-access';
-import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE, writeFailed } from '@/lib/feedback-lifecycle';
+import { setFeedbackOpen, SUPERLATIVES_LIFECYCLE } from '@/lib/feedback-lifecycle';
 import { getSuperlativePoll, isSuperlativePollLocked } from '@/lib/queries';
 import { validateSuperlativeOrder, validateSuperlativeTitle } from '@/lib/superlatives';
 import { addSuperlative, removeSuperlative, renameSuperlative, reorderSuperlatives, SuperlativeRacedError } from '@/lib/superlative-writes';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 const LOCKED = { error: 'Voting has opened — superlatives can no longer be changed' };
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, superlative_id: superlativeId }, { status: 201 });
   } catch (err) {
     if (err instanceof SuperlativeRacedError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return writeFailed(err, 'Adding the superlative failed');
+    return internalError(err, 'Adding the superlative failed');
   }
 }
 
@@ -56,7 +57,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await removeSuperlative(getAdminClient(), seasonId, superlativeId);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return writeFailed(err, 'Removing the superlative failed');
+    return internalError(err, 'Removing the superlative failed');
   }
 }
 
@@ -77,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await reorderSuperlatives(getAdminClient(), seasonId, order.value);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return writeFailed(err, 'Reordering the superlatives failed');
+    return internalError(err, 'Reordering the superlatives failed');
   }
 }
 
@@ -109,7 +110,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       await renameSuperlative(getAdminClient(), seasonId, target.id, title.value);
       return NextResponse.json({ ok: true });
     } catch (err) {
-      return writeFailed(err, 'Renaming the superlative failed');
+      return internalError(err, 'Renaming the superlative failed');
     }
   }
   return setFeedbackOpen(SUPERLATIVES_LIFECYCLE, seasonId, open === true, poll);

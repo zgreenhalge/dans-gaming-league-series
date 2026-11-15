@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMatchAccess } from "@/lib/match-access";
 import { accessDenied } from "@/lib/access-control";
+import { internalError } from "@/lib/route-errors";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { setMatchRecording } from "@/lib/match-day";
 import { parseRouteId } from "@/lib/util";
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Saving the recording failed" }, { status: 500 });
+    return internalError(err, "Saving the recording failed");
   }
   return NextResponse.json({ success: true });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMatchAccess } from '@/lib/match-access';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isVetoComplete, isVetoWindowOpen, type VetoFields } from '@/lib/veto';
@@ -126,7 +127,7 @@ export async function PATCH(
     try {
       await setVetoFields(supabaseAdmin, matchId, { [field]: null });
     } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : 'Clearing the pick/ban failed' }, { status: 500 });
+      return internalError(err, 'Clearing the pick/ban failed');
     }
     return NextResponse.json({ ok: true });
   }
@@ -230,7 +231,7 @@ export async function PATCH(
     await setVetoFields(supabaseAdmin, matchId, update, currentValues[field] === null ? field : undefined);
   } catch (err) {
     if (err instanceof VetoStepTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Saving the pick/ban failed' }, { status: 500 });
+    return internalError(err, 'Saving the pick/ban failed');
   }
 
   // Auto-provision the match server whenever the pick/ban is complete — not just on the first

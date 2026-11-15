@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import { requireScrimSignupTarget } from '@/lib/scrim-signup-access';
 import { parseCommitment, parseNightStart } from '@/lib/scrim-schedule';
 import { OverlappingScrimNightError, startScrimNight } from '@/lib/scrim-nights';
@@ -28,6 +29,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, nightId }, { status: 201 });
   } catch (err) {
     if (err instanceof OverlappingScrimNightError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Starting the night failed' }, { status: 500 });
+    return internalError(err, 'Starting the night failed');
   }
 }

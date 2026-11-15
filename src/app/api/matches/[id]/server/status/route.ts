@@ -8,6 +8,7 @@ import { getReconciledServerState } from '@/lib/dathost-lifecycle';
 import { requireServerStatusAccess } from '@/lib/match-access';
 import { parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 export async function GET(
   _req: NextRequest,
@@ -27,6 +28,6 @@ export async function GET(
     const view = await getReconciledServerState(getAdminClient(), matchId);
     return NextResponse.json(view);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Reading the server state failed' }, { status: 500 });
+    return internalError(err, 'Reading the server state failed');
   }
 }

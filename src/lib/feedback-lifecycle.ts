@@ -94,12 +94,7 @@ export const SUPERLATIVES_LIFECYCLE: FeedbackLifecycle<SuperlativePoll> = {
   },
 };
 
-/** The 500 for a write that threw: its message, or `fallback` for a non-`Error`. Used by the survey
- *  and superlatives routes' edit writes (`survey-writes.ts`, `superlative-writes.ts`). */
-export function writeFailed(err: unknown, fallback: string) {
-  return NextResponse.json({ error: err instanceof Error ? err.message : fallback }, { status: 500 });
-}
-
+/** The 500 for a failed write result (a `{ message }` object, not a thrown error). */
 function failure(error: { message: string }) {
   return NextResponse.json({ error: error.message }, { status: 500 });
 }

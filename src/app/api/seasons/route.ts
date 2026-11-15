@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeasons } from '@/lib/queries';
 import { nextRegularSeasonName } from '@/lib/util';
@@ -39,6 +40,6 @@ export async function POST(req: NextRequest) {
     const created = await createSeason(supabaseAdmin, { name, mapPool: input.mapPool, buyInAmount: buyIn.amount, newMaps: input.newMaps });
     return NextResponse.json(created, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Creating the season failed' }, { status: 500 });
+    return internalError(err, 'Creating the season failed');
   }
 }

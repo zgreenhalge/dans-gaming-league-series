@@ -12,7 +12,7 @@ import { getMapsForWorkshopPicker, getPlayerRatings, getScrimNightMatches } from
 import { pickNextScrimMatch } from '@/lib/scrim-matchmaking';
 import { SCRIM_MATCH_SIZE } from '@/lib/scrim-schedule';
 import { queueScrimMatches } from '@/lib/scrim-matches';
-import { scrimConflictResponse } from '@/lib/scrim-route-errors';
+import { scrimErrorResponse } from '@/lib/scrim-route-errors';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireScrimNightMatchAccess((await params).id);
@@ -32,8 +32,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const [matchId] = await queueScrimMatches(getAdminClient(), night.id, [plan], maps);
     return NextResponse.json({ ok: true, matchId }, { status: 201 });
   } catch (err) {
-    const conflict = scrimConflictResponse(err);
-    if (conflict) return conflict;
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Making the match failed' }, { status: 500 });
+    return scrimErrorResponse(err, 'Making the match failed');
   }
 }

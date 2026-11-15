@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/supabase-admin";
 import { deleteNameRole, getStoredNameRoleId } from "@/lib/discord-roles";
 import { unlinkDiscordId } from "@/lib/player-identity";
 import { afterBestEffort } from "@/lib/after";
+import { internalError } from '@/lib/route-errors';
 
 // Self-service Discord unlink (#394) — clears the caller's own players.discord_id. Linking itself
 // goes through the OAuth2 redirect flow (/api/auth/discord/link + callback); unlinking needs no
@@ -29,13 +30,13 @@ export async function DELETE() {
   try {
     nameRoleId = await getStoredNameRoleId(supabaseAdmin, playerId);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Could not read the stored name role" }, { status: 500 });
+    return internalError(err, "Could not read the stored name role");
   }
 
   try {
     await unlinkDiscordId(supabaseAdmin, playerId);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Unlinking failed" }, { status: 500 });
+    return internalError(err, "Unlinking failed");
   }
 
   if (nameRoleId) {

@@ -12,6 +12,7 @@ import { dathostServerId, loadMatch } from '@/lib/dathost';
 import { matchzyConfigContext, findServerOccupant } from '@/lib/dathost-lifecycle';
 import { parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
+import { internalError } from '@/lib/route-errors';
 
 export async function POST(
   req: NextRequest,
@@ -37,7 +38,7 @@ export async function POST(
   try {
     occupant = await findServerOccupant(getAdminClient(), matchId);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Checking the server failed' }, { status: 500 });
+    return internalError(err, 'Checking the server failed');
   }
   if (occupant !== null) {
     return NextResponse.json(
