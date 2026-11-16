@@ -427,7 +427,7 @@ export type Database = {
           match_id: number
           message_checkpoint: string | null
           notification_message_id: string | null
-          reminder_sent_at: string | null
+          starting_sent_at: string | null
           thread_id: string | null
         }
         Insert: {
@@ -435,7 +435,7 @@ export type Database = {
           match_id: number
           message_checkpoint?: string | null
           notification_message_id?: string | null
-          reminder_sent_at?: string | null
+          starting_sent_at?: string | null
           thread_id?: string | null
         }
         Update: {
@@ -443,7 +443,7 @@ export type Database = {
           match_id?: number
           message_checkpoint?: string | null
           notification_message_id?: string | null
-          reminder_sent_at?: string | null
+          starting_sent_at?: string | null
           thread_id?: string | null
         }
         Relationships: [
@@ -1275,20 +1275,20 @@ export type Database = {
         Row: {
           announcement_message_id: string | null
           night_id: number
-          reminder_message_id: string | null
-          reminder_sent_at: string | null
+          starting_message_id: string | null
+          starting_sent_at: string | null
         }
         Insert: {
           announcement_message_id?: string | null
           night_id: number
-          reminder_message_id?: string | null
-          reminder_sent_at?: string | null
+          starting_message_id?: string | null
+          starting_sent_at?: string | null
         }
         Update: {
           announcement_message_id?: string | null
           night_id?: number
-          reminder_message_id?: string | null
-          reminder_sent_at?: string | null
+          starting_message_id?: string | null
+          starting_sent_at?: string | null
         }
         Relationships: [
           {
@@ -1934,7 +1934,7 @@ export type Database = {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
-      schedule_scrim_night_reminder: {
+      schedule_scrim_night_start: {
         Args: { p_night_id: number; p_starts_at: string }
         Returns: boolean
       }

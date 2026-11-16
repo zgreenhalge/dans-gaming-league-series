@@ -1,4 +1,4 @@
-// Best-effort Discord webhook notifications for #match-notifications (#395). Every export here is
+// Best-effort Discord webhook notifications for #announcements (#395). Every export here is
 // safe to call unconditionally — a missing DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL never throws, and
 // neither does a real failure, matching the rest of this codebase's best-effort hooks (ops-errors.ts,
 // afterBestEffort()). A real failure — the webhook itself erroring, or `fetchMatchMeta()` below

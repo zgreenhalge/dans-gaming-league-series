@@ -1,10 +1,10 @@
 /**
- * Route-handler harness for POST /api/cron/scrim-reminder — the CRON_SECRET bearer gate and the
- * nightId body validation, plus that an eligible night reaches notifyScrimNightReminder() and the
+ * Route-handler harness for POST /api/cron/scrim-start — the CRON_SECRET bearer gate and the
+ * nightId body validation, plus that an eligible night reaches notifyScrimNightStarting() and the
  * route still 200s when the notification no-ops. Eligibility and idempotency are covered by
  * src/lib/discord-scrim-notify.test.ts.
  *
- * Run:  npx vitest run "src/app/api/cron/scrim-reminder/route.test.ts"
+ * Run:  npx vitest run "src/app/api/cron/scrim-start/route.test.ts"
  */
 
 import assert from 'node:assert/strict';
@@ -15,7 +15,7 @@ import { scrimNightStartingIn } from '@/lib/test-support/scrimFixtures';
 import { test, report } from '@/lib/test-support/miniTest';
 import { POST } from './route';
 
-const URL = 'http://localhost/api/cron/scrim-reminder';
+const URL = 'http://localhost/api/cron/scrim-start';
 
 function request(body: unknown, auth?: string): NextRequest {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
@@ -46,23 +46,23 @@ function stubFetch(): { calls: number } {
 async function main() {
   await test('POST — a missing or wrong bearer token is rejected (401)', async () => {
     process.env.CRON_SECRET = 'test-cron-secret';
-    installFixture(55 * 60 * 1000);
+    installFixture(-60 * 1000);
     assert.equal((await POST(request({ nightId: 5 }))).status, 401);
     assert.equal((await POST(request({ nightId: 5 }, 'Bearer wrong'))).status, 401);
   });
 
   await test('POST — a malformed nightId is rejected (400)', async () => {
     process.env.CRON_SECRET = 'test-cron-secret';
-    installFixture(55 * 60 * 1000);
+    installFixture(-60 * 1000);
     for (const nightId of ['abc', 1.5, 0, -1, true, [5], undefined]) {
       assert.equal((await POST(request({ nightId }, 'Bearer test-cron-secret'))).status, 400);
     }
   });
 
-  await test('POST — an eligible night posts the reminder', async () => {
+  await test('POST — an eligible night posts the starting message', async () => {
     process.env.CRON_SECRET = 'test-cron-secret';
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    installFixture(55 * 60 * 1000);
+    installFixture(-60 * 1000);
     const fetched = stubFetch();
     const res = await POST(request({ nightId: 5 }, 'Bearer test-cron-secret'));
     assert.equal(res.status, 200);

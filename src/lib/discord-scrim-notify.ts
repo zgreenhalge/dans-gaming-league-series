@@ -7,9 +7,9 @@
 //
 // A night has up to two messages, both stored in `scrim_night_discord_state`:
 //   - the announcement, posted when the night is started (`notifyScrimNightScheduled()`), and
-//   - the reminder, posted an hour before the start (`notifyScrimNightReminder()`, called from
-//     `POST /api/cron/scrim-reminder`, which a one-shot pg_cron job queued by
-//     `scheduleScrimNightReminder()` fires). A new post is what pings people; an edit does not.
+//   - the starting message, posted when the night starts (`notifyScrimNightStarting()`, called from
+//     `POST /api/cron/scrim-start`, which a one-shot pg_cron job queued by
+//     `scheduleScrimNightStart()` fires). A new post is what pings people; an edit does not.
 // Every roster change (a signup, a changed commitment, a drop-out, a check-in) rebuilds the roster from
 // the database and edits whichever of the two exist in place (`syncScrimNightRoster()`), so neither goes
 // stale — the match notifications' "one message edited in place" pattern. A night that ends stops being
@@ -18,7 +18,6 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  REMINDER_WINDOW_MS,
   deleteWebhookMessage,
   editWebhookEmbed,
   playerTag,
@@ -31,14 +30,17 @@ import { SITE_URL } from './seo/site';
 import { formatLeagueDateTime } from './util';
 
 const COLOR_SCHEDULED = 0x1abc9c; // teal — distinct from the match notification colors
-const COLOR_REMINDER = 0xfee75c; // Discord's "yellow", as for a match reminder
+const COLOR_STARTING = 0xfee75c; // Discord's "yellow", as for a match reminder
+// How far from the start the starting message may fire and still post: a pg_cron job fires at the
+// start by construction; this tolerates pg_net delivery lag and clock skew.
+const STARTING_WINDOW_MS = 30 * 60 * 1000;
 
-type MessageKind = 'announcement' | 'reminder';
-const MESSAGE_COLUMN = { announcement: 'announcement_message_id', reminder: 'reminder_message_id' } as const;
+type MessageKind = 'announcement' | 'starting';
+const MESSAGE_COLUMN = { announcement: 'announcement_message_id', starting: 'starting_message_id' } as const;
 
 interface DiscordState {
   announcement_message_id: string | null;
-  reminder_message_id: string | null;
+  starting_message_id: string | null;
 }
 
 function webhookUrl(): string | undefined {
@@ -79,7 +81,7 @@ function buildScrimNightMessage(
   const statusLine =
     kind === 'announcement'
       ? `📅 **Scrim night scheduled**\n<t:${epoch}:F> · <t:${epoch}:R>`
-      : `⏰ **Scrim night starts <t:${epoch}:R>**\n<t:${epoch}:F>`;
+      : `🚦 **Scrim night is starting**\n<t:${epoch}:F>`;
 
   const tagLines = [
     definite.length > 0 ? `Definite: ${definite.map(playerTag).join(' ')}` : '',
@@ -91,7 +93,7 @@ function buildScrimNightMessage(
     embed: {
       title: `Scrim night · ${formatLeagueDateTime(night.startsAt)}`,
       description: statusLine,
-      color: kind === 'announcement' ? COLOR_SCHEDULED : COLOR_REMINDER,
+      color: kind === 'announcement' ? COLOR_SCHEDULED : COLOR_STARTING,
       url: nightUrl(night.id),
       author: { name: 'Scrims' },
       fields: [rosterField('Definite', definite), rosterField('Maybe', maybe)],
@@ -102,7 +104,7 @@ function buildScrimNightMessage(
 async function getState(db: SupabaseClient, nightId: number): Promise<DiscordState | null> {
   const { data, error } = await db
     .from('scrim_night_discord_state')
-    .select('announcement_message_id, reminder_message_id')
+    .select('announcement_message_id, starting_message_id')
     .eq('night_id', nightId)
     .maybeSingle();
   if (error) throw error;
@@ -140,9 +142,9 @@ export async function notifyScrimNightScheduled(db: SupabaseClient, nightId: num
   });
 }
 
-/** Rebuilds the roster and edits the night's announcement and reminder messages in place. An
+/** Rebuilds the roster and edits the night's announcement and starting messages in place. An
  *  announcement that was never posted, or can no longer be edited (deleted from the channel), is posted
- *  fresh; a reminder that can't be edited is left alone, since a re-post would ping everyone again. A
+ *  fresh; a starting message that can't be edited is left alone, since a re-post would ping everyone again. A
  *  night that has ended is not touched. Call after any signup, commitment, check-in or drop-out. */
 export async function syncScrimNightRoster(db: SupabaseClient, nightId: number): Promise<void> {
   const url = webhookUrl();
@@ -163,55 +165,55 @@ export async function syncScrimNightRoster(db: SupabaseClient, nightId: number):
       }
     }
 
-    const reminderId = state?.reminder_message_id ?? null;
-    if (reminderId) {
-      const reminder = buildScrimNightMessage(data.night, data.signups, 'reminder');
-      const result = await editWebhookEmbed(url, reminderId, reminder.content, reminder.embed);
+    const startingId = state?.starting_message_id ?? null;
+    if (startingId) {
+      const starting = buildScrimNightMessage(data.night, data.signups, 'starting');
+      const result = await editWebhookEmbed(url, startingId, starting.content, starting.embed);
       if (!result.ok) failures.push(result.error);
     }
     if (failures.length > 0) throw new Error(failures.join('; '));
   });
 }
 
-/** Posts the reminder an hour before the night starts. Called by `POST /api/cron/scrim-reminder`,
- *  fired once by the pg_cron job `scheduleScrimNightReminder()` queues. Skips a night that is gone, has
- *  ended, or whose start is not within `REMINDER_WINDOW_MS` of now. Claims
- *  `scrim_night_discord_state.reminder_sent_at` atomically before posting, so two racing calls never
+/** Posts the starting message when the night starts. Called by `POST /api/cron/scrim-start`,
+ *  fired once by the pg_cron job `scheduleScrimNightStart()` queues. Skips a night that is gone, has
+ *  ended, or whose start is not within `STARTING_WINDOW_MS` of now. Claims
+ *  `scrim_night_discord_state.starting_sent_at` atomically before posting, so two racing calls never
  *  both post; nothing retries a failed post, since the pg_cron job is already spent. */
-export async function notifyScrimNightReminder(db: SupabaseClient, nightId: number): Promise<void> {
+export async function notifyScrimNightStarting(db: SupabaseClient, nightId: number): Promise<void> {
   const url = webhookUrl();
   if (!url) return;
-  return bestEffort('notifyScrimNightReminder', nightId, async () => {
+  return bestEffort('notifyScrimNightStarting', nightId, async () => {
     const data = await getScrimNightForDiscord(db, nightId);
     if (!data) return;
-    const msUntilStart = Date.parse(data.night.startsAt) - Date.now();
-    if (hasScrimNightEnded(data.night, new Date()) || msUntilStart <= 0 || msUntilStart > REMINDER_WINDOW_MS) return;
+    const msFromStart = Math.abs(Date.parse(data.night.startsAt) - Date.now());
+    if (hasScrimNightEnded(data.night, new Date()) || msFromStart > STARTING_WINDOW_MS) return;
 
     // The announcement may never have posted, so there may be no row to claim yet; seed one without
     // overwriting an existing row.
     await db
       .from('scrim_night_discord_state')
-      .upsert({ night_id: nightId, reminder_sent_at: null }, { onConflict: 'night_id', ignoreDuplicates: true })
+      .upsert({ night_id: nightId, starting_sent_at: null }, { onConflict: 'night_id', ignoreDuplicates: true })
       .throwOnError();
     const { data: claimed } = await db
       .from('scrim_night_discord_state')
-      .update({ reminder_sent_at: new Date().toISOString() })
+      .update({ starting_sent_at: new Date().toISOString() })
       .eq('night_id', nightId)
-      .is('reminder_sent_at', null)
+      .is('starting_sent_at', null)
       .select('night_id')
       .throwOnError();
     if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
 
-    await postAndRemember(db, url, nightId, 'reminder', buildScrimNightMessage(data.night, data.signups, 'reminder'));
+    await postAndRemember(db, url, nightId, 'starting', buildScrimNightMessage(data.night, data.signups, 'starting'));
   });
 }
 
-/** Queues the night's one-shot reminder (`schedule_scrim_night_reminder()`, a pg_cron job). A night's
+/** Queues the night's one-shot starting message (`schedule_scrim_night_start()`, a pg_cron job). A night's
  *  start never changes, so this runs once, when the night is started. */
-export async function scheduleScrimNightReminder(db: SupabaseClient, nightId: number, startsAt: string): Promise<void> {
+export async function scheduleScrimNightStart(db: SupabaseClient, nightId: number, startsAt: string): Promise<void> {
   if (!webhookUrl()) return;
-  return bestEffort('scheduleScrimNightReminder', nightId, async () => {
-    const { data, error } = await db.rpc('schedule_scrim_night_reminder', { p_night_id: nightId, p_starts_at: startsAt });
+  return bestEffort('scheduleScrimNightStart', nightId, async () => {
+    const { data, error } = await db.rpc('schedule_scrim_night_start', { p_night_id: nightId, p_starts_at: startsAt });
     if (error) throw error;
     if (!data) throw new Error('the "cron_secret" Vault secret is not configured');
   });
@@ -223,7 +225,7 @@ export async function getScrimNightMessageIds(db: SupabaseClient, nightId: numbe
   if (!webhookUrl()) return [];
   try {
     const state = await getState(db, nightId);
-    return [state?.announcement_message_id, state?.reminder_message_id].filter((id): id is string => !!id);
+    return [state?.announcement_message_id, state?.starting_message_id].filter((id): id is string => !!id);
   } catch (e) {
     console.error(`getScrimNightMessageIds(${nightId}) failed (non-fatal):`, e);
     return [];

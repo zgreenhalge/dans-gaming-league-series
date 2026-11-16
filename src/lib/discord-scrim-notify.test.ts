@@ -1,7 +1,7 @@
 /**
  * Unit tests for discord-scrim-notify.ts's scrim night announcements: the announcement posted when a
  * night starts, the roster edited in place (Definite/Maybe, check-in marks) on every change, the
- * reminder an hour out (once, inside its window, never for an ended night), message deletion when a
+ * starting message at the start (once, inside its window, never for an ended night), message deletion when a
  * night is removed, and the no-throw/no-webhook guarantees.
  *
  * Run:  npx vitest run src/lib/discord-scrim-notify.test.ts
@@ -14,9 +14,9 @@ import { test, report } from './test-support/miniTest';
 import {
   deleteScrimNightMessages,
   getScrimNightMessageIds,
-  notifyScrimNightReminder,
+  notifyScrimNightStarting,
   notifyScrimNightScheduled,
-  scheduleScrimNightReminder,
+  scheduleScrimNightStart,
   syncScrimNightRoster,
 } from './discord-scrim-notify';
 
@@ -57,7 +57,7 @@ function fixture(startsInMs: number, extra: Partial<FakeDb> = {}) {
     scrim_night_discord_state: [],
     ...extra,
   };
-  return { db, client: createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true }) };
+  return { db, client: createFakeSupabaseClient(db, { schedule_scrim_night_start: () => true }) };
 }
 
 const field = (call: FetchCall, name: string) => call.body!.embeds[0].fields.find((f) => f.name.startsWith(name))!.value;
@@ -88,23 +88,23 @@ async function main() {
     const calls = stubFetch();
     await notifyScrimNightScheduled(client, NIGHT_ID);
     await syncScrimNightRoster(client, NIGHT_ID);
-    await notifyScrimNightReminder(client, NIGHT_ID);
-    await scheduleScrimNightReminder(client, NIGHT_ID, new Date().toISOString());
+    await notifyScrimNightStarting(client, NIGHT_ID);
+    await scheduleScrimNightStart(client, NIGHT_ID, new Date().toISOString());
     assert.equal(calls.length, 0);
     assert.equal(db.scrim_night_discord_state.length, 0);
   });
 
-  await test('syncScrimNightRoster: edits the announcement and the reminder in place', async () => {
+  await test('syncScrimNightRoster: edits the announcement and the starting message in place', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK;
     const { client } = fixture(2 * HOUR, {
-      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', reminder_message_id: 'rem', reminder_sent_at: null }],
+      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', starting_message_id: 'rem', starting_sent_at: null }],
     });
     const calls = stubFetch();
     await syncScrimNightRoster(client, NIGHT_ID);
 
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['PATCH', `${WEBHOOK}/messages/ann`], ['PATCH', `${WEBHOOK}/messages/rem`]]);
     assert.match(calls[0].body!.embeds[0].description, /scheduled/);
-    assert.match(calls[1].body!.embeds[0].description, /starts/);
+    assert.match(calls[1].body!.embeds[0].description, /starting/);
     assert.equal(field(calls[1], 'Maybe'), 'Bob');
   });
 
@@ -116,7 +116,7 @@ async function main() {
     assert.deepEqual(calls.map((c) => c.method), ['POST']);
     assert.equal(none.db.scrim_night_discord_state[0].announcement_message_id, 'msg-1');
 
-    const gone = fixture(2 * HOUR, { scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'old', reminder_message_id: null, reminder_sent_at: null }] });
+    const gone = fixture(2 * HOUR, { scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'old', starting_message_id: null, starting_sent_at: null }] });
     calls = [];
     const real = globalThis.fetch;
     let n = 0;
@@ -142,43 +142,43 @@ async function main() {
     assert.equal(calls.length, 0);
   });
 
-  await test('notifyScrimNightReminder: posts once inside the window, stores the id, and is claimed', async () => {
+  await test('notifyScrimNightStarting: posts once at the start, stores the id, and is claimed', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK;
-    const { db, client } = fixture(55 * 60 * 1000, {
-      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', reminder_message_id: null, reminder_sent_at: null }],
+    const { db, client } = fixture(-60 * 1000, {
+      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', starting_message_id: null, starting_sent_at: null }],
     });
     const calls = stubFetch();
-    await notifyScrimNightReminder(client, NIGHT_ID);
-    await notifyScrimNightReminder(client, NIGHT_ID);
+    await notifyScrimNightStarting(client, NIGHT_ID);
+    await notifyScrimNightStarting(client, NIGHT_ID);
 
-    assert.equal(calls.length, 1, 'the second call finds the reminder already claimed');
+    assert.equal(calls.length, 1, 'the second call finds the starting message already claimed');
     assert.equal(calls[0].method, 'POST');
-    assert.match(calls[0].body!.embeds[0].description, /starts/);
+    assert.match(calls[0].body!.embeds[0].description, /starting/);
     const state = db.scrim_night_discord_state[0];
-    assert.equal(state.reminder_message_id, 'msg-1');
+    assert.equal(state.starting_message_id, 'msg-1');
     assert.equal(state.announcement_message_id, 'ann', 'the announcement id is kept');
-    assert.ok(state.reminder_sent_at);
+    assert.ok(state.starting_sent_at);
   });
 
-  await test('notifyScrimNightReminder: seeds a state row when the announcement never posted', async () => {
+  await test('notifyScrimNightStarting: seeds a state row when the announcement never posted', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK;
-    const { db, client } = fixture(55 * 60 * 1000);
+    const { db, client } = fixture(-60 * 1000);
     const calls = stubFetch();
-    await notifyScrimNightReminder(client, NIGHT_ID);
+    await notifyScrimNightStarting(client, NIGHT_ID);
     assert.equal(calls.length, 1);
-    assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'msg-1');
+    assert.equal(db.scrim_night_discord_state[0].starting_message_id, 'msg-1');
   });
 
-  await test('notifyScrimNightReminder: skips a start outside the window, a started night, an ended night and a missing one', async () => {
+  await test('notifyScrimNightStarting: skips a start outside the window either side, an ended night and a missing one', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK;
     const calls = stubFetch();
-    for (const startsIn of [5 * HOUR, -10 * 60 * 1000]) {
-      await notifyScrimNightReminder(fixture(startsIn).client, NIGHT_ID);
+    for (const startsIn of [5 * HOUR, -2 * HOUR]) {
+      await notifyScrimNightStarting(fixture(startsIn).client, NIGHT_ID);
     }
-    const ended = fixture(HOUR);
+    const ended = fixture(-60 * 1000);
     ended.db.scrim_nights[0].ended_at = new Date().toISOString();
-    await notifyScrimNightReminder(ended.client, NIGHT_ID);
-    await notifyScrimNightReminder(fixture(HOUR).client, 999);
+    await notifyScrimNightStarting(ended.client, NIGHT_ID);
+    await notifyScrimNightStarting(fixture(HOUR).client, 999);
     assert.equal(calls.length, 0);
   });
 
@@ -201,7 +201,7 @@ async function main() {
   await test('getScrimNightMessageIds + deleteScrimNightMessages: removes both messages, and a 404 counts as deleted', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK;
     const { client } = fixture(2 * HOUR, {
-      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', reminder_message_id: 'rem', reminder_sent_at: null }],
+      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', starting_message_id: 'rem', starting_sent_at: null }],
     });
     const ids = await getScrimNightMessageIds(client, NIGHT_ID);
     assert.deepEqual(ids, ['ann', 'rem']);
@@ -219,20 +219,20 @@ async function main() {
     assert.deepEqual(await getScrimNightMessageIds(fixture(HOUR).client, NIGHT_ID), []);
   });
 
-  await test('scheduleScrimNightReminder: calls the RPC with the night and its start; a refused schedule is logged', async () => {
+  await test('scheduleScrimNightStart: calls the RPC with the night and its start; a refused schedule is logged', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK;
     const args: unknown[] = [];
     const db: FakeDb = { scrim_nights: [] };
-    const ok = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: (a) => (args.push(a), true) });
-    await scheduleScrimNightReminder(ok, NIGHT_ID, '2026-12-01T01:00:00.000Z');
+    const ok = createFakeSupabaseClient(db, { schedule_scrim_night_start: (a) => (args.push(a), true) });
+    await scheduleScrimNightStart(ok, NIGHT_ID, '2026-12-01T01:00:00.000Z');
     assert.deepEqual(args, [{ p_night_id: NIGHT_ID, p_starts_at: '2026-12-01T01:00:00.000Z' }]);
 
-    const refused = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => false });
+    const refused = createFakeSupabaseClient(db, { schedule_scrim_night_start: () => false });
     const logged: unknown[][] = [];
     const realError = console.error;
     console.error = (...a: unknown[]) => void logged.push(a);
     try {
-      await scheduleScrimNightReminder(refused, NIGHT_ID, '2026-12-01T01:00:00.000Z');
+      await scheduleScrimNightStart(refused, NIGHT_ID, '2026-12-01T01:00:00.000Z');
     } finally {
       console.error = realError;
     }

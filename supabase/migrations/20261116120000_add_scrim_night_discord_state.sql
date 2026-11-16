@@ -3,13 +3,13 @@
 -- (`on delete cascade`).
 --   announcement_message_id  the webhook message posted when the night was started, edited in place
 --                            as the roster changes
---   reminder_message_id      the webhook message posted an hour before the start, edited the same way
---   reminder_sent_at         claimed atomically before the reminder posts, so it never posts twice
+--   starting_message_id      the webhook message posted when the night starts, edited the same way
+--   starting_sent_at         claimed atomically before the starting message posts, so it never posts twice
 create table public.scrim_night_discord_state (
   night_id integer primary key references public.scrim_nights(id) on delete cascade,
   announcement_message_id text,
-  reminder_message_id text,
-  reminder_sent_at timestamptz
+  starting_message_id text,
+  starting_sent_at timestamptz
 );
 
 alter table public.scrim_night_discord_state enable row level security;
@@ -17,16 +17,16 @@ alter table public.scrim_night_discord_state enable row level security;
 create constraint trigger bump_data_version after insert or update or delete on public.scrim_night_discord_state
   deferrable initially deferred for each row execute function public.bump_data_version();
 
--- Schedules the one-shot "1 hour out" Discord reminder for a night, the way
--- `schedule_match_reminder()` does for a match: a pg_cron job for the exact minute that POSTs
--- /api/cron/scrim-reminder and then unschedules itself. A night's start never changes, so this runs
--- once, when the night is created. A start that is already within the hour schedules nothing (the
--- announcement posted at creation is the notice). Returns true when the reminder is scheduled or none
+-- Schedules the one-shot "starting" Discord message for a night, the way
+-- `schedule_match_reminder()` schedules a match's reminder: a pg_cron job for the exact minute the night
+-- starts that POSTs /api/cron/scrim-start and then unschedules itself. A night's start never changes,
+-- so this runs once, when the night is created. A start that is already due schedules nothing (the
+-- announcement posted at creation is the notice). Returns true when the message is scheduled or none
 -- is due, false when scheduling stopped early because the `cron_secret` Vault secret is missing.
 --
 -- The job re-reads the Vault secret when it fires rather than embedding it in the command, so a
 -- CRON_SECRET rotation is picked up and the token never sits in cron.job.command.
-create or replace function public.schedule_scrim_night_reminder(
+create or replace function public.schedule_scrim_night_start(
   p_night_id integer,
   p_starts_at timestamptz
 )
@@ -36,9 +36,8 @@ security definer
 set search_path = ''
 as $function$
 declare
-  v_job_name text := format('scrim_reminder_%s', p_night_id);
+  v_job_name text := format('scrim_start_%s', p_night_id);
   v_site_url text := 'https://dans-gaming-league-series.vercel.app'; -- keep in sync with SITE_URL (src/lib/seo/site.ts)
-  v_reminder_at timestamptz := p_starts_at - interval '1 hour';
 begin
   begin
     perform cron.unschedule(v_job_name);
@@ -46,7 +45,7 @@ begin
     null; -- no job existed yet for this night — expected on first schedule
   end;
 
-  if v_reminder_at <= now() then
+  if p_starts_at <= now() then
     return true;
   end if;
 
@@ -58,7 +57,7 @@ begin
   -- unschedules itself after firing since cron has no year field.
   perform cron.schedule(
     v_job_name,
-    to_char(v_reminder_at at time zone 'utc', 'MI HH24 DD MM') || ' *',
+    to_char(p_starts_at at time zone 'utc', 'MI HH24 DD MM') || ' *',
     format(
       $sql$
       select net.http_post(
@@ -69,7 +68,7 @@ begin
       );
       select cron.unschedule(%L);
       $sql$,
-      v_site_url || '/api/cron/scrim-reminder',
+      v_site_url || '/api/cron/scrim-start',
       p_night_id,
       v_job_name
     )
@@ -78,4 +77,4 @@ begin
 end;
 $function$;
 
-revoke execute on function public.schedule_scrim_night_reminder(integer, timestamptz) from public, anon, authenticated;
+revoke execute on function public.schedule_scrim_night_start(integer, timestamptz) from public, anon, authenticated;

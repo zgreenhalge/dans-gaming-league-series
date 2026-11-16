@@ -11,7 +11,7 @@ import { parseCommitment, parseNightStart } from '@/lib/scrim-schedule';
 import { OverlappingScrimNightError, startScrimNight } from '@/lib/scrim-nights';
 import { getPlayersById } from '@/lib/queries';
 import { afterBestEffort } from '@/lib/after';
-import { notifyScrimNightScheduled, scheduleScrimNightReminder } from '@/lib/discord-scrim-notify';
+import { notifyScrimNightScheduled, scheduleScrimNightStart } from '@/lib/discord-scrim-notify';
 
 export async function POST(req: NextRequest) {
   const access = await requireScrimSignupTarget(req);
@@ -29,9 +29,9 @@ export async function POST(req: NextRequest) {
   try {
     const db = getAdminClient();
     const nightId = await startScrimNight(db, start.startsAt, access.targetPlayerId, commitment);
-    // Deferred past the response: announce the night in Discord and queue its 1-hour reminder.
+    // Deferred past the response: announce the night in Discord and queue its starting message.
     afterBestEffort('announceScrimNight', () =>
-      Promise.all([notifyScrimNightScheduled(db, nightId), scheduleScrimNightReminder(db, nightId, start.startsAt)]),
+      Promise.all([notifyScrimNightScheduled(db, nightId), scheduleScrimNightStart(db, nightId, start.startsAt)]),
     );
     return NextResponse.json({ ok: true, nightId }, { status: 201 });
   } catch (err) {

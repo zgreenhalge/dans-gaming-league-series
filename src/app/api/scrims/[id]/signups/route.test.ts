@@ -145,7 +145,7 @@ async function main() {
       return { ok: true, status: 200, json: async () => ({ id: 'new' }) } as unknown as Response;
     }) as typeof fetch;
     installFixture({
-      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', reminder_message_id: null, reminder_sent_at: null }],
+      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', starting_message_id: null, starting_sent_at: null }],
     });
     __setTestSession(sessionFor(PLAYER_ID));
 

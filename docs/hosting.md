@@ -70,7 +70,7 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
   the `golden` config set, PUTs it + the picked workshop map, reasserts its cfg files since they're
   `exec`'d at boot / go-live, `startServer`, `waitUntilReady`) → `loadMatch` (`matchzy_loadmatch_url`)
   → `live` + `connect_string` → best-effort `notifyMatchServerLive()` (`src/lib/discord-notify.ts`,
-  #395), a `#match-notifications` Discord webhook post naming the two rosters (never the connect
+  #395), a `#announcements` Discord webhook post naming the two rosters (never the connect
   string — that's per-player, not broadcast). A real webhook failure is recorded to `ops_errors`
   (`discord_notify_server_live`, entity `match`) — see [`architecture.md`](./architecture.md)'s
   "Surfacing best-effort failures". Marks `failed` and rethrows on any error. A per-file
