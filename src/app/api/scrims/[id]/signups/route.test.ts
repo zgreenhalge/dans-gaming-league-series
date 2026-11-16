@@ -136,7 +136,7 @@ async function main() {
     assert.deepEqual(db.scrim_signups.map((s) => s.player_id), [PLAYER_ID]);
   });
 
-  await test('Discord: a signup edits the night\'s announcement in place; the last drop-out deletes its messages', async () => {
+  await test('Discord: a signup edits the night message in place; the last drop-out deletes the night\'s messages', async () => {
     await __flushTestAfter(); // earlier tests' deferred notifications, before the webhook is set
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     const calls: string[] = [];
@@ -145,18 +145,18 @@ async function main() {
       return { ok: true, status: 200, json: async () => ({ id: 'new' }) } as unknown as Response;
     }) as typeof fetch;
     installFixture({
-      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', starting_message_id: null, starting_sent_at: null }],
+      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', reminder_message_id: 'night', reminder_sent_at: '2026-01-01T00:00:00Z', finalized_at: null }],
     });
     __setTestSession(sessionFor(PLAYER_ID));
 
     await call(POST, 'POST', NIGHT_ID, { player_id: PLAYER_ID, commitment: 'maybe' });
     await __flushTestAfter();
-    assert.deepEqual(calls, ['PATCH https://discord.example/webhook/messages/ann']);
+    assert.deepEqual(calls, ['PATCH https://discord.example/webhook/messages/night']);
 
     calls.length = 0;
     await call(DELETE, 'DELETE', NIGHT_ID, { player_id: PLAYER_ID });
     await __flushTestAfter();
-    assert.deepEqual(calls, ['DELETE https://discord.example/webhook/messages/ann']);
+    assert.deepEqual(calls, ['DELETE https://discord.example/webhook/messages/ann', 'DELETE https://discord.example/webhook/messages/night']);
     delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   });
 

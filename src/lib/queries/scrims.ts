@@ -206,10 +206,11 @@ function toScrimMatch(r: ScrimMatchRow): ScrimMatch {
   };
 }
 
-/** A scrim night's matches in play order, with lineups, stat lines and server state. Not cached:
- *  server state is operational and changes without bumping `data_version`. */
-export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[]> {
-  const { data, error } = await getAdminClient().from('matches').select(SCRIM_MATCH_COLUMNS).eq('scrim_night_id', nightId).order('match_number');
+/** A scrim night's matches in play order, with lineups, stat lines and server state, read through
+ *  `db` (the Discord notifications pass their own client). Not cached: server state is operational and
+ *  changes without bumping `data_version`. */
+export async function getScrimNightMatches(nightId: number, db: SupabaseClient = getAdminClient()): Promise<ScrimMatch[]> {
+  const { data, error } = await db.from('matches').select(SCRIM_MATCH_COLUMNS).eq('scrim_night_id', nightId).order('match_number');
   if (error) throw error;
   return ((data ?? []) as unknown as ScrimMatchRow[]).map(toScrimMatch);
 }

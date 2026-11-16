@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { scrimMatchRpcs } from '@/lib/test-support/scrimMatchRpcs';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
@@ -79,6 +80,7 @@ async function makeMatch(db: FakeDb, date: string): Promise<number> {
 }
 
 async function main() {
+  __setTestAfterMode(true); // the route defers its Discord notification with after()
   await test('create: a checked-in player makes a match of four checked-in players on a known map', async () => {
     const { db, date } = installFixture([2, 3, 4, 5, 6]);
     const matchId = await makeMatch(db, date);

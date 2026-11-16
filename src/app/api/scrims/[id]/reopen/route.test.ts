@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -43,6 +44,7 @@ function installFixture(nights: Row[]): FakeDb {
 const reopen = (id = NIGHT) => POST(new Request(`http://localhost/api/scrims/${id}/reopen`, { method: 'POST' }), { params: Promise.resolve({ id }) });
 
 async function main() {
+  __setTestAfterMode(true); // the route defers its Discord notification with after()
   await test('a signed-up player reopens a night ended by hand: ended_at clears and now counts as activity', async () => {
     const db = installFixture([ended()]);
     __setTestSession(sessionFor(PLAYER_ID));

@@ -35,17 +35,18 @@ export function playerTag(player: { name: string; discordNameRoleId: string | nu
 }
 
 /** Posts a new message and returns its id (via `?wait=true`, the only way a webhook POST returns
- *  one) so a later call can edit it in place. `id` is `null` when Discord's response didn't parse. */
+ *  one) so a later call can edit it in place. `id` is `null` when Discord's response didn't parse. With
+ *  no `embed`, the message is its `content` alone, and a link in it unfurls into Discord's own preview. */
 export async function postWebhookEmbed(
   webhookUrl: string,
   content: string,
-  embed: Embed,
+  embed: Embed | null,
 ): Promise<WebhookResult<{ id: string | null }>> {
   try {
     const res = await fetch(`${webhookUrl}?wait=true`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, embeds: [embed] }),
+      body: JSON.stringify({ content, embeds: embed ? [embed] : [] }),
     });
     if (!res.ok) return { ok: false, error: await discordErrorDetail('Webhook post', res) };
     const posted = (await res.json().catch(() => null)) as { id?: string } | null;

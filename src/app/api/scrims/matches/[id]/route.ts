@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { accessDenied } from '@/lib/access-control';
+import { afterBestEffort } from '@/lib/after';
+import { syncScrimNightMessage } from '@/lib/discord-scrim-notify';
 import { parseRouteId } from '@/lib/util';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
 import { workshopIdFromInput } from '@/lib/workshop';
@@ -87,7 +89,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (revision === null) return NextResponse.json({ error: SCRIM_REVISION_INVALID }, { status: 400 });
 
   try {
-    await discardScrimMatch(getAdminClient(), matchId, revision);
+    const db = getAdminClient();
+    await discardScrimMatch(db, matchId, revision);
+    // A discarded match can no longer be the one the night's Discord message shows.
+    afterBestEffort('syncScrimNightMessage', () => syncScrimNightMessage(db, access.match.night_id));
   } catch (err) {
     return scrimErrorResponse(err, 'Discarding the match failed');
   }

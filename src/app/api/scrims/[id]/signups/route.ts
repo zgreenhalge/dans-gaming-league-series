@@ -14,7 +14,7 @@ import { parseCommitment } from '@/lib/scrim-schedule';
 import { leaveScrimNight, setScrimSignup } from '@/lib/scrim-nights';
 import { getPlayersById } from '@/lib/queries';
 import { afterBestEffort } from '@/lib/after';
-import { deleteScrimNightMessages, getScrimNightMessageIds, syncScrimNightRoster } from '@/lib/discord-scrim-notify';
+import { deleteScrimNightMessages, getScrimNightMessageIds, syncScrimNightMessage } from '@/lib/discord-scrim-notify';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireScrimSignupAccess(req, (await params).id);
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const db = getAdminClient();
     await setScrimSignup(db, access.night.id, access.targetPlayerId, commitment);
-    afterBestEffort('syncScrimNightRoster', () => syncScrimNightRoster(db, access.night.id));
+    afterBestEffort('syncScrimNightMessage', () => syncScrimNightMessage(db, access.night.id));
   } catch (err) {
     return internalError(err, 'Signup failed');
   }
@@ -45,8 +45,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // The night's state row (and its message ids) goes with the night, so read them first.
     const messageIds = await getScrimNightMessageIds(db, access.night.id);
     const nightRemoved = await leaveScrimNight(db, access.night.id, access.targetPlayerId);
-    afterBestEffort('syncScrimNightRoster', () =>
-      nightRemoved ? deleteScrimNightMessages(access.night.id, messageIds) : syncScrimNightRoster(db, access.night.id),
+    afterBestEffort('syncScrimNightMessage', () =>
+      nightRemoved ? deleteScrimNightMessages(access.night.id, messageIds) : syncScrimNightMessage(db, access.night.id),
     );
     return NextResponse.json({ ok: true, nightRemoved });
   } catch (err) {
