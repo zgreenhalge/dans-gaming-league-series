@@ -59,7 +59,7 @@ import { getPlayersBySteamId } from './queries/player';
 import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL, matchUrl } from './seo/site';
-import { discordErrorDetail } from './discord-threads';
+import { REMINDER_WINDOW_MS, playerTag, postWebhookEmbed, editWebhookEmbed, type Embed, type EmbedField } from './discord-webhook';
 import { formatDuration, deriveAdr } from './util';
 import type { Player } from './types';
 
@@ -74,21 +74,6 @@ const OPERATION_LIVE_SCORE = 'discord_notify_live_score';
 const OPERATION_SCORE = 'discord_notify_score';
 const OPERATION_REMINDER = 'discord_notify_reminder';
 const OPERATION_SCHEDULE_REMINDER = 'discord_schedule_reminder';
-// A pg_cron job fires this ~1h before scheduled_at by construction; this window just tolerates
-// clock skew/pg_net delivery lag while still catching the real failure mode it guards against — the
-// match having been rescheduled away from the time the job was originally queued for.
-const REMINDER_WINDOW_MS = 2 * 60 * 60 * 1000;
-
-type EmbedField = { name: string; value: string; inline?: boolean };
-type Embed = {
-  title: string;
-  description: string;
-  color: number;
-  url: string;
-  author: { name: string };
-  thumbnail?: { url: string };
-  fields?: EmbedField[];
-};
 
 interface MatchEmbedParts {
   matchId: number;
@@ -99,16 +84,6 @@ interface MatchEmbedParts {
   color: number;
   image?: string | null;
   boxScore?: { shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] };
-}
-
-/** A player's name-color role mention (`<@&roleId>`) when they have one, else their plain name
- *  bolded — the same "tag if linked, else plain name" fallback `discord-threads.ts`'s `openingPost()`
- *  uses for user mentions. Only usable in a webhook message's `content`: Discord does not render
- *  mentions typed inside an embed (title, description, or field values) as tags at all — they show as
- *  literal `<@&...>` text there — so this is for the roster line in `buildMatchContent()` below, never
- *  for the box score, which lives in an embed field. */
-function playerTag(player: MatchDiscordPlayer): string {
-  return player.discordNameRoleId ? `<@&${player.discordNameRoleId}>` : `**${player.name}**`;
 }
 
 /** The webhook message's plain `content`, sent alongside the embed — a "Shirts vs Skins" roster line
@@ -230,9 +205,9 @@ function buildMatchMessage(
   };
 }
 
-/** Posts a new message and returns its id (via `?wait=true`, the only way a webhook POST returns
- *  one) so a later call can edit it in place — `null` if unconfigured, if the post failed, or if
- *  Discord's response didn't parse. */
+/** Posts a new message (`postWebhookEmbed()`) and returns its id so a later call can edit it in
+ *  place — `null` if the post failed or Discord's response didn't parse. A failure is recorded to
+ *  ops_errors under `operation`, and cleared by a success. */
 async function postNewEmbed(
   supabaseAdmin: SupabaseClient,
   matchId: number,
@@ -241,27 +216,18 @@ async function postNewEmbed(
   content: string,
   embed: Embed,
 ): Promise<string | null> {
-  try {
-    const res = await fetch(`${webhookUrl}?wait=true`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, embeds: [embed] }),
-    });
-    if (!res.ok) {
-      await recordOpsError(supabaseAdmin, 'match', matchId, operation, await discordErrorDetail('Webhook post', res));
-      return null;
-    }
-    await clearOpsError(supabaseAdmin, 'match', matchId, operation);
-    const posted = (await res.json().catch(() => null)) as { id?: string } | null;
-    return posted?.id ?? null;
-  } catch (e) {
-    await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook post failed: ${(e as Error).message}`);
+  const result = await postWebhookEmbed(webhookUrl, content, embed);
+  if (!result.ok) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, operation, result.error);
     return null;
   }
+  await clearOpsError(supabaseAdmin, 'match', matchId, operation);
+  return result.id;
 }
 
-/** Edits a previously-posted webhook message in place. Returns whether it succeeded — a caller
- *  should fall back to `postNewEmbed()` on `false` (the message may have been deleted). */
+/** Edits a previously-posted message in place (`editWebhookEmbed()`), recording a failure the same
+ *  way. Returns whether it succeeded — a caller should fall back to `postNewEmbed()` on `false` (the
+ *  message may have been deleted). */
 async function editEmbed(
   supabaseAdmin: SupabaseClient,
   matchId: number,
@@ -271,22 +237,13 @@ async function editEmbed(
   content: string,
   embed: Embed,
 ): Promise<boolean> {
-  try {
-    const res = await fetch(`${webhookUrl}/messages/${messageId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, embeds: [embed] }),
-    });
-    if (!res.ok) {
-      await recordOpsError(supabaseAdmin, 'match', matchId, operation, await discordErrorDetail('Webhook edit', res));
-      return false;
-    }
-    await clearOpsError(supabaseAdmin, 'match', matchId, operation);
-    return true;
-  } catch (e) {
-    await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook edit failed: ${(e as Error).message}`);
+  const result = await editWebhookEmbed(webhookUrl, messageId, content, embed);
+  if (!result.ok) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, operation, result.error);
     return false;
   }
+  await clearOpsError(supabaseAdmin, 'match', matchId, operation);
+  return true;
 }
 
 /** The message a notification for this match should edit in place, if one's on record yet — reads
