@@ -44,11 +44,16 @@ export function scrimMatchNeedsServer(m: ScrimMatchState): boolean {
   return !isPlayedScore(m.final_score) && !(m.server_state !== null && GAME_OVER_SERVER_STATES.has(m.server_state));
 }
 
-/** Whether a scrim match's map, side and lineup can still change: not scored and never started — once
- *  it has claimed the server (`done` included), they're what the server loaded. `failed` and `idle`
- *  don't lock it: a failed start can be fixed and retried. */
+/** Whether a scrim match has started: it is scored, or has claimed the server (`done` included). A
+ *  `failed` or `idle` server doesn't count — a failed start can be fixed and retried. */
+export function scrimMatchHasStarted(m: ScrimMatchState): boolean {
+  return isPlayedScore(m.final_score) || (m.server_state !== null && (RUNNING_SERVER_STATES.has(m.server_state) || m.server_state === 'done'));
+}
+
+/** Whether a scrim match's map, side and lineup can still change: it has not started — once it has
+ *  claimed the server, they're what the server loaded. */
 export function isScrimMatchEditable(m: ScrimMatchState): boolean {
-  return !isPlayedScore(m.final_score) && (m.server_state === null || !(RUNNING_SERVER_STATES.has(m.server_state) || m.server_state === 'done'));
+  return !scrimMatchHasStarted(m);
 }
 
 /** Whether a scrim match can be discarded: not scored, and not holding the server right now. That

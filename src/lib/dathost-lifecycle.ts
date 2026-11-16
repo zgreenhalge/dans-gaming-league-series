@@ -32,6 +32,7 @@ import { SERVER_BOOT_MARKER } from './server-players';
 import { resolveConfigSet, pushCfgFiles, type CfgPushResult } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { notifyMatchServerLive } from './discord-notify';
+import { notifyScrimMatchProgress } from './discord-scrim-notify';
 
 /** The "friendly" cvars — only asserted when the launch-time "friendly" toggle is on. */
 const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
@@ -296,6 +297,8 @@ export async function provisionMatchServer(
       connect_string: null,
       server_started_at: new Date().toISOString(),
     });
+    // A scrim match's night message moves on to this match as soon as it holds the server.
+    await notifyScrimMatchProgress(supabaseAdmin, matchId);
 
     const mapWorkshopId = await resolveMapWorkshopId(supabaseAdmin, matchId);
     const { connect } = await launchServer(supabaseAdmin, serverId, { configSetKey: 'golden', mapWorkshopId });
@@ -310,6 +313,7 @@ export async function provisionMatchServer(
     // so this never adds latency to the HTTP response it's ultimately deferred from — safe to await
     // inline. notifyMatchServerLive() never throws (self-contained best-effort).
     await notifyMatchServerLive(supabaseAdmin, matchId);
+    await notifyScrimMatchProgress(supabaseAdmin, matchId);
     return { connect, serverId };
   } catch (err) {
     await setServerState(supabaseAdmin, matchId, { server_state: 'failed' }).catch(() => {});

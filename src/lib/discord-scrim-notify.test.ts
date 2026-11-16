@@ -56,6 +56,7 @@ const stat = (id: number, matchId: number, playerId: number, faction: string, wo
 const scrimMatch = (id: number, matchNumber: number, finalScore: string | null): Row => ({
   id, week_id: null, scrim_night_id: NIGHT_ID, match_number: matchNumber, scrim_revision: 1, shirts_pick: 'Foroglio', skins_starting_side: null, final_score: finalScore,
 });
+const serverState = (matchId: number, server_state: string): Row => ({ match_id: matchId, server_state });
 const liveScore = (matchId: number, shirts: number, skins: number, round: number): Row => ({ match_id: matchId, shirts_score: shirts, skins_score: skins, round, updated_at: '2026-01-01T00:00:00Z' });
 const state = (extra: Row = {}): Row => ({ night_id: NIGHT_ID, announcement_message_id: null, reminder_message_id: null, reminder_sent_at: null, finalized_at: null, ...extra });
 
@@ -199,7 +200,7 @@ async function main() {
 
   await test('syncScrimNightMessage: shows a live match with its score and a link, then its final score', async () => {
     withWebhook();
-    const { db, client } = underway({ matches: [scrimMatch(900, 1, null)], live_match_score: [liveScore(900, 7, 5, 12)] });
+    const { db, client } = underway({ matches: [scrimMatch(900, 1, null)], match_server_state: [serverState(900, 'live')], live_match_score: [liveScore(900, 7, 5, 12)] });
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.equal(matchField(calls[0])!.name, 'Match 1 · Foroglio');
@@ -211,21 +212,45 @@ async function main() {
     assert.match(matchField(calls[1])!.value, /^🏁 \*\*Final\*\* 13-9\n\[Match page\]\(.*\/scrims\/matches\/900\)$/);
   });
 
-  await test('syncScrimNightMessage: the next match replaces the last final score once it reports a score, not before', async () => {
+  await test('syncScrimNightMessage: the next match replaces the last final score once its server has started, not before', async () => {
     withWebhook();
-    const { db, client } = underway({ matches: [scrimMatch(900, 1, '13-9'), scrimMatch(901, 2, null)] });
+    const { db, client } = underway({ matches: [scrimMatch(900, 1, '13-9'), scrimMatch(901, 2, null)], match_server_state: [serverState(900, 'done')] });
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.match(matchField(calls[0])!.name, /^Match 1/, 'match 2 is only queued');
     assert.match(matchField(calls[0])!.value, /Final/);
 
+    db.match_server_state.push(serverState(901, 'provisioning'));
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.match(matchField(calls[1])!.name, /^Match 2/, 'the server claim replaces it');
+    assert.match(matchField(calls[1])!.value, /Server starting/);
+
+    db.match_server_state[1].server_state = 'live';
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.match(matchField(calls[2])!.value, /Server live/);
+
     db.live_match_score = [liveScore(901, 1, 0, 1)];
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.match(matchField(calls[1])!.name, /^Match 2/);
-    assert.match(matchField(calls[1])!.value, /LIVE/);
+    assert.match(matchField(calls[3])!.value, /LIVE\*\* 1-0 · Round 1/);
   });
 
-  await test('syncScrimNightMessage: no match field before any match has a score', async () => {
+  await test('syncScrimNightMessage: a failed server start does not replace the last match', async () => {
+    withWebhook();
+    const { client } = underway({ matches: [scrimMatch(900, 1, '13-9'), scrimMatch(901, 2, null)], match_server_state: [serverState(901, 'failed')] });
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.match(matchField(calls[0])!.name, /^Match 1/);
+  });
+
+  await test('syncScrimNightMessage: a match whose game is over but has no score yet awaits its result', async () => {
+    withWebhook();
+    const { client } = underway({ matches: [scrimMatch(900, 1, null)], match_server_state: [serverState(900, 'tearing_down')] });
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.match(matchField(calls[0])!.value, /Awaiting the result/);
+  });
+
+  await test('syncScrimNightMessage: no match field before any match has started', async () => {
     withWebhook();
     const { client } = underway({ matches: [scrimMatch(900, 1, null)] });
     const calls = stubFetch();
@@ -299,7 +324,7 @@ async function main() {
 
   await test('notifyScrimMatchProgress: syncs the night of a scrim match; a league match is a no-op', async () => {
     withWebhook();
-    const { client } = underway({ matches: [scrimMatch(900, 1, null), { id: 100, week_id: 1, scrim_night_id: null, match_number: 1, final_score: null }], live_match_score: [liveScore(900, 1, 0, 1)] });
+    const { client } = underway({ matches: [scrimMatch(900, 1, null), { id: 100, week_id: 1, scrim_night_id: null, match_number: 1, final_score: null }], match_server_state: [serverState(900, 'live')], live_match_score: [liveScore(900, 1, 0, 1)] });
     const calls = stubFetch();
     await notifyScrimMatchProgress(client, 100);
     await notifyScrimMatchProgress(client, 12345);

@@ -12,7 +12,7 @@
 //      `POST /api/cron/scrim-reminder`, which a one-shot pg_cron job queued by
 //      `scheduleScrimNightReminder()` fires). It deletes the announcement and carries the night from
 //      then on: the roster with each player's Definite/Maybe emoji, then the latest match's running
-//      and final score with a link to it — until the next match starts and takes its place — and, once
+//      and final score with a link to it — until the next match's server starts and takes its place — and, once
 //      the night has ended, the final standings in place of that score. A night scheduled less than an
 //      hour out gets this message straight away instead of an announcement.
 // `syncScrimNightMessage()` rebuilds the night message from the database and edits it in place after
@@ -40,10 +40,11 @@ import {
   type ScrimLeaderboardRow,
   type ScrimMatch,
 } from './queries/scrims';
+import { scrimMatchHasStarted } from './scrim-matches';
 import { hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
 import { scrimMatchHref, scrimNightHref } from './crumbs';
 import { SITE_URL } from './seo/site';
-import { formatLeagueDateTime, isPlayedScore, parseScore } from './util';
+import { formatLeagueDateTime, parseScore } from './util';
 
 const COLOR_UPCOMING = 0xfee75c; // Discord's "yellow", as for a match reminder
 const COLOR_LIVE = 0xed4245; // Discord's "red" — a match is being played
@@ -61,10 +62,12 @@ interface DiscordState {
   finalized_at: string | null;
 }
 
-/** What the night message shows of the latest match that has started: its score, running or final. */
+/** What the night message shows of the latest match that has started: its score, running or final,
+ *  or where its server is while there is no score yet. */
 interface LatestMatch {
   match: ScrimMatch;
-  live: boolean;
+  /** `starting`: the server is booting; `waiting`: no score yet (the first round, or the result). */
+  kind: 'final' | 'live' | 'starting' | 'waiting';
   shirts: number;
   skins: number;
   round: number | null;
@@ -100,25 +103,19 @@ function isReminderDue(night: ScrimNight, now: Date): boolean {
   return Date.parse(night.startsAt) - now.getTime() <= REMINDER_LEAD_MS + REMINDER_LEAD_SLACK_MS;
 }
 
-/** The latest match that has started — scored, or with a live score — in play order, so the next
- *  match takes over as soon as its server reports a score. `null` before any has. */
+/** The latest match that has started (`scrimMatchHasStarted()`) in play order, so the next match takes
+ *  over as soon as it holds the server. `null` before any has. */
 async function getLatestMatch(db: SupabaseClient, matches: ScrimMatch[]): Promise<LatestMatch | null> {
-  const unplayed = matches.filter((m) => !isPlayedScore(m.final_score)).map((m) => m.id);
-  const liveById = new Map<number, { shirts: number; skins: number; round: number | null }>();
-  if (unplayed.length > 0) {
-    const { data, error } = await db.from('live_match_score').select('match_id, shirts_score, skins_score, round').in('match_id', unplayed);
-    if (error) throw error;
-    for (const r of (data ?? []) as { match_id: number; shirts_score: number; skins_score: number; round: number | null }[]) {
-      liveById.set(r.match_id, { shirts: r.shirts_score, skins: r.skins_score, round: r.round });
-    }
-  }
-  for (const match of [...matches].reverse()) {
-    const final = parseScore(match.final_score);
-    if (final) return { match, live: false, ...final, round: null };
-    const live = liveById.get(match.id);
-    if (live) return { match, live: true, ...live };
-  }
-  return null;
+  const match = [...matches].reverse().find(scrimMatchHasStarted);
+  if (!match) return null;
+  const final = parseScore(match.final_score);
+  if (final) return { match, kind: 'final', ...final, round: null };
+
+  const { data, error } = await db.from('live_match_score').select('shirts_score, skins_score, round').eq('match_id', match.id).maybeSingle();
+  if (error) throw error;
+  const live = data as { shirts_score: number; skins_score: number; round: number | null } | null;
+  if (live) return { match, kind: 'live', shirts: live.shirts_score, skins: live.skins_score, round: live.round };
+  return { match, kind: match.server_state === 'provisioning' ? 'starting' : 'waiting', shirts: 0, skins: 0, round: null };
 }
 
 /** Everything the night message shows, read fresh through `db`. `null` when the night doesn't exist. */
@@ -173,8 +170,13 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
   ];
   if (standings) fields.push({ name: 'Final standings', value: standingsTable(standings) });
   if (latestMatch) {
-    const { match, live, shirts, skins, round } = latestMatch;
-    const result = live ? `🔴 **LIVE** ${shirts}-${skins}${round != null ? ` · Round ${round}` : ''}` : `🏁 **Final** ${shirts}-${skins}`;
+    const { match, kind, shirts, skins, round } = latestMatch;
+    const result = {
+      final: `🏁 **Final** ${shirts}-${skins}`,
+      live: `🔴 **LIVE** ${shirts}-${skins}${round != null ? ` · Round ${round}` : ''}`,
+      starting: '🟡 **Server starting**',
+      waiting: match.server_state === 'live' ? '🟢 **Server live** — waiting for the first round' : '⏳ **Awaiting the result**',
+    }[kind];
     fields.push({ name: `Match ${match.match_number}${match.map ? ` · ${match.map}` : ''}`, value: `${result}\n[Match page](${matchUrl(match.id)})` });
   }
 
@@ -188,7 +190,7 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
     embed: {
       title: `Scrim night · ${formatLeagueDateTime(night.startsAt)}`,
       description: `${status}\n<t:${epoch}:F>\n[Open the night](${nightUrl(night.id)})`,
-      color: ended ? COLOR_OVER : latestMatch?.live ? COLOR_LIVE : COLOR_UPCOMING,
+      color: ended ? COLOR_OVER : latestMatch?.kind === 'live' ? COLOR_LIVE : COLOR_UPCOMING,
       url: nightUrl(night.id),
       author: { name: 'Scrims' },
       fields,
