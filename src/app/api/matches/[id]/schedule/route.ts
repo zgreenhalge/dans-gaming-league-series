@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMatchAccess } from '@/lib/match-access';
 import { accessDenied } from '@/lib/access-control';
-import { internalError } from '@/lib/route-errors';
+import { matchWriteError } from '@/lib/route-errors';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
 import { setMatchScheduledAt } from '@/lib/match-day';
@@ -22,10 +22,6 @@ export async function PATCH(
   if (!access.ok) return accessDenied(access);
 
   const supabaseAdmin = getAdminClient();
-  const { data: matchRow } = await supabaseAdmin.from('matches').select('id').eq('id', matchId).maybeSingle();
-  if (!matchRow) {
-    return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-  }
 
   // A gauntlet pod's two games are paired 30 minutes apart automatically only when their time comes
   // from a linked Discord Scheduled Event (discord-event-sync.ts's podGame2ScheduledAt()) — a human
@@ -45,7 +41,7 @@ export async function PATCH(
   try {
     await setMatchScheduledAt(supabaseAdmin, matchId, scheduled_at);
   } catch (err) {
-    return internalError(err, 'Saving the time failed');
+    return matchWriteError(err, 'Saving the time failed');
   }
 
   // Deferred past the response, same as score/route.ts's own post-commit side effects: (re)schedules
