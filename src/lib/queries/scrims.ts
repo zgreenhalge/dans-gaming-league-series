@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import {
   hasScrimNightEnded,
@@ -53,9 +54,60 @@ export const getScrimSignups = persistentQuery('getScrimSignups', async (nightId
     if (!player) continue;
     entries.push({ ...r, player_name: player.name, steam_avatar_url: player.steam_avatar_url });
   }
-  const rank = (c: ScrimCommitment) => (c === 'definite' ? 0 : 1);
-  return entries.sort((a, b) => rank(a.commitment) - rank(b.commitment) || a.signed_up_at.localeCompare(b.signed_up_at));
+  return entries.sort(compareScrimSignups);
 });
+
+/** Definite before maybe, then in signup order — the order every roster lists a night's signups. */
+function compareScrimSignups(a: { commitment: ScrimCommitment; signed_up_at: string }, b: { commitment: ScrimCommitment; signed_up_at: string }): number {
+  const rank = (c: ScrimCommitment) => (c === 'definite' ? 0 : 1);
+  return rank(a.commitment) - rank(b.commitment) || a.signed_up_at.localeCompare(b.signed_up_at);
+}
+
+/** One signup as a Discord notification lists it. */
+export interface ScrimDiscordSignup {
+  name: string;
+  discordNameRoleId: string | null;
+  commitment: ScrimCommitment;
+  checkedIn: boolean;
+}
+
+/** A night and its signups (in `compareScrimSignups()` order), read fresh through `db` — the Discord
+ *  notifications for a night (`discord-scrim-notify.ts`) rebuild their roster from this on every
+ *  change, so they take the caller's client and never read through the data-version cache. `null`
+ *  when the night doesn't exist. A signup whose player row is missing is omitted, as in
+ *  `getScrimSignups()`. */
+export async function getScrimNightForDiscord(
+  db: SupabaseClient,
+  nightId: number,
+): Promise<{ night: ScrimNight; signups: ScrimDiscordSignup[] } | null> {
+  const [nightRes, signupRes] = await Promise.all([
+    db.from('scrim_nights').select('id, starts_at, ended_at, last_active_at').eq('id', nightId).maybeSingle(),
+    db.from('scrim_signups').select('player_id, commitment, signed_up_at, checked_in_at').eq('night_id', nightId),
+  ]);
+  if (nightRes.error) throw nightRes.error;
+  if (signupRes.error) throw signupRes.error;
+  if (!nightRes.data) return null;
+  const n = nightRes.data as { id: number; starts_at: string; ended_at: string | null; last_active_at: string | null };
+  const iso = (t: string | null) => (t ? new Date(t).toISOString() : null);
+  const night: ScrimNight = { id: n.id, startsAt: new Date(n.starts_at).toISOString(), endedAt: iso(n.ended_at), lastActiveAt: iso(n.last_active_at) };
+
+  const rows = (signupRes.data ?? []) as { player_id: number; commitment: ScrimCommitment; signed_up_at: string; checked_in_at: string | null }[];
+  const playerIds = rows.map((r) => r.player_id);
+  const playersRes = playerIds.length
+    ? await db.from('players').select('id, name, discord_name_role_id').in('id', playerIds)
+    : { data: [], error: null };
+  if (playersRes.error) throw playersRes.error;
+  const players = new Map(((playersRes.data ?? []) as { id: number; name: string; discord_name_role_id: string | null }[]).map((p) => [p.id, p]));
+
+  const signups = rows
+    .filter((r) => players.has(r.player_id))
+    .sort(compareScrimSignups)
+    .map((r) => {
+      const p = players.get(r.player_id)!;
+      return { name: p.name, discordNameRoleId: p.discord_name_role_id, commitment: r.commitment, checkedIn: r.checked_in_at !== null };
+    });
+  return { night, signups };
+}
 
 /** A night that hasn't ended, with what its signup panel shows. */
 export interface UpcomingScrimNight {
