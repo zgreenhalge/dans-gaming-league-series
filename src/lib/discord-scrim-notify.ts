@@ -17,7 +17,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   REMINDER_WINDOW_MS,
+  EMBED_FIELD_VALUE_MAX,
+  MESSAGE_CONTENT_MAX,
   deleteWebhookMessage,
+  joinWithinLimit,
   matchNotificationsWebhookUrl,
   editWebhookEmbed,
   playerTag,
@@ -125,7 +128,7 @@ const commitmentEmoji = (s: ScrimDiscordSignup) => (s.commitment === 'definite' 
 /** Standings as a fixed-width `# Player W-L ADR` table in a code block (embed field values render in
  *  a proportional font otherwise). */
 function standingsTable(rows: ScrimLeaderboardRow[]): string {
-  const shown = rows.slice(0, MAX_STANDINGS_ROWS).map((r, i) => ({ rank: String(i + 1), name: r.player_name, record: `${r.wins}-${r.losses}`, adr: r.adr.toFixed(1) }));
+  const shown = rows.slice(0, MAX_STANDINGS_ROWS).map((r, i) => ({ rank: String(i + 1), name: r.player_name.replaceAll('`', "'"), record: `${r.wins}-${r.losses}`, adr: r.adr.toFixed(1) }));
   const nameWidth = Math.max('Player'.length, ...shown.map((r) => r.name.length));
   const recordWidth = Math.max('W-L'.length, ...shown.map((r) => r.record.length));
   const adrWidth = Math.max('ADR'.length, ...shown.map((r) => r.adr.length));
@@ -150,7 +153,7 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
       : `⏰ **Scrim night starts <t:${epoch}:R>**`;
 
   const fields: EmbedField[] = [
-    { name: `Roster (${signups.length})`, value: signups.length > 0 ? signups.map((s) => `${commitmentEmoji(s)} ${s.name}`).join('\n') : '—' },
+    { name: `Roster (${signups.length})`, value: signups.length > 0 ? joinWithinLimit(signups.map((s) => `${commitmentEmoji(s)} ${s.name}`), EMBED_FIELD_VALUE_MAX) : '—' },
   ];
   if (standings) fields.push({ name: 'Final standings', value: standingsTable(standings) });
   if (latestMatch) {
@@ -167,7 +170,8 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
 
   const tagLines = (['definite', 'maybe'] as const).flatMap((commitment) => {
     const tags = signups.filter((x) => x.commitment === commitment).map(playerTag);
-    return tags.length > 0 ? [`${commitment === 'definite' ? 'Definite' : 'Maybe'}: ${tags.join(' ')}`] : [];
+    // Each list gets under half the content limit, so the two lines fit together.
+    return tags.length > 0 ? [`${commitment === 'definite' ? 'Definite' : 'Maybe'}: ${joinWithinLimit(tags, MESSAGE_CONTENT_MAX / 2 - 100, ' ')}`] : [];
   });
 
   return {
@@ -209,20 +213,18 @@ async function postAnnouncement(db: SupabaseClient, url: string, night: ScrimNig
 }
 
 /** Posts the night message, then deletes the announcement it replaces. Claims
- *  `scrim_night_discord_state.reminder_sent_at` atomically first, so two racing calls never both post;
- *  nothing retries a post that fails after the claim except a later `syncScrimNightMessage()`, which
- *  finds the claim taken and leaves it. Posting before deleting means a failed post never leaves the
- *  channel with neither message. */
+ *  `scrim_night_discord_state.reminder_sent_at` atomically first, so two racing calls never both post.
+ *  A post that fails, or comes back with no message id to edit, gives the claim back so the next
+ *  `syncScrimNightMessage()` posts again; an unreleased claim would leave the night with no message for
+ *  good. The announcement goes only once the new message's id is stored, so a failed post never leaves
+ *  the channel with neither. */
 async function postNightMessage(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
   const nightId = data.night.id;
+  const table = () => db.from('scrim_night_discord_state');
   // The announcement may never have posted, so there may be no row to claim yet; seed one without
   // overwriting an existing row.
-  await db
-    .from('scrim_night_discord_state')
-    .upsert({ night_id: nightId, reminder_sent_at: null }, { onConflict: 'night_id', ignoreDuplicates: true })
-    .throwOnError();
-  const { data: claimed } = await db
-    .from('scrim_night_discord_state')
+  await table().upsert({ night_id: nightId, reminder_sent_at: null }, { onConflict: 'night_id', ignoreDuplicates: true }).throwOnError();
+  const { data: claimed } = await table()
     .update({ reminder_sent_at: now.toISOString() })
     .eq('night_id', nightId)
     .is('reminder_sent_at', null)
@@ -232,16 +234,17 @@ async function postNightMessage(db: SupabaseClient, url: string, data: NightMess
 
   const message = buildNightMessage(data, now);
   const result = await postWebhookEmbed(url, message.content, message.embed);
-  if (!result.ok) throw new Error(result.error);
-  if (result.id) {
-    await db.from('scrim_night_discord_state').update({ reminder_message_id: result.id }).eq('night_id', nightId).throwOnError();
+  if (!result.ok || !result.id) {
+    await table().update({ reminder_sent_at: null }).eq('night_id', nightId).throwOnError();
+    throw new Error(result.ok ? 'Discord returned no id for the posted message' : result.error);
   }
+  await table().update({ reminder_message_id: result.id }).eq('night_id', nightId).throwOnError();
 
   const announcementId = claimed[0].announcement_message_id;
   if (announcementId) {
     const deleted = await deleteWebhookMessage(url, announcementId);
     if (!deleted.ok) throw new Error(deleted.error);
-    await db.from('scrim_night_discord_state').update({ announcement_message_id: null }).eq('night_id', nightId).throwOnError();
+    await table().update({ announcement_message_id: null }).eq('night_id', nightId).throwOnError();
   }
 }
 

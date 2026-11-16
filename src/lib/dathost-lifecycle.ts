@@ -297,8 +297,9 @@ export async function provisionMatchServer(
       connect_string: null,
       server_started_at: new Date().toISOString(),
     });
-    // A scrim match's night message moves on to this match as soon as it holds the server.
-    await notifyScrimMatchProgress(supabaseAdmin, matchId);
+    // A scrim match's night message moves on to this match as soon as it holds the server. Started
+    // alongside the boot rather than ahead of it (it never throws), and settled before the live sync.
+    const claimSynced = notifyScrimMatchProgress(supabaseAdmin, matchId);
 
     const mapWorkshopId = await resolveMapWorkshopId(supabaseAdmin, matchId);
     const { connect } = await launchServer(supabaseAdmin, serverId, { configSetKey: 'golden', mapWorkshopId });
@@ -313,6 +314,7 @@ export async function provisionMatchServer(
     // so this never adds latency to the HTTP response it's ultimately deferred from — safe to await
     // inline. notifyMatchServerLive() never throws (self-contained best-effort).
     await notifyMatchServerLive(supabaseAdmin, matchId);
+    await claimSynced;
     await notifyScrimMatchProgress(supabaseAdmin, matchId);
     return { connect, serverId };
   } catch (err) {

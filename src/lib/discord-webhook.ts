@@ -12,6 +12,26 @@ export function matchNotificationsWebhookUrl(): string | undefined {
   return process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL || undefined;
 }
 
+/** Discord's limits on one embed field's value and on a message's content. */
+export const EMBED_FIELD_VALUE_MAX = 1024;
+export const MESSAGE_CONTENT_MAX = 2000;
+
+/** How long a webhook call may take before it is abandoned, so a stalled connection cannot hold the
+ *  caller (a server boot, an ingest event) indefinitely. */
+const WEBHOOK_TIMEOUT_MS = 10_000;
+
+/** `lines` joined with `separator`, cut to fit `max` characters: the lines that fit, then "+N more"
+ *  for the rest. Discord rejects a field or message over its limit outright. */
+export function joinWithinLimit(lines: string[], max: number, separator = '\n'): string {
+  const joined = lines.join(separator);
+  if (joined.length <= max) return joined;
+  for (let shown = lines.length - 1; shown > 0; shown--) {
+    const text = `${lines.slice(0, shown).join(separator)}${separator}+${lines.length - shown} more`;
+    if (text.length <= max) return text;
+  }
+  return `+${lines.length} more`;
+}
+
 /** How far from its target time a reminder may fire and still post. A pg_cron job fires ~1h before
  *  the start by construction; this tolerates clock skew and pg_net delivery lag while still catching a
  *  reminder whose target has moved away. */
@@ -53,6 +73,7 @@ export async function postWebhookEmbed(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, embeds: embed ? [embed] : [] }),
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
     if (!res.ok) return { ok: false, error: await discordErrorDetail('Webhook post', res) };
     const posted = (await res.json().catch(() => null)) as { id?: string } | null;
@@ -75,6 +96,7 @@ export async function editWebhookEmbed(
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, embeds: [embed] }),
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
     if (!res.ok) return { ok: false, error: await discordErrorDetail('Webhook edit', res) };
     return { ok: true };
@@ -87,7 +109,7 @@ export async function editWebhookEmbed(
  *  deleted. */
 export async function deleteWebhookMessage(webhookUrl: string, messageId: string): Promise<WebhookResult> {
   try {
-    const res = await fetch(`${webhookUrl}/messages/${messageId}`, { method: 'DELETE' });
+    const res = await fetch(`${webhookUrl}/messages/${messageId}`, { method: 'DELETE', signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS) });
     if (!res.ok && res.status !== 404) return { ok: false, error: await discordErrorDetail('Webhook delete', res) };
     return { ok: true };
   } catch (e) {

@@ -256,6 +256,77 @@ async function main() {
     assert.equal(matchField(calls[0]), undefined);
   });
 
+  await test('a failed night-message post gives the claim back, so the next sync posts it', async () => {
+    withWebhook();
+    const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
+    const logged: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      stubFetch(500);
+      await notifyScrimNightReminder(client, NIGHT_ID);
+    } finally {
+      console.error = realError;
+    }
+    assert.equal(logged.length, 1);
+    assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null, 'claim released');
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'ann', 'the announcement stays');
+
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.deepEqual(calls.map((c) => c.method), ['POST', 'DELETE']);
+    assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'msg-1');
+  });
+
+  await test('a post that returns no message id gives the claim back and keeps the announcement', async () => {
+    withWebhook();
+    const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
+    const calls: string[] = [];
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url: string, init?: RequestInit) => {
+      calls.push(init?.method ?? 'GET');
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    }) as typeof fetch;
+    const realError = console.error;
+    console.error = () => {};
+    try {
+      await notifyScrimNightReminder(client, NIGHT_ID);
+    } finally {
+      console.error = realError;
+    }
+    assert.deepEqual(calls, ['POST'], 'the announcement is not deleted');
+    assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null);
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'ann');
+  });
+
+  await test('a long roster is cut to Discord\'s field limit with a "+N more" tail, and the content to its own', async () => {
+    withWebhook();
+    const names = Array.from({ length: 160 }, (_, i) => `Player-with-a-long-name-${i}`);
+    const { client } = fixture(55 * MIN, {
+      players: names.map((name, i) => ({ id: 100 + i, name, discord_name_role_id: `9000000000000${String(i).padStart(5, '0')}`, steam_avatar_url: null })),
+      scrim_signups: names.map((_, i) => ({ id: i, night_id: NIGHT_ID, player_id: 100 + i, commitment: i % 2 ? 'maybe' : 'definite', signed_up_at: `2026-01-01T00:${String(i).padStart(2, '0')}:00Z`, checked_in_at: null })),
+    });
+    const calls = stubFetch();
+    await notifyScrimNightReminder(client, NIGHT_ID);
+    assert.ok(roster(calls[0]).length <= 1024);
+    assert.match(roster(calls[0]), /\+\d+ more$/);
+    assert.ok(calls[0].body!.content.length <= 2000);
+    assert.match(calls[0].body!.content, /\+\d+ more/);
+  });
+
+  await test('a player name with backticks cannot close the standings code block', async () => {
+    withWebhook();
+    const { db, client } = underway({
+      matches: [scrimMatch(900, 1, '13-9')],
+      player_match_stats: [stat(1, 900, 1, 'SHIRTS', true), stat(2, 900, 3, 'SHIRTS', true), stat(3, 900, 2, 'SKINS', false), stat(4, 900, 4, 'SKINS', false)],
+    });
+    db.players[0].name = 'A```nn';
+    db.scrim_nights[0].ended_at = new Date().toISOString();
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    const standings = calls[0].body!.embeds[0].fields.find((f) => f.name === 'Final standings')!.value;
+    assert.equal(standings.split('```').length, 3, 'only the opening and closing fence');
+  });
+
   await test('syncScrimNightMessage: an ended night shows its standings in place of the last match, once', async () => {
     withWebhook();
     const { db, client } = underway({
