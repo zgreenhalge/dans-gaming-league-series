@@ -17,8 +17,8 @@
 //      hour out gets this message straight away instead of an announcement.
 // `syncScrimNightMessage()` rebuilds the night message from the database and edits it in place after
 // anything that changes it: a signup, a check-in, a drop-out, a match's live or final score, a discard,
-// the night ending or reopening. A night that ends on the clock has no write to react to, so
-// `finalizeEndedScrimNights()` (`POST /api/cron/scrim-finalize`, every five minutes) catches those.
+// the night ending (End night) or reopening. A night that goes idle ends on the clock with no write to
+// react to, so its message keeps its last state until the next sync.
 // A new post is what pings people; an edit does not. A night removed with its last player has its
 // messages deleted (`deleteScrimNightMessages()`).
 
@@ -296,8 +296,8 @@ export async function notifyScrimNightReminder(db: SupabaseClient, nightId: numb
  *  the night is due one; an announcement is left as it is. An ended night is edited to its final
  *  standings once (`finalized_at`), and a reopened one back to its match. A message that can't be
  *  edited (deleted from the channel) is left alone, since a re-post would ping everyone again. Call
- *  after anything that changes it. `onlyEnded` skips a night that is still on — the sweep's filter. */
-export async function syncScrimNightMessage(db: SupabaseClient, nightId: number, opts: { onlyEnded?: boolean } = {}): Promise<void> {
+ *  after anything that changes it. */
+export async function syncScrimNightMessage(db: SupabaseClient, nightId: number): Promise<void> {
   const url = webhookUrl();
   if (!url) return;
   return bestEffort('syncScrimNightMessage', nightId, async () => {
@@ -305,7 +305,6 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number,
     const [data, state] = await Promise.all([loadMessageData(db, nightId, now), getState(db, nightId)]);
     if (!data) return;
     const ended = hasScrimNightEnded(data.night, now);
-    if (opts.onlyEnded && !ended) return;
 
     const messageId = state?.reminder_message_id ?? null;
     if (!messageId) {
@@ -336,24 +335,6 @@ export async function notifyScrimMatchProgress(db: SupabaseClient, matchId: numb
     if (error) throw error;
     const nightId = (data as { scrim_night_id: number | null } | null)?.scrim_night_id;
     if (nightId != null) await syncScrimNightMessage(db, nightId);
-  });
-}
-
-/** Finalizes the night message of every night that has ended without a write to react to (it went
- *  idle on the clock): shows its standings. Called every five minutes by
- *  `POST /api/cron/scrim-finalize`. */
-export async function finalizeEndedScrimNights(db: SupabaseClient): Promise<void> {
-  if (!webhookUrl()) return;
-  return bestEffort('finalizeEndedScrimNights', 0, async () => {
-    const { data, error } = await db
-      .from('scrim_night_discord_state')
-      .select('night_id')
-      .not('reminder_message_id', 'is', null)
-      .is('finalized_at', null);
-    if (error) throw error;
-    for (const { night_id } of (data ?? []) as { night_id: number }[]) {
-      await syncScrimNightMessage(db, night_id, { onlyEnded: true });
-    }
   });
 }
 

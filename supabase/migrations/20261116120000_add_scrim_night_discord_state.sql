@@ -82,19 +82,3 @@ end;
 $function$;
 
 revoke execute on function public.schedule_scrim_night_reminder(integer, timestamptz) from public, anon, authenticated;
-
--- A night that goes idle ends on the clock, with no write to react to, so a recurring job asks the app
--- every five minutes to finalize any ended night whose message still shows a match (POST
--- /api/cron/scrim-finalize). It re-reads the Vault secret on each run, like the reminder job.
-select cron.schedule(
-  'scrim_night_finalize',
-  '*/5 * * * *',
-  $sql$
-  select net.http_post(
-    url := 'https://dans-gaming-league-series.vercel.app/api/cron/scrim-finalize', -- keep in sync with SITE_URL (src/lib/seo/site.ts)
-    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization',
-      'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret' limit 1)),
-    body := '{}'::jsonb
-  );
-  $sql$
-);

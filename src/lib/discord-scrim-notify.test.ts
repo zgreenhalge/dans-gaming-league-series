@@ -11,11 +11,10 @@
 
 import assert from 'node:assert/strict';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
-import { idleFor, scrimNightStartingIn } from './test-support/scrimFixtures';
+import { scrimNightStartingIn } from './test-support/scrimFixtures';
 import { test, report } from './test-support/miniTest';
 import {
   deleteScrimNightMessages,
-  finalizeEndedScrimNights,
   getScrimNightMessageIds,
   notifyScrimMatchProgress,
   notifyScrimNightReminder,
@@ -125,7 +124,6 @@ async function main() {
     await syncScrimNightMessage(client, NIGHT_ID);
     await notifyScrimNightReminder(client, NIGHT_ID);
     await notifyScrimMatchProgress(client, 900);
-    await finalizeEndedScrimNights(client);
     await scheduleScrimNightReminder(client, NIGHT_ID, new Date().toISOString());
     assert.equal(calls.length, 0);
     assert.equal(db.scrim_night_discord_state.length, 0);
@@ -307,19 +305,6 @@ async function main() {
       console.error = realError;
     }
     assert.equal(logged.length, 1, 'logged, and no replacement posted');
-  });
-
-  await test('finalizeEndedScrimNights: finalizes ended nights only', async () => {
-    withWebhook();
-    const { db, client } = fixture(-3 * HOUR, {
-      scrim_nights: [idleFor(scrimNightStartingIn(-3 * HOUR, NIGHT_ID), 2 * HOUR), scrimNightStartingIn(-10 * MIN, 6)],
-      scrim_night_discord_state: [state({ reminder_message_id: 'a' }), state({ night_id: 6, reminder_message_id: 'b' }), state({ night_id: 7, reminder_message_id: 'c', finalized_at: '2026-01-01T00:00:00Z' })],
-    });
-    const calls = stubFetch();
-    await finalizeEndedScrimNights(client);
-    assert.deepEqual(calls.map((c) => c.url), [`${WEBHOOK}/messages/a`]);
-    assert.ok(db.scrim_night_discord_state[0].finalized_at);
-    assert.equal(db.scrim_night_discord_state[1].finalized_at, null);
   });
 
   await test('notifyScrimMatchProgress: syncs the night of a scrim match; a league match is a no-op', async () => {
