@@ -1,31 +1,24 @@
-// Best-effort Discord webhook messages for scrim nights, posted to the same channel as the match
-// notifications (`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL`, see `discord-notify.ts`) and built from
-// the same webhook primitives (`discord-webhook.ts`). Every export is safe to call unconditionally: a
-// missing webhook URL is a no-op, and a failure is logged rather than thrown, so none of the routes
-// that call these can fail over a notification. (`ops_errors` has no scrim-night entity, so a failure
-// lands in the function log.)
+// Best-effort Discord messages for scrim nights, posted through the match notifications' webhook
+// (`discord-webhook.ts`). Every export is safe to call unconditionally: a missing webhook is a no-op,
+// and a failure is logged rather than thrown, so no caller can fail over a notification (`ops_errors`
+// has no scrim-night entity).
 //
-// A night has two messages over its life, both stored in `scrim_night_discord_state`:
-//   1. The announcement, posted when the night is scheduled (`notifyScrimNightScheduled()`): its start
-//      time and a link to the night, which Discord unfurls into the site's own preview card.
-//   2. The night message, posted an hour before the start (`notifyScrimNightReminder()`, called from
-//      `POST /api/cron/scrim-reminder`, which a one-shot pg_cron job queued by
-//      `scheduleScrimNightReminder()` fires). It deletes the announcement and carries the night from
-//      then on: the roster with each player's Definite/Maybe emoji, then the latest match's running
-//      and final score with a link to it — until the next match's server starts and takes its place — and, once
-//      the night has ended, the final standings in place of that score. A night scheduled less than an
-//      hour out gets this message straight away instead of an announcement.
-// `syncScrimNightMessage()` rebuilds the night message from the database and edits it in place after
-// anything that changes it: a signup, a check-in, a drop-out, a match's live or final score, a discard,
-// the night ending (End night) or reopening. A night that goes idle ends on the clock with no write to
-// react to, so its message keeps its last state until the next sync.
-// A new post is what pings people; an edit does not. A night removed with its last player has its
-// messages deleted (`deleteScrimNightMessages()`).
+// A night has two messages, both stored in `scrim_night_discord_state`:
+//   1. The announcement, posted when the night is scheduled: its start and a link Discord previews.
+//   2. The night message, posted an hour before the start by the one-shot job
+//      `scheduleScrimNightReminder()` queues (a night scheduled less than an hour out gets it
+//      straight away). It deletes the announcement and is then edited in place by
+//      `syncScrimNightMessage()`: the roster (✅ Definite, ❔ Maybe), the latest started match's
+//      running or final score until the next match's server starts, and the final standings once the
+//      night has been ended. A night that goes idle ends on the clock with no write to react to, so its
+//      message keeps its last state until the next sync.
+// A new post is what pings people; an edit does not.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   REMINDER_WINDOW_MS,
   deleteWebhookMessage,
+  matchNotificationsWebhookUrl,
   editWebhookEmbed,
   playerTag,
   postWebhookEmbed,
@@ -33,26 +26,25 @@ import {
   type EmbedField,
 } from './discord-webhook';
 import {
-  buildScrimNightLeaderboard,
+  getScrimLiveScore,
   getScrimNightForDiscord,
   getScrimNightMatches,
+  getScrimNightStandings,
   type ScrimDiscordSignup,
   type ScrimLeaderboardRow,
   type ScrimMatch,
 } from './queries/scrims';
 import { scrimMatchHasStarted } from './scrim-matches';
 import { hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
-import { scrimMatchHref, scrimNightHref } from './crumbs';
-import { SITE_URL } from './seo/site';
+import { scrimMatchUrl, scrimNightUrl } from './seo/site';
 import { formatLeagueDateTime, parseScore } from './util';
 
 const COLOR_UPCOMING = 0xfee75c; // Discord's "yellow", as for a match reminder
 const COLOR_LIVE = 0xed4245; // Discord's "red" — a match is being played
 const COLOR_OVER = 0x5865f2; // Discord's "blurple" — the night has ended
-/** How long before the start the night message posts. */
-const REMINDER_LEAD_MS = 60 * 60 * 1000;
-/** Slack on the lead: a pg_cron job fires on the minute, a little before a start with seconds on it. */
-const REMINDER_LEAD_SLACK_MS = 5 * 60 * 1000;
+/** A night is due its night message within this long of its start: the hour's lead plus 5 minutes of
+ *  slack, since a pg_cron job fires on the minute, a little before a start with seconds on it. */
+const REMINDER_DUE_WITHIN_MS = 65 * 60 * 1000;
 /** Standings listed in the message; a night has a handful of players. */
 const MAX_STANDINGS_ROWS = 10;
 
@@ -66,8 +58,9 @@ interface DiscordState {
  *  or where its server is while there is no score yet. */
 interface LatestMatch {
   match: ScrimMatch;
-  /** `starting`: the server is booting; `waiting`: no score yet (the first round, or the result). */
-  kind: 'final' | 'live' | 'starting' | 'waiting';
+  /** Without a score: `starting` (the server is booting), `ready` (up, waiting for the first round),
+   *  `waiting` (the game is over, awaiting the result). */
+  kind: 'final' | 'live' | 'starting' | 'ready' | 'waiting';
   shirts: number;
   skins: number;
   round: number | null;
@@ -82,10 +75,6 @@ interface NightMessageData {
   standings: ScrimLeaderboardRow[] | null;
 }
 
-function webhookUrl(): string | undefined {
-  return process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL || undefined;
-}
-
 /** Runs one notification, logging instead of throwing — the no-throw guarantee every export keeps. */
 async function bestEffort(label: string, id: number, fn: () => Promise<void>): Promise<void> {
   try {
@@ -95,12 +84,12 @@ async function bestEffort(label: string, id: number, fn: () => Promise<void>): P
   }
 }
 
-const nightUrl = (nightId: number) => `${SITE_URL}${scrimNightHref(nightId)}`;
-const matchUrl = (matchId: number) => `${SITE_URL}${scrimMatchHref(matchId)}`;
+/** Discord's `<t:…>` timestamp markup takes epoch seconds. */
+const discordEpoch = (iso: string) => Math.floor(Date.parse(iso) / 1000);
 
 /** Whether the night is due its night message: it starts within the lead, or already has. */
 function isReminderDue(night: ScrimNight, now: Date): boolean {
-  return Date.parse(night.startsAt) - now.getTime() <= REMINDER_LEAD_MS + REMINDER_LEAD_SLACK_MS;
+  return Date.parse(night.startsAt) - now.getTime() <= REMINDER_DUE_WITHIN_MS;
 }
 
 /** The latest match that has started (`scrimMatchHasStarted()`) in play order, so the next match takes
@@ -111,11 +100,10 @@ async function getLatestMatch(db: SupabaseClient, matches: ScrimMatch[]): Promis
   const final = parseScore(match.final_score);
   if (final) return { match, kind: 'final', ...final, round: null };
 
-  const { data, error } = await db.from('live_match_score').select('shirts_score, skins_score, round').eq('match_id', match.id).maybeSingle();
-  if (error) throw error;
-  const live = data as { shirts_score: number; skins_score: number; round: number | null } | null;
-  if (live) return { match, kind: 'live', shirts: live.shirts_score, skins: live.skins_score, round: live.round };
-  return { match, kind: match.server_state === 'provisioning' ? 'starting' : 'waiting', shirts: 0, skins: 0, round: null };
+  const live = await getScrimLiveScore(db, match.id);
+  if (live) return { match, kind: 'live', ...live };
+  const kind = match.server_state === 'provisioning' ? 'starting' : match.server_state === 'live' ? 'ready' : 'waiting';
+  return { match, kind, shirts: 0, skins: 0, round: null };
 }
 
 /** Everything the night message shows, read fresh through `db`. `null` when the night doesn't exist. */
@@ -127,11 +115,7 @@ async function loadMessageData(db: SupabaseClient, nightId: number, now: Date): 
 
   const matches = await getScrimNightMatches(nightId, db);
   if (!hasScrimNightEnded(night, now)) return { night, signups, latestMatch: await getLatestMatch(db, matches), standings: null };
-  const playerIds = [...new Set(matches.flatMap((m) => m.players.map((p) => p.player_id)))];
-  const playersRes = playerIds.length > 0 ? await db.from('players').select('id, name, steam_avatar_url').in('id', playerIds) : { data: [], error: null };
-  if (playersRes.error) throw playersRes.error;
-  const playersById = new Map(((playersRes.data ?? []) as { id: number; name: string; steam_avatar_url: string | null }[]).map((p) => [p.id, p]));
-  const standings = buildScrimNightLeaderboard(matches, playersById);
+  const standings = await getScrimNightStandings(db, matches);
   return { night, signups, latestMatch: null, standings: standings.length > 0 ? standings : null };
 }
 
@@ -157,7 +141,7 @@ function standingsTable(rows: ScrimLeaderboardRow[]): string {
  *  and a line in the description; neither unfurls into a preview card. */
 function buildNightMessage(data: NightMessageData, now: Date): { content: string; embed: Embed } {
   const { night, signups, latestMatch, standings } = data;
-  const epoch = Math.floor(Date.parse(night.startsAt) / 1000);
+  const epoch = discordEpoch(night.startsAt);
   const ended = hasScrimNightEnded(night, now);
   const status = ended
     ? '🏁 **Scrim night over**'
@@ -175,23 +159,24 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
       final: `🏁 **Final** ${shirts}-${skins}`,
       live: `🔴 **LIVE** ${shirts}-${skins}${round != null ? ` · Round ${round}` : ''}`,
       starting: '🟡 **Server starting**',
-      waiting: match.server_state === 'live' ? '🟢 **Server live** — waiting for the first round' : '⏳ **Awaiting the result**',
+      ready: '🟢 **Server live** — waiting for the first round',
+      waiting: '⏳ **Awaiting the result**',
     }[kind];
-    fields.push({ name: `Match ${match.match_number}${match.map ? ` · ${match.map}` : ''}`, value: `${result}\n[Match page](${matchUrl(match.id)})` });
+    fields.push({ name: `Match ${match.match_number}${match.map ? ` · ${match.map}` : ''}`, value: `${result}\n[Match page](${scrimMatchUrl(match.id)})` });
   }
 
-  const tagLines = [
-    signups.some((s) => s.commitment === 'definite') ? `Definite: ${signups.filter((s) => s.commitment === 'definite').map(playerTag).join(' ')}` : '',
-    signups.some((s) => s.commitment === 'maybe') ? `Maybe: ${signups.filter((s) => s.commitment === 'maybe').map(playerTag).join(' ')}` : '',
-  ].filter(Boolean);
+  const tagLines = (['definite', 'maybe'] as const).flatMap((commitment) => {
+    const tags = signups.filter((x) => x.commitment === commitment).map(playerTag);
+    return tags.length > 0 ? [`${commitment === 'definite' ? 'Definite' : 'Maybe'}: ${tags.join(' ')}`] : [];
+  });
 
   return {
     content: tagLines.join('\n'),
     embed: {
       title: `Scrim night · ${formatLeagueDateTime(night.startsAt)}`,
-      description: `${status}\n<t:${epoch}:F>\n[Open the night](${nightUrl(night.id)})`,
+      description: `${status}\n<t:${epoch}:F>\n[Open the night](${scrimNightUrl(night.id)})`,
       color: ended ? COLOR_OVER : latestMatch?.kind === 'live' ? COLOR_LIVE : COLOR_UPCOMING,
-      url: nightUrl(night.id),
+      url: scrimNightUrl(night.id),
       author: { name: 'Scrims' },
       fields,
     },
@@ -211,8 +196,8 @@ async function getState(db: SupabaseClient, nightId: number): Promise<DiscordSta
 /** Posts the announcement: the start time and a link to the night, as plain content so Discord
  *  unfurls the site's preview of it. */
 async function postAnnouncement(db: SupabaseClient, url: string, night: ScrimNight): Promise<void> {
-  const epoch = Math.floor(Date.parse(night.startsAt) / 1000);
-  const content = `📅 **Scrim night scheduled** — <t:${epoch}:F> (<t:${epoch}:R>)\n${nightUrl(night.id)}`;
+  const epoch = discordEpoch(night.startsAt);
+  const content = `📅 **Scrim night scheduled** — <t:${epoch}:F> (<t:${epoch}:R>)\n${scrimNightUrl(night.id)}`;
   const result = await postWebhookEmbed(url, content, null);
   if (!result.ok) throw new Error(result.error);
   if (result.id) {
@@ -263,7 +248,7 @@ async function postNightMessage(db: SupabaseClient, url: string, data: NightMess
 /** Announces a night that has just been scheduled. A night starting within the hour skips the
  *  announcement and gets the night message right away. */
 export async function notifyScrimNightScheduled(db: SupabaseClient, nightId: number): Promise<void> {
-  const url = webhookUrl();
+  const url = matchNotificationsWebhookUrl();
   if (!url) return;
   return bestEffort('notifyScrimNightScheduled', nightId, async () => {
     const now = new Date();
@@ -280,7 +265,7 @@ export async function notifyScrimNightScheduled(db: SupabaseClient, nightId: num
  *  `REMINDER_WINDOW_MS`; a night whose job never fired gets its message from the next
  *  `syncScrimNightMessage()`. */
 export async function notifyScrimNightReminder(db: SupabaseClient, nightId: number): Promise<void> {
-  const url = webhookUrl();
+  const url = matchNotificationsWebhookUrl();
   if (!url) return;
   return bestEffort('notifyScrimNightReminder', nightId, async () => {
     const now = new Date();
@@ -298,7 +283,7 @@ export async function notifyScrimNightReminder(db: SupabaseClient, nightId: numb
  *  edited (deleted from the channel) is left alone, since a re-post would ping everyone again. Call
  *  after anything that changes it. */
 export async function syncScrimNightMessage(db: SupabaseClient, nightId: number): Promise<void> {
-  const url = webhookUrl();
+  const url = matchNotificationsWebhookUrl();
   if (!url) return;
   return bestEffort('syncScrimNightMessage', nightId, async () => {
     const now = new Date();
@@ -329,7 +314,7 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
 /** Syncs the night a scrim match belongs to after its live or final score changes. A league match, or
  *  one that no longer exists, is a no-op. */
 export async function notifyScrimMatchProgress(db: SupabaseClient, matchId: number): Promise<void> {
-  if (!webhookUrl()) return;
+  if (!matchNotificationsWebhookUrl()) return;
   return bestEffort('notifyScrimMatchProgress', matchId, async () => {
     const { data, error } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle();
     if (error) throw error;
@@ -341,7 +326,7 @@ export async function notifyScrimMatchProgress(db: SupabaseClient, matchId: numb
 /** Queues the night's one-shot reminder (`schedule_scrim_night_reminder()`, a pg_cron job). A night's
  *  start never changes, so this runs once, when the night is scheduled. */
 export async function scheduleScrimNightReminder(db: SupabaseClient, nightId: number, startsAt: string): Promise<void> {
-  if (!webhookUrl()) return;
+  if (!matchNotificationsWebhookUrl()) return;
   return bestEffort('scheduleScrimNightReminder', nightId, async () => {
     const { data, error } = await db.rpc('schedule_scrim_night_reminder', { p_night_id: nightId, p_starts_at: startsAt });
     if (error) throw error;
@@ -352,7 +337,7 @@ export async function scheduleScrimNightReminder(db: SupabaseClient, nightId: nu
 /** The ids of the Discord messages posted for a night. Read before a drop-out that may remove the night:
  *  the state row goes with it. */
 export async function getScrimNightMessageIds(db: SupabaseClient, nightId: number): Promise<string[]> {
-  if (!webhookUrl()) return [];
+  if (!matchNotificationsWebhookUrl()) return [];
   try {
     const state = await getState(db, nightId);
     return [state?.announcement_message_id, state?.reminder_message_id].filter((id): id is string => !!id);
@@ -364,7 +349,7 @@ export async function getScrimNightMessageIds(db: SupabaseClient, nightId: numbe
 
 /** Deletes a removed night's Discord messages (ids from `getScrimNightMessageIds()`). */
 export async function deleteScrimNightMessages(nightId: number, messageIds: string[]): Promise<void> {
-  const url = webhookUrl();
+  const url = matchNotificationsWebhookUrl();
   if (!url) return;
   return bestEffort('deleteScrimNightMessages', nightId, async () => {
     const results = await Promise.all(messageIds.map((id) => deleteWebhookMessage(url, id)));

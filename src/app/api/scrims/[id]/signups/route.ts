@@ -1,8 +1,7 @@
 // Signs a player up for a scrim night (`POST { player_id, commitment: 'definite' | 'maybe' }` — again
 // to change their commitment) or drops them (`DELETE { player_id }`, answering `{ nightRemoved }`:
 // the last player out of a night with no matches removes it). Admin-or-self, open until the night
-// ends — see `requireScrimSignupAccess()`. Each change updates the night's Discord roster
-// (`discord-scrim-notify.ts`); removing the night deletes its messages. A night is started by its first signup through
+// ends — see `requireScrimSignupAccess()`. A night is started by its first signup through
 // `POST /api/scrims`.
 
 import { NextRequest, NextResponse } from 'next/server';

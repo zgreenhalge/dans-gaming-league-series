@@ -166,11 +166,13 @@ export async function POST(req: NextRequest) {
       if (liveScore.status === 'rejected') {
         console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
       } else {
-        await notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value);
-        // A scrim match's score goes on its night's Discord message instead (a no-op for a league match).
-        if (liveScore.value && (identity.event === 'going_live' || identity.event === 'round_end')) {
-          await notifyScrimMatchProgress(supabaseAdmin, identity.matchid);
-        }
+        // A scrim match's score goes on its night's Discord message instead (a no-op for a league
+        // match); the two never both act on one match, so they run side by side.
+        const isScoreEvent = identity.event === 'going_live' || identity.event === 'round_end';
+        await Promise.all([
+          notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value),
+          liveScore.value && isScoreEvent ? notifyScrimMatchProgress(supabaseAdmin, identity.matchid) : undefined,
+        ]);
       }
     });
   }

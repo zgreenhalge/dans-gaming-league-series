@@ -6,6 +6,12 @@
 
 import { discordErrorDetail } from './discord-threads';
 
+/** The webhook URL the match and scrim notifiers post to, or `undefined` when unset (every notifier
+ *  then no-ops). */
+export function matchNotificationsWebhookUrl(): string | undefined {
+  return process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL || undefined;
+}
+
 /** How far from its target time a reminder may fire and still post. A pg_cron job fires ~1h before
  *  the start by construction; this tolerates clock skew and pg_net delivery lag while still catching a
  *  reminder whose target has moved away. */

@@ -59,7 +59,7 @@ import { getPlayersBySteamId } from './queries/player';
 import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL, matchUrl } from './seo/site';
-import { REMINDER_WINDOW_MS, playerTag, postWebhookEmbed, editWebhookEmbed, type Embed, type EmbedField } from './discord-webhook';
+import { REMINDER_WINDOW_MS, matchNotificationsWebhookUrl, playerTag, postWebhookEmbed, editWebhookEmbed, type Embed, type EmbedField } from './discord-webhook';
 import { formatDuration, deriveAdr } from './util';
 import type { Player } from './types';
 
@@ -296,7 +296,7 @@ async function fetchMatchMeta(supabaseAdmin: SupabaseClient, matchId: number, op
  *  rather than posting a second one, the same reuse `notifyMatchScoreReported()` does below. Connect
  *  info is deliberately never included — it's per-player, not something to broadcast to a channel. */
 export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+  const webhookUrl = matchNotificationsWebhookUrl();
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const [meta, existingMessageId] = await Promise.all([
@@ -336,7 +336,7 @@ export async function notifyMatchLiveScore(
 ): Promise<void> {
   if (event !== 'going_live' && event !== 'round_end') return;
   if (!liveScore) return;
-  const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+  const webhookUrl = matchNotificationsWebhookUrl();
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
@@ -365,7 +365,7 @@ export async function notifyMatchLiveScore(
  *  not-yet-played match is a no-op below rather than posting a premature result.
  *  Never throws — `writeMatchScore()` relies on that to call it unguarded inside its own `Promise.all`. */
 export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+  const webhookUrl = matchNotificationsWebhookUrl();
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const [meta, boxScore, existingMessageId] = await Promise.all([
@@ -413,7 +413,7 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
  *  anything on record yet to reuse. It does record the message id it posts, though, so
  *  `notifyMatchServerLive()` can edit this message in place instead of posting its own. */
 export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+  const webhookUrl = matchNotificationsWebhookUrl();
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   // A single getMatchMeta() read covers everything below (scheduledAtRaw, score) — no separate
