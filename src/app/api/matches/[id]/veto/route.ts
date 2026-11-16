@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMatchAccess } from '@/lib/match-access';
 import { accessDenied } from '@/lib/access-control';
-import { internalError } from '@/lib/route-errors';
+import { matchWriteError } from '@/lib/route-errors';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { isVetoComplete, isVetoWindowOpen, type VetoFields } from '@/lib/veto';
+import { VETO_FIELDS, isVetoComplete, isVetoWindowOpen, type VetoFields } from '@/lib/veto';
 import {
   provisionMatchServer,
   matchzyConfigContext,
@@ -15,17 +15,9 @@ import {
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { getLinkedRegularSeason } from '@/lib/queries/seasons';
-import { VetoStepTakenError, setVetoFields } from '@/lib/match-day';
+import { VetoStepChangedError, setGauntletPick, setVetoFields } from '@/lib/match-day';
 
-const VALID_FIELDS = [
-  'shirts_ban',
-  'shirts_ban2',
-  'skins_ban1',
-  'skins_ban2',
-  'shirts_pick',
-  'skins_starting_side',
-] as const;
-type VetoField = (typeof VALID_FIELDS)[number];
+type VetoField = (typeof VETO_FIELDS)[number];
 
 const REGULAR_STEPS: VetoField[] = [
   'shirts_ban',
@@ -115,7 +107,7 @@ export async function PATCH(
   const field = body.field as VetoField;
   const value: string | null = body.value;
 
-  if (!(VALID_FIELDS as readonly string[]).includes(field)) {
+  if (!(VETO_FIELDS as readonly string[]).includes(field)) {
     return NextResponse.json({ error: 'Invalid field' }, { status: 400 });
   }
 
@@ -127,7 +119,7 @@ export async function PATCH(
     try {
       await setVetoFields(supabaseAdmin, matchId, { [field]: null });
     } catch (err) {
-      return internalError(err, 'Clearing the pick/ban failed');
+      return matchWriteError(err, 'Clearing the pick/ban failed');
     }
     return NextResponse.json({ ok: true });
   }
@@ -209,37 +201,26 @@ export async function PATCH(
     }
   }
 
-  const update: Partial<Record<VetoField, string | null>> = { [field]: value };
-
-  // For gauntlet: once all 4 bans are set, auto-pick the remaining map
-  if (isGauntlet) {
-    const bansAfter = [
-      field === 'shirts_ban'  ? value : m.shirts_ban,
-      field === 'shirts_ban2' ? value : m.shirts_ban2,
-      field === 'skins_ban1'  ? value : m.skins_ban1,
-      field === 'skins_ban2'  ? value : m.skins_ban2,
-    ].filter(Boolean) as string[];
-    if (bansAfter.length === 4) {
-      const remaining = mapPool.filter((map) => !bansAfter.includes(map));
-      if (remaining.length === 1) update.shirts_pick = remaining[0];
-    }
-  }
-
-  // Filling a step for the first time only lands while it is still empty (the write checks, since two
-  // players can submit the same step at once); overwriting a value has no such condition.
+  // The write only lands while the field still holds the value this request read (`null` for a first
+  // fill), so a step another request filled or changed since the read is refused, not overwritten. It
+  // returns the row as the write left it, which everything after it reads: a concurrent request's
+  // write is in it, where the row read at the start of the request is not.
+  let row: VetoFields;
   try {
-    await setVetoFields(supabaseAdmin, matchId, update, currentValues[field] === null ? field : undefined);
+    row = await setVetoFields(supabaseAdmin, matchId, { [field]: value }, { [field]: currentValues[field] });
+
+    // Gauntlet: once all 4 bans are set, auto-pick the remaining map.
+    if (isGauntlet) row = await setGauntletPick(supabaseAdmin, matchId, row, mapPool);
   } catch (err) {
-    if (err instanceof VetoStepTakenError) return NextResponse.json({ error: err.message }, { status: 409 });
-    return internalError(err, 'Saving the pick/ban failed');
+    if (err instanceof VetoStepChangedError) return NextResponse.json({ error: err.message }, { status: 409 });
+    return matchWriteError(err, 'Saving the pick/ban failed');
   }
 
   // Auto-provision the match server whenever the pick/ban is complete — not just on the first
   // completing edit — so a post-completion map correction re-provisions with the new map. But never
   // disrupt a server that's already booting/live: an admin stops it first to change the map. (The
   // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
-  const merged = { ...m, ...update } as VetoFields;
-  if (isVetoComplete(merged, isGauntlet)) {
+  if (isVetoComplete(row, isGauntlet)) {
     let srv: MatchServerStateRow | null;
     try {
       srv = await fetchServerStateRow(supabaseAdmin, matchId);

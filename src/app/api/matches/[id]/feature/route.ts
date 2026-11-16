@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { setMatchFeatured } from '@/lib/match-day';
 import { parseRouteId } from '@/lib/util';
 import { accessDenied } from '@/lib/access-control';
-import { internalError } from '@/lib/route-errors';
+import { matchWriteError } from '@/lib/route-errors';
 
 // Set a match's `is_feature_match` flag. Admin-only — feature status is an editorial call (which match
 // the league spotlights), not something an in-match player should flip, so this doesn't use the
@@ -30,11 +30,9 @@ export async function PATCH(
   }
 
   try {
-    if (!(await setMatchFeatured(supabaseAdmin, matchId, body.is_feature_match))) {
-      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-    }
+    await setMatchFeatured(supabaseAdmin, matchId, body.is_feature_match);
   } catch (err) {
-    return internalError(err, 'Saving the feature flag failed');
+    return matchWriteError(err, 'Saving the feature flag failed');
   }
 
   return NextResponse.json({ ok: true, is_feature_match: body.is_feature_match });

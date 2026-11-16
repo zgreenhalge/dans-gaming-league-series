@@ -260,6 +260,16 @@ async function main() {
     __setTestAfterMode(false);
   });
 
+  await test('PATCH — an unknown match is a 404, with no reminder scheduled', async () => {
+    const rpc = recordingRpc();
+    installFixture({ schedule_match_reminder: rpc.handler });
+    __setTestAfterMode(true);
+    assert.equal((await call(999, ADMIN_ID, { scheduled_at: '2026-01-01T00:00:00.000Z' })).status, 404);
+    await __flushTestAfter();
+    assert.equal(rpc.calls.length, 0);
+    __setTestAfterMode(false);
+  });
+
   await test('PATCH — a failed scheduled_at write is a 500, with no reminder scheduled', async () => {
     __setTestAfterMode(true);
     const { calls, handler } = recordingRpc();
