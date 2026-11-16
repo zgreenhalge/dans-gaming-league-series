@@ -4,7 +4,7 @@ import { accessDenied } from '@/lib/access-control';
 import { matchWriteError } from '@/lib/route-errors';
 import { isPlayedScore, parseRouteId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { GAUNTLET_BAN_FIELDS, gauntletAutoPick, isVetoComplete, isVetoWindowOpen, type VetoFields } from '@/lib/veto';
+import { VETO_FIELDS, isVetoComplete, isVetoWindowOpen, type VetoFields } from '@/lib/veto';
 import {
   provisionMatchServer,
   matchzyConfigContext,
@@ -15,17 +15,9 @@ import {
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 import { getLinkedRegularSeason } from '@/lib/queries/seasons';
-import { VetoStepChangedError, getVetoFields, setVetoFields } from '@/lib/match-day';
+import { VetoStepChangedError, setGauntletPick, setVetoFields } from '@/lib/match-day';
 
-const VALID_FIELDS = [
-  'shirts_ban',
-  'shirts_ban2',
-  'skins_ban1',
-  'skins_ban2',
-  'shirts_pick',
-  'skins_starting_side',
-] as const;
-type VetoField = (typeof VALID_FIELDS)[number];
+type VetoField = (typeof VETO_FIELDS)[number];
 
 const REGULAR_STEPS: VetoField[] = [
   'shirts_ban',
@@ -115,7 +107,7 @@ export async function PATCH(
   const field = body.field as VetoField;
   const value: string | null = body.value;
 
-  if (!(VALID_FIELDS as readonly string[]).includes(field)) {
+  if (!(VETO_FIELDS as readonly string[]).includes(field)) {
     return NextResponse.json({ error: 'Invalid field' }, { status: 400 });
   }
 
@@ -217,19 +209,8 @@ export async function PATCH(
   try {
     row = await setVetoFields(supabaseAdmin, matchId, { [field]: value }, { [field]: currentValues[field] });
 
-    // Gauntlet: once all 4 bans are set, auto-pick the remaining map. The pick follows from the bans
-    // alone, so it is written against the bans it was derived from; if one changed meanwhile, that
-    // change's own request derives the pick, and this one reads the row as it now stands.
-    const pick = isGauntlet ? gauntletAutoPick(row, mapPool) : null;
-    if (pick !== null && pick !== row.shirts_pick) {
-      const bans = Object.fromEntries(GAUNTLET_BAN_FIELDS.map((f) => [f, row[f]]));
-      try {
-        row = await setVetoFields(supabaseAdmin, matchId, { shirts_pick: pick }, bans);
-      } catch (err) {
-        if (!(err instanceof VetoStepChangedError)) throw err;
-        row = await getVetoFields(supabaseAdmin, matchId);
-      }
-    }
+    // Gauntlet: once all 4 bans are set, auto-pick the remaining map.
+    if (isGauntlet) row = await setGauntletPick(supabaseAdmin, matchId, row, mapPool);
   } catch (err) {
     if (err instanceof VetoStepChangedError) return NextResponse.json({ error: err.message }, { status: 409 });
     return matchWriteError(err, 'Saving the pick/ban failed');

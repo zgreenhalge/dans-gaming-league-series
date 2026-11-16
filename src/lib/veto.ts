@@ -16,6 +16,9 @@ export interface VetoFields {
   skins_starting_side: string | null;
 }
 
+/** Every pick/ban field on a match, in the order `VetoFields` declares them. */
+export const VETO_FIELDS = ['shirts_ban', 'shirts_ban2', 'skins_ban1', 'skins_ban2', 'shirts_pick', 'skins_starting_side'] as const;
+
 /** The four ban fields of a gauntlet match (two per faction). */
 export const GAUNTLET_BAN_FIELDS = ['shirts_ban', 'shirts_ban2', 'skins_ban1', 'skins_ban2'] as const;
 
@@ -34,7 +37,7 @@ export function gauntletAutoPick(m: VetoFields, mapPool: string[]): string | nul
  */
 export function isVetoComplete(m: VetoFields, isGauntlet: boolean): boolean {
   return isGauntlet
-    ? !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2)
+    ? GAUNTLET_BAN_FIELDS.every((f) => !!m[f])
     : !!(m.shirts_ban && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
 }
 

@@ -87,6 +87,25 @@ function installFixture(): FakeDb {
   return db;
 }
 
+/** Installs a client that runs `beforeWrite` just before every `matches` update — the way a concurrent
+ *  request landing between the route's read and its write would. */
+function installClientWithRaceBeforeMatchWrite(db: FakeDb, beforeWrite: () => void) {
+  const client = createFakeSupabaseClient(db);
+  __setTestAdminClient({
+    from: (table: string) => {
+      const builder = client.from(table);
+      if (table !== 'matches') return builder;
+      const update = builder.update.bind(builder);
+      builder.update = (values) => {
+        beforeWrite();
+        return update(values);
+      };
+      return builder;
+    },
+    rpc: client.rpc.bind(client),
+  } as unknown as typeof client);
+}
+
 const url = (matchId: number | string) => `http://localhost/api/matches/${matchId}/veto`;
 
 function call(matchId: number | string, sessionPlayerId: number | null, body?: unknown) {
@@ -283,21 +302,8 @@ async function main() {
 
   await test('PATCH — a regular step another request filled after the route read it is refused (409), not overwritten', async () => {
     const db = makeDb();
-    const client = createFakeSupabaseClient(db);
     // Fills the step the way a concurrent submission would — after this request's read, before its write.
-    __setTestAdminClient({
-      from: (table: string) => {
-        const builder = client.from(table);
-        if (table !== 'matches') return builder;
-        const update = builder.update.bind(builder);
-        builder.update = (values) => {
-          db.matches.find((m) => m.id === REGULAR_MATCH_ID)!.shirts_ban = 'Vertigo';
-          return update(values);
-        };
-        return builder;
-      },
-      rpc: client.rpc.bind(client),
-    } as unknown as typeof client);
+    installClientWithRaceBeforeMatchWrite(db, () => { db.matches.find((m) => m.id === REGULAR_MATCH_ID)!.shirts_ban = 'Vertigo'; });
 
     const res = await call(REGULAR_MATCH_ID, ADMIN_ID, { field: 'shirts_ban', value: 'Foroglio' });
     assert.equal(res.status, 409);
@@ -314,20 +320,7 @@ async function main() {
   await test('PATCH — a regular step overwritten by another request after the route read it is refused (409), not clobbered', async () => {
     const db = makeDb();
     db.matches.find((m) => m.id === REGULAR_MATCH_ID)!.shirts_ban = 'Vertigo';
-    const client = createFakeSupabaseClient(db);
-    __setTestAdminClient({
-      from: (table: string) => {
-        const builder = client.from(table);
-        if (table !== 'matches') return builder;
-        const update = builder.update.bind(builder);
-        builder.update = (values) => {
-          db.matches.find((m) => m.id === REGULAR_MATCH_ID)!.shirts_ban = 'Cobblestone';
-          return update(values);
-        };
-        return builder;
-      },
-      rpc: client.rpc.bind(client),
-    } as unknown as typeof client);
+    installClientWithRaceBeforeMatchWrite(db, () => { db.matches.find((m) => m.id === REGULAR_MATCH_ID)!.shirts_ban = 'Cobblestone'; });
 
     const res = await call(REGULAR_MATCH_ID, ADMIN_ID, { field: 'shirts_ban', value: 'Foroglio' });
     assert.equal(res.status, 409);
@@ -337,20 +330,7 @@ async function main() {
   await test('PATCH — a match deleted after the route read it is a 404 for a write and for a clear', async () => {
     for (const value of ['Foroglio', null]) {
       const db = makeDb();
-      const client = createFakeSupabaseClient(db);
-      __setTestAdminClient({
-        from: (table: string) => {
-          const builder = client.from(table);
-          if (table !== 'matches') return builder;
-          const update = builder.update.bind(builder);
-          builder.update = (values) => {
-            db.matches = db.matches.filter((m) => m.id !== GAUNTLET_MATCH_ID);
-            return update(values);
-          };
-          return builder;
-        },
-        rpc: client.rpc.bind(client),
-      } as unknown as typeof client);
+      installClientWithRaceBeforeMatchWrite(db, () => { db.matches = db.matches.filter((m) => m.id !== GAUNTLET_MATCH_ID); });
 
       const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { field: 'shirts_ban', value });
       assert.equal(res.status, 404);

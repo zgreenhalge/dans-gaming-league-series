@@ -4,7 +4,7 @@
 // route reports it, and every write throws `MatchNotFoundError` when no match has the id.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { VetoFields } from './veto';
+import { GAUNTLET_BAN_FIELDS, VETO_FIELDS, gauntletAutoPick, type VetoFields } from './veto';
 
 /** Thrown by every writer here when no match has the id. A route answers it with a 404. */
 export class MatchNotFoundError extends Error {
@@ -23,7 +23,7 @@ export class VetoStepChangedError extends Error {
   }
 }
 
-const VETO_COLUMNS = 'shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side';
+const VETO_COLUMNS = VETO_FIELDS.join(', ');
 
 /** Reads a match's pick/ban fields. Throws `MatchNotFoundError` when no match has that id. */
 export async function getVetoFields(db: SupabaseClient, matchId: number): Promise<VetoFields> {
@@ -54,6 +54,22 @@ export async function setVetoFields(
   // Nothing matched: either the match is gone or an expected field changed. `getVetoFields()` tells them apart.
   await getVetoFields(db, matchId);
   throw new VetoStepChangedError();
+}
+
+/** Sets a gauntlet match's `shirts_pick` to the map its four bans leave, when they leave one, and returns
+ *  the pick/ban fields as they then stand. `row` is the pick/ban row the bans are read from (the one
+ *  `setVetoFields()` returned). The pick is written against those bans: if one changed meanwhile, that
+ *  change's own request derives the pick, and this returns the row as it now stands. */
+export async function setGauntletPick(db: SupabaseClient, matchId: number, row: VetoFields, mapPool: string[]): Promise<VetoFields> {
+  const pick = gauntletAutoPick(row, mapPool);
+  if (pick === null || pick === row.shirts_pick) return row;
+  const bans = Object.fromEntries(GAUNTLET_BAN_FIELDS.map((f) => [f, row[f]]));
+  try {
+    return await setVetoFields(db, matchId, { shirts_pick: pick }, bans);
+  } catch (err) {
+    if (err instanceof VetoStepChangedError) return getVetoFields(db, matchId);
+    throw err;
+  }
 }
 
 /** Applies `values` to a match, throwing `MatchNotFoundError` when no match has that id. */
