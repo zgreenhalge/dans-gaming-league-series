@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -50,6 +51,7 @@ const signup = (id: number, playerId: number, commitment = 'definite') => ({
 });
 
 async function main() {
+  __setTestAfterMode(true); // the routes defer their Discord notifications with after()
   await test('POST: 401 when signed out', async () => {
     installFixture();
     __setTestSession(null);
@@ -132,6 +134,30 @@ async function main() {
     __setTestSession(sessionFor(ADMIN_ID));
     assert.equal((await call(DELETE, 'DELETE', NIGHT_ID, { player_id: OTHER_PLAYER_ID })).status, 200);
     assert.deepEqual(db.scrim_signups.map((s) => s.player_id), [PLAYER_ID]);
+  });
+
+  await test('Discord: a signup edits the night\'s announcement in place; the last drop-out deletes its messages', async () => {
+    await __flushTestAfter(); // earlier tests' deferred notifications, before the webhook is set
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    const calls: string[] = [];
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      return { ok: true, status: 200, json: async () => ({ id: 'new' }) } as unknown as Response;
+    }) as typeof fetch;
+    installFixture({
+      scrim_night_discord_state: [{ night_id: NIGHT_ID, announcement_message_id: 'ann', reminder_message_id: null, reminder_sent_at: null }],
+    });
+    __setTestSession(sessionFor(PLAYER_ID));
+
+    await call(POST, 'POST', NIGHT_ID, { player_id: PLAYER_ID, commitment: 'maybe' });
+    await __flushTestAfter();
+    assert.deepEqual(calls, ['PATCH https://discord.example/webhook/messages/ann']);
+
+    calls.length = 0;
+    await call(DELETE, 'DELETE', NIGHT_ID, { player_id: PLAYER_ID });
+    await __flushTestAfter();
+    assert.deepEqual(calls, ['DELETE https://discord.example/webhook/messages/ann']);
+    delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   });
 
   report();

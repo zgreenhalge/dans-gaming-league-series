@@ -143,6 +143,7 @@ source of truth, and the owning doc has the detail.
 | Timer | Value | Defined by | Effect |
 |---|---|---|---|
 | Veto window | Opens 10 min before `scheduled_at` | `VETO_WINDOW_LEAD_MS` / `isVetoWindowOpen()` (`src/lib/veto.ts`) | Players can't veto earlier; the match page refreshes itself when it opens |
+| Scrim night announcement and reminder | When the night is started, and 1 hour before its start | `notifyScrimNightScheduled()`, `schedule_scrim_night_reminder()` (Postgres) | An announcement posted at creation and a reminder an hour out, each carrying a Definite/Maybe roster that is edited in place as players sign up, change commitment, check in or drop out |
 | Match reminder | 1 hour before `scheduled_at` | `schedule_match_reminder()` (Postgres) | One Discord reminder per match whose time is set; a time synced from a Discord event reminds only a pod's Game 1 |
 | Server clash warning | Under 1 hour apart | `SCHEDULE_COLLISION_WINDOW_MS` | Warning only |
 | Pod Game 2 time | Game 1 + 30 min | `POD_GAME_GAP_MS` | Only for a time synced from a Discord event |
