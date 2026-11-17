@@ -14,7 +14,7 @@ import { ScrimNightRoster } from '@/components/ScrimNightRoster';
 import { ScrimNightStatusBar } from '@/components/ScrimNightStatusBar';
 import { ScrimNightLeaderboard, ScrimNightMatchList } from '@/components/ScrimNightResults';
 import { getSession } from '@/lib/session';
-import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getStatsVersion, getScrimSignups } from '@/lib/queries';
+import { getMapsForWorkshopPicker, getPlayersById, hasScrimMatchSabremetrics, scrimLeaderboardToStatLines, getScheduleLabData, getScheduledUnplayedMatches, getScrimNight, getScrimNightById, getStatsVersion } from '@/lib/queries';
 import { scrimNightHref } from '@/lib/crumbs';
 import { hasScrimNightEnded, scrimNightBoundaries } from '@/lib/scrim-schedule';
 import { LocalDateInTitle } from '@/components/LocalDateInTitle';
@@ -29,17 +29,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const night = nightId === null ? null : await getScrimNightById(nightId);
   if (!night) return { title: 'Scrims' };
   // A link preview is read wherever it's shared, so it names the start in the league timezone.
-  const signups = await getScrimSignups(night.id);
-  const definite = signups.filter((s) => s.commitment === 'definite').length;
-  const status = hasScrimNightEnded(night, new Date()) ? 'final' : `${definite} definite, ${signups.length - definite} maybe`;
   const title = `Scrims · ${formatLeagueDate(night.startsAt)}`;
-  const description = `Scrim night · ${formatLeagueDateTime(night.startsAt)} · ${status} — sign up, check in and see the night's results on DGLS.`;
+  const description = `${formatLeagueDateTime(night.startsAt)}\nSign up, check in and see the night's results on DGLS.`;
+  const previewTitle = 'DGLS · Scrim night';
   return {
     title,
     description,
     alternates: { canonical: scrimNightHref(night.id) },
-    openGraph: { title: `DGLS · ${title}`, description },
-    twitter: { card: 'summary', title: `DGLS · ${title}`, description },
+    openGraph: { title: previewTitle, description },
+    twitter: { card: 'summary', title: previewTitle, description },
   };
 }
 

@@ -74,6 +74,7 @@ export interface ScrimDiscordSignup {
   name: string;
   discordNameRoleId: string | null;
   commitment: ScrimCommitment;
+  checkedIn: boolean;
 }
 
 /** A night and its signups (in `compareScrimSignups()` order), read fresh through `db` — the Discord
@@ -88,11 +89,12 @@ export async function getScrimNightForDiscord(
   type SignupRow = {
     commitment: ScrimCommitment;
     signed_up_at: string;
+    checked_in_at: string | null;
     players: { name: string; discord_name_role_id: string | null } | null;
   };
   const [nightRes, signupRes] = await Promise.all([
     db.from('scrim_nights').select(SCRIM_NIGHT_COLUMNS).eq('id', nightId).maybeSingle(),
-    db.from('scrim_signups').select('commitment, signed_up_at, players(name, discord_name_role_id)').eq('night_id', nightId),
+    db.from('scrim_signups').select('commitment, signed_up_at, checked_in_at, players(name, discord_name_role_id)').eq('night_id', nightId),
   ]);
   if (nightRes.error) throw nightRes.error;
   if (signupRes.error) throw signupRes.error;
@@ -101,7 +103,7 @@ export async function getScrimNightForDiscord(
   const signups = ((signupRes.data ?? []) as unknown as SignupRow[])
     .filter((r) => r.players !== null)
     .sort(compareScrimSignups)
-    .map((r) => ({ name: r.players!.name, discordNameRoleId: r.players!.discord_name_role_id, commitment: r.commitment }));
+    .map((r) => ({ name: r.players!.name, discordNameRoleId: r.players!.discord_name_role_id, commitment: r.commitment, checkedIn: r.checked_in_at !== null }));
   return { night: toScrimNight(nightRes.data as ScrimNightRow), signups };
 }
 
