@@ -6,6 +6,7 @@ import { RosterPlayerRow, useAddPlayerMenuItem } from './RosterPlayerRow';
 import { AdminMenu, type AdminMenuItem } from './AdminMenu';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
 import { ACTIVE_COMMITMENT_BTN_CLS, COMMITMENT_LABEL, IDLE_COMMITMENT_BTN_CLS } from './ScrimCommitmentButtons';
+import { useRefreshingAction } from './useRefreshingAction';
 import { useScrimSignupWrite } from './useScrimSignupWrite';
 import { StatusPill } from './StatusPill';
 import type { ScrimSignupEntry } from '@/lib/queries';
@@ -29,9 +30,11 @@ interface Props {
  *  whoever has checked in, under an Attendance header with the count. An admin gets `AdminMenu`s: one on
  *  each row (check in or out while check-in is open, switch between definite and maybe, remove — which
  *  asks for a confirm for the night's only player, whose removal deletes the night) and one on the header
- *  (Add player…, which opens the player picker in the menu). */
+ *  (Add player…, which opens the player picker in the menu, and Post announcement, which re-posts the
+ *  night's Discord message). */
 export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerId, admin, allPlayers, collapsible = false }: Props) {
   const { busy, error, pending, setCommitment, setCheckIn } = useScrimSignupWrite(nightId);
+  const announce = useRefreshingAction();
   const [open, setOpen] = useState(true);
   const shown = open || !collapsible;
 
@@ -85,6 +88,14 @@ export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerI
     })),
   });
 
+  // Posts the night's Discord message by hand (`POST /api/scrims/[id]/announce`): for a night whose
+  // announcement never posted or was deleted from the channel, or that holds a duplicate.
+  const postAnnouncementItem: AdminMenuItem = {
+    label: 'Post announcement',
+    onSelect: () => void announce.act('POST', `/api/scrims/${nightId}/announce`),
+    disabled: announce.busy,
+  };
+
   function group(commitment: ScrimCommitment) {
     const entries = signups.filter((s) => s.commitment === commitment);
     const other: ScrimCommitment = commitment === 'definite' ? 'maybe' : 'definite';
@@ -131,10 +142,10 @@ export function ScrimNightRoster({ nightId, signups, checkInOpen, currentPlayerI
         ) : (
           <div className={headerCls}>Attendance · {signups.length}</div>
         )}
-        {admin && <AdminMenu label="Attendance admin actions" items={[addPlayerItem]} />}
+        {admin && <AdminMenu label="Attendance admin actions" items={[addPlayerItem, postAnnouncementItem]} />}
       </div>
       {shown && SCRIM_COMMITMENTS.map(group)}
-      <ErrorText error={error} size={12} className="px-4 py-3" />
+      <ErrorText error={error ?? announce.error} size={12} className="px-4 py-3" />
     </div>
   );
 }
