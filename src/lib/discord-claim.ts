@@ -6,23 +6,28 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** A per-subject Discord state table and the column its rows are keyed by. */
+const CLAIM_TABLES = {
+  match: { table: 'match_discord_state', keyColumn: 'match_id' },
+  night: { table: 'scrim_night_discord_state', keyColumn: 'night_id' },
+} as const;
+
+/** The subject of a claim: a league match or a scrim night, by id. */
 export interface ClaimTarget {
-  table: 'match_discord_state' | 'scrim_night_discord_state';
-  keyColumn: 'match_id' | 'night_id';
+  kind: keyof typeof CLAIM_TABLES;
   id: number;
 }
 
 /** Claims `reminder_sent_at` on the subject's state row: seeds the row if it doesn't exist (never
  *  overwriting one that does), then `UPDATE … WHERE reminder_sent_at IS NULL`. Returns the claimed row
- *  with `returning` columns, or `null` when the reminder was already sent or a concurrent call won the
- *  race. Throws when a database write fails. */
-export async function claimReminderSent<Returning extends Record<string, unknown> = Record<string, never>>(
+ *  with the `returning` columns (just the key when none are asked for), or `null` when the reminder was
+ *  already sent or a concurrent call won the race. Throws when a database write fails. */
+export async function claimReminderSent(
   db: SupabaseClient,
-  { table, keyColumn, id }: ClaimTarget,
+  { kind, id }: ClaimTarget,
   now: Date,
   returning: string[] = [],
-): Promise<Returning | null> {
+): Promise<Record<string, string | null> | null> {
+  const { table, keyColumn } = CLAIM_TABLES[kind];
   await db.from(table).upsert({ [keyColumn]: id, reminder_sent_at: null }, { onConflict: keyColumn, ignoreDuplicates: true }).throwOnError();
   const { data } = await db
     .from(table)
@@ -31,10 +36,11 @@ export async function claimReminderSent<Returning extends Record<string, unknown
     .is('reminder_sent_at', null)
     .select([keyColumn, ...returning].join(', '))
     .throwOnError();
-  return ((data ?? [])[0] as unknown as Returning | undefined) ?? null;
+  return ((data ?? [])[0] as unknown as Record<string, string | null> | undefined) ?? null;
 }
 
 /** Gives a claim back, so a later attempt can post. */
-export async function releaseReminderClaim(db: SupabaseClient, { table, keyColumn, id }: ClaimTarget): Promise<void> {
+export async function releaseReminderClaim(db: SupabaseClient, { kind, id }: ClaimTarget): Promise<void> {
+  const { table, keyColumn } = CLAIM_TABLES[kind];
   await db.from(table).update({ reminder_sent_at: null }).eq(keyColumn, id).throwOnError();
 }

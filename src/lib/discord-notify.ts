@@ -431,9 +431,9 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
 
   // `claimReminderSent()` seeds a state row if there is none, so this doesn't rely on
   // schedule_match_reminder() having upserted one before this fires.
-  let claimed: Record<string, never> | null;
+  let claimed: Awaited<ReturnType<typeof claimReminderSent>>;
   try {
-    claimed = await claimReminderSent(supabaseAdmin, { table: 'match_discord_state', keyColumn: 'match_id', id: matchId }, new Date());
+    claimed = await claimReminderSent(supabaseAdmin, { kind: 'match', id: matchId }, new Date());
   } catch (e) {
     await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_REMINDER, `Failed to claim reminder: ${(e as Error).message}`);
     return;

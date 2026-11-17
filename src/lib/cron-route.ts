@@ -15,7 +15,7 @@ export async function handleCronPost(
   req: NextRequest,
   idKey: string,
   run: (db: SupabaseClient, id: number) => Promise<void>,
-): Promise<NextResponse> {
+) {
   const auth = req.headers.get('authorization');
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
