@@ -33,7 +33,7 @@ function installFixture(): FakeDb {
     matches: [],
     ops_errors: [],
   };
-  __setTestAdminClient(createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true }));
+  __setTestAdminClient(createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true, schedule_one_shot_post: () => true }));
   return db;
 }
 

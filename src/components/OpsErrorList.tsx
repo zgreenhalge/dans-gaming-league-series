@@ -45,6 +45,7 @@ export function retryEndpointFor(item: Pick<OpsErrorItem, 'operation' | 'entityI
     case 'scrim_announce':
     case 'scrim_night_message':
     case 'scrim_schedule_reminder':
+    case 'scrim_schedule_end_sync':
       return `/api/scrims/${item.entityId}/announce`;
     default:
       return null;
@@ -80,6 +81,7 @@ export const OPERATION_LABELS: Record<string, string> = {
   scrim_announcement_edit: 'Scrim Announcement Edit',
   scrim_night_message: 'Scrim Night Message',
   scrim_schedule_reminder: 'Scrim Reminder Schedule',
+  scrim_schedule_end_sync: 'Scrim End Sync Schedule',
 };
 
 /** Dismiss one live `ops_errors` row. Shared by every surface that renders one (this list, and the
