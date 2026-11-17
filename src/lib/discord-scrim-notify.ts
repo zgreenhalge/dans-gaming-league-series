@@ -16,8 +16,10 @@
 // Both show the start and the roster (✅ checked in, ✔️ Definite, ❔ Maybe) under a heading of its
 // counts. The night message adds the countdown and tags the roster, and shows the latest started
 // match's running or final score until the next match's server starts, and the final standings once
-// the night has been ended. A night that goes idle ends on the clock with no write to react to, so its
-// message keeps its last state until the next sync. A new post is what pings people; an edit does not.
+// the night has ended. A night that goes idle ends on the clock with no write to react to, so each
+// sync of a night that hasn't ended queues a one-shot job for the instant it would end
+// (`scheduleScrimNightEndSync()`), which syncs it once more. A new post is what pings people; an edit
+// does not.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -44,8 +46,9 @@ import {
 } from './queries/scrims';
 import { scrimMatchHasStarted } from './scrim-matches';
 import { signupCounts } from './scrim-seats';
-import { hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
+import { hasScrimNightEnded, hasScrimNightStarted, scrimNightEnd, type ScrimNight } from './scrim-schedule';
 import { scrimMatchUrl, scrimNightUrl } from './seo/site';
+import { claimReminderSent, releaseReminderClaim, type ClaimTarget } from './discord-claim';
 import { clearOpsError, recordOpsError } from './ops-errors';
 import { parseScore } from './util';
 
@@ -54,6 +57,7 @@ const OPERATION_ANNOUNCE = 'scrim_announce';
 const OPERATION_ANNOUNCEMENT_EDIT = 'scrim_announcement_edit';
 const OPERATION_NIGHT_MESSAGE = 'scrim_night_message';
 const OPERATION_SCHEDULE_REMINDER = 'scrim_schedule_reminder';
+const OPERATION_SCHEDULE_END_SYNC = 'scrim_schedule_end_sync';
 
 const COLOR_UPCOMING = 0xfee75c; // Discord's "yellow", as for a match reminder
 const COLOR_LIVE = 0xed4245; // Discord's "red" — a match is being played
@@ -301,20 +305,13 @@ async function postAnnouncement(db: SupabaseClient, url: string, data: NightMess
  *  and deleting it again is harmless. Failing to store the new message's id gives the claim back too. */
 async function postNightMessage(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
   const nightId = data.night.id;
-  const table = () => db.from('scrim_night_discord_state');
-  // The announcement may never have posted, so there may be no row to claim yet; seed one without
-  // overwriting an existing row.
-  await table().upsert({ night_id: nightId, reminder_sent_at: null }, { onConflict: 'night_id', ignoreDuplicates: true }).throwOnError();
-  const { data: claimed } = await table()
-    .update({ reminder_sent_at: now.toISOString() })
-    .eq('night_id', nightId)
-    .is('reminder_sent_at', null)
-    .select('night_id, announcement_message_id')
-    .throwOnError();
-  if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
+  const target: ClaimTarget = { kind: 'night', id: nightId };
+  // The announcement may never have posted, so `claimReminderSent()` seeds a row to claim if need be.
+  const claimed = await claimReminderSent(db, target, now, ['announcement_message_id']);
+  if (!claimed) return; // Already sent, or lost the race to a concurrent call.
 
   try {
-    const announcementId = claimed[0].announcement_message_id;
+    const announcementId = claimed.announcement_message_id;
     if (announcementId) {
       const deleted = await deleteWebhookMessage(url, announcementId);
       if (!deleted.ok) throw new Error(deleted.error);
@@ -322,7 +319,7 @@ async function postNightMessage(db: SupabaseClient, url: string, data: NightMess
     const messageId = await postMessage(url, data, now);
     await storeMessageIds(db, url, nightId, { reminder_message_id: messageId, announcement_message_id: null }, messageId);
   } catch (e) {
-    await table().update({ reminder_sent_at: null }).eq('night_id', nightId).throwOnError();
+    await releaseReminderClaim(db, target);
     throw e;
   }
 }
@@ -372,6 +369,8 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
     const [data, state] = await Promise.all([loadMessageData(db, nightId, now), getState(db, nightId)]);
     if (!data) return;
     const ended = hasScrimNightEnded(data.night, now);
+    // Any activity pushes the end back, so every sync of a live night replaces the queued job.
+    await scheduleScrimNightEndSync(db, data.night, now);
 
     const messageId = state?.reminder_message_id ?? null;
     if (!messageId) {
@@ -424,6 +423,27 @@ export async function scheduleScrimNightReminder(db: SupabaseClient, nightId: nu
   });
 }
 
+/** Queues the one-shot job that syncs the night at the instant it would end on the clock
+ *  (`scrimNightEnd()`), replacing the one queued before: the job `POST`s `/api/cron/scrim-night-sync`,
+ *  whose `syncScrimNightMessage()` renders the final standings once the night has ended and is a plain
+ *  edit if later activity moved the end (that sync has already queued the next job). A night that has
+ *  ended queues nothing. Records `scrim_schedule_end_sync` on failure. */
+async function scheduleScrimNightEndSync(db: SupabaseClient, night: ScrimNight, now: Date): Promise<void> {
+  if (hasScrimNightEnded(night, now)) return;
+  return bestEffort('scheduleScrimNightEndSync', night.id, () =>
+    tracked(db, night.id, OPERATION_SCHEDULE_END_SYNC, async () => {
+      const { data, error } = await db.rpc('schedule_one_shot_post', {
+        p_job_name: `scrim_end_${night.id}`,
+        p_path: '/api/cron/scrim-night-sync',
+        p_body: { nightId: night.id },
+        p_fire_at: new Date(scrimNightEnd(night)).toISOString(),
+      });
+      if (error) throw error;
+      if (!data) throw new Error('the "cron_secret" Vault secret is not configured');
+    }),
+  );
+}
+
 /** What `postScrimNightMessage()` posted, or why it could not. */
 export type ScrimPostResult =
   | { ok: true; posted: 'announcement' | 'night message' }
@@ -433,7 +453,8 @@ export type ScrimPostResult =
  *  the night message once the night is due one (`isReminderDue()`). Any message on record is deleted
  *  first and the new id stored in its place, so it covers a night whose post failed, whose message was
  *  deleted from the channel, or that holds a duplicate. It also gives back a stuck `reminder_sent_at`
- *  claim, and re-queues the reminder job (`scheduleScrimNightReminder()`).
+ *  claim, and re-queues the reminder and end-sync jobs (`scheduleScrimNightReminder()`,
+ *  `scheduleScrimNightEndSync()`).
  *  Never throws: a failure is returned for the admin and recorded like any other post. */
 export async function postScrimNightMessage(db: SupabaseClient, nightId: number): Promise<ScrimPostResult> {
   const url = matchNotificationsWebhookUrl();
@@ -446,6 +467,7 @@ export async function postScrimNightMessage(db: SupabaseClient, nightId: number)
     // already within the hour (or past) queues nothing and succeeds.
     await scheduleScrimNightReminder(db, nightId, data.night.startsAt);
     if (hasScrimNightEnded(data.night, now)) return { ok: false, error: 'The night is over' };
+    await scheduleScrimNightEndSync(db, data.night, now);
     const due = isReminderDue(data.night, now);
 
     await tracked(db, nightId, due ? OPERATION_NIGHT_MESSAGE : OPERATION_ANNOUNCE, async () => {

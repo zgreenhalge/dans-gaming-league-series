@@ -752,6 +752,7 @@ Wired into thirty-three operations today:
 | `scrim_announcement_edit` | `scrim_night` | `syncScrimNightMessage()` failing to edit the announcement's roster in place. No Retry: the next roster change edits it again (clearing the row), and Dismiss clears it meanwhile |
 | `scrim_night_message` | `scrim_night` | The night message failing to post (`notifyScrimNightReminder()`, `notifyScrimNightScheduled()` for a night under an hour out, `syncScrimNightMessage()` for a due night with none, or the manual post) or to edit — including one deleted from the channel by hand. Cleared by the next post or edit; Retry re-posts it through `POST /api/scrims/[id]/announce` |
 | `scrim_schedule_reminder` | `scrim_night` | `scheduleScrimNightReminder()` — the `schedule_scrim_night_reminder` RPC errored, or the `cron_secret` Vault secret is missing. Retry posts the night's message by hand, which re-queues the reminder job |
+| `scrim_schedule_end_sync` | `scrim_night` | `scheduleScrimNightEndSync()` — the `schedule_one_shot_post` RPC errored, or the `cron_secret` Vault secret is missing. Cleared by the next sync of the night; Retry posts the night's message by hand, which re-queues the job |
 | `discord_event_sync` | `season` (regular) for a channel/thread/events-listing failure, `match` for a thread's message-history or `scheduled_at` write failure | `syncSeasonScheduledEvents()` (`discord-event-sync.ts`, #398) — a real Discord API failure resolving the forum channel, listing its threads, listing the guild's scheduled events, or reading one match's thread message history; or a Supabase write failure updating a matched match's `scheduled_at`. A match with no thread yet, or a thread with nothing shared in it yet, is not an error |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —
@@ -813,22 +814,32 @@ way `refresh-steam` is, but since a Postgres function can't read Vercel's env va
 also stored in Supabase Vault under the name `cron_secret` — kept in sync with the Vercel
 `CRON_SECRET` value by hand; see the README's env var table.
 
+The scrim cron jobs are queued by one generic Postgres function, `schedule_one_shot_post(job_name, path,
+body, fire_at)`: it replaces any job of that name, queues a one-shot `pg_cron` job for the exact minute that
+`POST`s the route with the `cron_secret` bearer and unschedules itself, and queues nothing for a time already
+due. The cron routes share `handleCronPost()` (`src/lib/cron-route.ts`: bearer check, id parse, always 200),
+and both Discord notifiers claim `reminder_sent_at` through `claimReminderSent()` (`discord-claim.ts`).
+
 A scrim night's message works the same way: `POST /api/scrims` calls `scheduleScrimNightReminder()`
-(`discord-scrim-notify.ts`), which calls `schedule_scrim_night_reminder()` (Postgres) to queue a one-shot
-`pg_cron` job that `POST`s `/api/cron/scrim-reminder` at `starts_at - 1h`. A night's start never changes, so
+(`discord-scrim-notify.ts`), which calls `schedule_scrim_night_reminder()` (Postgres, a thin wrapper over
+`schedule_one_shot_post()`) to queue a one-shot `pg_cron` job that `POST`s `/api/cron/scrim-reminder` at
+`starts_at - 1h`. A night's start never changes, so
 it is scheduled once, and a start already within the hour schedules nothing: the night message is posted
 straight away instead of an announcement. After that the message is edited by `syncScrimNightMessage()`
 from the scrim routes (signup, check-in, drop-out, end, reopen, discard) and from the score hooks
 (`matchzy-log` for a live score, `writeMatchScore()` for the final one). A night that goes idle ends on
-the clock with no write to react to, so its message keeps its last state until the next sync; pressing End
-night turns it to the final standings. A failure to schedule, post or edit is logged to the function log
+the clock with no write to react to, so every sync of a night that hasn't ended queues a one-shot
+`schedule_one_shot_post()` job (`scrim_end_<id>`, `scheduleScrimNightEndSync()`) for the instant it would end
+(`scrimNightEnd()`), replacing the last, since any activity pushes the end back; it `POST`s
+`/api/cron/scrim-night-sync`, which runs `syncScrimNightMessage()` to turn the message to the final standings
+(a plain edit if the night is still on). Pressing End night does the same at once. A failure to schedule, post or edit is logged to the function log
 and recorded to `ops_errors` (entity `scrim_night`, one operation per kind: `scrim_announce`,
-`scrim_announcement_edit`, `scrim_night_message`, `scrim_schedule_reminder`), each cleared by the next
+`scrim_announcement_edit`, `scrim_night_message`, `scrim_schedule_reminder`, `scrim_schedule_end_sync`), each cleared by the next
 success of its own kind. An admin can post a night's message by hand — **Post announcement** in the
 Attendance admin menu, and the Retry on those rows — through `POST /api/scrims/[id]/announce`
 (`postScrimNightMessage()`): it deletes any message on record, posts the announcement (or the night message
 once the night is due one), stores the new id, gives back a stuck `reminder_sent_at` claim and re-queues
-the reminder job. That covers a post that failed, a message deleted from the channel, and a duplicate.
+the reminder and end-sync jobs. That covers a post that failed, a message deleted from the channel, and a duplicate.
 
 ### CI
 

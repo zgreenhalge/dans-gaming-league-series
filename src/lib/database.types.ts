@@ -1937,6 +1937,10 @@ export type Database = {
         Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
+      schedule_one_shot_post: {
+        Args: { p_body: Json; p_fire_at: string; p_job_name: string; p_path: string }
+        Returns: boolean
+      }
       schedule_scrim_night_reminder: {
         Args: { p_night_id: number; p_starts_at: string }
         Returns: boolean

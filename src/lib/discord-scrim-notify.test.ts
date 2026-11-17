@@ -81,7 +81,7 @@ function fixture(startsInMs: number, extra: Partial<FakeDb> = {}) {
     ops_errors: [],
     ...extra,
   };
-  return { db, client: createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true }) };
+  return { db, client: createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true, schedule_one_shot_post: () => true }) };
 }
 
 /** `fixture()` for a night that is underway, with the night message already posted. */
@@ -633,7 +633,7 @@ async function main() {
     withWebhook();
     const rpcCalls: unknown[] = [];
     const { db } = fixture(5 * HOUR);
-    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: (a) => (rpcCalls.push(a), true) });
+    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: (a) => (rpcCalls.push(a), true), schedule_one_shot_post: () => true });
     const calls = stubFetch();
     assert.deepEqual(await postScrimNightMessage(client, NIGHT_ID), { ok: true, posted: 'announcement' });
     assert.deepEqual(calls.map((c) => c.method), ['POST']);
@@ -675,10 +675,58 @@ async function main() {
   await test('postScrimNightMessage: a retry after the night is due still re-queues the reminder, clearing its error', async () => {
     withWebhook();
     const { db } = fixture(30 * MIN, { ops_errors: [{ id: 1, entity_type: 'scrim_night', entity_id: NIGHT_ID, operation: 'scrim_schedule_reminder', message: 'x', occurred_at: '2026-01-01T00:00:00Z', dismissed_at: null }] });
-    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true });
+    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true, schedule_one_shot_post: () => true });
     stubFetch();
     await postScrimNightMessage(client, NIGHT_ID);
     assert.deepEqual(db.ops_errors.filter((r) => !r.dismissed_at), []);
+  });
+
+  await test('syncScrimNightMessage: queues a one-shot sync at the instant the night would end, replacing the last', async () => {
+    withWebhook();
+    stubFetch();
+    const queued: Record<string, unknown>[] = [];
+    const { db } = underway();
+    const client = createFakeSupabaseClient(db, { schedule_one_shot_post: (a) => (queued.push(a), true) });
+    await syncScrimNightMessage(client, NIGHT_ID);
+    const night = db.scrim_nights[0];
+    const end = new Date(Date.parse(night.last_active_at as string) + HOUR).toISOString();
+    assert.deepEqual(queued, [{ p_job_name: `scrim_end_${NIGHT_ID}`, p_path: '/api/cron/scrim-night-sync', p_body: { nightId: NIGHT_ID }, p_fire_at: end }]);
+
+    night.last_active_at = new Date(Date.parse(night.last_active_at as string) + 20 * MIN).toISOString();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.equal(queued.length, 2, 'every sync of a live night re-queues');
+    assert.equal(queued[1].p_fire_at, new Date(Date.parse(end) + 20 * MIN).toISOString(), 'activity pushes the end back');
+    assert.equal(queued[1].p_job_name, queued[0].p_job_name, 'one job name per night, so the queue replaces it');
+  });
+
+  await test('syncScrimNightMessage: an ended night queues nothing, and a failed queue is recorded as scrim_schedule_end_sync', async () => {
+    withWebhook();
+    stubFetch();
+    const queued: unknown[] = [];
+    const ended = underway();
+    ended.db.scrim_nights[0].ended_at = new Date().toISOString();
+    await syncScrimNightMessage(createFakeSupabaseClient(ended.db, { schedule_one_shot_post: (a) => (queued.push(a), true) }), NIGHT_ID);
+    assert.deepEqual(queued, []);
+
+    const live = underway();
+    await captureErrors(() => syncScrimNightMessage(createFakeSupabaseClient(live.db, { schedule_one_shot_post: () => false }), NIGHT_ID));
+    assert.deepEqual(opsErrors(live.db), [['scrim_night', NIGHT_ID, 'scrim_schedule_end_sync']]);
+    await syncScrimNightMessage(createFakeSupabaseClient(live.db, { schedule_one_shot_post: () => true }), NIGHT_ID);
+    assert.deepEqual(opsErrors(live.db), []);
+  });
+
+  await test('syncScrimNightMessage: a night idle past its end shows the final standings when the queued sync runs', async () => {
+    withWebhook();
+    const { db, client } = underway({
+      scrim_nights: [idleFor(scrimNightStartingIn(-3 * HOUR, NIGHT_ID), 2 * HOUR)],
+      matches: [scrimMatch(900, 1, '13-7')],
+      player_match_stats: [stat(1, 900, 1, 'shirts', true), stat(2, 900, 2, 'skins', false)],
+    });
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.equal(calls[0].method, 'PATCH');
+    assert.ok(calls[0].body!.embeds[0].fields.some((f) => f.name === 'Final standings'));
+    assert.ok(db.scrim_night_discord_state[0].finalized_at);
   });
 
   await test('postScrimNightMessage: refuses a night that is gone or over, and reports a missing webhook', async () => {
