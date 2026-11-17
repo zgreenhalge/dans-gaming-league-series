@@ -3,15 +3,19 @@
 // and a failure is logged rather than thrown, so no caller can fail over a notification (`ops_errors`
 // has no scrim-night entity).
 //
-// A night has two messages, both stored in `scrim_night_discord_state`:
-//   1. The announcement, posted when the night is scheduled: a link Discord previews (with the start time).
+// A night has two messages in turn, both built by `buildNightMessage()` and stored in
+// `scrim_night_discord_state`:
+//   1. The announcement, posted when the night is scheduled. It is edited in place as the roster
+//      changes, and tags no one.
 //   2. The night message, posted an hour before the start by the one-shot job
-//      `scheduleScrimNightReminder()` queues (a night scheduled less than an hour out gets it
-//      straight away). It deletes the announcement and is then edited in place by
-//      `syncScrimNightMessage()`: the roster (✅ checked in, ✔️ Definite, ❔ Maybe), the latest started match's
-//      running or final score until the next match's server starts, and the final standings once the
-//      night has been ended. A night that goes idle ends on the clock with no write to react to, so its
-//      message keeps its last state until the next sync.
+//      `scheduleScrimNightReminder()` queues (a night scheduled less than an hour out gets it straight
+//      away). The announcement is deleted first, so the channel never shows both. The night message
+//      adds a "starting" countdown and tags the roster, and is then edited in place by
+//      `syncScrimNightMessage()`.
+// Both show the roster (✅ checked in, ✔️ Definite, ❔ Maybe) with counts. The night message also shows
+// the latest started match's running or final score until the next match's server starts, and the
+// final standings once the night has been ended. A night that goes idle ends on the clock with no write
+// to react to, so its message keeps its last state until the next sync.
 // A new post is what pings people; an edit does not.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -137,12 +141,13 @@ function standingsTable(rows: ScrimLeaderboardRow[]): string {
   return ['```', line('#', 'Player', 'W-L', 'ADR'), ...shown.map((r) => line(r.rank, r.name, r.record, r.adr)), '```'].join('\n');
 }
 
-/** The night message: the roster tagged in `content` (the one place mentions render, as in
- *  `discord-notify.ts`) and listed with each player's emoji in the embed, then the latest match's score
- *  or, once the night is over, the standings. Times use Discord's own timestamp markup, so they show in
- *  each reader's timezone and the relative form needs no editing. The night is linked from the title
- *  and a line in the description; neither unfurls into a preview card. */
-function buildNightMessage(data: NightMessageData, now: Date): { content: string; embed: Embed } {
+/** The message for a night, in one of two phases. Both list the roster with each player's emoji and
+ *  the counts; the `night` phase (an hour out, until the night is over) adds the "starting" countdown
+ *  and tags the roster in `content` (the one place mentions render, as in `discord-notify.ts`), and
+ *  shows the latest match's score or, once the night is over, the standings. Times use Discord's own
+ *  timestamp markup, so they show in each reader's timezone and the relative form needs no editing. The
+ *  night is linked from the title and a line in the description. */
+function buildNightMessage(data: NightMessageData, now: Date, phase: 'announcement' | 'night'): { content: string; embed: Embed } {
   const { night, signups, latestMatch, standings } = data;
   const epoch = discordEpoch(night.startsAt);
   const ended = hasScrimNightEnded(night, now);
@@ -150,11 +155,14 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
     ? '🏁 **Scrim night over**'
     : hasScrimNightStarted(night, now)
       ? '🟢 **Scrim night underway**'
-      : `⏰ **Scrim night starts <t:${epoch}:R>**`;
+      : phase === 'announcement'
+        ? '📅 **Scrim night scheduled**'
+        : `⏰ **Scrim starting <t:${epoch}:R>!**`;
 
+  const count = (pick: (s: ScrimDiscordSignup) => boolean) => signups.filter(pick).length;
   const fields: EmbedField[] = [
     {
-      name: `Roster (${signups.length}) · ${signups.filter((s) => s.checkedIn).length} checked in`,
+      name: `Roster (${signups.length}) · ${count((s) => s.commitment === 'definite')} definite · ${count((s) => s.commitment === 'maybe')} maybe · ${count((s) => s.checkedIn)} checked in`,
       value: signups.length > 0 ? joinWithinLimit(signups.map((s) => `${statusEmoji(s)} ${s.name}`), EMBED_FIELD_VALUE_MAX) : '—',
     },
   ];
@@ -171,11 +179,14 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
     fields.push({ name: `Match ${match.match_number}${match.map ? ` · ${match.map}` : ''}`, value: `${result}\n[Match page](${scrimMatchUrl(match.id)})` });
   }
 
-  const tagLines = (['definite', 'maybe'] as const).flatMap((commitment) => {
-    const tags = signups.filter((x) => x.commitment === commitment).map(playerTag);
-    // Each list gets under half the content limit, so the two lines fit together.
-    return tags.length > 0 ? [`${commitment === 'definite' ? 'Definite' : 'Maybe'}: ${joinWithinLimit(tags, MESSAGE_CONTENT_MAX / 2 - 100, ' ')}`] : [];
-  });
+  const tagLines =
+    phase === 'announcement'
+      ? []
+      : (['definite', 'maybe'] as const).flatMap((commitment) => {
+          const tags = signups.filter((x) => x.commitment === commitment).map(playerTag);
+          // Each list gets under half the content limit, so the two lines fit together.
+          return tags.length > 0 ? [`${commitment === 'definite' ? 'Definite' : 'Maybe'}: ${joinWithinLimit(tags, MESSAGE_CONTENT_MAX / 2 - 100, ' ')}`] : [];
+        });
 
   return {
     content: tagLines.join('\n'),
@@ -200,16 +211,15 @@ async function getState(db: SupabaseClient, nightId: number): Promise<DiscordSta
   return data;
 }
 
-/** Posts the announcement: a line and a link to the night, as plain content so Discord unfurls the
- *  site's preview of it, which carries the start time. */
-async function postAnnouncement(db: SupabaseClient, url: string, night: ScrimNight): Promise<void> {
-  const content = `📅 **Scrim night scheduled**\n${scrimNightUrl(night.id)}`;
-  const result = await postWebhookEmbed(url, content, null);
+/** Posts the announcement and stores its id. */
+async function postAnnouncement(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
+  const message = buildNightMessage(data, now, 'announcement');
+  const result = await postWebhookEmbed(url, message.content, message.embed);
   if (!result.ok) throw new Error(result.error);
   if (result.id) {
     await db
       .from('scrim_night_discord_state')
-      .upsert({ night_id: night.id, announcement_message_id: result.id }, { onConflict: 'night_id' })
+      .upsert({ night_id: data.night.id, announcement_message_id: result.id }, { onConflict: 'night_id' })
       .throwOnError();
   }
 }
@@ -241,7 +251,7 @@ async function postNightMessage(db: SupabaseClient, url: string, data: NightMess
       if (!deleted.ok) throw new Error(deleted.error);
       await table().update({ announcement_message_id: null }).eq('night_id', nightId).throwOnError();
     }
-    const message = buildNightMessage(data, now);
+    const message = buildNightMessage(data, now, 'night');
     const result = await postWebhookEmbed(url, message.content, message.embed);
     if (!result.ok) throw new Error(result.error);
     if (!result.id) throw new Error('Discord returned no id for the posted message');
@@ -263,7 +273,7 @@ export async function notifyScrimNightScheduled(db: SupabaseClient, nightId: num
     const data = await loadMessageData(db, nightId, now);
     if (!data || hasScrimNightEnded(data.night, now)) return;
     if (isReminderDue(data.night, now)) await postNightMessage(db, url, data, now);
-    else await postAnnouncement(db, url, data.night);
+    else await postAnnouncement(db, url, data, now);
   });
 }
 
@@ -285,11 +295,11 @@ export async function notifyScrimNightReminder(db: SupabaseClient, nightId: numb
   });
 }
 
-/** Rebuilds the night message and edits it in place. Before the night message exists it posts it once
- *  the night is due one; an announcement is left as it is. An ended night is edited to its final
- *  standings once (`finalized_at`), and a reopened one back to its match. A message that can't be
- *  edited (deleted from the channel) is left alone, since a re-post would ping everyone again. Call
- *  after anything that changes it. */
+/** Rebuilds the night's message and edits it in place: the announcement's roster until the night
+ *  message is due (then it posts that, replacing the announcement), the night message after. An ended
+ *  night is edited to its final standings once (`finalized_at`), and a reopened one back to its match.
+ *  A message that can't be edited (deleted from the channel) is left alone and logged, since a re-post
+ *  would ping everyone again. Call after anything that changes it. */
 export async function syncScrimNightMessage(db: SupabaseClient, nightId: number): Promise<void> {
   const url = matchNotificationsWebhookUrl();
   if (!url) return;
@@ -301,12 +311,19 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
 
     const messageId = state?.reminder_message_id ?? null;
     if (!messageId) {
-      if (!ended && isReminderDue(data.night, now)) await postNightMessage(db, url, data, now);
+      if (ended) return;
+      if (isReminderDue(data.night, now)) {
+        await postNightMessage(db, url, data, now);
+      } else if (state?.announcement_message_id) {
+        const announcement = buildNightMessage(data, now, 'announcement');
+        const edited = await editWebhookEmbed(url, state.announcement_message_id, announcement.content, announcement.embed);
+        if (!edited.ok) throw new Error(edited.error);
+      }
       return;
     }
     if (ended && state?.finalized_at) return;
 
-    const message = buildNightMessage(data, now);
+    const message = buildNightMessage(data, now, 'night');
     const result = await editWebhookEmbed(url, messageId, message.content, message.embed);
     if (!result.ok) throw new Error(result.error);
     if (ended || state?.finalized_at) {
