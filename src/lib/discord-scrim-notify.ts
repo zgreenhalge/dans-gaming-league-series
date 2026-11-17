@@ -4,7 +4,7 @@
 // has no scrim-night entity).
 //
 // A night has two messages, both stored in `scrim_night_discord_state`:
-//   1. The announcement, posted when the night is scheduled: its start and a link Discord previews.
+//   1. The announcement, posted when the night is scheduled: a link Discord previews (with the start time).
 //   2. The night message, posted an hour before the start by the one-shot job
 //      `scheduleScrimNightReminder()` queues (a night scheduled less than an hour out gets it
 //      straight away). It deletes the announcement and is then edited in place by
@@ -197,11 +197,10 @@ async function getState(db: SupabaseClient, nightId: number): Promise<DiscordSta
   return data;
 }
 
-/** Posts the announcement: the start time and a link to the night, as plain content so Discord
- *  unfurls the site's preview of it. */
+/** Posts the announcement: a line and a link to the night, as plain content so Discord unfurls the
+ *  site's preview of it, which carries the start time. */
 async function postAnnouncement(db: SupabaseClient, url: string, night: ScrimNight): Promise<void> {
-  const epoch = discordEpoch(night.startsAt);
-  const content = `📅 **Scrim night scheduled** — <t:${epoch}:F> (<t:${epoch}:R>)\n${scrimNightUrl(night.id)}`;
+  const content = `📅 **Scrim night scheduled**\n${scrimNightUrl(night.id)}`;
   const result = await postWebhookEmbed(url, content, null);
   if (!result.ok) throw new Error(result.error);
   if (result.id) {

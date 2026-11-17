@@ -101,6 +101,7 @@ async function main() {
     assert.deepEqual(calls[0].body!.embeds, [], 'no embed, so the link unfurls');
     assert.match(calls[0].body!.content, /Scrim night scheduled/);
     assert.ok(calls[0].body!.content.endsWith(`/scrims/${NIGHT_ID}`));
+    assert.doesNotMatch(calls[0].body!.content, /<t:/, 'the start time is in the link preview, not the message');
     assert.deepEqual(db.scrim_night_discord_state.map((r) => [r.night_id, r.announcement_message_id, r.reminder_message_id]), [[NIGHT_ID, 'msg-1', undefined]]);
   });
 
