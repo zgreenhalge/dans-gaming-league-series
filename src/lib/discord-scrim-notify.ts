@@ -211,16 +211,22 @@ async function getState(db: SupabaseClient, nightId: number): Promise<DiscordSta
   return data;
 }
 
-/** Posts the announcement and stores its id. */
+/** Posts the announcement and stores its id. If the id can't be stored because the night was removed
+ *  while the post was in flight (its last player dropped out before the id was on record to delete),
+ *  the message is deleted again rather than left in the channel for a night that is gone. */
 async function postAnnouncement(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
   const message = buildNightMessage(data, now, 'announcement');
   const result = await postWebhookEmbed(url, message.content, message.embed);
   if (!result.ok) throw new Error(result.error);
-  if (result.id) {
+  if (!result.id) return;
+  try {
     await db
       .from('scrim_night_discord_state')
       .upsert({ night_id: data.night.id, announcement_message_id: result.id }, { onConflict: 'night_id' })
       .throwOnError();
+  } catch (e) {
+    await deleteWebhookMessage(url, result.id);
+    throw e;
   }
 }
 
@@ -260,7 +266,9 @@ async function postNightMessage(db: SupabaseClient, url: string, data: NightMess
     await table().update({ reminder_sent_at: null }).eq('night_id', nightId).throwOnError();
     throw e;
   }
-  await table().update({ reminder_message_id: messageId }).eq('night_id', nightId).throwOnError();
+  // No row to update means the night was removed while the message was posting: take it back down.
+  const { data: stored } = await table().update({ reminder_message_id: messageId }).eq('night_id', nightId).select('night_id').throwOnError();
+  if (!stored || stored.length === 0) await deleteWebhookMessage(url, messageId);
 }
 
 /** Announces a night that has just been scheduled. A night starting within the hour skips the

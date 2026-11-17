@@ -10,7 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
+import { clientThrowingOn, createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { scrimNightStartingIn } from './test-support/scrimFixtures';
 import { test, report } from './test-support/miniTest';
 import {
@@ -353,6 +353,34 @@ async function main() {
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.ok(calls[1].body!.embeds[0].fields[0].name.endsWith('· 1 checked in'));
     assert.equal(roster(calls[1]), '✔️ Ann\n✅ Cy\n❔ Bob');
+  });
+
+  await test('an announcement whose night is removed while it posts is deleted again', async () => {
+    withWebhook();
+    const { client } = fixture(5 * HOUR);
+    const calls = stubFetch();
+    const realError = console.error;
+    console.error = () => {};
+    try {
+      // Storing the id fails, as the foreign key does once the night is gone.
+      await notifyScrimNightScheduled(clientThrowingOn(client, 'scrim_night_discord_state'), NIGHT_ID);
+    } finally {
+      console.error = realError;
+    }
+    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['POST', `${WEBHOOK}?wait=true`], ['DELETE', `${WEBHOOK}/messages/msg-1`]]);
+  });
+
+  await test('a night message whose night is removed while it posts is deleted again', async () => {
+    withWebhook();
+    const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state()] });
+    const calls: string[] = [];
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      if (init?.method === 'POST') db.scrim_night_discord_state = []; // the night's last player drops out mid-post
+      return { ok: true, status: 200, json: async () => ({ id: 'night-msg' }) } as unknown as Response;
+    }) as typeof fetch;
+    await notifyScrimNightReminder(client, NIGHT_ID);
+    assert.deepEqual(calls, [`POST ${WEBHOOK}?wait=true`, `DELETE ${WEBHOOK}/messages/night-msg`]);
   });
 
   await test('a long roster is cut to Discord\'s field limit with a "+N more" tail, and the content to its own', async () => {
