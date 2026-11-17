@@ -46,8 +46,8 @@ function stubFetch(status = 200): FetchCall[] {
   return calls;
 }
 
-const signup = (playerId: number, commitment: string): Row => ({
-  id: playerId, night_id: NIGHT_ID, player_id: playerId, commitment, signed_up_at: `2026-01-01T00:0${playerId}:00Z`, checked_in_at: null,
+const signup = (playerId: number, commitment: string, checkedIn = false): Row => ({
+  id: playerId, night_id: NIGHT_ID, player_id: playerId, commitment, signed_up_at: `2026-01-01T00:0${playerId}:00Z`, checked_in_at: checkedIn ? '2026-01-01T01:00:00Z' : null,
 });
 const stat = (id: number, matchId: number, playerId: number, faction: string, won: boolean): Row => ({
   id, match_id: matchId, player_id: playerId, faction, kills: 10, assists: 0, deaths: 8, damage: 1500, adr: 75, rounds_played: 20, rounds_won: won ? 13 : 7, is_win: won,
@@ -112,7 +112,7 @@ async function main() {
     await notifyScrimNightScheduled(client, NIGHT_ID);
 
     assert.deepEqual(calls.map((c) => c.method), ['POST']);
-    assert.equal(roster(calls[0]), '✅ Ann\n✅ Cy\n❔ Bob');
+    assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob');
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'msg-1');
     assert.ok(!db.scrim_night_discord_state[0].announcement_message_id);
   });
@@ -137,13 +137,13 @@ async function main() {
     await notifyScrimNightReminder(client, NIGHT_ID);
     await notifyScrimNightReminder(client, NIGHT_ID);
 
-    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['POST', `${WEBHOOK}?wait=true`], ['DELETE', `${WEBHOOK}/messages/ann`]], 'the second call finds the message claimed');
-    const embed = calls[0].body!.embeds[0];
+    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['DELETE', `${WEBHOOK}/messages/ann`], ['POST', `${WEBHOOK}?wait=true`]], 'the announcement goes before the night message is posted; the second call finds it claimed');
+    const embed = calls[1].body!.embeds[0];
     assert.match(embed.description, /Scrim night starts/);
     assert.ok(embed.description.includes(`/scrims/${NIGHT_ID}`), 'links the night');
     assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`));
-    assert.equal(roster(calls[0]), '✅ Ann\n✅ Cy\n❔ Bob', 'definite ✅, maybe ❔');
-    assert.equal(calls[0].body!.content, 'Definite: <@&111> **Cy**\nMaybe: **Bob**');
+    assert.equal(roster(calls[1]), '✔️ Ann\n✔️ Cy\n❔ Bob', 'definite ✔️, maybe ❔');
+    assert.equal(calls[1].body!.content, 'Definite: <@&111> **Cy**\nMaybe: **Bob**');
     const row = db.scrim_night_discord_state[0];
     assert.deepEqual([row.reminder_message_id, row.announcement_message_id], ['msg-1', null]);
     assert.ok(row.reminder_sent_at);
@@ -175,7 +175,7 @@ async function main() {
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['PATCH', `${WEBHOOK}/messages/night`]]);
-    assert.equal(roster(calls[0]), '✅ Ann\n✅ Cy\n❔ Bob');
+    assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob');
   });
 
   await test('syncScrimNightMessage: leaves the announcement alone before the night message is due', async () => {
@@ -191,10 +191,10 @@ async function main() {
     const { db, client } = fixture(-10 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.deepEqual(calls.map((c) => c.method), ['POST', 'DELETE']);
+    assert.deepEqual(calls.map((c) => c.method), ['DELETE', 'POST']);
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'msg-1');
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.deepEqual(calls.map((c) => c.method), ['POST', 'DELETE', 'PATCH'], 'then edits it');
+    assert.deepEqual(calls.map((c) => c.method), ['DELETE', 'POST', 'PATCH'], 'then edits it');
   });
 
   await test('syncScrimNightMessage: shows a live match with its score and a link, then its final score', async () => {
@@ -264,22 +264,46 @@ async function main() {
     const realError = console.error;
     console.error = (...args: unknown[]) => void logged.push(args);
     try {
-      stubFetch(500);
+      // The announcement's delete succeeds; the night message's post fails.
+      (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url: string, init?: RequestInit) => {
+        const ok = init?.method === 'DELETE';
+        return { ok, status: ok ? 204 : 500, json: async () => ({}) } as unknown as Response;
+      }) as typeof fetch;
       await notifyScrimNightReminder(client, NIGHT_ID);
     } finally {
       console.error = realError;
     }
     assert.equal(logged.length, 1);
     assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null, 'claim released');
-    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'ann', 'the announcement stays');
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, null, 'the announcement is gone');
 
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.deepEqual(calls.map((c) => c.method), ['POST', 'DELETE']);
+    assert.deepEqual(calls.map((c) => c.method), ['POST'], 'the announcement was already deleted');
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'msg-1');
   });
 
-  await test('a post that returns no message id gives the claim back and keeps the announcement', async () => {
+  await test('a failed announcement delete posts nothing and gives the claim back', async () => {
+    withWebhook();
+    const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
+    const calls = stubFetch(500);
+    const realError = console.error;
+    console.error = () => {};
+    try {
+      await notifyScrimNightReminder(client, NIGHT_ID);
+    } finally {
+      console.error = realError;
+    }
+    assert.deepEqual(calls.map((c) => c.method), ['DELETE'], 'no night message while the announcement is up');
+    assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null, 'claim released');
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'ann');
+
+    const retry = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.deepEqual(retry.map((c) => c.method), ['DELETE', 'POST'], 'the next sync deletes then posts');
+  });
+
+  await test('a post that returns no message id gives the claim back', async () => {
     withWebhook();
     const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
     const calls: string[] = [];
@@ -294,9 +318,23 @@ async function main() {
     } finally {
       console.error = realError;
     }
-    assert.deepEqual(calls, ['POST'], 'the announcement is not deleted');
+    assert.deepEqual(calls, ['DELETE', 'POST']);
     assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null);
-    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'ann');
+    assert.equal(db.scrim_night_discord_state[0].reminder_message_id ?? null, null);
+  });
+
+  await test('the roster marks who has checked in with ✅ and counts them, 0 included', async () => {
+    withWebhook();
+    const { db, client } = fixture(40 * MIN, { scrim_night_discord_state: [state({ reminder_message_id: 'night', reminder_sent_at: '2026-01-01T00:00:00Z' })] });
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.ok(calls[0].body!.embeds[0].fields[0].name.endsWith('· 0 checked in'));
+    assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob', 'no ✅ before anyone checks in');
+
+    db.scrim_signups[2].checked_in_at = '2026-01-01T01:00:00Z';
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.ok(calls[1].body!.embeds[0].fields[0].name.endsWith('· 1 checked in'));
+    assert.equal(roster(calls[1]), '✔️ Ann\n✅ Cy\n❔ Bob');
   });
 
   await test('a long roster is cut to Discord\'s field limit with a "+N more" tail, and the content to its own', async () => {
