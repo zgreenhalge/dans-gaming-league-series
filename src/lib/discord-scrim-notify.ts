@@ -11,7 +11,7 @@
 //      `scheduleScrimNightReminder()` queues (a night scheduled less than an hour out gets it straight
 //      away). The announcement is deleted first, so the channel never shows both. It is then edited in
 //      place by `syncScrimNightMessage()`.
-// Both show the start and the roster (✅ checked in, ✔️ Definite, ❔ Maybe). The night message adds the
+// Both show the start and the roster (✅ checked in, ✔️ Definite, ❔ Maybe) under a heading of its counts. The night message adds the
 // countdown and tags the roster, and shows the latest started match's running or final score until the
 // next match's server starts, and the final standings once the night has been ended. A night that goes
 // idle ends on the clock with no write to react to, so its message keeps its last state until the next
@@ -42,6 +42,7 @@ import {
   type ScrimMatch,
 } from './queries/scrims';
 import { scrimMatchHasStarted } from './scrim-matches';
+import { signupCounts } from './scrim-seats';
 import { hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
 import { scrimMatchUrl, scrimNightUrl } from './seo/site';
 import { parseScore } from './util';
@@ -149,17 +150,36 @@ function stateLine(night: ScrimNight, now: Date): string | null {
   return isReminderDue(night, now) ? `⏰ Starting <t:${discordEpoch(night.startsAt)}:R>!` : null;
 }
 
+/** Each tag list gets under half the content limit (less room for its label), so both fit together. */
+const TAG_LIST_MAX = MESSAGE_CONTENT_MAX / 2 - 100;
+
+/** The roster as `Definite: …` and `Maybe: …` lines of name-color role tags, for a message's `content`
+ *  (the one place mentions render, as in `discord-notify.ts`). A group with no one in it has no line. */
+function tagLines(signups: ScrimDiscordSignup[]): string[] {
+  return (['definite', 'maybe'] as const).flatMap((commitment) => {
+    const tags = signups.filter((s) => s.commitment === commitment).map(playerTag);
+    return tags.length > 0 ? [`${commitment === 'definite' ? 'Definite' : 'Maybe'}: ${joinWithinLimit(tags, TAG_LIST_MAX, ' ')}`] : [];
+  });
+}
+
+/** The roster's heading: the total, then how many are definite, maybe and checked in. A count of zero
+ *  has no label, so the heading never says "0 checked in". */
+function rosterHeading(signups: ScrimDiscordSignup[]): string {
+  const { definite, maybe } = signupCounts(signups);
+  const labels = [`${definite} definite`, `${maybe} maybe`, `${signups.filter((s) => s.checkedIn).length} checked in`].filter((l) => !l.startsWith('0 '));
+  return [`Roster (${signups.length})`, ...labels].join(' · ');
+}
+
 /** The message for a night: its start (once), the roster with each player's emoji, and the latest
  *  match's score or, once the night is over, the standings. Once the night message is due
- *  (`isReminderDue()`) it also tags the roster in `content` (the one place mentions render, as in
- *  `discord-notify.ts`) and shows the countdown; before that, as the announcement, it tags no one.
- *  Times use Discord's own timestamp markup, so they show in each reader's timezone. The night is
- *  linked from the title. */
+ *  (`isReminderDue()`) it also tags the roster in `content` and shows the countdown; before that, as
+ *  the announcement, it tags no one. Times use Discord's own timestamp markup, so they show in each
+ *  reader's timezone. The night is linked from the title. */
 function buildNightMessage(data: NightMessageData, now: Date): { content: string; embed: Embed } {
   const { night, signups, latestMatch, standings } = data;
   const ended = hasScrimNightEnded(night, now);
   const fields: EmbedField[] = [
-    { name: 'Roster', value: signups.length > 0 ? joinWithinLimit(signups.map((s) => `${statusEmoji(s)} ${s.name}`), EMBED_FIELD_VALUE_MAX) : '—' },
+    { name: rosterHeading(signups), value: signups.length > 0 ? joinWithinLimit(signups.map((s) => `${statusEmoji(s)} ${s.name}`), EMBED_FIELD_VALUE_MAX) : '—' },
   ];
   if (standings) fields.push({ name: 'Final standings', value: standingsTable(standings) });
   if (latestMatch) {
@@ -175,7 +195,7 @@ function buildNightMessage(data: NightMessageData, now: Date): { content: string
   }
 
   return {
-    content: isReminderDue(night, now) ? joinWithinLimit(signups.map(playerTag), MESSAGE_CONTENT_MAX, ' ') : '',
+    content: isReminderDue(night, now) ? tagLines(signups).join('\n') : '',
     embed: {
       title: 'Scrim night',
       description: [`<t:${discordEpoch(night.startsAt)}:F>`, stateLine(night, now)].filter(Boolean).join('\n'),

@@ -139,7 +139,7 @@ async function main() {
     assert.equal(embed.title, 'Scrim night');
     assert.match(embed.description, /^<t:\d+:F>$/, 'the start, once, and no state line yet');
     assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`));
-    assert.equal(embed.fields[0].name, 'Roster');
+    assert.equal(embed.fields[0].name, 'Roster (3) · 2 definite · 1 maybe', 'no "0 checked in" label');
     assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob');
     assert.deepEqual(db.scrim_night_discord_state.map((r) => [r.night_id, r.announcement_message_id, r.reminder_message_id]), [[NIGHT_ID, 'msg-1', undefined]]);
   });
@@ -182,7 +182,7 @@ async function main() {
     assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`), 'the title links the night');
     assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`));
     assert.equal(roster(calls[1]), '✔️ Ann\n✔️ Cy\n❔ Bob', 'definite ✔️, maybe ❔');
-    assert.equal(calls[1].body!.content, '<@&111> **Cy** **Bob**', 'the roster tagged, without repeating the labels');
+    assert.equal(calls[1].body!.content, 'Definite: <@&111> **Cy**\nMaybe: **Bob**');
     const row = db.scrim_night_discord_state[0];
     assert.deepEqual([row.reminder_message_id, row.announcement_message_id], ['msg-1', null]);
     assert.ok(row.reminder_sent_at);
@@ -229,6 +229,7 @@ async function main() {
     db.scrim_signups.push(signup(4, 'maybe'));
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.equal(roster(calls[1]), '✔️ Ann\n✔️ Cy\n❔ Bob\n❔ Di');
+    assert.equal(calls[1].body!.embeds[0].fields[0].name, 'Roster (4) · 2 definite · 2 maybe');
   });
 
   await test('syncScrimNightMessage: does nothing before the night message is due when no announcement is on record', async () => {
@@ -363,15 +364,17 @@ async function main() {
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id ?? null, null);
   });
 
-  await test('the roster marks who has checked in with ✅', async () => {
+  await test('the roster marks who has checked in with ✅, and the heading counts them only once someone has', async () => {
     withWebhook();
     const { db, client } = fixture(40 * MIN, { scrim_night_discord_state: [state({ reminder_message_id: 'night', reminder_sent_at: '2026-01-01T00:00:00Z' })] });
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob', 'no ✅ before anyone checks in');
+    assert.equal(calls[0].body!.embeds[0].fields[0].name, 'Roster (3) · 2 definite · 1 maybe', 'no "0 checked in" label');
 
     db.scrim_signups[2].checked_in_at = '2026-01-01T01:00:00Z';
     await syncScrimNightMessage(client, NIGHT_ID);
+    assert.equal(calls[1].body!.embeds[0].fields[0].name, 'Roster (3) · 2 definite · 1 maybe · 1 checked in');
     assert.equal(roster(calls[1]), '✔️ Ann\n✅ Cy\n❔ Bob');
   });
 
@@ -423,6 +426,15 @@ async function main() {
     const logged = await captureErrors(() => syncScrimNightMessage(client, NIGHT_ID));
     assert.equal(logged.length, 1);
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'night', 'no re-post');
+  });
+
+  await test('a group with no one in it has no label: no maybes means no "maybe" count and no Maybe tag line', async () => {
+    withWebhook();
+    const { client } = fixture(55 * MIN, { scrim_signups: [signup(1, 'definite'), signup(3, 'definite')] });
+    const calls = stubFetch();
+    await notifyScrimNightReminder(client, NIGHT_ID);
+    assert.equal(calls[0].body!.embeds[0].fields[0].name, 'Roster (2) · 2 definite');
+    assert.equal(calls[0].body!.content, 'Definite: <@&111> **Cy**');
   });
 
   await test('a long roster is cut to Discord\'s field limit with a "+N more" tail, and the content to its own', async () => {
