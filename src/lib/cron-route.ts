@@ -29,6 +29,10 @@ export async function handleCronPost(
     return NextResponse.json({ error: `Invalid ${idKey}` }, { status: 400 });
   }
 
-  await run(getAdminClient(), id);
+  try {
+    await run(getAdminClient(), id);
+  } catch (e) {
+    console.error(`cron ${idKey}=${id} failed (non-fatal):`, e);
+  }
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 -- One generic one-shot scheduler for the app's pg_cron jobs. `schedule_one_shot_post()` queues a job
--- for the exact minute of `p_fire_at` that `POST`s `p_path` (a route under the site) with `p_body` and a
+-- for the first whole minute at or after `p_fire_at` (cron fires on the minute, so a job never fires
+-- before its time) that `POST`s `p_path` (a route under the site) with `p_body` and a
 -- `CRON_SECRET` bearer token, then unschedules itself (cron has no year field, so it would otherwise
 -- recur annually). A job of the same name queued before is replaced. A time that is already due queues
 -- nothing and succeeds. Returns true when the job is queued or none is due, false when scheduling
@@ -20,6 +21,7 @@ set search_path = ''
 as $function$
 declare
   v_site_url text := 'https://dans-gaming-league-series.vercel.app'; -- keep in sync with SITE_URL (src/lib/seo/site.ts)
+  v_fire_minute timestamptz := date_trunc('minute', p_fire_at + interval '1 minute' - interval '1 microsecond');
 begin
   begin
     perform cron.unschedule(p_job_name);
@@ -35,10 +37,10 @@ begin
     return false;
   end if;
 
-  -- 5-field cron expression for one exact minute this year ("MI HH24 DD MM *").
+  -- 5-field cron expression for that one minute this year ("MI HH24 DD MM *").
   perform cron.schedule(
     p_job_name,
-    to_char(p_fire_at at time zone 'utc', 'MI HH24 DD MM') || ' *',
+    to_char(v_fire_minute at time zone 'utc', 'MI HH24 DD MM') || ' *',
     format(
       $sql$
       select net.http_post(
