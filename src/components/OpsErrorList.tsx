@@ -10,7 +10,7 @@ import { BACKGROUND_JOB_TYPES, jobClaimOperation } from '@/lib/jobs';
 
 export interface OpsErrorItem {
   id: number;
-  entityType: 'season' | 'match' | 'player' | 'system';
+  entityType: 'season' | 'match' | 'player' | 'system' | 'scrim_night';
   entityId: number;
   label: string;
   operation: string;
@@ -39,6 +39,13 @@ export function retryEndpointFor(item: Pick<OpsErrorItem, 'operation' | 'entityI
     case 'discord_schedule_reminder':
     case 'discord_notify_reminder':
       return `/api/matches/${item.entityId}/schedule/retry-reminder`;
+    // A failed scrim night post, or its reminder schedule: posting the message by hand covers both. A
+    // failed edit (`scrim_announcement_edit`) has no retry: the next roster change or score edits it
+    // again, and Dismiss clears it meanwhile.
+    case 'scrim_announce':
+    case 'scrim_night_message':
+    case 'scrim_schedule_reminder':
+      return `/api/scrims/${item.entityId}/announce`;
     default:
       return null;
   }
@@ -69,6 +76,10 @@ export const OPERATION_LABELS: Record<string, string> = {
   schedule_generate_cleanup: 'Schedule Generate Cleanup',
   schedule_confirm: 'Schedule Confirm',
   schedule_confirm_cleanup: 'Schedule Confirm Cleanup',
+  scrim_announce: 'Scrim Announcement',
+  scrim_announcement_edit: 'Scrim Announcement Edit',
+  scrim_night_message: 'Scrim Night Message',
+  scrim_schedule_reminder: 'Scrim Reminder Schedule',
 };
 
 /** Dismiss one live `ops_errors` row. Shared by every surface that renders one (this list, and the

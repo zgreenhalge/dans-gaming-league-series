@@ -271,7 +271,8 @@ function OpsEventRow({ event, onJump, onDismissed }: {
   onDismissed: (id: number) => void;
 }) {
   const { err } = event;
-  const jumpType = err.entityType === 'system' ? null : err.entityType;
+  // Manage has no scrim night tab: a night's row links to its page, where the admin menu lives.
+  const jumpType = err.entityType === 'system' || err.entityType === 'scrim_night' ? null : err.entityType;
   const retryUrl = retryEndpointFor(err);
   return (
     <div className="px-3 py-2.5 border-t border-[var(--color-border-tertiary)]">
@@ -302,6 +303,11 @@ function OpsEventRow({ event, onJump, onDismissed }: {
               >
                 Open in Manage
               </button>
+            )}
+            {err.entityType === 'scrim_night' && (
+              <Link href={`/scrims/${err.entityId}`} className="font-mono text-[10px] text-[var(--color-accent-blue-fg)] hover:underline">
+                Open night
+              </Link>
             )}
             {retryUrl && <JobRetryButton dispatchUrl={retryUrl} inProgress={false} />}
             <DismissOpsError id={err.id} onDismissed={() => onDismissed(err.id)} />

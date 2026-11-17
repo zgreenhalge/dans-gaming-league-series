@@ -223,7 +223,7 @@ export interface OpsErrorRow {
   operation: string;
   message: string;
   occurredAt: string;
-  /** Human-readable name for the row's entity — a season/match/player name, or "EHOG Recompute"
+  /** Human-readable name for the row's entity — a season/match/player name, a scrim night's date, or "EHOG Recompute"
    * for the system-wide singleton — resolved here so the admin UI never has to. */
   label: string;
 }
@@ -262,14 +262,16 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
     match_number: number | null;
     weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
   };
-  const [seasonRows, matchRows, playerRows] = await Promise.all([
+  const [seasonRows, matchRows, playerRows, nightRows] = await Promise.all([
     batchedIn<{ id: number; name: string }>('seasons', 'id', idsOf('season'), 'id, name'),
     batchedIn<MatchJoinRow>('matches', 'id', idsOf('match'), 'id, match_number, weeks(week_number, seasons(name))'),
     batchedIn<{ id: number; name: string }>('players', 'id', idsOf('player'), 'id, name'),
+    batchedIn<{ id: number; starts_at: string }>('scrim_nights', 'id', idsOf('scrim_night'), 'id, starts_at'),
   ]);
 
   const seasonName = new Map(seasonRows.map((s) => [s.id, s.name]));
   const playerName = new Map(playerRows.map((p) => [p.id, p.name]));
+  const nightStart = new Map(nightRows.map((n) => [n.id, n.starts_at]));
   const matchLbl = new Map(
     matchRows.map((m) => [
       m.id,
@@ -290,6 +292,10 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
         return matchLbl.get(r.entity_id) ?? `Match #${r.entity_id}`;
       case 'player':
         return playerName.get(r.entity_id) ?? `Player #${r.entity_id}`;
+      case 'scrim_night': {
+        const startsAt = nightStart.get(r.entity_id);
+        return startsAt ? `Scrim night #${r.entity_id} · ${startsAt.slice(0, 10)}` : `Scrim night #${r.entity_id}`;
+      }
       case 'system':
         return 'EHOG Recompute';
     }

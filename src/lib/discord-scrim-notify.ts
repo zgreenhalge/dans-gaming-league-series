@@ -1,7 +1,9 @@
 // Best-effort Discord messages for scrim nights, posted through the match notifications' webhook
 // (`discord-webhook.ts`). Every export is safe to call unconditionally: a missing webhook is a no-op,
-// and a failure is logged rather than thrown, so no caller can fail over a notification (`ops_errors`
-// has no scrim-night entity).
+// and a failure is logged and recorded to `ops_errors` (entity `scrim_night`) rather than thrown, so
+// no caller can fail over a notification. Each kind of failure has its own operation key (below), so
+// one kind's success never clears another's still-live error, and a later success of the same kind
+// clears its own.
 //
 // A night has two messages in turn, both built by `buildNightMessage()` and stored in
 // `scrim_night_discord_state`:
@@ -44,7 +46,14 @@ import { scrimMatchHasStarted } from './scrim-matches';
 import { signupCounts } from './scrim-seats';
 import { hasScrimNightEnded, hasScrimNightStarted, type ScrimNight } from './scrim-schedule';
 import { scrimMatchUrl, scrimNightUrl } from './seo/site';
+import { clearOpsError, recordOpsError } from './ops-errors';
 import { parseScore } from './util';
+
+/** `ops_errors` operation keys, one per kind of failure on a night. */
+const OPERATION_ANNOUNCE = 'scrim_announce';
+const OPERATION_ANNOUNCEMENT_EDIT = 'scrim_announcement_edit';
+const OPERATION_NIGHT_MESSAGE = 'scrim_night_message';
+const OPERATION_SCHEDULE_REMINDER = 'scrim_schedule_reminder';
 
 const COLOR_UPCOMING = 0xfee75c; // Discord's "yellow", as for a match reminder
 const COLOR_LIVE = 0xed4245; // Discord's "red" — a match is being played
@@ -80,6 +89,19 @@ interface NightMessageData {
   latestMatch: LatestMatch | null;
   /** Set once the night has ended and has a scored match. */
   standings: ScrimLeaderboardRow[] | null;
+}
+
+/** Runs one step of a night's Discord message under its `ops_errors` operation: a failure is recorded
+ *  (and rethrown for the caller's own handling), a success clears the earlier failure. */
+async function tracked<T>(db: SupabaseClient, nightId: number, operation: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    const result = await fn();
+    await clearOpsError(db, 'scrim_night', nightId, operation);
+    return result;
+  } catch (e) {
+    await recordOpsError(db, 'scrim_night', nightId, operation, e instanceof Error ? e.message : String(e));
+    throw e;
+  }
 }
 
 /** Runs one notification, logging instead of throwing — the no-throw guarantee every export keeps. */
@@ -254,6 +276,17 @@ async function storeMessageIds(
   }
 }
 
+/** Empties the night's state row — no message on record, no claim, not finalized — creating it if
+ *  need be, so a message posted next starts from a clean slate. */
+async function resetState(db: SupabaseClient, nightId: number): Promise<void> {
+  const cleared = { night_id: nightId, announcement_message_id: null, reminder_message_id: null, reminder_sent_at: null, finalized_at: null };
+  await db.from('scrim_night_discord_state').upsert(cleared, { onConflict: 'night_id' }).throwOnError();
+}
+
+/** `postNightMessage()` under its `ops_errors` operation. */
+const postNightMessageTracked = (db: SupabaseClient, url: string, data: NightMessageData, now: Date) =>
+  tracked(db, data.night.id, OPERATION_NIGHT_MESSAGE, () => postNightMessage(db, url, data, now));
+
 /** Posts the announcement. */
 async function postAnnouncement(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
   const messageId = await postMessage(url, data, now);
@@ -303,8 +336,8 @@ export async function notifyScrimNightScheduled(db: SupabaseClient, nightId: num
     const now = new Date();
     const data = await loadMessageData(db, nightId, now);
     if (!data || hasScrimNightEnded(data.night, now)) return;
-    if (isReminderDue(data.night, now)) await postNightMessage(db, url, data, now);
-    else await postAnnouncement(db, url, data, now);
+    if (isReminderDue(data.night, now)) await postNightMessageTracked(db, url, data, now);
+    else await tracked(db, nightId, OPERATION_ANNOUNCE, () => postAnnouncement(db, url, data, now));
   });
 }
 
@@ -322,7 +355,7 @@ export async function notifyScrimNightReminder(db: SupabaseClient, nightId: numb
     if (!data) return;
     const msUntilStart = Date.parse(data.night.startsAt) - now.getTime();
     if (hasScrimNightEnded(data.night, now) || msUntilStart <= 0 || msUntilStart > REMINDER_WINDOW_MS) return;
-    await postNightMessage(db, url, data, now);
+    await postNightMessageTracked(db, url, data, now);
   });
 }
 
@@ -342,18 +375,20 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
 
     const messageId = state?.reminder_message_id ?? null;
     if (!messageId) {
-      if (!ended && isReminderDue(data.night, now)) return postNightMessage(db, url, data, now);
+      if (!ended && isReminderDue(data.night, now)) return postNightMessageTracked(db, url, data, now);
       // Only the announcement exists: keep its roster current, or show an ended night as over. One
       // deleted from the channel is forgotten rather than failing every sync until the night message.
       const announcementId = state?.announcement_message_id;
-      if (announcementId && !(await editMessage(url, announcementId, data, now))) {
+      if (announcementId && !(await tracked(db, nightId, OPERATION_ANNOUNCEMENT_EDIT, () => editMessage(url, announcementId, data, now)))) {
         await db.from('scrim_night_discord_state').update({ announcement_message_id: null }).eq('night_id', nightId).throwOnError();
       }
       return;
     }
     if (ended && state?.finalized_at) return;
 
-    if (!(await editMessage(url, messageId, data, now))) throw new Error('The night message no longer exists in the channel');
+    await tracked(db, nightId, OPERATION_NIGHT_MESSAGE, async () => {
+      if (!(await editMessage(url, messageId, data, now))) throw new Error('The night message no longer exists in the channel');
+    });
     if (ended || state?.finalized_at) {
       await db
         .from('scrim_night_discord_state')
@@ -381,10 +416,54 @@ export async function notifyScrimMatchProgress(db: SupabaseClient, matchId: numb
 export async function scheduleScrimNightReminder(db: SupabaseClient, nightId: number, startsAt: string): Promise<void> {
   if (!matchNotificationsWebhookUrl()) return;
   return bestEffort('scheduleScrimNightReminder', nightId, async () => {
-    const { data, error } = await db.rpc('schedule_scrim_night_reminder', { p_night_id: nightId, p_starts_at: startsAt });
-    if (error) throw error;
-    if (!data) throw new Error('the "cron_secret" Vault secret is not configured');
+    await tracked(db, nightId, OPERATION_SCHEDULE_REMINDER, async () => {
+      const { data, error } = await db.rpc('schedule_scrim_night_reminder', { p_night_id: nightId, p_starts_at: startsAt });
+      if (error) throw error;
+      if (!data) throw new Error('the "cron_secret" Vault secret is not configured');
+    });
   });
+}
+
+/** What `postScrimNightMessage()` posted, or why it could not. */
+export type ScrimPostResult =
+  | { ok: true; posted: 'announcement' | 'night message' }
+  | { ok: false; error: string; notFound?: true };
+
+/** Posts the night's Discord message by hand (an admin's "Post announcement"): the announcement, or
+ *  the night message once the night is due one (`isReminderDue()`). Any message on record is deleted
+ *  first and the new id stored in its place, so it covers a night whose post failed, whose message was
+ *  deleted from the channel, or that holds a duplicate. It also gives back a stuck `reminder_sent_at`
+ *  claim, and re-queues the reminder job (`scheduleScrimNightReminder()`).
+ *  Never throws: a failure is returned for the admin and recorded like any other post. */
+export async function postScrimNightMessage(db: SupabaseClient, nightId: number): Promise<ScrimPostResult> {
+  const url = matchNotificationsWebhookUrl();
+  if (!url) return { ok: false, error: 'The Discord match notifications webhook is not configured' };
+  try {
+    const now = new Date();
+    const data = await loadMessageData(db, nightId, now);
+    if (!data) return { ok: false, error: 'Night not found', notFound: true };
+    // Re-queued whatever the night's state, so a retry of a failed schedule clears its row; a start
+    // already within the hour (or past) queues nothing and succeeds.
+    await scheduleScrimNightReminder(db, nightId, data.night.startsAt);
+    if (hasScrimNightEnded(data.night, now)) return { ok: false, error: 'The night is over' };
+    const due = isReminderDue(data.night, now);
+
+    await tracked(db, nightId, due ? OPERATION_NIGHT_MESSAGE : OPERATION_ANNOUNCE, async () => {
+      const state = await getState(db, nightId);
+      for (const id of [state?.announcement_message_id, state?.reminder_message_id]) {
+        if (!id) continue;
+        const deleted = await deleteWebhookMessage(url, id);
+        if (!deleted.ok) throw new Error(deleted.error);
+      }
+      await resetState(db, nightId);
+      if (due) await postNightMessage(db, url, data, now);
+      else await postAnnouncement(db, url, data, now);
+    });
+    return { ok: true, posted: due ? 'night message' : 'announcement' };
+  } catch (e) {
+    console.error(`postScrimNightMessage(${nightId}) failed:`, e);
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** The ids of the Discord messages posted for a night. Read before a drop-out that may remove the night:

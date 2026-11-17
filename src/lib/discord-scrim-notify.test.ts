@@ -3,8 +3,9 @@
  * straight to the night message when the night is under an hour out), the night message an hour out
  * (replacing the announcement, once), the roster with Definite/Maybe emoji, the latest match's running
  * and final score until the next match starts, the final standings once the night has ended
- * (including a reopen), message deletion when a night is removed, and the no-throw/no-webhook
- * guarantees.
+ * (including a reopen), message deletion when a night is removed, the failures recorded to
+ * `ops_errors` per operation (and cleared by the next success), the admin's manual post, and the
+ * no-throw/no-webhook guarantees.
  *
  * Run:  npx vitest run src/lib/discord-scrim-notify.test.ts
  */
@@ -17,6 +18,7 @@ import { test, report } from './test-support/miniTest';
 import {
   deleteScrimNightMessages,
   getScrimNightMessageIds,
+  postScrimNightMessage,
   notifyScrimMatchProgress,
   notifyScrimNightReminder,
   notifyScrimNightScheduled,
@@ -76,6 +78,7 @@ function fixture(startsInMs: number, extra: Partial<FakeDb> = {}) {
     player_match_stats: [],
     match_server_state: [],
     live_match_score: [],
+    ops_errors: [],
     ...extra,
   };
   return { db, client: createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true }) };
@@ -575,6 +578,118 @@ async function main() {
     await scheduleScrimNightReminder(refused, NIGHT_ID, '2026-12-01T01:00:00.000Z');
     });
     assert.equal(logged.length, 1);
+  });
+
+  const opsErrors = (db: FakeDb) => db.ops_errors.filter((r) => !r.dismissed_at).map((r) => [r.entity_type, r.entity_id, r.operation]);
+
+  await test('a failed announcement post is recorded as scrim_announce, and cleared by the next successful post', async () => {
+    withWebhook();
+    const { db, client } = fixture(5 * HOUR);
+    stubFetch(500);
+    await captureErrors(() => notifyScrimNightScheduled(client, NIGHT_ID));
+    assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_announce']]);
+    stubFetch();
+    await notifyScrimNightScheduled(client, NIGHT_ID);
+    assert.deepEqual(opsErrors(db), []);
+  });
+
+  await test('a failed night message post is recorded as scrim_night_message, distinct from the announcement\'s', async () => {
+    withWebhook();
+    const { db, client } = fixture(55 * MIN);
+    stubFetch(500);
+    await captureErrors(() => notifyScrimNightReminder(client, NIGHT_ID));
+    assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_night_message']]);
+  });
+
+  await test('a failed announcement edit is recorded as scrim_announcement_edit and clears on the next edit', async () => {
+    withWebhook();
+    const { db, client } = fixture(5 * HOUR, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
+    stubFetch(500);
+    await captureErrors(() => syncScrimNightMessage(client, NIGHT_ID));
+    assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_announcement_edit']]);
+    stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.deepEqual(opsErrors(db), []);
+  });
+
+  await test('a night message deleted from the channel is recorded as scrim_night_message', async () => {
+    withWebhook();
+    const { db, client } = underway();
+    stubFetch(404);
+    await captureErrors(() => syncScrimNightMessage(client, NIGHT_ID));
+    assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_night_message']]);
+  });
+
+  await test('a refused reminder schedule is recorded as scrim_schedule_reminder, and cleared once it schedules', async () => {
+    withWebhook();
+    const db: FakeDb = { scrim_nights: [], ops_errors: [] };
+    await captureErrors(() => scheduleScrimNightReminder(createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => false }), NIGHT_ID, '2026-12-01T01:00:00.000Z'));
+    assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_schedule_reminder']]);
+    await scheduleScrimNightReminder(createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true }), NIGHT_ID, '2026-12-01T01:00:00.000Z');
+    assert.deepEqual(opsErrors(db), []);
+  });
+
+  await test('postScrimNightMessage: posts an announcement for a night that never had one, and re-queues the reminder', async () => {
+    withWebhook();
+    const rpcCalls: unknown[] = [];
+    const { db } = fixture(5 * HOUR);
+    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: (a) => (rpcCalls.push(a), true) });
+    const calls = stubFetch();
+    assert.deepEqual(await postScrimNightMessage(client, NIGHT_ID), { ok: true, posted: 'announcement' });
+    assert.deepEqual(calls.map((c) => c.method), ['POST']);
+    assert.equal(calls[0].body!.content, '', 'an announcement tags no one');
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'msg-1');
+    assert.equal(rpcCalls.length, 1);
+  });
+
+  await test('postScrimNightMessage: deletes the announcement on record (a duplicate\'s, or one gone from the channel) and replaces it', async () => {
+    withWebhook();
+    const { db, client } = fixture(5 * HOUR, { scrim_night_discord_state: [state({ announcement_message_id: 'old' })] });
+    const calls = stubFetch();
+    assert.equal((await postScrimNightMessage(client, NIGHT_ID)).ok, true);
+    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['DELETE', `${WEBHOOK}/messages/old`], ['POST', `${WEBHOOK}?wait=true`]]);
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'msg-1');
+  });
+
+  await test('postScrimNightMessage: a due night gets the night message, replacing both messages and giving back a stuck claim', async () => {
+    withWebhook();
+    const { db, client } = fixture(30 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann', reminder_message_id: 'night', reminder_sent_at: '2026-01-01T00:00:00Z', finalized_at: '2026-01-01T00:00:00Z' })] });
+    const calls = stubFetch();
+    assert.deepEqual(await postScrimNightMessage(client, NIGHT_ID), { ok: true, posted: 'night message' });
+    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['DELETE', `${WEBHOOK}/messages/ann`], ['DELETE', `${WEBHOOK}/messages/night`], ['POST', `${WEBHOOK}?wait=true`]]);
+    const row = db.scrim_night_discord_state[0];
+    assert.deepEqual([row.reminder_message_id, row.announcement_message_id, row.finalized_at], ['msg-1', null, null]);
+    assert.ok(row.reminder_sent_at, 'claimed again by the new post');
+  });
+
+  await test('postScrimNightMessage: reports a failed post without throwing, and records it', async () => {
+    withWebhook();
+    const { db, client } = fixture(5 * HOUR);
+    stubFetch(500);
+    let result: Awaited<ReturnType<typeof postScrimNightMessage>> | undefined;
+    await captureErrors(async () => void (result = await postScrimNightMessage(client, NIGHT_ID)));
+    assert.equal(result!.ok, false);
+    assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_announce']]);
+  });
+
+  await test('postScrimNightMessage: a retry after the night is due still re-queues the reminder, clearing its error', async () => {
+    withWebhook();
+    const { db } = fixture(30 * MIN, { ops_errors: [{ id: 1, entity_type: 'scrim_night', entity_id: NIGHT_ID, operation: 'scrim_schedule_reminder', message: 'x', occurred_at: '2026-01-01T00:00:00Z', dismissed_at: null }] });
+    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true });
+    stubFetch();
+    await postScrimNightMessage(client, NIGHT_ID);
+    assert.deepEqual(db.ops_errors.filter((r) => !r.dismissed_at), []);
+  });
+
+  await test('postScrimNightMessage: refuses a night that is gone or over, and reports a missing webhook', async () => {
+    withWebhook();
+    stubFetch();
+    assert.deepEqual(await postScrimNightMessage(fixture(HOUR).client, 999), { ok: false, error: 'Night not found', notFound: true });
+    const over = fixture(-HOUR);
+    over.db.scrim_nights[0].ended_at = new Date().toISOString();
+    assert.deepEqual(await postScrimNightMessage(over.client, NIGHT_ID), { ok: false, error: 'The night is over' });
+    delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+    assert.equal((await postScrimNightMessage(fixture(HOUR).client, NIGHT_ID)).ok, false);
   });
 
   report();
