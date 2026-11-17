@@ -38,6 +38,7 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 import { notifyMatchScoreReported } from './discord-notify';
+import { notifyScrimMatchProgress } from './discord-scrim-notify';
 import { closeMatchThread, closeGauntletPodThreadIfDone } from './discord-threads';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
@@ -525,9 +526,13 @@ export async function writeMatchScore(
   // header for why that's correct rather than spammy.
   const runHooks = async (): Promise<void> => {
     // A scrim match (no season) is outside the league: no rating, season or bracket to update, and no
-    // Discord match thread or score announcement. Only steam-id learning applies.
+    // Discord match thread or score announcement. Steam-id learning applies, and its night's Discord
+    // message shows the final score.
     if (seasonId === null) {
-      await runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings);
+      await Promise.all([
+        runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
+        notifyScrimMatchProgress(supabaseAdmin, matchId),
+      ]);
       return;
     }
     const leagueSeasonId = seasonId;

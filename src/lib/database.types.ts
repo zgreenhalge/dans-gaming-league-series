@@ -1271,6 +1271,38 @@ export type Database = {
         }
         Relationships: []
       }
+      scrim_night_discord_state: {
+        Row: {
+          announcement_message_id: string | null
+          finalized_at: string | null
+          night_id: number
+          reminder_message_id: string | null
+          reminder_sent_at: string | null
+        }
+        Insert: {
+          announcement_message_id?: string | null
+          finalized_at?: string | null
+          night_id: number
+          reminder_message_id?: string | null
+          reminder_sent_at?: string | null
+        }
+        Update: {
+          announcement_message_id?: string | null
+          finalized_at?: string | null
+          night_id?: number
+          reminder_message_id?: string | null
+          reminder_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrim_night_discord_state_night_id_fkey"
+            columns: ["night_id"]
+            isOneToOne: true
+            referencedRelation: "scrim_nights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scrim_nights: {
         Row: {
           ended_at: string | null
@@ -1903,6 +1935,10 @@ export type Database = {
       }
       schedule_match_reminder: {
         Args: { p_match_id: number; p_scheduled_at: string }
+        Returns: boolean
+      }
+      schedule_scrim_night_reminder: {
+        Args: { p_night_id: number; p_starts_at: string }
         Returns: boolean
       }
       scrim_night_end: {

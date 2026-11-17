@@ -56,6 +56,9 @@ const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
   player_match_stats: {
     matches: { kind: 'one', fk: 'match_id', table: 'matches' },
   },
+  scrim_signups: {
+    players: { kind: 'one', fk: 'player_id', table: 'players' },
+  },
   weeks: {
     seasons: { kind: 'one', fk: 'season_id', table: 'seasons' },
     matches: { kind: 'many', fk: 'week_id', table: 'matches' },

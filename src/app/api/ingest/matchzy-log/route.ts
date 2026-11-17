@@ -20,6 +20,7 @@ import { parseMapResultEvent, putMapResult } from '@/lib/demo/mapResult';
 import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzyContact';
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
 import { notifyMatchLiveScore } from '@/lib/discord-notify';
+import { notifyScrimMatchProgress } from '@/lib/discord-scrim-notify';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { advanceJobStatus, claimJob, dispatchAndRecordFailure, matchJobKey, mirrorSubjectStatus } from '@/lib/background-jobs';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
@@ -165,7 +166,13 @@ export async function POST(req: NextRequest) {
       if (liveScore.status === 'rejected') {
         console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
       } else {
-        await notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value);
+        // A scrim match's score goes on its night's Discord message instead (a no-op for a league
+        // match); the two never both act on one match, so they run side by side.
+        const isScoreEvent = identity.event === 'going_live' || identity.event === 'round_end';
+        await Promise.all([
+          notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value),
+          liveScore.value && isScoreEvent ? notifyScrimMatchProgress(supabaseAdmin, identity.matchid) : undefined,
+        ]);
       }
     });
   }

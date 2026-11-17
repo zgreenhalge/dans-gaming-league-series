@@ -11,6 +11,8 @@ import { requireScrimSignupAccess } from '@/lib/scrim-signup-access';
 import { isScrimCheckInOpen } from '@/lib/scrim-schedule';
 import { setScrimCheckIn } from '@/lib/scrim-nights';
 import { getPlayersById } from '@/lib/queries';
+import { afterBestEffort } from '@/lib/after';
+import { syncScrimNightMessage } from '@/lib/discord-scrim-notify';
 
 async function handle(req: NextRequest, params: Promise<{ id: string }>, checkedIn: boolean) {
   const now = new Date();
@@ -24,7 +26,9 @@ async function handle(req: NextRequest, params: Promise<{ id: string }>, checked
   }
 
   try {
-    await setScrimCheckIn(getAdminClient(), access.night.id, access.targetPlayerId, checkedIn);
+    const db = getAdminClient();
+    await setScrimCheckIn(db, access.night.id, access.targetPlayerId, checkedIn);
+    afterBestEffort('syncScrimNightMessage', () => syncScrimNightMessage(db, access.night.id));
   } catch (err) {
     return internalError(err, 'Check-in failed');
   }

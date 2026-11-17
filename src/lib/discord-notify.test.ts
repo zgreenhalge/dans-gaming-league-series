@@ -1,5 +1,5 @@
 /**
- * Unit tests for discord-notify.ts's best-effort #match-notifications webhook posts (#395),
+ * Unit tests for discord-notify.ts's best-effort #announcements webhook posts (#395),
  * including the ops_errors observability retrofit — a real webhook failure must be visible in the
  * admin console's Activity feed, not just a Vercel function log — and the single-message-per-match
  * behavior: `notifyMatchReminder()`/`notifyMatchServerLive()` post with `?wait=true` and remember the

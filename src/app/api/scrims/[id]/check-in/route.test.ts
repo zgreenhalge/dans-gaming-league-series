@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -43,6 +44,7 @@ function call(handler: typeof POST, method: 'POST' | 'DELETE', id: string, body:
 }
 
 async function main() {
+  __setTestAfterMode(true); // the routes defer their Discord notifications with after()
   await test('POST: 409 before check-in opens', async () => {
     const { db, date } = installFixture(LATER);
     __setTestSession(sessionFor(PLAYER_ID));

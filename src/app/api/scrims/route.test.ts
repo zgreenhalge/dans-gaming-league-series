@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode } from '@/lib/after';
 import { createFakeSupabaseClient, FakeRpcError, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -44,6 +45,7 @@ function installFixture(extra: Partial<FakeDb> = {}): FakeDb {
 const start = (body: Record<string, unknown>) => POST(jsonRequest('http://localhost/api/scrims', 'POST', body));
 
 async function main() {
+  __setTestAfterMode(true); // the routes defer their Discord notifications with after()
   await test('a player starts a night as its first signup', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(PLAYER_ID));

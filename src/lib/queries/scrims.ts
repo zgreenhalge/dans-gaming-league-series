@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '../supabase-admin';
 import {
   hasScrimNightEnded,
@@ -28,14 +29,20 @@ export interface ScrimSignupEntry {
   checked_in_at: string | null;
 }
 
+const SCRIM_NIGHT_COLUMNS = 'id, starts_at, ended_at, last_active_at';
+type ScrimNightRow = { id: number; starts_at: string; ended_at: string | null; last_active_at: string | null };
+
+function toScrimNight(r: ScrimNightRow): ScrimNight {
+  const iso = (t: string | null) => (t ? new Date(t).toISOString() : null);
+  return { id: r.id, startsAt: new Date(r.starts_at).toISOString(), endedAt: iso(r.ended_at), lastActiveAt: iso(r.last_active_at) };
+}
+
 /** Every scrim night, in id order. */
 export const getScrimNightRows = persistentQuery('getScrimNightRows', async (): Promise<ScrimNight[]> => {
-  type Row = { id: number; starts_at: string; ended_at: string | null; last_active_at: string | null };
-  const rows = await fetchAllPages<Row>((from, to) =>
-    asPage(getAdminClient().from('scrim_nights').select('id, starts_at, ended_at, last_active_at').order('id').range(from, to)),
+  const rows = await fetchAllPages<ScrimNightRow>((from, to) =>
+    asPage(getAdminClient().from('scrim_nights').select(SCRIM_NIGHT_COLUMNS).order('id').range(from, to)),
   );
-  const iso = (t: string | null) => (t ? new Date(t).toISOString() : null);
-  return rows.map((r) => ({ id: r.id, startsAt: new Date(r.starts_at).toISOString(), endedAt: iso(r.ended_at), lastActiveAt: iso(r.last_active_at) }));
+  return rows.map(toScrimNight);
 });
 
 /** A night's signups: definite before maybe, then in signup order. A signup whose player row is
@@ -53,9 +60,70 @@ export const getScrimSignups = persistentQuery('getScrimSignups', async (nightId
     if (!player) continue;
     entries.push({ ...r, player_name: player.name, steam_avatar_url: player.steam_avatar_url });
   }
-  const rank = (c: ScrimCommitment) => (c === 'definite' ? 0 : 1);
-  return entries.sort((a, b) => rank(a.commitment) - rank(b.commitment) || a.signed_up_at.localeCompare(b.signed_up_at));
+  return entries.sort(compareScrimSignups);
 });
+
+/** Definite before maybe, then in signup order — the order every roster lists a night's signups. */
+function compareScrimSignups(a: { commitment: ScrimCommitment; signed_up_at: string }, b: { commitment: ScrimCommitment; signed_up_at: string }): number {
+  const rank = (c: ScrimCommitment) => (c === 'definite' ? 0 : 1);
+  return rank(a.commitment) - rank(b.commitment) || a.signed_up_at.localeCompare(b.signed_up_at);
+}
+
+/** One signup as a Discord notification lists it. */
+export interface ScrimDiscordSignup {
+  name: string;
+  discordNameRoleId: string | null;
+  commitment: ScrimCommitment;
+}
+
+/** A night and its signups (in `compareScrimSignups()` order), read fresh through `db` — the Discord
+ *  notifications for a night (`discord-scrim-notify.ts`) rebuild their roster from this on every
+ *  change, so they take the caller's client and never read through the data-version cache. `null`
+ *  when the night doesn't exist. A signup whose player row is missing is omitted, as in
+ *  `getScrimSignups()`. */
+export async function getScrimNightForDiscord(
+  db: SupabaseClient,
+  nightId: number,
+): Promise<{ night: ScrimNight; signups: ScrimDiscordSignup[] } | null> {
+  type SignupRow = {
+    commitment: ScrimCommitment;
+    signed_up_at: string;
+    players: { name: string; discord_name_role_id: string | null } | null;
+  };
+  const [nightRes, signupRes] = await Promise.all([
+    db.from('scrim_nights').select(SCRIM_NIGHT_COLUMNS).eq('id', nightId).maybeSingle(),
+    db.from('scrim_signups').select('commitment, signed_up_at, players(name, discord_name_role_id)').eq('night_id', nightId),
+  ]);
+  if (nightRes.error) throw nightRes.error;
+  if (signupRes.error) throw signupRes.error;
+  if (!nightRes.data) return null;
+
+  const signups = ((signupRes.data ?? []) as unknown as SignupRow[])
+    .filter((r) => r.players !== null)
+    .sort(compareScrimSignups)
+    .map((r) => ({ name: r.players!.name, discordNameRoleId: r.players!.discord_name_role_id, commitment: r.commitment }));
+  return { night: toScrimNight(nightRes.data as ScrimNightRow), signups };
+}
+
+/** A scrim match's running score, or `null` before its server has reported one (`live_match_score`).
+ *  Read through `db`, like `getScrimNightForDiscord()`. */
+export async function getScrimLiveScore(db: SupabaseClient, matchId: number): Promise<{ shirts: number; skins: number; round: number | null } | null> {
+  const { data, error } = await db.from('live_match_score').select('shirts_score, skins_score, round').eq('match_id', matchId).maybeSingle();
+  if (error) throw error;
+  const row = data as { shirts_score: number; skins_score: number; round: number | null } | null;
+  return row && { shirts: row.shirts_score, skins: row.skins_score, round: row.round };
+}
+
+/** A night's standings (`buildScrimNightLeaderboard()`) from matches already read, with the players'
+ *  names read through `db`. */
+export async function getScrimNightStandings(db: SupabaseClient, matches: ScrimMatch[]): Promise<ScrimLeaderboardRow[]> {
+  const playerIds = [...new Set(matches.flatMap((m) => m.players.map((p) => p.player_id)))];
+  if (playerIds.length === 0) return [];
+  const { data, error } = await db.from('players').select('id, name, steam_avatar_url').in('id', playerIds);
+  if (error) throw error;
+  const playersById = new Map(((data ?? []) as { id: number; name: string; steam_avatar_url: string | null }[]).map((p) => [p.id, p]));
+  return buildScrimNightLeaderboard(matches, playersById);
+}
 
 /** A night that hasn't ended, with what its signup panel shows. */
 export interface UpcomingScrimNight {
@@ -154,10 +222,11 @@ function toScrimMatch(r: ScrimMatchRow): ScrimMatch {
   };
 }
 
-/** A scrim night's matches in play order, with lineups, stat lines and server state. Not cached:
- *  server state is operational and changes without bumping `data_version`. */
-export async function getScrimNightMatches(nightId: number): Promise<ScrimMatch[]> {
-  const { data, error } = await getAdminClient().from('matches').select(SCRIM_MATCH_COLUMNS).eq('scrim_night_id', nightId).order('match_number');
+/** A scrim night's matches in play order, with lineups, stat lines and server state, read through
+ *  `db` (the Discord notifications pass their own client). Not cached: server state is operational and
+ *  changes without bumping `data_version`. */
+export async function getScrimNightMatches(nightId: number, db: SupabaseClient = getAdminClient()): Promise<ScrimMatch[]> {
+  const { data, error } = await db.from('matches').select(SCRIM_MATCH_COLUMNS).eq('scrim_night_id', nightId).order('match_number');
   if (error) throw error;
   return ((data ?? []) as unknown as ScrimMatchRow[]).map(toScrimMatch);
 }
