@@ -45,6 +45,12 @@ directions on purpose; the skill is knowing which one applies.
   merely *look* alike: `deriveRates()` is shared while each caller keeps its own summation, because
   the input shapes are genuinely different. Rule of three — extract on the third real repetition, not
   the first coincidence.
+- **Say it once.** A view or message shows each fact in one place: no date in both the title and the
+  body, no link repeating the title's link, no label restating what the heading above it says.
+  Repeated content is noise to read past and one more copy to keep in step. A summary of a list (a
+  count, a group label) is not a repeat, but one with nothing under it is noise: leave it out rather
+  than show "0 checked in". The scrim night Discord message (`buildNightMessage()`) follows
+  this; the rest of the UI should as it is touched.
 - **WYSIWYG — What You See Is What You Get.** A component renders what it's handed; it doesn't
   secretly recompute, refetch, or reorder. Reading a component's JSX should tell you what's on screen
   — derivations live in the data/util layer (see **Centralize derivations** below). Same spirit in
