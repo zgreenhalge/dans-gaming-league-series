@@ -43,7 +43,7 @@ export type Embed = {
   description: string;
   color: number;
   url: string;
-  author: { name: string };
+  author?: { name: string };
   thumbnail?: { url: string };
   fields?: EmbedField[];
 };

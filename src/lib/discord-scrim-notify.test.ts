@@ -126,7 +126,7 @@ async function captureErrors(fn: () => Promise<unknown>): Promise<unknown[][]> {
 const withWebhook = () => void (process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK);
 
 async function main() {
-  await test('notifyScrimNightScheduled: posts the announcement embed with the roster and counts, tags no one, and stores its id', async () => {
+  await test('notifyScrimNightScheduled: posts the announcement embed with the start and the roster, tags no one, and stores its id', async () => {
     withWebhook();
     const { db, client } = fixture(5 * HOUR);
     const calls = stubFetch();
@@ -136,10 +136,10 @@ async function main() {
     assert.equal(calls[0].method, 'POST');
     assert.equal(calls[0].body!.content, '', 'no mentions on the announcement');
     const embed = calls[0].body!.embeds[0];
-    assert.match(embed.description, /Scrim night scheduled/);
-    assert.doesNotMatch(embed.description, /starting/i, 'no countdown yet');
+    assert.equal(embed.title, 'Scrim night');
+    assert.match(embed.description, /^<t:\d+:F>$/, 'the start, once, and no state line yet');
     assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`));
-    assert.equal(embed.fields[0].name, 'Roster (3) · 2 definite · 1 maybe · 0 checked in');
+    assert.equal(embed.fields[0].name, 'Roster');
     assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob');
     assert.deepEqual(db.scrim_night_discord_state.map((r) => [r.night_id, r.announcement_message_id, r.reminder_message_id]), [[NIGHT_ID, 'msg-1', undefined]]);
   });
@@ -178,12 +178,11 @@ async function main() {
 
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['DELETE', `${WEBHOOK}/messages/ann`], ['POST', `${WEBHOOK}?wait=true`]], 'the announcement goes before the night message is posted; the second call finds it claimed');
     const embed = calls[1].body!.embeds[0];
-    assert.match(embed.description, /Scrim starting <t:\d+:R>!/);
-    assert.doesNotMatch(embed.description, /scheduled/);
-    assert.ok(embed.description.includes(`/scrims/${NIGHT_ID}`), 'links the night');
+    assert.match(embed.description, /^<t:\d+:F>\n⏰ Starting <t:\d+:R>!$/, 'the start once, then the countdown');
+    assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`), 'the title links the night');
     assert.ok(embed.url.endsWith(`/scrims/${NIGHT_ID}`));
     assert.equal(roster(calls[1]), '✔️ Ann\n✔️ Cy\n❔ Bob', 'definite ✔️, maybe ❔');
-    assert.equal(calls[1].body!.content, 'Definite: <@&111> **Cy**\nMaybe: **Bob**');
+    assert.equal(calls[1].body!.content, '<@&111> **Cy** **Bob**', 'the roster tagged, without repeating the labels');
     const row = db.scrim_night_discord_state[0];
     assert.deepEqual([row.reminder_message_id, row.announcement_message_id], ['msg-1', null]);
     assert.ok(row.reminder_sent_at);
@@ -225,11 +224,11 @@ async function main() {
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['PATCH', `${WEBHOOK}/messages/ann`]]);
     assert.equal(calls[0].body!.content, '', 'still no mentions');
-    assert.match(calls[0].body!.embeds[0].description, /Scrim night scheduled/);
+    assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob');
 
     db.scrim_signups.push(signup(4, 'maybe'));
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.equal(calls[1].body!.embeds[0].fields[0].name, 'Roster (4) · 2 definite · 2 maybe · 0 checked in');
+    assert.equal(roster(calls[1]), '✔️ Ann\n✔️ Cy\n❔ Bob\n❔ Di');
   });
 
   await test('syncScrimNightMessage: does nothing before the night message is due when no announcement is on record', async () => {
@@ -364,17 +363,15 @@ async function main() {
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id ?? null, null);
   });
 
-  await test('the roster marks who has checked in with ✅ and counts them, 0 included', async () => {
+  await test('the roster marks who has checked in with ✅', async () => {
     withWebhook();
     const { db, client } = fixture(40 * MIN, { scrim_night_discord_state: [state({ reminder_message_id: 'night', reminder_sent_at: '2026-01-01T00:00:00Z' })] });
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.ok(calls[0].body!.embeds[0].fields[0].name.endsWith('· 0 checked in'));
     assert.equal(roster(calls[0]), '✔️ Ann\n✔️ Cy\n❔ Bob', 'no ✅ before anyone checks in');
 
     db.scrim_signups[2].checked_in_at = '2026-01-01T01:00:00Z';
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.ok(calls[1].body!.embeds[0].fields[0].name.endsWith('· 1 checked in'));
     assert.equal(roster(calls[1]), '✔️ Ann\n✅ Cy\n❔ Bob');
   });
 
@@ -405,7 +402,7 @@ async function main() {
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['PATCH', `${WEBHOOK}/messages/ann`]]);
-    assert.match(calls[0].body!.embeds[0].description, /Scrim night over/);
+    assert.match(calls[0].body!.embeds[0].description, /🏁 Over/);
   });
 
   await test('an announcement deleted from the channel is forgotten without an error, and not edited again', async () => {
@@ -475,7 +472,7 @@ async function main() {
     assert.match(standings, /W-L/);
     assert.match(standings, / 1 {2}(Ann|Cy) +1-0/);
     assert.match(standings, / 3 {2}(Bob|Di) +0-1/);
-    assert.match(calls[0].body!.embeds[0].description, /Scrim night over/);
+    assert.match(calls[0].body!.embeds[0].description, /🏁 Over/);
     assert.ok(db.scrim_night_discord_state[0].finalized_at);
   });
 
