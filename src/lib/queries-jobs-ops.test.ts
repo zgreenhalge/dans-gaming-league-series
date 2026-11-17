@@ -52,6 +52,23 @@ async function main() {
     matchesSnapshot('getOpsErrors', errors);
   });
 
+  await test('getOpsErrors() — a scrim night row is labeled by its start date, or by id once the night is gone', async () => {
+    const db = buildFakeDb();
+    db.scrim_nights = [{ id: 7, starts_at: '2026-01-20T01:00:00Z' }];
+    db.ops_errors.push(
+      { id: 901, entity_type: 'scrim_night', entity_id: 7, operation: 'scrim_announce', message: 'x', occurred_at: '2026-01-21T00:00:00Z', dismissed_at: null },
+      { id: 902, entity_type: 'scrim_night', entity_id: 8, operation: 'scrim_announce', message: 'y', occurred_at: '2026-01-21T00:00:00Z', dismissed_at: null },
+    );
+    __setTestAdminClient(createFakeSupabaseClient(db));
+    try {
+      const labels = new Map((await getOpsErrors()).filter((e) => e.entityType === 'scrim_night').map((e) => [e.entityId, e.label]));
+      assert.equal(labels.get(7), 'Scrim night 2026-01-20');
+      assert.equal(labels.get(8), 'Scrim night #8');
+    } finally {
+      __setTestAdminClient(fakeClient);
+    }
+  });
+
   report();
 }
 
