@@ -10,7 +10,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { clientThrowingOn, createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { scrimNightStartingIn } from './test-support/scrimFixtures';
 import { test, report } from './test-support/miniTest';
 import {
@@ -87,6 +88,41 @@ function underway(extra: Partial<FakeDb> = {}) {
 
 const roster = (call: FetchCall) => call.body!.embeds[0].fields.find((f) => f.name.startsWith('Roster'))!.value;
 const matchField = (call: FetchCall) => call.body!.embeds[0].fields.find((f) => f.name.startsWith('Match'));
+/** `client` where recording a message id on the night's state row fails, as the foreign key does once
+ *  the night has been removed. */
+function failingIdStore(client: SupabaseClient): SupabaseClient {
+  return new Proxy(client, {
+    get(target, prop) {
+      if (prop !== 'from') return Reflect.get(target, prop);
+      return (table: string) => {
+        const builder = target.from(table);
+        if (table !== 'scrim_night_discord_state') return builder;
+        return new Proxy(builder, {
+          get(b, p) {
+            const member = Reflect.get(b, p);
+            if (p !== 'upsert') return typeof member === 'function' ? member.bind(b) : member;
+            return (row: Row, opts: unknown) => {
+              if ('reminder_message_id' in row || row.announcement_message_id) throw new Error('foreign key violation');
+              return (member as (row: Row, opts: unknown) => unknown).call(b, row, opts);
+            };
+          },
+        });
+      };
+    },
+  });
+}
+/** Runs `fn` with console.error captured instead of printed, and returns what was logged. */
+async function captureErrors(fn: () => Promise<unknown>): Promise<unknown[][]> {
+  const logged: unknown[][] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => void logged.push(args);
+  try {
+    await fn();
+  } finally {
+    console.error = realError;
+  }
+  return logged;
+}
 const withWebhook = () => void (process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = WEBHOOK);
 
 async function main() {
@@ -278,26 +314,21 @@ async function main() {
   await test('a failed night-message post gives the claim back, so the next sync posts it', async () => {
     withWebhook();
     const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
-    const logged: unknown[][] = [];
-    const realError = console.error;
-    console.error = (...args: unknown[]) => void logged.push(args);
-    try {
-      // The announcement's delete succeeds; the night message's post fails.
-      (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url: string, init?: RequestInit) => {
-        const ok = init?.method === 'DELETE';
-        return { ok, status: ok ? 204 : 500, json: async () => ({}) } as unknown as Response;
-      }) as typeof fetch;
-      await notifyScrimNightReminder(client, NIGHT_ID);
-    } finally {
-      console.error = realError;
-    }
+    const logged = await captureErrors(async () => {
+    // The announcement's delete succeeds; the night message's post fails.
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url: string, init?: RequestInit) => {
+      const ok = init?.method === 'DELETE';
+      return { ok, status: ok ? 204 : 500, json: async () => ({}) } as unknown as Response;
+    }) as typeof fetch;
+    await notifyScrimNightReminder(client, NIGHT_ID);
+    });
     assert.equal(logged.length, 1);
     assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null, 'claim released');
-    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, null, 'the announcement is gone');
 
     const calls = stubFetch();
     await syncScrimNightMessage(client, NIGHT_ID);
-    assert.deepEqual(calls.map((c) => c.method), ['POST'], 'the announcement was already deleted');
+    assert.deepEqual(calls.map((c) => c.method), ['DELETE', 'POST'], 'the announcement id was still on record, and deleting it again is harmless');
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, null, 'cleared once the night message is stored');
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'msg-1');
   });
 
@@ -305,13 +336,9 @@ async function main() {
     withWebhook();
     const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
     const calls = stubFetch(500);
-    const realError = console.error;
-    console.error = () => {};
-    try {
-      await notifyScrimNightReminder(client, NIGHT_ID);
-    } finally {
-      console.error = realError;
-    }
+    await captureErrors(async () => {
+    await notifyScrimNightReminder(client, NIGHT_ID);
+    });
     assert.deepEqual(calls.map((c) => c.method), ['DELETE'], 'no night message while the announcement is up');
     assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null, 'claim released');
     assert.equal(db.scrim_night_discord_state[0].announcement_message_id, 'ann');
@@ -329,13 +356,9 @@ async function main() {
       calls.push(init?.method ?? 'GET');
       return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
     }) as typeof fetch;
-    const realError = console.error;
-    console.error = () => {};
-    try {
-      await notifyScrimNightReminder(client, NIGHT_ID);
-    } finally {
-      console.error = realError;
-    }
+    await captureErrors(async () => {
+    await notifyScrimNightReminder(client, NIGHT_ID);
+    });
     assert.deepEqual(calls, ['DELETE', 'POST']);
     assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null);
     assert.equal(db.scrim_night_discord_state[0].reminder_message_id ?? null, null);
@@ -359,28 +382,21 @@ async function main() {
     withWebhook();
     const { client } = fixture(5 * HOUR);
     const calls = stubFetch();
-    const realError = console.error;
-    console.error = () => {};
-    try {
-      // Storing the id fails, as the foreign key does once the night is gone.
-      await notifyScrimNightScheduled(clientThrowingOn(client, 'scrim_night_discord_state'), NIGHT_ID);
-    } finally {
-      console.error = realError;
-    }
+    await captureErrors(async () => {
+    // Storing the id fails, as the foreign key does once the night is gone.
+    await notifyScrimNightScheduled(failingIdStore(client), NIGHT_ID);
+    });
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['POST', `${WEBHOOK}?wait=true`], ['DELETE', `${WEBHOOK}/messages/msg-1`]]);
   });
 
   await test('a night message whose night is removed while it posts is deleted again', async () => {
     withWebhook();
-    const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state()] });
-    const calls: string[] = [];
-    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
-      calls.push(`${init?.method} ${url}`);
-      if (init?.method === 'POST') db.scrim_night_discord_state = []; // the night's last player drops out mid-post
-      return { ok: true, status: 200, json: async () => ({ id: 'night-msg' }) } as unknown as Response;
-    }) as typeof fetch;
-    await notifyScrimNightReminder(client, NIGHT_ID);
-    assert.deepEqual(calls, [`POST ${WEBHOOK}?wait=true`, `DELETE ${WEBHOOK}/messages/night-msg`]);
+    const { client } = fixture(55 * MIN, { scrim_night_discord_state: [state()] });
+    const calls = stubFetch();
+    await captureErrors(async () => {
+    await notifyScrimNightReminder(failingIdStore(client), NIGHT_ID);
+    });
+    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['POST', `${WEBHOOK}?wait=true`], ['DELETE', `${WEBHOOK}/messages/msg-1`]]);
   });
 
   await test('a long roster is cut to Discord\'s field limit with a "+N more" tail, and the content to its own', async () => {
@@ -451,15 +467,10 @@ async function main() {
     await syncScrimNightMessage(underway().client, 999);
     assert.equal(calls.length, 0);
 
-    const logged: unknown[][] = [];
-    const realError = console.error;
-    console.error = (...args: unknown[]) => void logged.push(args);
-    try {
-      stubFetch(404);
-      await syncScrimNightMessage(underway().client, NIGHT_ID);
-    } finally {
-      console.error = realError;
-    }
+    const logged = await captureErrors(async () => {
+    stubFetch(404);
+    await syncScrimNightMessage(underway().client, NIGHT_ID);
+    });
     assert.equal(logged.length, 1, 'logged, and no replacement posted');
   });
 
@@ -478,14 +489,9 @@ async function main() {
     withWebhook();
     const { db, client } = fixture(5 * HOUR);
     stubFetch(500);
-    const logged: unknown[][] = [];
-    const realError = console.error;
-    console.error = (...args: unknown[]) => void logged.push(args);
-    try {
-      await notifyScrimNightScheduled(client, NIGHT_ID);
-    } finally {
-      console.error = realError;
-    }
+    const logged = await captureErrors(async () => {
+    await notifyScrimNightScheduled(client, NIGHT_ID);
+    });
     assert.equal(logged.length, 1);
     assert.equal(db.scrim_night_discord_state.length, 0);
   });
@@ -496,14 +502,9 @@ async function main() {
     const ids = await getScrimNightMessageIds(client, NIGHT_ID);
     assert.deepEqual(ids, ['ann', 'night']);
     const calls = stubFetch(404);
-    const logged: unknown[][] = [];
-    const realError = console.error;
-    console.error = (...args: unknown[]) => void logged.push(args);
-    try {
-      await deleteScrimNightMessages(NIGHT_ID, ids);
-    } finally {
-      console.error = realError;
-    }
+    const logged = await captureErrors(async () => {
+    await deleteScrimNightMessages(NIGHT_ID, ids);
+    });
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['DELETE', `${WEBHOOK}/messages/ann`], ['DELETE', `${WEBHOOK}/messages/night`]]);
     assert.equal(logged.length, 0);
     assert.deepEqual(await getScrimNightMessageIds(fixture(HOUR).client, NIGHT_ID), []);
@@ -518,14 +519,9 @@ async function main() {
     assert.deepEqual(args, [{ p_night_id: NIGHT_ID, p_starts_at: '2026-12-01T01:00:00.000Z' }]);
 
     const refused = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => false });
-    const logged: unknown[][] = [];
-    const realError = console.error;
-    console.error = (...a: unknown[]) => void logged.push(a);
-    try {
-      await scheduleScrimNightReminder(refused, NIGHT_ID, '2026-12-01T01:00:00.000Z');
-    } finally {
-      console.error = realError;
-    }
+    const logged = await captureErrors(async () => {
+    await scheduleScrimNightReminder(refused, NIGHT_ID, '2026-12-01T01:00:00.000Z');
+    });
     assert.equal(logged.length, 1);
   });
 

@@ -28,8 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const nightId = parseRouteId((await params).id);
   const night = nightId === null ? null : await getScrimNightById(nightId);
   if (!night) return { title: 'Scrims' };
-  // A link preview is read wherever it's shared, and long after it was posted, so it names the start
-  // in the league timezone and carries nothing that changes (no signup counts).
+  // A link preview is read wherever it's shared, so it names the start in the league timezone.
   const title = `Scrims · ${formatLeagueDate(night.startsAt)}`;
   const description = `${formatLeagueDateTime(night.startsAt)}\nSign up, check in and see the night's results on DGLS.`;
   const previewTitle = 'DGLS · Scrim night';
