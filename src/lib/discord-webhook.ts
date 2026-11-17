@@ -48,8 +48,9 @@ export type Embed = {
   fields?: EmbedField[];
 };
 
-/** The outcome of a webhook call: `error` is a ready-to-record message. */
-export type WebhookResult<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string };
+/** The outcome of a webhook call: `error` is a ready-to-record message, and `status` the HTTP status
+ *  of a refusal where the caller needs to tell 404 (the message is gone) from the rest. */
+export type WebhookResult<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string; status?: number };
 
 /** A player's name-color role mention (`<@&roleId>`) when they have one, else their plain name
  *  bolded — the same "tag if linked, else plain name" fallback `discord-threads.ts`'s `openingPost()`
@@ -98,7 +99,7 @@ export async function editWebhookEmbed(
       body: JSON.stringify({ content, embeds: [embed] }),
       signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
-    if (!res.ok) return { ok: false, error: await discordErrorDetail('Webhook edit', res) };
+    if (!res.ok) return { ok: false, error: await discordErrorDetail('Webhook edit', res), status: res.status };
     return { ok: true };
   } catch (e) {
     return { ok: false, error: `Webhook edit failed: ${(e as Error).message}` };

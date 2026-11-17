@@ -391,12 +391,41 @@ async function main() {
 
   await test('a night message whose night is removed while it posts is deleted again', async () => {
     withWebhook();
-    const { client } = fixture(55 * MIN, { scrim_night_discord_state: [state()] });
+    const { db, client } = fixture(55 * MIN, { scrim_night_discord_state: [state()] });
     const calls = stubFetch();
-    await captureErrors(async () => {
-    await notifyScrimNightReminder(failingIdStore(client), NIGHT_ID);
-    });
+    await captureErrors(() => notifyScrimNightReminder(failingIdStore(client), NIGHT_ID));
     assert.deepEqual(calls.map((c) => [c.method, c.url]), [['POST', `${WEBHOOK}?wait=true`], ['DELETE', `${WEBHOOK}/messages/msg-1`]]);
+    assert.equal(db.scrim_night_discord_state[0].reminder_sent_at, null, 'the claim is given back, so a retry posts it fresh');
+  });
+
+  await test('an ended night with only its announcement has the announcement edited to over', async () => {
+    withWebhook();
+    const { db, client } = fixture(-HOUR, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
+    db.scrim_nights[0].ended_at = new Date().toISOString();
+    const calls = stubFetch();
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.deepEqual(calls.map((c) => [c.method, c.url]), [['PATCH', `${WEBHOOK}/messages/ann`]]);
+    assert.match(calls[0].body!.embeds[0].description, /Scrim night over/);
+  });
+
+  await test('an announcement deleted from the channel is forgotten without an error, and not edited again', async () => {
+    withWebhook();
+    const { db, client } = fixture(5 * HOUR, { scrim_night_discord_state: [state({ announcement_message_id: 'ann' })] });
+    const calls = stubFetch(404);
+    const logged = await captureErrors(() => syncScrimNightMessage(client, NIGHT_ID));
+    assert.equal(logged.length, 0);
+    assert.equal(db.scrim_night_discord_state[0].announcement_message_id, null);
+    await syncScrimNightMessage(client, NIGHT_ID);
+    assert.equal(calls.length, 1, 'no further edits');
+  });
+
+  await test('a night message deleted from the channel is logged and left alone', async () => {
+    withWebhook();
+    const { db, client } = underway();
+    stubFetch(404);
+    const logged = await captureErrors(() => syncScrimNightMessage(client, NIGHT_ID));
+    assert.equal(logged.length, 1);
+    assert.equal(db.scrim_night_discord_state[0].reminder_message_id, 'night', 'no re-post');
   });
 
   await test('a long roster is cut to Discord\'s field limit with a "+N more" tail, and the content to its own', async () => {

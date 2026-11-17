@@ -215,11 +215,14 @@ async function postMessage(url: string, data: NightMessageData, now: Date): Prom
   return result.id;
 }
 
-/** Edits a posted message to the night's current state. Throws when Discord refuses the edit. */
-async function editMessage(url: string, messageId: string, data: NightMessageData, now: Date): Promise<void> {
+/** Edits a posted message to the night's current state. Returns `false` when the message no longer
+ *  exists (deleted from the channel); throws when Discord refuses the edit for any other reason. */
+async function editMessage(url: string, messageId: string, data: NightMessageData, now: Date): Promise<boolean> {
   const message = buildNightMessage(data, now);
   const result = await editWebhookEmbed(url, messageId, message.content, message.embed);
-  if (!result.ok) throw new Error(result.error);
+  if (result.ok) return true;
+  if (result.status === 404) return false;
+  throw new Error(result.error);
 }
 
 async function getState(db: SupabaseClient, nightId: number): Promise<DiscordState | null> {
@@ -232,10 +235,10 @@ async function getState(db: SupabaseClient, nightId: number): Promise<DiscordSta
   return data;
 }
 
-/** Records a just-posted message's id on the night's state row. The row's foreign key to the night
- *  refuses the write once the night is gone (its last player dropped out while the message was posting,
- *  before its id was on record to delete), and the message is then taken down rather than left in the
- *  channel for a night that no longer exists. */
+/** Records a just-posted message's id on the night's state row. If that fails — the row's foreign key
+ *  to the night refuses the write once the night is gone (its last player dropped out while the message
+ *  was posting, before its id was on record to delete), or the database errored — the message is taken
+ *  down rather than left in the channel untracked, and the caller's retry posts it fresh. */
 async function storeMessageIds(
   db: SupabaseClient,
   url: string,
@@ -262,7 +265,7 @@ async function postAnnouncement(db: SupabaseClient, url: string, data: NightMess
  *  If the delete or the post fails, the claim is given back so the next `syncScrimNightMessage()` tries
  *  again; an unreleased claim would leave the night with no message for good. The announcement goes
  *  first so the channel never shows both; its id stays on record until the night message's is stored,
- *  and deleting it again is harmless. */
+ *  and deleting it again is harmless. Failing to store the new message's id gives the claim back too. */
 async function postNightMessage(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
   const nightId = data.night.id;
   const table = () => db.from('scrim_night_discord_state');
@@ -277,19 +280,18 @@ async function postNightMessage(db: SupabaseClient, url: string, data: NightMess
     .throwOnError();
   if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
 
-  let messageId: string;
   try {
     const announcementId = claimed[0].announcement_message_id;
     if (announcementId) {
       const deleted = await deleteWebhookMessage(url, announcementId);
       if (!deleted.ok) throw new Error(deleted.error);
     }
-    messageId = await postMessage(url, data, now);
+    const messageId = await postMessage(url, data, now);
+    await storeMessageIds(db, url, nightId, { reminder_message_id: messageId, announcement_message_id: null }, messageId);
   } catch (e) {
     await table().update({ reminder_sent_at: null }).eq('night_id', nightId).throwOnError();
     throw e;
   }
-  await storeMessageIds(db, url, nightId, { reminder_message_id: messageId, announcement_message_id: null }, messageId);
 }
 
 /** Announces a night that has just been scheduled. A night starting within the hour skips the
@@ -327,8 +329,8 @@ export async function notifyScrimNightReminder(db: SupabaseClient, nightId: numb
 /** Rebuilds the night's message and edits it in place: the announcement's roster until the night
  *  message is due (then it posts that, replacing the announcement), the night message after. An ended
  *  night is edited to its final standings once (`finalized_at`), and a reopened one back to its match.
- *  A message that can't be edited (deleted from the channel) is left alone and logged, since a re-post
- *  would ping everyone again. Call after anything that changes it. */
+ *  A night message that can't be edited (deleted from the channel) is logged and left alone, since a
+ *  re-post would ping everyone again. Call after anything that changes it. */
 export async function syncScrimNightMessage(db: SupabaseClient, nightId: number): Promise<void> {
   const url = matchNotificationsWebhookUrl();
   if (!url) return;
@@ -340,14 +342,18 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
 
     const messageId = state?.reminder_message_id ?? null;
     if (!messageId) {
-      if (ended) return;
-      if (isReminderDue(data.night, now)) return postNightMessage(db, url, data, now);
-      if (state?.announcement_message_id) await editMessage(url, state.announcement_message_id, data, now);
+      if (!ended && isReminderDue(data.night, now)) return postNightMessage(db, url, data, now);
+      // Only the announcement exists: keep its roster current, or show an ended night as over. One
+      // deleted from the channel is forgotten rather than failing every sync until the night message.
+      const announcementId = state?.announcement_message_id;
+      if (announcementId && !(await editMessage(url, announcementId, data, now))) {
+        await db.from('scrim_night_discord_state').update({ announcement_message_id: null }).eq('night_id', nightId).throwOnError();
+      }
       return;
     }
     if (ended && state?.finalized_at) return;
 
-    await editMessage(url, messageId, data, now);
+    if (!(await editMessage(url, messageId, data, now))) throw new Error('The night message no longer exists in the channel');
     if (ended || state?.finalized_at) {
       await db
         .from('scrim_night_discord_state')
