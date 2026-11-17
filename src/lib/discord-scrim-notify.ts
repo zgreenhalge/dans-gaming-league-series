@@ -11,12 +11,11 @@
 //      `scheduleScrimNightReminder()` queues (a night scheduled less than an hour out gets it straight
 //      away). The announcement is deleted first, so the channel never shows both. It is then edited in
 //      place by `syncScrimNightMessage()`.
-// Both show the start and the roster (✅ checked in, ✔️ Definite, ❔ Maybe) under a heading of its counts. The night message adds the
-// countdown and tags the roster, and shows the latest started match's running or final score until the
-// next match's server starts, and the final standings once the night has been ended. A night that goes
-// idle ends on the clock with no write to react to, so its message keeps its last state until the next
-// sync.
-// A new post is what pings people; an edit does not.
+// Both show the start and the roster (✅ checked in, ✔️ Definite, ❔ Maybe) under a heading of its
+// counts. The night message adds the countdown and tags the roster, and shows the latest started
+// match's running or final score until the next match's server starts, and the final standings once
+// the night has been ended. A night that goes idle ends on the clock with no write to react to, so its
+// message keeps its last state until the next sync. A new post is what pings people; an edit does not.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -166,8 +165,8 @@ function tagLines(signups: ScrimDiscordSignup[]): string[] {
  *  has no label, so the heading never says "0 checked in". */
 function rosterHeading(signups: ScrimDiscordSignup[]): string {
   const { definite, maybe } = signupCounts(signups);
-  const labels = [`${definite} definite`, `${maybe} maybe`, `${signups.filter((s) => s.checkedIn).length} checked in`].filter((l) => !l.startsWith('0 '));
-  return [`Roster (${signups.length})`, ...labels].join(' · ');
+  const counts: [number, string][] = [[definite, 'definite'], [maybe, 'maybe'], [signups.filter((s) => s.checkedIn).length, 'checked in']];
+  return [`Roster (${signups.length})`, ...counts.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`)].join(' · ');
 }
 
 /** The message for a night: its start (once), the roster with each player's emoji, and the latest

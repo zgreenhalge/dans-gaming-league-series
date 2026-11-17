@@ -49,7 +49,7 @@ directions on purpose; the skill is knowing which one applies.
   body, no link repeating the title's link, no label restating what the heading above it says.
   Repeated content is noise to read past and one more copy to keep in step. A summary of a list (a
   count, a group label) is not a repeat, but one with nothing under it is noise: leave it out rather
-  than show "0 checked in". The Discord notifications in `src/lib/discord-scrim-notify.ts` follow
+  than show "0 checked in". The scrim night Discord message (`buildNightMessage()`) follows
   this; the rest of the UI should as it is touched.
 - **WYSIWYG — What You See Is What You Get.** A component renders what it's handed; it doesn't
   secretly recompute, refetch, or reorder. Reading a component's JSX should tell you what's on screen
