@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { effectiveSkinsStartingSide, isVetoComplete, isVetoWindowOpen, vetoWindowOpensAt, VETO_WINDOW_LEAD_MS, type VetoFields } from './veto';
+import { effectiveSkinsStartingSide, gauntletAutoPick, isVetoComplete, isVetoWindowOpen, vetoWindowOpensAt, VETO_WINDOW_LEAD_MS, type VetoFields } from './veto';
 import { test, report } from './test-support/miniTest';
 
 const full: VetoFields = {
@@ -94,6 +94,20 @@ test('isVetoWindowOpen: opens exactly at vetoWindowOpensAt(), VETO_WINDOW_LEAD_M
   assert.equal(isVetoWindowOpen(scheduledAt, opensAt - 1), false);
   assert.equal(isVetoWindowOpen(scheduledAt, opensAt), true);
   assert.equal(isVetoWindowOpen(null, opensAt), false);
+});
+
+const POOL = ['Palais', 'Nuke', 'Vertigo', 'Ascent', 'Train Yard'];
+
+test('gauntletAutoPick: the one map left after 4 bans', () => {
+  assert.equal(gauntletAutoPick({ ...full, shirts_pick: null }, POOL), 'Train Yard');
+});
+
+test('gauntletAutoPick: null while a ban is missing', () => {
+  assert.equal(gauntletAutoPick({ ...full, shirts_pick: null, skins_ban2: null }, POOL), null);
+});
+
+test('gauntletAutoPick: null when the bans leave more than one map', () => {
+  assert.equal(gauntletAutoPick({ ...full, shirts_pick: null }, [...POOL, 'Inferno']), null);
 });
 
 report();

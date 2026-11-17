@@ -16,13 +16,28 @@ export interface VetoFields {
   skins_starting_side: string | null;
 }
 
+/** Every pick/ban field on a match, in the order `VetoFields` declares them. */
+export const VETO_FIELDS = ['shirts_ban', 'shirts_ban2', 'skins_ban1', 'skins_ban2', 'shirts_pick', 'skins_starting_side'] as const;
+
+/** The four ban fields of a gauntlet match (two per faction). */
+export const GAUNTLET_BAN_FIELDS = ['shirts_ban', 'shirts_ban2', 'skins_ban1', 'skins_ban2'] as const;
+
+/** The map a gauntlet match plays: the one map left in `mapPool` once all four bans are set, or `null`
+ *  while a ban is missing or the bans leave more or fewer than one map. */
+export function gauntletAutoPick(m: VetoFields, mapPool: string[]): string | null {
+  const bans = GAUNTLET_BAN_FIELDS.map((f) => m[f]).filter((v): v is string => v !== null);
+  if (bans.length !== GAUNTLET_BAN_FIELDS.length) return null;
+  const remaining = mapPool.filter((map) => !bans.includes(map));
+  return remaining.length === 1 ? remaining[0] : null;
+}
+
 /**
  * Whether the pick/ban is fully resolved. Gauntlet matches need the 4 bans (the final map is
  * auto-picked); regular matches also need the pick and the starting side.
  */
 export function isVetoComplete(m: VetoFields, isGauntlet: boolean): boolean {
   return isGauntlet
-    ? !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2)
+    ? GAUNTLET_BAN_FIELDS.every((f) => !!m[f])
     : !!(m.shirts_ban && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
 }
 
