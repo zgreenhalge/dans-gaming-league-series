@@ -59,6 +59,7 @@ import { getPlayersBySteamId } from './queries/player';
 import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL, matchUrl } from './seo/site';
+import { claimReminderSent } from './discord-claim';
 import { REMINDER_WINDOW_MS, matchNotificationsWebhookUrl, playerTag, postWebhookEmbed, editWebhookEmbed, type Embed, type EmbedField } from './discord-webhook';
 import { formatDuration, deriveAdr } from './util';
 import type { Player } from './types';
@@ -428,28 +429,16 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   const msUntilMatch = new Date(meta.scheduledAtRaw).getTime() - Date.now();
   if (msUntilMatch <= 0 || msUntilMatch > REMINDER_WINDOW_MS) return; // Rescheduled away from this job's target time.
 
-  // schedule_match_reminder() always upserts a match_discord_state row before this ever fires, but
-  // this doesn't rely on that invariant holding across the DB/app boundary — ON CONFLICT DO NOTHING
-  // first guarantees a row to claim, without ever clobbering an already-set reminder_sent_at.
-  const { error: seedErr } = await supabaseAdmin
-    .from('match_discord_state')
-    .upsert({ match_id: matchId, reminder_sent_at: null }, { onConflict: 'match_id', ignoreDuplicates: true });
-  if (seedErr) {
-    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_REMINDER, `Failed to seed match_discord_state: ${seedErr.message}`);
+  // `claimReminderSent()` seeds a state row if there is none, so this doesn't rely on
+  // schedule_match_reminder() having upserted one before this fires.
+  let claimed: Record<string, never> | null;
+  try {
+    claimed = await claimReminderSent(supabaseAdmin, { table: 'match_discord_state', keyColumn: 'match_id', id: matchId }, new Date());
+  } catch (e) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_REMINDER, `Failed to claim reminder: ${(e as Error).message}`);
     return;
   }
-
-  const { data: claimed, error: claimErr } = await supabaseAdmin
-    .from('match_discord_state')
-    .update({ reminder_sent_at: new Date().toISOString() })
-    .eq('match_id', matchId)
-    .is('reminder_sent_at', null)
-    .select('match_id');
-  if (claimErr) {
-    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_REMINDER, `Failed to claim reminder: ${claimErr.message}`);
-    return;
-  }
-  if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
+  if (!claimed) return; // Already sent, or lost the race to a concurrent call.
 
   const { content, embed } = buildMatchMessage(matchId, meta, {
     statusLine: `⏰ **Starting in ${formatDuration(msUntilMatch)}**${meta.scheduledAt ? `\n${meta.scheduledAt}` : ''}`,
