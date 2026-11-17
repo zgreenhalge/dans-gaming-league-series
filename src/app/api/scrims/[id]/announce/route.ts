@@ -19,7 +19,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const result = await postScrimNightMessage(getAdminClient(), nightId);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.error === 'Night not found' ? 404 : 502 });
+    return NextResponse.json({ error: result.error }, { status: result.notFound ? 404 : 502 });
   }
   return NextResponse.json({ ok: true, posted: result.posted });
 }

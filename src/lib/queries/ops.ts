@@ -294,7 +294,7 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
         return playerName.get(r.entity_id) ?? `Player #${r.entity_id}`;
       case 'scrim_night': {
         const startsAt = nightStart.get(r.entity_id);
-        return startsAt ? `Scrim night ${startsAt.slice(0, 10)}` : `Scrim night #${r.entity_id}`;
+        return startsAt ? `Scrim night #${r.entity_id} · ${startsAt.slice(0, 10)}` : `Scrim night #${r.entity_id}`;
       }
       case 'system':
         return 'EHOG Recompute';

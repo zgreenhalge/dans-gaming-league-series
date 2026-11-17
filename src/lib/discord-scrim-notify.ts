@@ -283,6 +283,10 @@ async function resetState(db: SupabaseClient, nightId: number): Promise<void> {
   await db.from('scrim_night_discord_state').upsert(cleared, { onConflict: 'night_id' }).throwOnError();
 }
 
+/** `postNightMessage()` under its `ops_errors` operation. */
+const postNightMessageTracked = (db: SupabaseClient, url: string, data: NightMessageData, now: Date) =>
+  tracked(db, data.night.id, OPERATION_NIGHT_MESSAGE, () => postNightMessage(db, url, data, now));
+
 /** Posts the announcement. */
 async function postAnnouncement(db: SupabaseClient, url: string, data: NightMessageData, now: Date): Promise<void> {
   const messageId = await postMessage(url, data, now);
@@ -332,7 +336,7 @@ export async function notifyScrimNightScheduled(db: SupabaseClient, nightId: num
     const now = new Date();
     const data = await loadMessageData(db, nightId, now);
     if (!data || hasScrimNightEnded(data.night, now)) return;
-    if (isReminderDue(data.night, now)) await tracked(db, nightId, OPERATION_NIGHT_MESSAGE, () => postNightMessage(db, url, data, now));
+    if (isReminderDue(data.night, now)) await postNightMessageTracked(db, url, data, now);
     else await tracked(db, nightId, OPERATION_ANNOUNCE, () => postAnnouncement(db, url, data, now));
   });
 }
@@ -351,7 +355,7 @@ export async function notifyScrimNightReminder(db: SupabaseClient, nightId: numb
     if (!data) return;
     const msUntilStart = Date.parse(data.night.startsAt) - now.getTime();
     if (hasScrimNightEnded(data.night, now) || msUntilStart <= 0 || msUntilStart > REMINDER_WINDOW_MS) return;
-    await tracked(db, nightId, OPERATION_NIGHT_MESSAGE, () => postNightMessage(db, url, data, now));
+    await postNightMessageTracked(db, url, data, now);
   });
 }
 
@@ -371,7 +375,7 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
 
     const messageId = state?.reminder_message_id ?? null;
     if (!messageId) {
-      if (!ended && isReminderDue(data.night, now)) return tracked(db, nightId, OPERATION_NIGHT_MESSAGE, () => postNightMessage(db, url, data, now));
+      if (!ended && isReminderDue(data.night, now)) return postNightMessageTracked(db, url, data, now);
       // Only the announcement exists: keep its roster current, or show an ended night as over. One
       // deleted from the channel is forgotten rather than failing every sync until the night message.
       const announcementId = state?.announcement_message_id;
@@ -421,13 +425,15 @@ export async function scheduleScrimNightReminder(db: SupabaseClient, nightId: nu
 }
 
 /** What `postScrimNightMessage()` posted, or why it could not. */
-export type ScrimPostResult = { ok: true; posted: 'announcement' | 'night message' } | { ok: false; error: string };
+export type ScrimPostResult =
+  | { ok: true; posted: 'announcement' | 'night message' }
+  | { ok: false; error: string; notFound?: true };
 
 /** Posts the night's Discord message by hand (an admin's "Post announcement"): the announcement, or
  *  the night message once the night is due one (`isReminderDue()`). Any message on record is deleted
  *  first and the new id stored in its place, so it covers a night whose post failed, whose message was
  *  deleted from the channel, or that holds a duplicate. It also gives back a stuck `reminder_sent_at`
- *  claim, and re-queues the reminder job after an announcement (`scheduleScrimNightReminder()`).
+ *  claim, and re-queues the reminder job (`scheduleScrimNightReminder()`).
  *  Never throws: a failure is returned for the admin and recorded like any other post. */
 export async function postScrimNightMessage(db: SupabaseClient, nightId: number): Promise<ScrimPostResult> {
   const url = matchNotificationsWebhookUrl();
@@ -435,7 +441,10 @@ export async function postScrimNightMessage(db: SupabaseClient, nightId: number)
   try {
     const now = new Date();
     const data = await loadMessageData(db, nightId, now);
-    if (!data) return { ok: false, error: 'Night not found' };
+    if (!data) return { ok: false, error: 'Night not found', notFound: true };
+    // Re-queued whatever the night's state, so a retry of a failed schedule clears its row; a start
+    // already within the hour (or past) queues nothing and succeeds.
+    await scheduleScrimNightReminder(db, nightId, data.night.startsAt);
     if (hasScrimNightEnded(data.night, now)) return { ok: false, error: 'The night is over' };
     const due = isReminderDue(data.night, now);
 
@@ -450,7 +459,6 @@ export async function postScrimNightMessage(db: SupabaseClient, nightId: number)
       if (due) await postNightMessage(db, url, data, now);
       else await postAnnouncement(db, url, data, now);
     });
-    if (!due) await scheduleScrimNightReminder(db, nightId, data.night.startsAt);
     return { ok: true, posted: due ? 'night message' : 'announcement' };
   } catch (e) {
     console.error(`postScrimNightMessage(${nightId}) failed:`, e);

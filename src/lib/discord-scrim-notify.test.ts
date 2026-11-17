@@ -672,10 +672,19 @@ async function main() {
     assert.deepEqual(opsErrors(db), [['scrim_night', NIGHT_ID, 'scrim_announce']]);
   });
 
+  await test('postScrimNightMessage: a retry after the night is due still re-queues the reminder, clearing its error', async () => {
+    withWebhook();
+    const { db } = fixture(30 * MIN, { ops_errors: [{ id: 1, entity_type: 'scrim_night', entity_id: NIGHT_ID, operation: 'scrim_schedule_reminder', message: 'x', occurred_at: '2026-01-01T00:00:00Z', dismissed_at: null }] });
+    const client = createFakeSupabaseClient(db, { schedule_scrim_night_reminder: () => true });
+    stubFetch();
+    await postScrimNightMessage(client, NIGHT_ID);
+    assert.deepEqual(db.ops_errors.filter((r) => !r.dismissed_at), []);
+  });
+
   await test('postScrimNightMessage: refuses a night that is gone or over, and reports a missing webhook', async () => {
     withWebhook();
     stubFetch();
-    assert.deepEqual(await postScrimNightMessage(fixture(HOUR).client, 999), { ok: false, error: 'Night not found' });
+    assert.deepEqual(await postScrimNightMessage(fixture(HOUR).client, 999), { ok: false, error: 'Night not found', notFound: true });
     const over = fixture(-HOUR);
     over.db.scrim_nights[0].ended_at = new Date().toISOString();
     assert.deepEqual(await postScrimNightMessage(over.client, NIGHT_ID), { ok: false, error: 'The night is over' });
