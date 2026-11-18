@@ -1,7 +1,7 @@
 /**
  * Route-handler tests for POST /api/scrims/[id]/end: only a started, current night; only an admin or a
  * player signed up for it; refused while a match still needs the server; and ending it stamps
- * `ended_at` once.
+ * `ended_at` once, and the night's Discord message is edited to its final standings.
  *
  * Run:  npx vitest run src/app/api/scrims/[id]/end/route.test.ts
  */

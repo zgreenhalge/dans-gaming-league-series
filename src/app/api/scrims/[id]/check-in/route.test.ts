@@ -1,6 +1,6 @@
 /**
  * Route-handler tests for POST/DELETE /api/scrims/[id]/check-in: the check-in window, a walk-up
- * check-in creating a definite signup, a maybe becoming definite, checking out, and admin-or-self.
+ * check-in creating a definite signup, a maybe becoming definite, checking out, admin-or-self, and each check-in or check-out editing the night's Discord message.
  *
  * Run:  npx vitest run src/app/api/scrims/[id]/check-in/route.test.ts
  */

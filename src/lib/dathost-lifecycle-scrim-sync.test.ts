@@ -11,6 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { vi } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { test, report } from './test-support/miniTest';
 import type { FakeDb } from './test-support/fakeSupabase';
 import { scrimNightStartingIn } from './test-support/scrimFixtures';
@@ -42,7 +43,7 @@ const SCRIM_MATCH_ID = 900;
 const LEAGUE_MATCH_ID = 100;
 const CONFIG_AUTH = { headerKey: 'X-MatchZy-Token', headerValue: 'sekret' };
 
-function fixture(): { db: FakeDb; client: ReturnType<typeof clientWithNightMessageRpcs> } {
+function fixture(): { db: FakeDb; client: SupabaseClient } {
   const db: FakeDb = {
     ...scrimNightMessageTables(NIGHT_ID),
     players: [],
@@ -57,9 +58,9 @@ function fixture(): { db: FakeDb; client: ReturnType<typeof clientWithNightMessa
   return { db, client: clientWithNightMessageRpcs(db) };
 }
 
-const provision = (client: ReturnType<typeof fixture>['client'], matchId: number) => {
+const provision = (client: SupabaseClient, matchId: number) => {
   process.env.DATHOST_SERVER_ID = 'srv-1';
-  return provisionMatchServer(client as never, matchId, 'https://dgls.example.com/config', CONFIG_AUTH, { takeOverLiveServer: true });
+  return provisionMatchServer(client, matchId, 'https://dgls.example.com/config', CONFIG_AUTH, { takeOverLiveServer: true });
 };
 
 async function main() {

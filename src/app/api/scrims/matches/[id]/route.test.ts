@@ -3,7 +3,7 @@
  * POST /api/scrims/[id]/rounds (queue pre-matched rounds) and PATCH/DELETE /api/scrims/matches/[id]
  * (change the map or lineup, or discard). Covers who may
  * act, the four-player minimum, one unplayed match at a time, lineups drawn only from checked-in
- * players, and the lock once a match has started.
+ * players, the lock once a match has started, and a discard editing the night's Discord message.
  *
  * Run:  npx vitest run src/app/api/scrims/matches/[id]/route.test.ts
  */

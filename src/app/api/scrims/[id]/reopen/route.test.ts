@@ -1,7 +1,7 @@
 /**
  * Route-handler tests for POST /api/scrims/[id]/reopen: only a night that is over, and still within
  * `SCRIM_NIGHT_SPAN_MS` of its start; only an admin or a player signed up for it; refused while
- * another night holds the server or a concurrent reopen got there first; and reopening clears `ended_at` and counts as activity.
+ * another night holds the server or a concurrent reopen got there first; and reopening clears `ended_at`, counts as activity and edits the night's Discord message back to its match.
  *
  * Run:  npx vitest run src/app/api/scrims/[id]/reopen/route.test.ts
  */
