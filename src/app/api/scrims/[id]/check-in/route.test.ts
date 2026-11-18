@@ -1,6 +1,6 @@
 /**
  * Route-handler tests for POST/DELETE /api/scrims/[id]/check-in: the check-in window, a walk-up
- * check-in creating a definite signup, a maybe becoming definite, checking out, and admin-or-self.
+ * check-in creating a definite signup, a maybe becoming definite, checking out, admin-or-self, and each check-in or check-out editing the night's Discord message.
  *
  * Run:  npx vitest run src/app/api/scrims/[id]/check-in/route.test.ts
  */
@@ -8,7 +8,8 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { __setTestAfterMode } from '@/lib/after';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
+import { clientWithNightMessageRpcs, scrimNightMessageTables, watchNightMessageEdits } from '@/lib/test-support/scrimNightMessageProbe';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -94,6 +95,29 @@ async function main() {
     const { date } = installFixture(-5 * 60 * 60 * 1000, { scrim_nights: [idleFor(scrimNightStartingIn(-5 * 60 * 60 * 1000, Number(NIGHT)), 60 * 60 * 1000)] });
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await call(POST, 'POST', date, { player_id: PLAYER_ID })).status, 409);
+  });
+
+  await test('Discord: checking in and out each edit the night message; a refused check-in edits nothing', async () => {
+    await __flushTestAfter(); // earlier tests' deferred notifications, before the webhook is set
+    const { db, date } = installFixture(SOON, scrimNightMessageTables(Number(NIGHT)));
+    __setTestAdminClient(clientWithNightMessageRpcs(db));
+    const { edits, stop } = watchNightMessageEdits();
+    try {
+      __setTestSession(sessionFor(PLAYER_ID));
+      assert.equal((await call(POST, 'POST', date, { player_id: OTHER_PLAYER_ID })).status, 403);
+      await __flushTestAfter();
+      assert.equal(edits.length, 0);
+
+      assert.equal((await call(POST, 'POST', date, { player_id: PLAYER_ID })).status, 200);
+      await __flushTestAfter();
+      assert.equal(edits.length, 1);
+
+      assert.equal((await call(DELETE, 'DELETE', date, { player_id: PLAYER_ID })).status, 200);
+      await __flushTestAfter();
+      assert.equal(edits.length, 2);
+    } finally {
+      stop();
+    }
   });
 
   report();
