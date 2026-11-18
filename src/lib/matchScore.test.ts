@@ -3,7 +3,8 @@
  * runGauntletCompletionPipeline always finishes propagation before starting the completion check,
  * since checking completion first can see an incomplete round as "everything played" and archive a
  * gauntlet season early (see docs/architecture.md) — and writeMatchScore(): a scrim match, which
- * writes the score but runs none of the league hooks, and a 0-0 result, which it refuses.
+ * writes the score but runs none of the league hooks (only the night's Discord message edit, on the
+ * first score and on a correction), and a 0-0 result, which it refuses.
  *
  * Run:  npx vitest run src/lib/matchScore.test.ts
  */
@@ -13,6 +14,8 @@ import { runGauntletCompletionPipeline, writeMatchScore } from './matchScore';
 import { test, report } from './test-support/miniTest';
 import { __setTestAdminClient } from './supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { scrimNightStartingIn } from './test-support/scrimFixtures';
+import { clientWithNightMessageRpcs, scrimNightMessageTables, watchNightMessageEdits } from './test-support/scrimNightMessageProbe';
 
 /** One scrim match (900) and one league match (100), each a 2v2 with zeroed stat rows. */
 function scoringDb(): FakeDb {
@@ -62,6 +65,29 @@ async function main() {
     __setTestAdminClient(client);
     assert.deepEqual(await writeMatchScore(client as never, 100, scoreInput()), { ok: true });
     assert.ok(db.background_jobs.some((j) => j.job_type === 'ehog_recompute'), 'ehog_recompute job for a league match');
+  });
+
+  await test('writeMatchScore — a scrim match edits its night\'s Discord message on the score and again on a correction; a league match does not', async () => {
+    const db: FakeDb = {
+      ...scrimNightMessageTables(5),
+      ...scoringDb(),
+      players: [1, 2, 3, 4].map((id) => ({ id, name: `P${id}` })),
+      scrim_nights: [scrimNightStartingIn(-10 * 60 * 1000, 5)],
+      scrim_signups: [],
+    };
+    const client = clientWithNightMessageRpcs(db);
+    __setTestAdminClient(client);
+    const { edits, stop } = watchNightMessageEdits();
+    try {
+      assert.deepEqual(await writeMatchScore(client as never, 900, scoreInput()), { ok: true });
+      assert.equal(edits.length, 1, 'the final score');
+      assert.deepEqual(await writeMatchScore(client as never, 900, { ...scoreInput(), shirts: 7, skins: 13 }), { ok: true });
+      assert.equal(edits.length, 2, 'the corrected score');
+      assert.deepEqual(await writeMatchScore(client as never, 100, scoreInput()), { ok: true });
+      assert.equal(edits.length, 2, 'a league match leaves the night message alone');
+    } finally {
+      stop();
+    }
   });
 
   await test('writeMatchScore — a 0-0 result is rejected and the match stays unplayed', async () => {
