@@ -11,6 +11,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { seedGauntletWithPods, teardownGauntlet, type TestGauntlet } from './support/db';
 import { assertNoErrorBoundary } from './support/assertions';
+import { main } from './support/page';
 
 let fixture: TestGauntlet;
 
@@ -25,7 +26,7 @@ test.afterEach(async () => {
 const weekPath = () => `/seasons/${fixture.hubSeasonId}/weeks/${fixture.hubWeekId}`;
 const roundPath = (round: number) => `/seasons/${fixture.hubSeasonId}/rounds/${round}`;
 const groupPath = (podId: number) => `/seasons/${fixture.hubSeasonId}/groups/${podId}`;
-const matchLink = (page: Page, matchId: number) => page.locator(`a[href="/matches/${matchId}"]`);
+const matchLink = (page: Page, matchId: number) => main(page).locator(`a[href="/matches/${matchId}"]`);
 
 /** Asserts the browser ended up on `path` (no query), after any redirects. */
 async function expectPath(page: Page, path: string): Promise<void> {
@@ -54,7 +55,7 @@ test('walks week, Gauntlet chip, round, group and Regular season chip', async ({
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toContainText(`Season ${fixture.seasonNumber} Gauntlet`);
     await expect(heading).toContainText('Round 1');
-    await expect(page.getByText('Complete', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Complete', { exact: true })).toBeVisible();
 
     const rounds = page.getByRole('navigation', { name: 'Rounds' });
     await expect(rounds.locator('[aria-current="page"]')).toHaveText('1');
@@ -71,7 +72,7 @@ test('walks week, Gauntlet chip, round, group and Regular season chip', async ({
     await expect(heading).toContainText('Round 1');
     await expect(heading).toContainText('Group 1');
     await expect(heading.getByRole('link', { name: 'Round 1' })).toHaveAttribute('href', roundPath(1));
-    await expect(page.getByText('Elimination', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Elimination', { exact: true })).toBeVisible();
 
     const groups = page.getByRole('navigation', { name: 'Groups' });
     await expect(groups.locator('[aria-current="page"]')).toHaveText('Group 1');
@@ -81,8 +82,8 @@ test('walks week, Gauntlet chip, round, group and Regular season chip', async ({
 
     // The elimination pod's scorecard: one player wins both games and advances.
     await expect(page.getByRole('columnheader', { name: 'Seed' })).toBeVisible();
-    await expect(page.getByText('Advances', { exact: true })).toHaveCount(1);
-    await expect(page.getByText('Eliminated', { exact: true })).toHaveCount(3);
+    await expect(main(page).getByText('Advances', { exact: true })).toHaveCount(1);
+    await expect(main(page).getByText('Eliminated', { exact: true })).toHaveCount(3);
     for (const matchId of fixture.eliminationMatchIds) await expect(matchLink(page, matchId)).toBeVisible();
     for (const matchId of fixture.wildcardMatchIds) await expect(matchLink(page, matchId)).toHaveCount(0);
 
@@ -102,14 +103,14 @@ test('round page lists every group; carets collapse a group and titles link to i
   // Two played groups and the unscheduled final, each a collapsible section with its own page link.
   await expect(page.getByRole('link', { name: /^Group 1/ })).toHaveAttribute('href', groupPath(fixture.eliminationPodId));
   await expect(page.getByRole('link', { name: /^Group 2/ })).toHaveAttribute('href', groupPath(fixture.wildcardPodId));
-  await expect(page.getByText('Elimination', { exact: true })).toBeVisible();
-  await expect(page.getByText('Wildcard', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Elimination', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Wildcard', { exact: true })).toBeVisible();
   for (const matchId of [...fixture.eliminationMatchIds, ...fixture.wildcardMatchIds]) {
     await expect(matchLink(page, matchId)).toBeVisible();
   }
   // 1 + 3 players advance (elimination, wildcard) and 3 + 1 are out.
-  await expect(page.getByText('Advances', { exact: true })).toHaveCount(4);
-  await expect(page.getByText('Eliminated', { exact: true })).toHaveCount(4);
+  await expect(main(page).getByText('Advances', { exact: true })).toHaveCount(4);
+  await expect(main(page).getByText('Eliminated', { exact: true })).toHaveCount(4);
 
   // The caret toggles its own group only, and stays on the round page.
   const collapse = page.getByRole('button', { name: 'Collapse Group 1' });
@@ -128,34 +129,34 @@ test('round page lists every group; carets collapse a group and titles link to i
   await page.getByRole('link', { name: /^Group 2/ }).click();
   await expectPath(page, groupPath(fixture.wildcardPodId));
   await assertNoErrorBoundary(page);
-  await expect(page.getByText('Wildcard', { exact: true })).toBeVisible();
-  await expect(page.getByText('Advances', { exact: true })).toHaveCount(3);
-  await expect(page.getByText('Eliminated', { exact: true })).toHaveCount(1);
+  await expect(main(page).getByText('Wildcard', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Advances', { exact: true })).toHaveCount(3);
+  await expect(main(page).getByText('Eliminated', { exact: true })).toHaveCount(1);
 });
 
 test('the final round is upcoming, with a final whose slots name where each player comes from', async ({ page }) => {
   await page.goto(roundPath(2));
   await assertNoErrorBoundary(page);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Round 2');
-  await expect(page.getByText('Final round', { exact: true })).toBeVisible();
-  await expect(page.getByText('Upcoming', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Final round', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Upcoming', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Rounds' }).locator('[aria-current="page"]')).toHaveText('2');
   await expect(page.getByRole('link', { name: /^Final/ })).toHaveAttribute('href', groupPath(fixture.finalPodId));
 
-  await expect(page.getByText('Not yet scheduled', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Not yet scheduled', { exact: true })).toBeVisible();
   for (const label of [
     'Round 1 Group 1 Winner',
     'Best seed of Round 1 Group 2',
     '2nd-best seed of Round 1 Group 2',
     '3rd-best seed of Round 1 Group 2',
   ]) {
-    await expect(page.getByText(label, { exact: true })).toBeVisible();
+    await expect(main(page).getByText(label, { exact: true })).toBeVisible();
   }
 
   await page.goto(groupPath(fixture.finalPodId));
   await assertNoErrorBoundary(page);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Final');
-  await expect(page.getByText('Round 1 Group 1 Winner', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Round 1 Group 1 Winner', { exact: true })).toBeVisible();
   // Alone in its round: no chip strip, just the way back to the regular season.
   await expect(page.getByRole('navigation', { name: 'Groups' }).getByRole('link', { name: '← Regular season' })).toBeVisible();
 });
@@ -175,7 +176,7 @@ test('ids that disagree with where a stage lives redirect to its canonical URL',
       await page.goto(from);
       await expectPath(page, to);
       await assertNoErrorBoundary(page);
-      await expect(page.getByText('Page not found')).toHaveCount(0);
+      await expect(main(page).getByText('Page not found')).toHaveCount(0);
     });
   }
 });
@@ -188,7 +189,7 @@ test('a missing round, group or week is a 404 page, not the error boundary', asy
   ]) {
     await test.step(path, async () => {
       await page.goto(path);
-      await expect(page.getByText('Page not found')).toBeVisible();
+      await expect(main(page).getByText('Page not found')).toBeVisible();
       await assertNoErrorBoundary(page);
     });
   }

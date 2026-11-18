@@ -8,6 +8,7 @@
 
 import { test, expect } from '@playwright/test';
 import { loginAs } from './support/auth';
+import { main } from './support/page';
 import { seedPlayedMatchWithSabremetrics, teardownMatch, type TestMatch } from './support/db';
 
 let fixture: TestMatch | null = null;
@@ -24,14 +25,13 @@ test.describe('with a running season', () => {
 
   test('signed out shows the Login placeholder and no feedback banners', async ({ page }) => {
     await page.goto('/');
-    const main = page.getByRole('main');
 
-    await expect(main.getByText('Login to see your stats')).toBeVisible();
+    await expect(main(page).getByText('Login to see your stats')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Login', exact: true })).toHaveAttribute('href', '/api/auth/steam');
-    await expect(page.getByText('Post-season survey')).toHaveCount(0);
-    await expect(page.getByText(/superlatives/i)).toHaveCount(0);
+    await expect(main(page).getByText('Post-season survey')).toHaveCount(0);
+    await expect(main(page).getByText(/superlatives/i)).toHaveCount(0);
     // The standings are public.
-    await expect(main.getByText('Live', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Live', { exact: true })).toBeVisible();
   });
 
   test('signed in shows My Stats, and Top duos opens the career H2H view; Hottest Rivalries is hidden until a rivalry rates', async ({ page }) => {
@@ -47,18 +47,14 @@ test.describe('with a running season', () => {
       await page.reload();
       await expect(page.getByRole('link', { name: 'Top duos', exact: true })).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 90_000, intervals: [3_000] });
-
-    // Scoped to the page's visible <main>: `getByText` also matches hidden nodes, and React can still
-    // hold a streamed copy of the page in a hidden `<div hidden id="S:…">` just after a reload.
-    const main = page.getByRole('main');
-    await expect(main.getByText('My Stats', { exact: true })).toBeVisible();
-    await expect(main.getByText('Match history', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('My Stats', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Match history', { exact: true })).toBeVisible();
 
     const duos = page.getByRole('link', { name: 'Top duos', exact: true });
     await expect(duos).toHaveAttribute('href', '/statistics?tab=h2h');
     await duos.click();
     await expect(page).toHaveURL(/\/statistics\?tab=h2h$/, { timeout: 30_000 });
-    await expect(page.getByText('Something went wrong')).toHaveCount(0);
+    await expect(main(page).getByText('Something went wrong')).toHaveCount(0);
     await page.goBack();
 
     // One played match gives every pair a single meeting, which rates 0, so the panel is omitted.
@@ -68,7 +64,7 @@ test.describe('with a running season', () => {
     const pairHref = 'a[href^="/statistics?tab=h2h&a="]';
     await page.locator(`${pairHref}:not([href*="type=opponent"])`).first().click();
     await expect(page).toHaveURL(/\/statistics\?tab=h2h&a=[^&]+&b=[^&]+$/, { timeout: 30_000 });
-    await expect(page.getByText('Something went wrong')).toHaveCount(0);
+    await expect(main(page).getByText('Something went wrong')).toHaveCount(0);
   });
 });
 
@@ -79,12 +75,11 @@ test.describe('between seasons', () => {
 
   test("shows the latest finished season's standings and no Upcoming panel", async ({ page }) => {
     await page.goto('/');
-    const main = page.getByRole('main');
 
-    await expect(main.getByText('Final', { exact: true })).toBeVisible();
-    await expect(page.getByText('Live', { exact: true })).toHaveCount(0);
+    await expect(main(page).getByText('Final', { exact: true })).toBeVisible();
+    await expect(main(page).getByText('Live', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'View all →' })).toHaveAttribute('href', `/seasons/${fixture!.seasonId}`);
     await expect(page.getByRole('link', { name: 'Upcoming', exact: true })).toHaveCount(0);
-    await expect(page.getByText('To Be Scheduled')).toHaveCount(0);
+    await expect(main(page).getByText('To Be Scheduled')).toHaveCount(0);
   });
 });
