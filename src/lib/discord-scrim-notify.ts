@@ -35,7 +35,9 @@ import {
 } from './discord-webhook';
 import {
   getScrimLiveScore,
+  getScrimNightDiscordState,
   getScrimNightForDiscord,
+  getScrimNightIdOfMatch,
   getScrimNightMatches,
   getScrimNightStandings,
   type ScrimDiscordSignup,
@@ -65,12 +67,6 @@ const COLOR_OVER = 0x5865f2; // Discord's "blurple" — the night has ended
 const REMINDER_DUE_WITHIN_MS = 65 * 60 * 1000;
 /** Standings listed in the message; a night has a handful of players. */
 const MAX_STANDINGS_ROWS = 10;
-
-interface DiscordState {
-  announcement_message_id: string | null;
-  reminder_message_id: string | null;
-  finalized_at: string | null;
-}
 
 /** What the night message shows of the latest match that has started: its score, running or final,
  *  or where its server is while there is no score yet. */
@@ -237,16 +233,6 @@ async function editMessage(url: string, messageId: string, data: NightMessageDat
   throw new Error(result.error);
 }
 
-async function getState(db: SupabaseClient, nightId: number): Promise<DiscordState | null> {
-  const { data, error } = await db
-    .from('scrim_night_discord_state')
-    .select('announcement_message_id, reminder_message_id, finalized_at')
-    .eq('night_id', nightId)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
 /** Records a just-posted message's id on the night's state row. If that fails — the row's foreign key
  *  to the night refuses the write once the night is gone (its last player dropped out while the message
  *  was posting, before its id was on record to delete), or the database errored — the message is taken
@@ -352,7 +338,7 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
   if (!url) return;
   return bestEffort('syncScrimNightMessage', nightId, async () => {
     const now = new Date();
-    const [data, state] = await Promise.all([loadMessageData(db, nightId, now), getState(db, nightId)]);
+    const [data, state] = await Promise.all([loadMessageData(db, nightId, now), getScrimNightDiscordState(db, nightId)]);
     if (!data) return;
     const ended = hasScrimNightEnded(data.night, now);
     // Any activity pushes the end back, so every sync of a live night replaces the queued job.
@@ -389,9 +375,7 @@ export async function syncScrimNightMessage(db: SupabaseClient, nightId: number)
 export async function notifyScrimMatchProgress(db: SupabaseClient, matchId: number): Promise<void> {
   if (!matchNotificationsWebhookUrl()) return;
   return bestEffort('notifyScrimMatchProgress', matchId, async () => {
-    const { data, error } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle();
-    if (error) throw error;
-    const nightId = (data as { scrim_night_id: number | null } | null)?.scrim_night_id;
+    const nightId = await getScrimNightIdOfMatch(db, matchId);
     if (nightId != null) await syncScrimNightMessage(db, nightId);
   });
 }
@@ -457,7 +441,7 @@ export async function postScrimNightMessage(db: SupabaseClient, nightId: number)
     const due = isReminderDue(data.night, now);
 
     await tracked(db, nightId, due ? OPERATION_NIGHT_MESSAGE : OPERATION_ANNOUNCE, async () => {
-      const state = await getState(db, nightId);
+      const state = await getScrimNightDiscordState(db, nightId);
       for (const id of [state?.announcement_message_id, state?.reminder_message_id]) {
         if (!id) continue;
         const deleted = await deleteWebhookMessage(url, id);
@@ -479,7 +463,7 @@ export async function postScrimNightMessage(db: SupabaseClient, nightId: number)
 export async function getScrimNightMessageIds(db: SupabaseClient, nightId: number): Promise<string[]> {
   if (!matchNotificationsWebhookUrl()) return [];
   try {
-    const state = await getState(db, nightId);
+    const state = await getScrimNightDiscordState(db, nightId);
     return [state?.announcement_message_id, state?.reminder_message_id].filter((id): id is string => !!id);
   } catch (e) {
     console.error(`getScrimNightMessageIds(${nightId}) failed (non-fatal):`, e);
