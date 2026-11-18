@@ -106,6 +106,33 @@ export async function getScrimNightForDiscord(
   return { night: toScrimNight(nightRes.data as ScrimNightRow), signups };
 }
 
+/** The Discord messages on record for a night, and when its final standings were posted. */
+export interface ScrimNightDiscordState {
+  announcement_message_id: string | null;
+  reminder_message_id: string | null;
+  finalized_at: string | null;
+}
+
+/** A night's `scrim_night_discord_state` row, or `null` when none exists. Read through `db`, like
+ *  `getScrimNightForDiscord()`. */
+export async function getScrimNightDiscordState(db: SupabaseClient, nightId: number): Promise<ScrimNightDiscordState | null> {
+  const { data, error } = await db
+    .from('scrim_night_discord_state')
+    .select('announcement_message_id, reminder_message_id, finalized_at')
+    .eq('night_id', nightId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** The night a match belongs to, or `null` for a league match or one that doesn't exist. Read through
+ *  `db`, like `getScrimNightForDiscord()`. */
+export async function getScrimNightIdOfMatch(db: SupabaseClient, matchId: number): Promise<number | null> {
+  const { data, error } = await db.from('matches').select('scrim_night_id').eq('id', matchId).maybeSingle();
+  if (error) throw error;
+  return (data as { scrim_night_id: number | null } | null)?.scrim_night_id ?? null;
+}
+
 /** A scrim match's running score, or `null` before its server has reported one (`live_match_score`).
  *  Read through `db`, like `getScrimNightForDiscord()`. */
 export async function getScrimLiveScore(db: SupabaseClient, matchId: number): Promise<{ shirts: number; skins: number; round: number | null } | null> {
