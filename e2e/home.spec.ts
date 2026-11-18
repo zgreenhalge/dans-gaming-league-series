@@ -8,6 +8,7 @@
 
 import { test, expect } from '@playwright/test';
 import { loginAs } from './support/auth';
+import { assertNoErrorBoundary } from './support/assertions';
 import { main } from './support/page';
 import { seedPlayedMatchWithSabremetrics, teardownMatch, type TestMatch } from './support/db';
 
@@ -54,7 +55,7 @@ test.describe('with a running season', () => {
     await expect(duos).toHaveAttribute('href', '/statistics?tab=h2h');
     await duos.click();
     await expect(page).toHaveURL(/\/statistics\?tab=h2h$/, { timeout: 30_000 });
-    await expect(main(page).getByText('Something went wrong')).toHaveCount(0);
+    await assertNoErrorBoundary(page);
     await page.goBack();
 
     // One played match gives every pair a single meeting, which rates 0, so the panel is omitted.
@@ -64,7 +65,7 @@ test.describe('with a running season', () => {
     const pairHref = 'a[href^="/statistics?tab=h2h&a="]';
     await page.locator(`${pairHref}:not([href*="type=opponent"])`).first().click();
     await expect(page).toHaveURL(/\/statistics\?tab=h2h&a=[^&]+&b=[^&]+$/, { timeout: 30_000 });
-    await expect(main(page).getByText('Something went wrong')).toHaveCount(0);
+    await assertNoErrorBoundary(page);
   });
 });
 
