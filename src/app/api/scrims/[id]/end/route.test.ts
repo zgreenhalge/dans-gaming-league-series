@@ -9,7 +9,8 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { __setTestAfterMode } from '@/lib/after';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
+import { clientWithNightMessageRpcs, scrimNightMessageTables, watchNightMessageEdits } from '@/lib/test-support/scrimNightMessageProbe';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -88,6 +89,27 @@ async function main() {
     installFixture(RUNNING);
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await end('99')).status, 404);
+  });
+
+  await test('Discord: ending the night edits its message to the final standings; a refused end edits nothing', async () => {
+    await __flushTestAfter(); // earlier tests' deferred notifications, before the webhook is set
+    const db = installFixture(RUNNING, scrimNightMessageTables(Number(NIGHT)));
+    __setTestAdminClient(clientWithNightMessageRpcs(db));
+    const { edits, stop } = watchNightMessageEdits();
+    try {
+      __setTestSession(sessionFor(OUTSIDER_ID));
+      assert.equal((await end()).status, 403);
+      await __flushTestAfter();
+      assert.equal(edits.length, 0);
+
+      __setTestSession(sessionFor(PLAYER_ID));
+      assert.equal((await end()).status, 200);
+      await __flushTestAfter();
+      assert.equal(edits.length, 1);
+      assert.ok(db.scrim_night_discord_state[0].finalized_at, 'the night is marked finalized');
+    } finally {
+      stop();
+    }
   });
 
   report();

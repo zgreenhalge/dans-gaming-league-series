@@ -9,7 +9,8 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { __setTestAfterMode } from '@/lib/after';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
+import { scrimNightMessageRpcs, scrimNightMessageTables, watchNightMessageEdits } from '@/lib/test-support/scrimNightMessageProbe';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -105,6 +106,29 @@ async function main() {
     installFixture([ended()]);
     __setTestSession(sessionFor(PLAYER_ID));
     assert.equal((await reopen('99')).status, 404);
+  });
+
+  await test('Discord: reopening a finalized night edits its message back to the match; a refused reopen edits nothing', async () => {
+    await __flushTestAfter(); // earlier tests' deferred notifications, before the webhook is set
+    const db = installFixture([ended()]);
+    Object.assign(db, scrimNightMessageTables(Number(NIGHT)));
+    db.scrim_night_discord_state[0].finalized_at = '2026-01-01T00:00:00Z';
+    __setTestAdminClient(createFakeSupabaseClient(db, { ...scrimNightRpcs, ...scrimNightMessageRpcs }));
+    const { edits, stop } = watchNightMessageEdits();
+    try {
+      __setTestSession(sessionFor(OUTSIDER_ID));
+      assert.equal((await reopen()).status, 403);
+      await __flushTestAfter();
+      assert.equal(edits.length, 0);
+
+      __setTestSession(sessionFor(PLAYER_ID));
+      assert.equal((await reopen()).status, 200);
+      await __flushTestAfter();
+      assert.equal(edits.length, 1);
+      assert.equal(db.scrim_night_discord_state[0].finalized_at, null, 'the night is no longer finalized');
+    } finally {
+      stop();
+    }
   });
 
   report();

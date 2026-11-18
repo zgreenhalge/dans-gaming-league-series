@@ -11,7 +11,8 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { __setTestAfterMode } from '@/lib/after';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
+import { scrimNightMessageRpcs, scrimNightMessageTables, watchNightMessageEdits } from '@/lib/test-support/scrimNightMessageProbe';
 import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
 import { scrimMatchRpcs } from '@/lib/test-support/scrimMatchRpcs';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
@@ -295,6 +296,28 @@ async function main() {
     __setTestSession(sessionFor(OUTSIDER_ID));
     assert.equal((await queue(date, { games: [{ shirts: [2, 3], skins: [4, 5] }] })).status, 403);
     assert.equal(db.matches.length, 0);
+  });
+
+
+  await test('Discord: discarding a match edits the night message; a refused discard edits nothing', async () => {
+    const { db, date } = installFixture([2, 3, 4, 5], scrimNightMessageTables(NIGHT_ID));
+    __setTestAdminClient(createFakeSupabaseClient(db, { ...scrimMatchRpcs, ...scrimNightMessageRpcs }));
+    const matchId = await makeMatch(db, date);
+    await __flushTestAfter(); // deferred notifications so far, before the webhook is set
+    const { edits, stop } = watchNightMessageEdits();
+    try {
+      __setTestSession(sessionFor(OUTSIDER_ID));
+      assert.equal((await discard(matchId)).status, 403);
+      await __flushTestAfter();
+      assert.equal(edits.length, 0);
+
+      __setTestSession(sessionFor(ADMIN_ID));
+      assert.equal((await discard(matchId)).status, 200);
+      await __flushTestAfter();
+      assert.equal(edits.length, 1);
+    } finally {
+      stop();
+    }
   });
 
   report();
