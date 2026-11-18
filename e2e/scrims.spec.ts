@@ -12,6 +12,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { assertNoErrorBoundary } from './support/assertions';
 import { loginAs, DEV_USER_PLAYER_ID } from './support/auth';
+import { main } from './support/page';
 import {
   clearMapWorkshopUrls,
   scrimMatchesOf,
@@ -40,12 +41,6 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   await teardownScrims();
 });
-
-/** The page's visible `<main>`: text and label locators go through it, since just after a load React
- *  can still hold a hidden copy of the page beside it (docs/e2e.md, "Locators"). */
-function main(page: Page) {
-  return page.getByRole('main');
-}
 
 /** The viewer's calendar day `daysAhead` from now (`YYYY-MM-DD`), and the instant that day's `time`
  *  is — both in the browser's timezone, which is what the calendar and the start form use. */

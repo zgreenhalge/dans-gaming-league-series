@@ -155,9 +155,10 @@ nodes too. Just after a load, React can hold a second, hidden copy of a streamed
 after navigation when it lands just before then. An update that reaches the section in that window
 (a prop or context change above it) makes React client-render the section in place, and the hidden
 copy sits beside it until the queued reveal removes it. A locator meant to match one element then
-matches two, and the action or assertion fails strict mode at once. Scope such locators to the
-visible page — `page.getByRole('main').getByText(…)` (`getByRole` skips hidden elements) — or use
-a role locator outright.
+matches two, and the action or assertion fails strict mode at once. Scope such locators and
+count assertions to the visible page with `main(page)` (`e2e/support/page.ts`, a `getByRole('main')`
+locator, and `getByRole` skips hidden elements) — or use a role locator outright. Don't hide a real
+duplicate with `.first()` / `nth()`: where a test depends on one row or match, assert the count.
 
 ## Database tests (pgTAP)
 
