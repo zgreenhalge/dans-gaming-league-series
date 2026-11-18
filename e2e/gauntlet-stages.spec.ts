@@ -176,7 +176,7 @@ test('ids that disagree with where a stage lives redirect to its canonical URL',
       await page.goto(from);
       await expectPath(page, to);
       await assertNoErrorBoundary(page);
-      await expect(main(page).getByText('Page not found')).toHaveCount(0);
+      await expect(page.getByText('Page not found')).toHaveCount(0);
     });
   }
 });
