@@ -19,11 +19,13 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# `supabase start` pulls ~7 images on a cold cache. A sandbox whose network policy blocks the
-# registry doesn't fail fast — the CLI retries each image with growing backoff for a long time — so
-# this cap keeps a blocked sandbox from stalling the (synchronous) session start for minutes. Bump it
-# if your environment's registry access is just slow rather than blocked.
-DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-120}"
+# `supabase start` pulls ~7 images on a cold cache, and a cold Postgres container takes a minute or
+# more to pass its health check even with the images already local. A sandbox whose network policy
+# blocks the registry doesn't fail fast either — the CLI retries each image with growing backoff — so
+# this cap keeps a blocked sandbox from stalling the (synchronous) session start indefinitely. Bump it
+# if your environment is just slow.
+DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-300}"
+DB_TEST_TIMEOUT_SECONDS="${DB_TEST_TIMEOUT_SECONDS:-180}"
 
 REPO_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$REPO_DIR" || exit 0
@@ -110,12 +112,26 @@ start_local_supabase() {
     log "local Supabase stack: up"
     return 0
   fi
-  log "local Supabase stack: FAILED to start within ${DB_START_TIMEOUT_SECONDS}s (this sandbox's network policy may block Docker registry pulls — see $STATUS_LOG for the actual CLI output)"
+  log "local Supabase stack: FAILED to start within ${DB_START_TIMEOUT_SECONDS}s (a blocked image registry or a slow cold start; the CLI output in $STATUS_LOG says which)"
   # The timeout above kills the CLI process, not any containers it already started (those run
   # detached from it) — clean those up so a later manual `supabase start` doesn't find a half-up
   # stack from this attempt.
   npx --yes supabase stop --no-backup >>"$STATUS_LOG" 2>&1 || true
   return 1
+}
+
+# --- 4b. Run the pgTAP suite once -------------------------------------------------------------
+
+# `supabase test db` pulls its `pg_prove` image on first use, and that pull can fail transiently.
+# Running the suite here pre-pulls it and reports up front whether SQL tests work in this session
+# (`npm run db:test`, docs/e2e.md). Best-effort: a failure is logged, never blocks the session.
+run_db_tests() {
+  log "Running the pgTAP suite (npm run db:test, capped at ${DB_TEST_TIMEOUT_SECONDS}s)..."
+  if timeout "$DB_TEST_TIMEOUT_SECONDS" npm run db:test >>"$STATUS_LOG" 2>&1; then
+    log "pgTAP suite: passed — run npm run db:test after any change under supabase/migrations/."
+  else
+    log "pgTAP suite: did not pass or could not run — see $STATUS_LOG; re-run npm run db:test by hand."
+  fi
 }
 
 # --- 5. Export the stack's fixed connection values for the rest of the session ----------------
@@ -177,6 +193,8 @@ if ! start_local_supabase; then
   use_fixture_data
   exit 0
 fi
+
+run_db_tests
 
 if export_local_env; then
   log "Ready — npm run dev / npm run build / npm test can now reach the local Supabase stack."

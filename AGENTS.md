@@ -108,6 +108,15 @@ Opening a PR is a lower-stakes action than merging but still isn't free: don't o
 just because a natural next step suggests it (e.g. splitting a change into a precursor + follow-up).
 If the user hasn't asked for a PR, say what you'd open and why, and let them confirm first.
 
+# SQL changes are verified by running the pgTAP suite
+
+A change under `supabase/migrations/` or `supabase/tests/database/` is verified by running it:
+`npm run db:start` if the stack isn't up, then `npm run db:test` ([`docs/e2e.md`](./docs/e2e.md#database-tests-pgtap)).
+Reading the SQL or the test and judging it correct is not verification, and the `fakeSupabase` mirrors
+in the Vitest suite can't see a SQL failure. A new pgTAP scenario also gets a break-it check: alter the
+function or grant it covers on the local stack, confirm the test fails, restore it. If the stack can't
+start, say so in the PR rather than reporting the SQL as tested.
+
 # Don't self-schedule reminders or event subscriptions
 
 Agent sessions on this repo have access to tools that create standing follow-up work without a human
