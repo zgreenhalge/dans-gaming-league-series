@@ -19,11 +19,9 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# `supabase start` gives up on its own when the Postgres container is not healthy after about a minute
-# or two, and removes every container it created. A first start in a fresh sandbox can miss that window
-# while a start a moment later, with the images and layers now warm, succeeds. So a failed start is
-# stopped and tried again, up to DB_START_ATTEMPTS times within one overall deadline. The deadline also
-# bounds a blocked image registry, which the CLI retries with growing backoff.
+# `supabase start` gives up after a minute or two without a healthy Postgres and removes its containers,
+# so a cold first start can miss that window where a second one succeeds. A failed start is retried up to
+# DB_START_ATTEMPTS times within the DB_START_TIMEOUT_SECONDS deadline, which also bounds a blocked registry.
 DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-300}"
 DB_START_ATTEMPTS="${DB_START_ATTEMPTS:-3}"
 
@@ -76,9 +74,8 @@ start_dockerd() {
     log "not running as root — cannot start the Docker daemon ourselves."
     return 1
   fi
-  # A daemon from an earlier run of this container leaves pid files behind. In a resumed sandbox the
-  # recorded pid can belong to an unrelated process by now, and dockerd then refuses to start ("process
-  # with PID N is still running"). With no dockerd or containerd running, those files are stale.
+  # Pid files from an earlier daemon can name a pid an unrelated process now holds, and dockerd then
+  # refuses to start.
   if ! pgrep -x dockerd >/dev/null 2>&1 && ! pgrep -x containerd >/dev/null 2>&1; then
     rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid
   fi
@@ -114,25 +111,21 @@ docker_available() {
 
 start_local_supabase() {
   log "Starting local Supabase stack (npm run db:start; up to ${DB_START_ATTEMPTS} attempts within ${DB_START_TIMEOUT_SECONDS}s, pulling images on a cold cache)..."
-  local began attempt=1 elapsed remaining
-  began=$(date +%s)
-  while [ "$attempt" -le "$DB_START_ATTEMPTS" ]; do
-    elapsed=$(( $(date +%s) - began ))
-    remaining=$(( DB_START_TIMEOUT_SECONDS - elapsed ))
-    if [ "$remaining" -le 0 ]; then
+  local attempt
+  SECONDS=0
+  for attempt in $(seq 1 "$DB_START_ATTEMPTS"); do
+    if [ "$SECONDS" -ge "$DB_START_TIMEOUT_SECONDS" ]; then
       break
     fi
-    if timeout "$remaining" npm run db:start >>"$STATUS_LOG" 2>&1; then
-      log "local Supabase stack: up (attempt ${attempt}, $(( $(date +%s) - began ))s)"
+    if timeout "$((DB_START_TIMEOUT_SECONDS - SECONDS))" npm run db:start >>"$STATUS_LOG" 2>&1; then
+      log "local Supabase stack: up (attempt ${attempt}, ${SECONDS}s)"
       return 0
     fi
-    log "local Supabase stack: attempt ${attempt} failed after $(( $(date +%s) - began ))s"
-    # A timeout kills the CLI, not the containers it already started (they run detached from it);
-    # clear them so the next attempt, or a later manual `supabase start`, finds no half-up stack.
-    npx --yes supabase stop --no-backup >>"$STATUS_LOG" 2>&1 || true
-    attempt=$((attempt + 1))
+    log "local Supabase stack: attempt ${attempt} failed after ${SECONDS}s"
+    # A timeout kills the CLI, not the containers it started; clear them before the next attempt.
+    timeout 60 npx --yes supabase stop --no-backup >>"$STATUS_LOG" 2>&1 || true
   done
-  log "local Supabase stack: FAILED after $(( $(date +%s) - began ))s (the CLI output in $STATUS_LOG says whether a registry was blocked or the database never became healthy)"
+  log "local Supabase stack: FAILED after ${SECONDS}s (the CLI output in $STATUS_LOG says whether a registry was blocked or the database never became healthy)"
   return 1
 }
 

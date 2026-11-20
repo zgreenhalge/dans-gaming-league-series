@@ -236,12 +236,10 @@ subscribing, so pages render their server-fetched data without live updates.
 tries to upgrade that fixture-backed fallback to the real local stack this doc already describes: it
 runs `npm install`, then — unless a real `.env.local` is already present — starts the Docker daemon
 itself if it isn't already running (no init system brings it up automatically in a sandbox
-container, and pid files an earlier daemon left behind are cleared first), brings up the local Supabase stack (`npm run db:start`), and exports
+container), brings up the local Supabase stack (`npm run db:start`), and exports
 `supabase/local.env`'s three fixed values into the session's environment. This still depends on
-outbound network access to pull the Postgres/PostgREST/Realtime images. `supabase start` gives up and
-removes its containers when Postgres isn't healthy after a minute or two, which a first start in a fresh
-sandbox can miss while a second start succeeds, so the hook stops and retries a failed start (up to
-`DB_START_ATTEMPTS`, default 3) within one deadline (`DB_START_TIMEOUT_SECONDS`, default 300s). When the stack isn't confirmed up, the hook also appends an `unset` of
+outbound network access to pull the Postgres/PostgREST/Realtime images. A failed start is stopped and
+retried within a deadline (`DB_START_ATTEMPTS`, `DB_START_TIMEOUT_SECONDS`). When the stack isn't confirmed up, the hook also appends an `unset` of
 the three connection variables to `$CLAUDE_ENV_FILE`, so values exported by an earlier session on the
 same checkout can't point `build`/`dev` at a port nothing listens on. Every step is independent and best-effort: a Docker daemon that won't
 start, a sandbox whose network policy blocks the image pulls, or an already-configured `.env.local`
