@@ -172,6 +172,16 @@ npx supabase db reset      # after pulling or adding migrations, so the stack ha
 npm run db:test
 ```
 
+One file per area:
+
+| File | Covers |
+|---|---|
+| `delete_upcoming_season.test.sql` | `delete_upcoming_season()` refusals and success |
+| `reopen_scrim_night.test.sql` | `reopen_scrim_night()` refusals, success and the idle case |
+| `scrim_night_activity.test.sql` | which writes stamp `scrim_nights.last_active_at` and which don't, the 5-minute throttle, ended and idle nights staying over |
+| `scrim_match_revisions.test.sql` | `update_scrim_match()` / `discard_scrim_match()` / `claim_scrim_match_start()`: stale revisions, claims, matches on the server, the failed-start retry |
+| `anon_grants.test.sql` | RLS on every table, the columns `anon` may select, no `anon` writes, no `anon`-executable function |
+
 Each file is one transaction that ends in `rollback`, so the stack's data is left as it was, and builds
 its own fixtures with explicit high ids (`9001`, ...) on top of `seed.sql`'s players. It declares its
 `plan()` count, and `delete_upcoming_season.test.sql` is the pattern to copy: each refusal raises its
@@ -199,6 +209,9 @@ e2e job is the check.
 
 ## Claude Code sessions
 
+In a session whose stack is not up, `npm run db:start` brings it up (a cold start takes a few minutes), then
+`npm run db:test` runs the pgTAP suite. The verification rule is in `AGENTS.md`.
+
 `npm test` (Vitest) never depends on any of this — every query test runs against the
 `fakeSupabase`/`src/lib/test-support/` harness, not a live database, so it (along with `npm run
 lint`/`npm run typecheck`) works in any agent session with no setup at all.
@@ -225,9 +238,9 @@ runs `npm install`, then — unless a real `.env.local` is already present — s
 itself if it isn't already running (no init system brings it up automatically in a sandbox
 container), brings up the local Supabase stack (`npm run db:start`), and exports
 `supabase/local.env`'s three fixed values into the session's environment. This still depends on
-outbound network access to pull the Postgres/PostgREST/Realtime images, which isn't guaranteed — in
-this repo's own sandbox, the outbound proxy blocks Docker Hub/CloudFront pulls, so the local stack
-never actually comes up there. When the stack isn't confirmed up, the hook also appends an `unset` of
+outbound network access to pull the Postgres/PostgREST/Realtime images, and a cold Postgres container
+can take a minute or more to pass its health check, so the start is capped at five minutes
+(`DB_START_TIMEOUT_SECONDS`). When the stack isn't confirmed up, the hook also appends an `unset` of
 the three connection variables to `$CLAUDE_ENV_FILE`, so values exported by an earlier session on the
 same checkout can't point `build`/`dev` at a port nothing listens on. Every step is independent and best-effort: a Docker daemon that won't
 start, a sandbox whose network policy blocks the image pulls, or an already-configured `.env.local`

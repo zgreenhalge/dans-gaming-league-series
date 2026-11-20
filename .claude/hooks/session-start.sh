@@ -19,11 +19,10 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# `supabase start` pulls ~7 images on a cold cache. A sandbox whose network policy blocks the
-# registry doesn't fail fast — the CLI retries each image with growing backoff for a long time — so
-# this cap keeps a blocked sandbox from stalling the (synchronous) session start for minutes. Bump it
-# if your environment's registry access is just slow rather than blocked.
-DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-120}"
+# `supabase start` pulls ~7 images on a cold cache, and a cold Postgres container can take minutes to
+# pass its health check. A success returns at once; the cap only bounds a blocked registry or a hung
+# start, which the CLI retries with growing backoff. Bump it if your environment is just slow.
+DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-300}"
 
 REPO_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$REPO_DIR" || exit 0
@@ -110,7 +109,7 @@ start_local_supabase() {
     log "local Supabase stack: up"
     return 0
   fi
-  log "local Supabase stack: FAILED to start within ${DB_START_TIMEOUT_SECONDS}s (this sandbox's network policy may block Docker registry pulls — see $STATUS_LOG for the actual CLI output)"
+  log "local Supabase stack: FAILED to start within ${DB_START_TIMEOUT_SECONDS}s (a blocked image registry or a slow cold start; the CLI output in $STATUS_LOG says which)"
   # The timeout above kills the CLI process, not any containers it already started (those run
   # detached from it) — clean those up so a later manual `supabase start` doesn't find a half-up
   # stack from this attempt.
