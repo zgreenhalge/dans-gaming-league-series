@@ -1,13 +1,25 @@
 -- What the `anon` role can reach: RLS, Realtime column grants, writes and functions.
 -- Run with `npx supabase test db` against the local stack (docs/e2e.md). Read-only catalog checks.
 begin;
-select plan(4);
+select plan(5);
 
 -- Row level security is on for every table in `public`.
 select is(
   (select coalesce(array_agg(relname::text order by relname), array[]::text[])
    from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity),
   array[]::text[], 'every public table has row level security');
+
+-- `anon` can select from these tables and no others. `live_match_score` and `matches` are public reads.
+select is(
+  (select array_agg(c.relname::text order by c.relname)
+   from pg_class c
+   where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'v', 'm', 'p')
+     and exists (
+       select 1 from pg_attribute a
+       where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+         and has_column_privilege('anon', c.oid, a.attnum, 'select'))),
+  array['background_jobs', 'gauntlet_pods', 'live_match_score', 'match_server_state', 'matches', 'scrim_nights', 'scrim_signups'],
+  'anon can select from only the Realtime tables and the public reads');
 
 -- `anon` selects only the columns each Realtime subscription reads (primary key, filter column, and what
 -- the component displays).
