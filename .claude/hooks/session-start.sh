@@ -76,6 +76,12 @@ start_dockerd() {
     log "not running as root — cannot start the Docker daemon ourselves."
     return 1
   fi
+  # A daemon from an earlier run of this container leaves pid files behind. In a resumed sandbox the
+  # recorded pid can belong to an unrelated process by now, and dockerd then refuses to start ("process
+  # with PID N is still running"). With no dockerd or containerd running, those files are stale.
+  if ! pgrep -x dockerd >/dev/null 2>&1 && ! pgrep -x containerd >/dev/null 2>&1; then
+    rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid
+  fi
   log "docker daemon not running — starting dockerd..."
   nohup dockerd >>"$STATUS_LOG" 2>&1 &
   local waited=0

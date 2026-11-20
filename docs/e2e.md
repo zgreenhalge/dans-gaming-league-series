@@ -236,7 +236,7 @@ subscribing, so pages render their server-fetched data without live updates.
 tries to upgrade that fixture-backed fallback to the real local stack this doc already describes: it
 runs `npm install`, then — unless a real `.env.local` is already present — starts the Docker daemon
 itself if it isn't already running (no init system brings it up automatically in a sandbox
-container), brings up the local Supabase stack (`npm run db:start`), and exports
+container, and pid files an earlier daemon left behind are cleared first), brings up the local Supabase stack (`npm run db:start`), and exports
 `supabase/local.env`'s three fixed values into the session's environment. This still depends on
 outbound network access to pull the Postgres/PostgREST/Realtime images. `supabase start` gives up and
 removes its containers when Postgres isn't healthy after a minute or two, which a first start in a fresh
