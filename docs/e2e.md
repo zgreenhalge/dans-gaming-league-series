@@ -239,8 +239,8 @@ itself if it isn't already running (no init system brings it up automatically in
 container), brings up the local Supabase stack (`npm run db:start`), and exports
 `supabase/local.env`'s three fixed values into the session's environment. This still depends on
 outbound network access to pull the Postgres/PostgREST/Realtime images. A failed start is stopped and
-retried within a deadline (`DB_START_ATTEMPTS`, `DB_START_TIMEOUT_SECONDS`). When the stack isn't confirmed up, the hook also appends an `unset` of
-the three connection variables to `$CLAUDE_ENV_FILE`, so values exported by an earlier session on the
+retried, up to 3 attempts (`DB_START_ATTEMPTS`) within 300s (`DB_START_TIMEOUT_SECONDS`). When the stack
+isn't confirmed up, the hook also appends an `unset` of the three connection variables to `$CLAUDE_ENV_FILE`, so values exported by an earlier session on the
 same checkout can't point `build`/`dev` at a port nothing listens on. Every step is independent and best-effort: a Docker daemon that won't
 start, a sandbox whose network policy blocks the image pulls, or an already-configured `.env.local`
 are all handled by skipping the remaining steps (with a bounded timeout on the image-pull attempt)

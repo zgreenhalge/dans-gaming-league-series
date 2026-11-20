@@ -19,9 +19,10 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# `supabase start` gives up after a minute or two without a healthy Postgres and removes its containers,
-# so a cold first start can miss that window where a second one succeeds. A failed start is retried up to
-# DB_START_ATTEMPTS times within the DB_START_TIMEOUT_SECONDS deadline, which also bounds a blocked registry.
+# `supabase start` gives up when Postgres is not healthy within a minute or two and removes its
+# containers; a start that fails this way can succeed on the next attempt. A failed start is retried up
+# to DB_START_ATTEMPTS times within the DB_START_TIMEOUT_SECONDS deadline (each cleanup stop between
+# attempts adds up to 60s), which also bounds a blocked image registry.
 DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-300}"
 DB_START_ATTEMPTS="${DB_START_ATTEMPTS:-3}"
 
