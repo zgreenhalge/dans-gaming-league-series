@@ -209,10 +209,8 @@ e2e job is the check.
 
 ## Claude Code sessions
 
-SQL behavior is verified by running `npm run db:test`, not by reading the SQL. In a session whose stack is
-not up, run `npm run db:start` (a cold start takes a few minutes), then `npm run db:test`. A change under
-`supabase/migrations/` is not done until the pgTAP suite passes there, and a new scenario is checked by
-breaking the function or grant under test on the local stack and seeing the test fail.
+In a session whose stack is not up, `npm run db:start` brings it up (a cold start takes a few minutes), then
+`npm run db:test` runs the pgTAP suite. The verification rule is in `AGENTS.md`.
 
 `npm test` (Vitest) never depends on any of this — every query test runs against the
 `fakeSupabase`/`src/lib/test-support/` harness, not a live database, so it (along with `npm run
@@ -242,8 +240,7 @@ container), brings up the local Supabase stack (`npm run db:start`), and exports
 `supabase/local.env`'s three fixed values into the session's environment. This still depends on
 outbound network access to pull the Postgres/PostgREST/Realtime images, and a cold Postgres container
 can take a minute or more to pass its health check, so the start is capped at five minutes
-(`DB_START_TIMEOUT_SECONDS`). Once the stack is up, the hook runs `npm run db:test` once, which pulls the
-`pg_prove` image and logs whether the pgTAP suite passes. When the stack isn't confirmed up, the hook also appends an `unset` of
+(`DB_START_TIMEOUT_SECONDS`). When the stack isn't confirmed up, the hook also appends an `unset` of
 the three connection variables to `$CLAUDE_ENV_FILE`, so values exported by an earlier session on the
 same checkout can't point `build`/`dev` at a port nothing listens on. Every step is independent and best-effort: a Docker daemon that won't
 start, a sandbox whose network policy blocks the image pulls, or an already-configured `.env.local`

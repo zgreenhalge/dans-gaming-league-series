@@ -19,13 +19,10 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# `supabase start` pulls ~7 images on a cold cache, and a cold Postgres container takes a minute or
-# more to pass its health check even with the images already local. A sandbox whose network policy
-# blocks the registry doesn't fail fast either — the CLI retries each image with growing backoff — so
-# this cap keeps a blocked sandbox from stalling the (synchronous) session start indefinitely. Bump it
-# if your environment is just slow.
+# `supabase start` pulls ~7 images on a cold cache, and a cold Postgres container can take minutes to
+# pass its health check. A success returns at once; the cap only bounds a blocked registry or a hung
+# start, which the CLI retries with growing backoff. Bump it if your environment is just slow.
 DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-300}"
-DB_TEST_TIMEOUT_SECONDS="${DB_TEST_TIMEOUT_SECONDS:-180}"
 
 REPO_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$REPO_DIR" || exit 0
@@ -120,20 +117,6 @@ start_local_supabase() {
   return 1
 }
 
-# --- 4b. Run the pgTAP suite once -------------------------------------------------------------
-
-# `supabase test db` pulls its `pg_prove` image on first use, and that pull can fail transiently.
-# Running the suite here pre-pulls it and reports up front whether SQL tests work in this session
-# (`npm run db:test`, docs/e2e.md). Best-effort: a failure is logged, never blocks the session.
-run_db_tests() {
-  log "Running the pgTAP suite (npm run db:test, capped at ${DB_TEST_TIMEOUT_SECONDS}s)..."
-  if timeout "$DB_TEST_TIMEOUT_SECONDS" npm run db:test >>"$STATUS_LOG" 2>&1; then
-    log "pgTAP suite: passed — run npm run db:test after any change under supabase/migrations/."
-  else
-    log "pgTAP suite: did not pass or could not run — see $STATUS_LOG; re-run npm run db:test by hand."
-  fi
-}
-
 # --- 5. Export the stack's fixed connection values for the rest of the session ----------------
 
 export_local_env() {
@@ -193,8 +176,6 @@ if ! start_local_supabase; then
   use_fixture_data
   exit 0
 fi
-
-run_db_tests
 
 if export_local_env; then
   log "Ready — npm run dev / npm run build / npm test can now reach the local Supabase stack."
