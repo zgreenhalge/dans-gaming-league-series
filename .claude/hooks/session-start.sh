@@ -19,10 +19,13 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# `supabase start` pulls ~7 images on a cold cache, and a cold Postgres container can take minutes to
-# pass its health check. A success returns at once; the cap only bounds a blocked registry or a hung
-# start, which the CLI retries with growing backoff. Bump it if your environment is just slow.
+# `supabase start` gives up on its own when the Postgres container is not healthy after about a minute
+# or two, and removes every container it created. A first start in a fresh sandbox can miss that window
+# while a start a moment later, with the images and layers now warm, succeeds. So a failed start is
+# stopped and tried again, up to DB_START_ATTEMPTS times within one overall deadline. The deadline also
+# bounds a blocked image registry, which the CLI retries with growing backoff.
 DB_START_TIMEOUT_SECONDS="${DB_START_TIMEOUT_SECONDS:-300}"
+DB_START_ATTEMPTS="${DB_START_ATTEMPTS:-3}"
 
 REPO_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$REPO_DIR" || exit 0
@@ -104,16 +107,26 @@ docker_available() {
 # --- 4. Start the local Supabase stack (supabase/config.toml + migrations + seed.sql) --------
 
 start_local_supabase() {
-  log "Starting local Supabase stack (npm run db:start — this pulls Postgres/PostgREST/Realtime images on first run, capped at ${DB_START_TIMEOUT_SECONDS}s)..."
-  if timeout "$DB_START_TIMEOUT_SECONDS" npm run db:start >>"$STATUS_LOG" 2>&1; then
-    log "local Supabase stack: up"
-    return 0
-  fi
-  log "local Supabase stack: FAILED to start within ${DB_START_TIMEOUT_SECONDS}s (a blocked image registry or a slow cold start; the CLI output in $STATUS_LOG says which)"
-  # The timeout above kills the CLI process, not any containers it already started (those run
-  # detached from it) — clean those up so a later manual `supabase start` doesn't find a half-up
-  # stack from this attempt.
-  npx --yes supabase stop --no-backup >>"$STATUS_LOG" 2>&1 || true
+  log "Starting local Supabase stack (npm run db:start; up to ${DB_START_ATTEMPTS} attempts within ${DB_START_TIMEOUT_SECONDS}s, pulling images on a cold cache)..."
+  local began attempt=1 elapsed remaining
+  began=$(date +%s)
+  while [ "$attempt" -le "$DB_START_ATTEMPTS" ]; do
+    elapsed=$(( $(date +%s) - began ))
+    remaining=$(( DB_START_TIMEOUT_SECONDS - elapsed ))
+    if [ "$remaining" -le 0 ]; then
+      break
+    fi
+    if timeout "$remaining" npm run db:start >>"$STATUS_LOG" 2>&1; then
+      log "local Supabase stack: up (attempt ${attempt}, $(( $(date +%s) - began ))s)"
+      return 0
+    fi
+    log "local Supabase stack: attempt ${attempt} failed after $(( $(date +%s) - began ))s"
+    # A timeout kills the CLI, not the containers it already started (they run detached from it);
+    # clear them so the next attempt, or a later manual `supabase start`, finds no half-up stack.
+    npx --yes supabase stop --no-backup >>"$STATUS_LOG" 2>&1 || true
+    attempt=$((attempt + 1))
+  done
+  log "local Supabase stack: FAILED after $(( $(date +%s) - began ))s (the CLI output in $STATUS_LOG says whether a registry was blocked or the database never became healthy)"
   return 1
 }
 
